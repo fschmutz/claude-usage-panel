@@ -2,7 +2,7 @@
 
 # Claude Usage Panel
 
-**See your Claude Code plan usage at a glance — in the GNOME top bar or the macOS menu bar.**
+**See your Claude Code plan usage at a glance — in the GNOME top bar, the macOS menu bar, or right under your Claude Code prompt.**
 
 Session, weekly, and **per-model** limits (Fable, Opus…) — the same numbers as `/usage`, always visible, auto-refreshing. Plus an optional **Cursor** team-spend section.
 
@@ -26,6 +26,7 @@ Session, weekly, and **per-model** limits (Fable, Opus…) — the same numbers 
 - [Screenshots](#screenshots)
 - [Install — GNOME (Linux)](#install--gnome-linux)
 - [Install — macOS](#install--macos)
+- [Install — Claude Code status line](#install--claude-code-status-line)
 - [Settings](#settings)
 - [How it works](#how-it-works)
 - [Cursor (optional)](#cursor-optional)
@@ -55,6 +56,7 @@ including **per-model weekly limits** (Fable, Opus…) that the others miss — 
 | 🟣 **Optional Cursor spend** | Team cycle spend / today / top spender via the Cursor Admin API |
 | 🔒 **Read-only & private** | Uses your existing local token, never writes it, talks only to `api.anthropic.com` |
 | 🖥️ **Cross-platform** | Native GNOME Shell extension **and** native SwiftUI menu-bar app |
+| ⌨️ **Terminal status line** | Optional condensed one-line view **under the Claude Code prompt** — zero-dependency Node |
 
 ## Screenshots
 
@@ -107,6 +109,35 @@ cask template are in [macos/README.md](macos/README.md) and [PUBLISHING.md](PUBL
 - **macOS:** 13 Ventura or later (Xcode 15+ / Swift toolchain)
 - An active Claude Code login (see [How it works](#how-it-works) for where the token lives)
 - Optional, for cost: Node.js / `npx`, or a global `ccusage`
+
+## Install — Claude Code status line
+
+Prefer it in the terminal? A tiny status line renders your usage **right under
+the Claude Code prompt input** — the same numbers, without leaving your session:
+
+```text
+Context ▌░░░░░ 8%  Session █▌░░░░ 26% 59m  Week █▌░░░░ 24%  Fable █▊░░░░ 29% 1d18h
+```
+
+Each limit gets a compact gauge, filled **green / yellow / red** by the API's own
+severity, a matching gauge for the session's context-window usage, and reset
+countdowns — the session's own, plus the shared weekly reset shown once after the
+weekly limits. It renders on its own row above Claude Code's mode badges (which
+it leaves untouched); Claude Code left-anchors the row, so indent it with the
+settings `padding` field if you like. Install it with:
+
+```bash
+cd claude-code
+./install.sh
+```
+
+`claude-code/install.sh` copies the script into `~/.claude`, then merges a
+`statusLine` entry into `~/.claude/settings.json` — other settings are left
+untouched and re-running is safe. Open a new session or run `/statusline` to see
+it. Manual setup and details are in [claude-code/README.md](claude-code/README.md).
+
+Needs only Node.js (already present — Claude Code runs on it) and an active
+Claude Code login.
 
 ## Settings
 
@@ -179,8 +210,11 @@ markdownlint (docs), gitleaks (secret scan), plus JSON/XML/whitespace checks.
 │   ├── extension.js         # panel button, dropdown, alerts, sparkline
 │   ├── prefs.js             # libadwaita preferences
 │   └── lib/                 # claudeUsage.js · cost.js · cursorUsage.js
-└── macos/                   # native SwiftUI MenuBarExtra app (SwiftPM)
-    └── Sources/ClaudeUsagePanel/
+├── macos/                   # native SwiftUI MenuBarExtra app (SwiftPM)
+│   └── Sources/ClaudeUsagePanel/
+└── claude-code/             # Node status line for the Claude Code prompt
+    ├── statusline.js        # fetch + render one condensed line
+    └── install.sh           # merge statusLine into ~/.claude/settings.json
 ```
 
 ## Roadmap
@@ -192,3 +226,11 @@ markdownlint (docs), gitleaks (secret scan), plus JSON/XML/whitespace checks.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+<div align="center"><sub>
+
+Keywords: Claude Code usage monitor · Claude usage GNOME Shell extension · Claude plan limits top bar · macOS menu bar Claude usage · Claude Code status line usage · Anthropic usage API · ccusage · Fable / Opus per-model weekly limit · Cursor Admin API spend · Ubuntu GNOME extension · SwiftUI MenuBarExtra
+
+</sub></div>

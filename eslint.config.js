@@ -4,8 +4,32 @@
 
 export default [
     {
+        // Node.js status-line helper for Claude Code (ESM, Node globals — not GJS).
+        files: ['claude-code/**/*.js'],
+        languageOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+            globals: {
+                process: 'readonly',
+                console: 'readonly',
+                fetch: 'readonly',
+                AbortController: 'readonly',
+                setTimeout: 'readonly',
+                clearTimeout: 'readonly',
+            },
+        },
+        rules: {
+            'no-unused-vars': ['error', {argsIgnorePattern: '^_'}],
+            'no-undef': 'error',
+            'prefer-const': 'error',
+            'no-var': 'error',
+            eqeqeq: ['error', 'smart'],
+            semi: ['error', 'always'],
+        },
+    },
+    {
         files: ['**/*.js'],
-        ignores: ['eslint.config.js'],
+        ignores: ['eslint.config.js', 'claude-code/**/*.js'],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
