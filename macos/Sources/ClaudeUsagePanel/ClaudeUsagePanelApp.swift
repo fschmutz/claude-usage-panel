@@ -62,6 +62,22 @@ final class UsageModel: ObservableObject {
     }
     @Published var cursorSummary: CursorSummary?
     @Published var cursorError: String?
+
+    // Session pings: the launchd agent plist is the source of truth (shared
+    // with `./install.sh sessionping`), not UserDefaults - see SessionPing.
+    @Published var sessionPingEnabled: Bool {
+        didSet { applySessionPing() }
+    }
+    @Published var sessionPingTimes: [String] {
+        didSet { applySessionPing() }
+    }
+    @Published var sessionPingDays: Set<Int> {
+        didSet { applySessionPing() }
+    }
+    @Published var sessionPingError: String?
+    /// Init reads the plist back through these properties; only user edits
+    /// (after init) may rewrite it.
+    private var sessionPingReady = false
     /// Per-limit [epochMs, percent] samples - sparkline + burn-rate forecast.
     @Published private(set) var history: [String: [[Double]]] = [:]
     @Published private(set) var forecasts: [String: Forecast] = [:]
@@ -94,6 +110,11 @@ final class UsageModel: ObservableObject {
             return []
         }
         launchAtLogin = LoginItem.isEnabled
+        let sp = SessionPing.read()
+        sessionPingEnabled = sp.enabled
+        sessionPingTimes = sp.schedule.times
+        sessionPingDays = sp.schedule.days
+        sessionPingReady = true
 
         // First launch: register the login item by default, matching the GNOME
         // extension's auto-enable. Only once - a later user opt-out is respected.
@@ -210,6 +231,38 @@ final class UsageModel: ObservableObject {
                 paceAlerted.remove(c.id)
             }
         }
+    }
+
+    private func applySessionPing() {
+        guard sessionPingReady else { return }
+        sessionPingError = SessionPing.apply(
+            enabled: sessionPingEnabled,
+            schedule: SessionPingSchedule(times: sessionPingTimes, days: sessionPingDays))
+    }
+
+    /// Re-read the agent plist into the model - the CLI installer edits the
+    /// same file, so refresh before showing (and thus before any UI edit could
+    /// rewrite the plist from a stale copy). Guarded so the read-back itself
+    /// never triggers apply().
+    func reloadSessionPing() {
+        sessionPingReady = false
+        let sp = SessionPing.read()
+        sessionPingEnabled = sp.enabled
+        sessionPingTimes = sp.schedule.times
+        sessionPingDays = sp.schedule.days
+        sessionPingReady = true
+    }
+
+    /// "06:00 11:00 · Mon-Fri" - the dropdown's one-line schedule summary.
+    var sessionPingSummary: String {
+        let names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        let days: String
+        switch sessionPingDays.sorted() {
+        case [1, 2, 3, 4, 5]: days = "Mon-Fri"
+        case [1, 2, 3, 4, 5, 6, 7]: days = "every day"
+        case let d: days = d.map { names[$0 - 1] }.joined(separator: " ")
+        }
+        return "\(sessionPingTimes.joined(separator: " ")) · \(days)"
     }
 
     private func notify(_ title: String, _ body: String) {
@@ -375,6 +428,10 @@ struct PopupView: View {
                 Text("Session cost: \(cost)").font(.system(size: 12, weight: .semibold))
             }
             Text("Updated \(model.updated)").font(.system(size: 11)).foregroundColor(.secondary)
+            if model.sessionPingEnabled {
+                Text("Session pings: \(model.sessionPingSummary)")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
 
             if model.cursorEnabled {
                 CursorSectionView(model: model)
@@ -400,14 +457,20 @@ struct PopupView: View {
                     Label("Refresh now", systemImage: "arrow.clockwise")
                 }
                 if #available(macOS 14.0, *) {
-                    SettingsLink {
-                        Label("Settings…", systemImage: "gearshape")
-                    }
+                    OpenSettingsButton()
                 } else {
                     Button {
+                        // An .accessory app is not active when the popup is
+                        // clicked - without activate the window opens behind
+                        // everything (or seemingly not at all).
                         NSApp.activate(ignoringOtherApps: true)
-                        NSApp.sendAction(
-                            Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                        // Renamed across versions; try both.
+                        if !NSApp.sendAction(
+                            Selector(("showSettingsWindow:")), to: nil, from: nil)
+                        {
+                            NSApp.sendAction(
+                                Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                        }
                     } label: {
                         Label("Settings…", systemImage: "gearshape")
                     }
@@ -424,6 +487,24 @@ struct PopupView: View {
         }
         .padding(14)
         .frame(width: 340)
+        .onAppear { model.reloadSessionPing() }
+    }
+}
+
+// Settings opener for macOS 14+. SettingsLink alone does not activate an
+// .accessory (menu-bar only) app, so the window opens behind everything and
+// looks like it never appeared; the openSettings environment action plus an
+// explicit activate brings it to front reliably.
+@available(macOS 14.0, *)
+private struct OpenSettingsButton: View {
+    @Environment(\.openSettings) private var openSettings
+    var body: some View {
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            openSettings()
+        } label: {
+            Label("Settings…", systemImage: "gearshape")
+        }
     }
 }
 
@@ -479,6 +560,47 @@ struct SettingsView: View {
                 Toggle("Show session cost (ccusage)", isOn: $model.showCost)
                 Toggle("Start at login", isOn: $model.launchAtLogin)
             }
+            Section("Session pings") {
+                Toggle("Open the 5h session window on schedule", isOn: $model.sessionPingEnabled)
+                if model.sessionPingEnabled {
+                    ForEach(model.sessionPingTimes.indices, id: \.self) { i in
+                        HStack {
+                            DatePicker(
+                                "Ping \(i + 1)", selection: timeBinding(i),
+                                displayedComponents: .hourAndMinute)
+                            Button {
+                                model.sessionPingTimes.remove(at: i)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(model.sessionPingTimes.count == 1)
+                        }
+                    }
+                    Button {
+                        model.sessionPingTimes.append("09:00")
+                    } label: {
+                        Label("Add a ping", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    HStack(spacing: 4) {
+                        ForEach(1...7, id: \.self) { d in
+                            Toggle(Self.dayNames[d - 1], isOn: dayBinding(d))
+                                .toggleStyle(.button)
+                                .font(.system(size: 11))
+                        }
+                    }
+                }
+                if let err = model.sessionPingError {
+                    Text(err).font(.footnote).foregroundColor(.cuCritical)
+                }
+                Text(
+                    "Pings claude (haiku, one turn) at these times so the 5-hour session "
+                        + "window opens on your schedule, not at your first message. "
+                        + "Same schedule as ./install.sh sessionping."
+                )
+                .font(.footnote).foregroundColor(.secondary)
+            }
             Section("Cursor (optional)") {
                 Toggle("Show Cursor team spend", isOn: $model.cursorEnabled)
                 SecureField("Cursor Admin API key", text: $model.cursorApiKey)
@@ -490,6 +612,50 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .padding()
+        .onAppear { model.reloadSessionPing() }
+    }
+
+    private static let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    private static let hhmm: DateFormatter = {
+        let f = DateFormatter()
+        // POSIX locale: "HH:mm" is a machine format for the plist (parsed by
+        // install.sh's sed and an ASCII regex). Without it the user's 12-hour
+        // preference or a non-ASCII-digit locale breaks the round-trip; the
+        // DatePicker still localizes its own display.
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    /// Date <-> "HH:MM" bridge for one time row. Guards the index: SwiftUI can
+    /// re-evaluate a row while the array is shrinking after a remove.
+    private func timeBinding(_ i: Int) -> Binding<Date> {
+        Binding(
+            get: {
+                guard i < model.sessionPingTimes.count,
+                    let d = Self.hhmm.date(from: model.sessionPingTimes[i])
+                else { return Self.hhmm.date(from: "09:00")! }
+                return d
+            },
+            set: { d in
+                guard i < model.sessionPingTimes.count else { return }
+                model.sessionPingTimes[i] = Self.hhmm.string(from: d)
+            })
+    }
+
+    /// Membership toggle for one weekday; the last remaining day can't be
+    /// removed (an empty schedule would be invalid).
+    private func dayBinding(_ d: Int) -> Binding<Bool> {
+        Binding(
+            get: { model.sessionPingDays.contains(d) },
+            set: { on in
+                if on {
+                    model.sessionPingDays.insert(d)
+                } else if model.sessionPingDays.count > 1 {
+                    model.sessionPingDays.remove(d)
+                }
+            })
     }
 }
 

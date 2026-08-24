@@ -38,6 +38,7 @@ pre-commit run zizmor --all-files   # workflow security audit (actionlint = vali
 ./install.sh mcp             # MCP server → claude mcp add + ~/.cursor/mcp.json
 ./install.sh macos           # build macos/ClaudeUsagePanel.app
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
+./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
 ./install.sh update [target...]        # reinstall installed targets (upgrade); --pull to git pull first
 ./install.sh --uninstall [target...]   # reverse it   |   --list (detected + installed)   |   -h
 ./install.sh --dry-run [target...]     # print actions without touching anything
@@ -52,6 +53,10 @@ node scripts/screenshots/render.mjs --check  # what CI runs; exits 1 on drift
 # Daily auto-update worker (what the timer runs) - safe to run by hand
 ./scripts/auto-update.sh --status    # installed vs newest released tag, last check
 ./scripts/auto-update.sh --check     # check only; exit 10 = update available
+
+# Session-ping worker (what the sessionping schedule runs) - safe to run by hand
+./scripts/session-ping.sh --status   # configured times/days, last ping, log path
+./scripts/session-ping.sh --force    # ping now, whatever the day is
 ```
 
 Auto-update reads the highest released `vX.Y.Z` tag on `origin`, so **a release

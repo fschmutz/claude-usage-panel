@@ -44,9 +44,10 @@ mcp/                    # MCP server: get_usage tool (Claude Code, Cursor…)
 
 plugin/                 # Claude Code plugin wrapping the MCP server
 docs/                   # GitHub Pages site + the /install bootstrap
-scripts/                # bump-version · check-versions · wiki-sync · auto-update
-└── auto-update.sh      # daily: newest released tag → ff-only → install.sh update
-install.sh              # unified installer (gnome · statusline · mcp · macos · autoupdate)
+scripts/                # bump-version · check-versions · wiki-sync · auto-update · session-ping
+├── auto-update.sh      # daily: newest released tag → ff-only → install.sh update
+└── session-ping.sh     # scheduled: 1-turn haiku ping so the 5h window opens on time
+install.sh              # unified installer (gnome · statusline · mcp · macos · autoupdate · sessionping)
 ```
 
 ## Staying current
