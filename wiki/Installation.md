@@ -24,6 +24,7 @@ uninstalls every client.
 | `./install.sh mcp` | `get_usage` MCP tool → Claude Code + Cursor |
 | `./install.sh macos` | build + install the macOS `.app` |
 | `./install.sh autoupdate` | daily check for a new release + auto-install |
+| `./install.sh sessionping [HH:MM …] [--days=…]` | scheduled `claude` pings that open the 5h session window (opt-in) |
 | `./install.sh update [target…]` | reinstall what's already installed (upgrade) |
 | `./install.sh update --pull` | `git pull` first, then upgrade |
 | `./install.sh --uninstall [target…]` | reverse an install |
@@ -125,3 +126,48 @@ so it won't add clients you never installed. `--pull` fast-forwards the checkout
 first. Per target: the **status line** and **MCP server** take effect next
 session; **GNOME** needs a log out / back in (Wayland); **macOS** quits the
 running app, replaces it in `/Applications`, and relaunches the new build.
+
+## Session pings
+
+The 5-hour Claude Code session window opens at your **first message** - start
+work at 9:00 and a 9-to-5 day fits only two full windows. The opt-in
+`sessionping` target schedules a tiny `claude` ping (haiku model, one turn) at
+fixed local times so the window opens on *your* schedule - ping at 5:30 and the
+same day fits three (5:30-10:30, 10:30-15:30, 15:30-20:30).
+
+```bash
+./install.sh sessionping                          # default: 05:30, Mon-Fri
+./install.sh sessionping 05:30 10:35              # several pings a day
+./install.sh sessionping 06:00 --days=mon,wed,fri # pick the days (or --days=all)
+```
+
+It is never part of the auto-detected set - every ping spends one haiku turn of
+your plan, so you have to ask for it. To **change the schedule**, just run the
+install command again with new times/days; it replaces the previous schedule
+in place. A plain `./install.sh update` keeps whatever times and days you
+configured.
+
+On macOS the same schedule is also editable in the **menu-bar app's Settings**
+(Session pings section: on/off, times, weekdays) - the app and the installer
+read and write the same launchd agent, so use whichever is closer to hand. The
+dropdown shows the active schedule when pings are on.
+
+The ping goes through the `claude` CLI (which refreshes the OAuth token if it
+expired overnight - the panel's clients never write the token themselves), from
+an empty working directory so none of your project context is loaded.
+
+| | |
+|---|---|
+| Linux | systemd user timer `claude-usage-panel-sessionping.timer` (one `OnCalendar` per time, `Persistent=false`) |
+| macOS | launchd agent `io.github.fschmutz.claude-usage-panel.sessionping` (one `StartCalendarInterval` per time) |
+| Neither | `cron` lines tagged `# claude-usage-panel session-ping` |
+
+```bash
+scripts/session-ping.sh --status      # configured times/days, last ping, log path
+scripts/session-ping.sh --force       # ping right now, whatever the day is
+./install.sh --uninstall sessionping  # turn it off
+```
+
+The day filter lives in the script (the schedulers fire daily), the rolling log
+is `~/.local/state/claude-usage-panel/session-ping.log`, and a missing `claude`
+CLI makes a ping skip quietly rather than fail.

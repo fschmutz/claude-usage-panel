@@ -6,6 +6,21 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **New `sessionping` install target**: schedules tiny `claude` pings (haiku,
+  one turn) at fixed local times so the 5-hour session window opens on your
+  schedule instead of at your first message of the day -
+  `./install.sh sessionping 05:30 10:35 --days=mon-fri`. Opt-in only, times and
+  days are changed by re-running the command, and `update` preserves them.
+  Wired through the same systemd timer / launchd agent / cron mechanisms as
+  `autoupdate`; the worker is `scripts/session-ping.sh` (`--status`, `--force`).
+- **macOS: session pings are configurable from the app's Settings** (times,
+  weekdays, on/off) - the app reads and writes the same launchd agent as the
+  installer, so either side can edit what the other configured, and the
+  dropdown shows the active schedule. The worker script ships in the app
+  bundle's Resources, so the schedule survives without a git checkout.
+
 ### Changed
 
 - **CI is one workflow with one required check.** `test.yml` and

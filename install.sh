@@ -8,6 +8,9 @@
 #   ./install.sh mcp                MCP server (get_usage tool in Claude Code + Cursor)
 #   ./install.sh macos              build the macOS .app bundle
 #   ./install.sh autoupdate         check for a new release once a day and install it
+#   ./install.sh sessionping [HH:MM ...] [--days=mon,wed,fri|all]
+#                                   ping claude at fixed times so the 5h session
+#                                   window opens on schedule (default 05:30, Mon-Fri)
 #   ./install.sh gnome statusline   any combination
 #   ./install.sh update [target...]        reinstall what's already installed (upgrade)
 #   ./install.sh update --pull             git pull --ff-only first, then upgrade
@@ -40,9 +43,11 @@ ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 # heredoc merges (node/python) are guarded inline with `$DRY`.
 DRY=false
 PULL=false
-BUILD_ONLY=false # macos: build the .app but don't install to /Applications (used by CI)
+BUILD_ONLY=false                    # macos: build the .app but don't install to /Applications (used by CI)
 SL_SEGMENTS="context,limits,tokens" # statusline: which segments, left→right
-SL_TOKENS="all"                      # statusline: token-total mode (all|fresh)
+SL_TOKENS="all"                     # statusline: token-total mode (all|fresh)
+SP_TIMES=()                         # sessionping: HH:MM args from the command line
+SP_DAYS=""                          # sessionping: --days= value from the command line
 act() {
     if $DRY; then printf '  would: %s\n' "$*"; else "$@"; fi
 }
@@ -324,6 +329,10 @@ install_macos() {
         rm -rf "$bundle"
         mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
         cp "$bin" "$bundle/Contents/MacOS/$app"
+        # The app's Settings can schedule session pings; give the launchd agent
+        # a runner that survives without a git checkout.
+        cp "$ROOT/scripts/session-ping.sh" "$bundle/Contents/Resources/session-ping.sh"
+        chmod +x "$bundle/Contents/Resources/session-ping.sh"
         cat >"$bundle/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -382,15 +391,22 @@ uninstall_macos() {
 # Schedules scripts/auto-update.sh once a day. That script is the one with all
 # the safety rules (skips a dirty or diverged checkout, only ever fast-forwards,
 # reinstalls just the targets already present) - here we only wire the schedule.
-AU_UNIT="claude-usage-panel-update"                       # systemd user units
-AU_LABEL="io.github.fschmutz.claude-usage-panel.update"   # launchd agent
-AU_CRON_TAG="# claude-usage-panel auto-update"            # cron marker line
+AU_UNIT="claude-usage-panel-update"                     # systemd user units
+AU_LABEL="io.github.fschmutz.claude-usage-panel.update" # launchd agent
+AU_CRON_TAG="# claude-usage-panel auto-update"          # cron marker line
 
 _au_systemd_dir() { echo "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"; }
 _au_plist() { echo "$HOME/Library/LaunchAgents/$AU_LABEL.plist"; }
 
 # Which daily scheduler this machine offers: launchd | systemd | cron | none.
+# Shared by the autoupdate and sessionping targets. CUP_TEST_SCHEDULER is a
+# unit-test hook: it forces a branch so tests can exercise one deterministically
+# (with the scheduler binary stubbed on PATH).
 _au_scheduler() {
+    if [ -n "${CUP_TEST_SCHEDULER:-}" ]; then
+        echo "$CUP_TEST_SCHEDULER"
+        return 0
+    fi
     if [ "$(uname -s)" = "Darwin" ] && command -v launchctl >/dev/null; then
         echo launchd
     elif command -v systemctl >/dev/null && [ -d /run/systemd/system ]; then
@@ -403,6 +419,7 @@ _au_scheduler() {
 }
 
 # Write a unit/plist from stdin, honouring --dry-run (stdin is always consumed).
+# Shared by the autoupdate and sessionping targets.
 _au_write() {
     local path="$1"
     if $DRY; then
@@ -547,14 +564,275 @@ uninstall_autoupdate() {
         if $DRY; then
             echo "  would: drop the '$AU_CRON_TAG' line from your crontab"
         elif crontab -l 2>/dev/null | grep -qF "$AU_CRON_TAG"; then
-            crontab -l 2>/dev/null | grep -vF "$AU_CRON_TAG" | crontab -
+            # `|| true`: grep -v selecting zero lines (ours was the only
+            # entry) must not kill the uninstall under pipefail.
+            { crontab -l 2>/dev/null | grep -vF "$AU_CRON_TAG" || true; } | crontab -
         fi
     fi
     ok "removed (no more daily checks)"
 }
 
+# ── Scheduled session pings ─────────────────────────────────────────────────────
+# Schedules scripts/session-ping.sh at fixed local times so the 5-hour Claude
+# Code session window opens on schedule instead of at the first real message of
+# the day. Opt-in only (never auto-detected): every ping spends one haiku turn.
+SP_UNIT="claude-usage-panel-sessionping"                     # systemd user units
+SP_LABEL="io.github.fschmutz.claude-usage-panel.sessionping" # launchd agent
+SP_CRON_TAG="# claude-usage-panel session-ping"              # cron marker line
+
+_sp_plist() { echo "$HOME/Library/LaunchAgents/$SP_LABEL.plist"; }
+
+_sp_installed() {
+    [ -f "$(_au_systemd_dir)/$SP_UNIT.timer" ] && return 0
+    [ -f "$(_sp_plist)" ] && return 0
+    if command -v crontab >/dev/null && crontab -l 2>/dev/null | grep -qF "$SP_CRON_TAG"; then
+        return 0
+    fi
+    return 1
+}
+
+# Times already scheduled (HH:MM, one per line) - lets `update` and a bare
+# reinstall preserve a custom schedule instead of resetting to the default.
+# scripts/session-ping.sh --status duplicates this read; keep the formats in sync.
+_sp_current_times() {
+    if [ -f "$(_au_systemd_dir)/$SP_UNIT.timer" ]; then
+        sed -n 's/^OnCalendar=\*-\*-\* \([0-9][0-9]:[0-9][0-9]\):00$/\1/p' \
+            "$(_au_systemd_dir)/$SP_UNIT.timer"
+    elif [ -f "$(_sp_plist)" ]; then
+        sed -n 's/.*<key>Hour<\/key><integer>\([0-9]*\)<\/integer><key>Minute<\/key><integer>\([0-9]*\)<\/integer>.*/\1 \2/p' \
+            "$(_sp_plist)" | awk '{printf "%02d:%02d\n", $1, $2}'
+    elif command -v crontab >/dev/null; then
+        crontab -l 2>/dev/null | grep -F "$SP_CRON_TAG" |
+            awk '{printf "%02d:%02d\n", $2, $1}'
+    fi
+    return 0
+}
+
+# The --days= list baked into the current schedule, if any.
+_sp_current_days() {
+    local f
+    for f in "$(_au_systemd_dir)/$SP_UNIT.service" "$(_sp_plist)"; do
+        if [ -f "$f" ]; then
+            grep -o -- '--days=[0-9,]*' "$f" | head -1 | cut -d= -f2
+            return 0
+        fi
+    done
+    if command -v crontab >/dev/null; then
+        crontab -l 2>/dev/null | grep -F "$SP_CRON_TAG" |
+            grep -o -- '--days=[0-9,]*' | head -1 | cut -d= -f2
+    fi
+    return 0
+}
+
+# mon,wed,... / mon-fri / all / an already-numeric list → sorted unique 1..7
+# list in `date +%u` numbering (1 = Monday). Prints nothing on invalid input.
+_sp_normalize_days() {
+    local spec d n list=""
+    spec="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+    case "$spec" in
+        "" | mon-fri)
+            echo "1,2,3,4,5"
+            return 0
+            ;;
+        all)
+            echo "1,2,3,4,5,6,7"
+            return 0
+            ;;
+    esac
+    # Validate before the unquoted split below - a glob character in the spec
+    # must not expand against the current directory.
+    [[ "$spec" =~ ^[a-z0-9]+(,[a-z0-9]+)*$ ]] || return 1
+    for d in ${spec//,/ }; do
+        case "$d" in
+            mon | 1) n=1 ;;
+            tue | 2) n=2 ;;
+            wed | 3) n=3 ;;
+            thu | 4) n=4 ;;
+            fri | 5) n=5 ;;
+            sat | 6) n=6 ;;
+            sun | 7) n=7 ;;
+            *) return 1 ;;
+        esac
+        list="$list$n"$'\n'
+    done
+    printf '%s' "$list" | sort -u | paste -sd, -
+}
+
+install_sessionping() {
+    info "Scheduled session pings"
+    local runner="$ROOT/scripts/session-ping.sh"
+    local times=() norm=() t h m days spec
+
+    # Times: command line, else whatever is already scheduled, else the default.
+    if [ ${#SP_TIMES[@]} -gt 0 ]; then
+        times=("${SP_TIMES[@]}")
+    else
+        # not mapfile: the stock macOS bash is 3.2
+        while IFS= read -r t; do [ -n "$t" ] && times+=("$t"); done < <(_sp_current_times)
+        [ ${#times[@]} -gt 0 ] || times=("05:30")
+    fi
+    for t in "${times[@]}"; do
+        if [[ "$t" =~ ^([01]?[0-9]|2[0-3]):([0-5][0-9])$ ]]; then
+            norm+=("$(printf '%02d:%s' "$((10#${t%%:*}))" "${t#*:}")")
+        else
+            echo "sessionping: invalid time '$t' (want HH:MM, 00:00-23:59)" >&2
+            exit 2
+        fi
+    done
+    times=("${norm[@]}")
+
+    # Days: command line, else the list baked into the current schedule.
+    spec="${SP_DAYS:-$(_sp_current_days)}"
+    if ! days="$(_sp_normalize_days "$spec")" || [ -z "$days" ]; then
+        echo "sessionping: invalid --days '$spec' (want e.g. mon,wed,fri or mon-fri or all)" >&2
+        exit 2
+    fi
+
+    echo "  schedule: at ${times[*]} on days $days (1 = Monday)"
+    if ! command -v claude >/dev/null; then
+        skip "claude CLI not found on PATH - pings will no-op until it is installed"
+    fi
+    act chmod +x "$runner"
+
+    case "$(_au_scheduler)" in
+        systemd)
+            local dir entries=""
+            dir="$(_au_systemd_dir)"
+            _au_write "$dir/$SP_UNIT.service" <<EOF
+[Unit]
+Description=Claude Usage Panel - session-window ping
+Documentation=https://github.com/fschmutz/claude-usage-panel
+
+[Service]
+Type=oneshot
+ExecStart=$runner --quiet --days=$days
+EOF
+            for t in "${times[@]}"; do
+                entries+="OnCalendar=*-*-* $t:00"$'\n'
+            done
+            # Exact times are the point: no RandomizedDelaySec, and no catch-up
+            # on wake (Persistent) - a late ping would only shift the window.
+            _au_write "$dir/$SP_UNIT.timer" <<EOF
+[Unit]
+Description=Claude Usage Panel - session-window ping
+
+[Timer]
+${entries}Persistent=false
+
+[Install]
+WantedBy=timers.target
+EOF
+            act systemctl --user daemon-reload
+            act systemctl --user enable --now "$SP_UNIT.timer"
+            $DRY || ok "systemd user timer enabled (systemctl --user list-timers | grep $SP_UNIT)"
+            ;;
+        launchd)
+            local plist intervals=""
+            plist="$(_sp_plist)"
+            for t in "${times[@]}"; do
+                h="$((10#${t%%:*}))"
+                m="$((10#${t#*:}))"
+                intervals+="    <dict><key>Hour</key><integer>$h</integer><key>Minute</key><integer>$m</integer></dict>"$'\n'
+            done
+            _au_write "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$SP_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>$runner</string>
+    <string>--quiet</string>
+    <string>--days=$days</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+${intervals}  </array>
+  <key>RunAtLoad</key><false/>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+</dict>
+</plist>
+EOF
+            if $DRY; then
+                echo "  would: launchctl bootstrap gui/$(id -u) $plist"
+            else
+                launchctl bootout "gui/$(id -u)/$SP_LABEL" >/dev/null 2>&1 || true
+                launchctl bootstrap "gui/$(id -u)" "$plist" >/dev/null 2>&1 ||
+                    launchctl load -w "$plist" >/dev/null 2>&1 || true
+            fi
+            $DRY || ok "launchd agent loaded (at ${times[*]})"
+            ;;
+        cron)
+            local line newlines=""
+            for t in "${times[@]}"; do
+                line="$((10#${t#*:})) $((10#${t%%:*})) * * * $runner --quiet --days=$days  $SP_CRON_TAG"
+                if $DRY; then
+                    echo "  would: add crontab line: $line"
+                else
+                    newlines+="$line"$'\n'
+                fi
+            done
+            if ! $DRY; then
+                # Drop any previous lines of ours, then append - idempotent.
+                {
+                    crontab -l 2>/dev/null | grep -vF "$SP_CRON_TAG" || true
+                    printf '%s' "$newlines"
+                } | crontab -
+            fi
+            $DRY || ok "cron entries added (at ${times[*]})"
+            ;;
+        *)
+            skip "sessionping: no systemd, launchd or cron found to schedule it"
+            return 0
+            ;;
+    esac
+
+    if $DRY; then
+        ok "dry-run: no changes written"
+        return 0
+    fi
+    echo "  Each ping is one haiku turn; it opens the 5h session window at that time."
+    echo "  Change it any time: ./install.sh sessionping HH:MM [HH:MM ...] [--days=...]"
+    echo "  Now:  $runner --force    Status:  $runner --status"
+    echo "  Off:  ./install.sh --uninstall sessionping"
+}
+
+uninstall_sessionping() {
+    info "Scheduled session pings"
+    # Remove all three wirings regardless of what this machine currently offers,
+    # so a schedule left by an earlier setup can't survive an uninstall.
+    if command -v systemctl >/dev/null; then
+        act systemctl --user disable --now "$SP_UNIT.timer" >/dev/null 2>&1 || true
+    fi
+    act rm -f "$(_au_systemd_dir)/$SP_UNIT.timer" "$(_au_systemd_dir)/$SP_UNIT.service"
+    if command -v systemctl >/dev/null; then
+        act systemctl --user daemon-reload >/dev/null 2>&1 || true
+    fi
+    if command -v launchctl >/dev/null; then
+        if $DRY; then
+            echo "  would: launchctl bootout gui/$(id -u)/$SP_LABEL"
+        else
+            launchctl bootout "gui/$(id -u)/$SP_LABEL" >/dev/null 2>&1 || true
+        fi
+    fi
+    act rm -f "$(_sp_plist)"
+    if command -v crontab >/dev/null; then
+        if $DRY; then
+            echo "  would: drop the '$SP_CRON_TAG' lines from your crontab"
+        elif crontab -l 2>/dev/null | grep -qF "$SP_CRON_TAG"; then
+            # `|| true`: grep -v selecting zero lines (ours were the only
+            # entries) must not kill the uninstall under pipefail.
+            { crontab -l 2>/dev/null | grep -vF "$SP_CRON_TAG" || true; } | crontab -
+        fi
+    fi
+    ok "removed (no more session pings)"
+}
+
 # ── Target resolution ───────────────────────────────────────────────────────────
-ALL_TARGETS="gnome statusline mcp macos autoupdate"
+ALL_TARGETS="gnome statusline mcp macos autoupdate sessionping"
 
 # Print the targets that make sense for this machine, one per line.
 detect_targets() {
@@ -590,6 +868,7 @@ installed_targets() {
     [ -f "$HOME/.claude/claude-usage-mcp.mjs" ] && echo mcp
     [ -d "/Applications/ClaudeUsagePanel.app" ] && echo macos
     _au_installed && echo autoupdate
+    _sp_installed && echo sessionping
     return 0
 }
 
@@ -619,6 +898,7 @@ for arg in "$@"; do
         --build-only) BUILD_ONLY=true ;;
         --segments=*) SL_SEGMENTS="${arg#*=}" ;;
         --tokens=*) SL_TOKENS="${arg#*=}" ;;
+        --days=*) SP_DAYS="${arg#*=}" ;;
         --dry-run | -n) DRY=true ;;
         --list) action=list ;;
         -*)
@@ -629,6 +909,8 @@ for arg in "$@"; do
         *)
             if is_target "$arg"; then
                 targets+=("$arg")
+            elif [[ "$arg" =~ ^[0-9]{1,2}:[0-9]{2}$ ]]; then
+                SP_TIMES+=("$arg") # sessionping ping times
             else
                 echo "Unknown target: $arg (want: $ALL_TARGETS)" >&2
                 exit 2
@@ -636,6 +918,15 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# HH:MM times and --days= configure the sessionping target only.
+if { [ ${#SP_TIMES[@]} -gt 0 ] || [ -n "$SP_DAYS" ]; } &&
+    [ "$action" != update ] &&
+    [[ " ${targets[*]-} " != *" sessionping "* ]]; then
+    echo "HH:MM times and --days= only apply to the sessionping target" >&2
+    echo "  e.g. ./install.sh sessionping 05:30 10:35 --days=mon-fri" >&2
+    exit 2
+fi
 
 if [ "$action" = list ]; then
     detected="$(detect_targets | paste -sd' ' -)"
