@@ -6,7 +6,7 @@
       "name": "claude-usage",
       "source": "./plugin",
       "description": "Ask Claude for your plan usage: a get_usage MCP tool returning session, weekly, and per-model limits from the official Anthropic usage endpoint.",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "author": {"name": "Falco Schmutz"},
       "homepage": "https://fschmutz.github.io/claude-usage-panel/",
       "repository": "https://github.com/fschmutz/claude-usage-panel",

@@ -7,5 +7,5 @@
   "settings-schema": "org.gnome.shell.extensions.claude-usage-panel",
   "gettext-domain": "claude-usage-panel",
   "session-modes": ["user"],
-  "version-name": "1.7.0"
+  "version-name": "1.8.0"
 }

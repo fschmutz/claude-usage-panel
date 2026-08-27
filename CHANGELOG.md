@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-08-27
+
 ### Fixed
 
 - **`./install.sh` with no target crashed on stock macOS** with
