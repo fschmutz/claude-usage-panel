@@ -13,10 +13,20 @@ reported `success`.
 ```text
 lint (pre-commit) ─┐
 js ────────────────┤
-screenshots ───────┼──▶ ci-gate ──▶ the only context the ruleset requires
-swift-core ────────┤
-macos-app ─────────┘
+screenshots ───────┤
+swift-core ────────┼──▶ ci-gate ──▶ the only context the ruleset requires
+macos-app ─────────┤
+bash32 ────────────┘
 ```
+
+`bash32` runs `scripts/bash32-smoke.sh` inside a `bash:3.2` container - the
+version macOS still ships as `/bin/bash`, and the one the launchd agents
+invoke. Every other shell gate runs on ubuntu's bash 5, where the 3.2 traps are
+invisible: expanding `"${arr[@]}"` on an **empty** array aborts under `set -u`
+in 3.2 and is fine in 4.4+, so a guard that reads correctly on Linux can die on
+a stock Mac. The script parses every shell script with `bash -n` and dry-runs
+every target `install.sh --list` advertises, so a new target is covered the day
+it lands without editing the workflow.
 
 Why it is built this way:
 

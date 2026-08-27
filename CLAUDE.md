@@ -77,6 +77,10 @@ exactly what happened here with CodeQL's `analyze` job. `ci-gate` also runs
 GitHub counts as a pass, so without it a failed dependency would wave the PR
 through.
 
+Shell changes are gated on **bash 3.2** (`bash32` job, `scripts/bash32-smoke.sh`
+in a container) because that is what macOS ships as `/bin/bash`; ubuntu's bash 5
+hides real traps, notably `"${arr[@]}"` on an empty array under `set -u`.
+
 Workflow rules, enforced by `zizmor` in pre-commit (it will fail the build):
 actions pinned to a full commit SHA with the version in a trailing comment
 (Dependabot maintains both), `persist-credentials: false` on every checkout,

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Smoke-test the shell entrypoints under bash 3.2 - the version macOS still
+# ships as /bin/bash, and the one the launchd agents actually invoke.
+#
+# CI runs the rest of the shell suite on ubuntu (bash 5), where several bash
+# 3.2 traps are invisible. The one that motivated this: expanding "${arr[@]}"
+# on an EMPTY array aborts under `set -u` in 3.2 but is fine in 4.4+, so a
+# guard that reads correctly on Linux dies on a stock Mac.
+#
+#   scripts/bash32-smoke.sh          run it (expects to BE bash 3.2)
+#
+# Run it the way CI does, from a checkout root:
+#   docker run --rm -v "$PWD:/repo:ro" -e HOME=/tmp bash:3.2 bash /repo/scripts/bash32-smoke.sh
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail=0
+
+case "${BASH_VERSION:-}" in
+    3.2*) echo "bash $BASH_VERSION - the macOS /bin/bash version" ;;
+    *) echo "WARNING: this is bash ${BASH_VERSION:-unknown}, not 3.2 - traps will be missed" ;;
+esac
+
+# 1. Parse every shell script. Catches syntax that only exists in bash 4+
+#    (mapfile, declare -A, ${x^^}, &>>) without running anything.
+echo
+echo "== syntax (bash -n) =="
+while IFS= read -r f; do
+    if bash -n "$f" 2>/dev/null; then
+        printf '  ok    %s\n' "${f#"$ROOT"/}"
+    else
+        printf '  FAIL  %s\n' "${f#"$ROOT"/}"
+        bash -n "$f" || true
+        fail=1
+    fi
+done <<EOT
+$(find "$ROOT" -name '*.sh' -not -path '*/node_modules/*' | sort)
+EOT
+
+# 2. Actually run every target install.sh advertises, in --dry-run. This is
+#    what catches the runtime traps that `bash -n` cannot see. The target list
+#    is read from --list rather than hardcoded, so a new target is covered the
+#    day it lands.
+echo
+echo "== install.sh --dry-run, every advertised target =="
+targets="$(bash "$ROOT/install.sh" --list | awk -F: '/^ *all:/ {print $2; exit}')"
+[ -n "$targets" ] || { echo "  FAIL  could not read the target list from --list"; exit 1; }
+
+for t in $targets; do
+    if bash "$ROOT/install.sh" --dry-run "$t" >/dev/null 2>&1; then
+        printf '  ok    install.sh --dry-run %s\n' "$t"
+    else
+        printf '  FAIL  install.sh --dry-run %s\n' "$t"
+        bash "$ROOT/install.sh" --dry-run "$t" 2>&1 | tail -5
+        fail=1
+    fi
+    if bash "$ROOT/install.sh" --dry-run --uninstall "$t" >/dev/null 2>&1; then
+        printf '  ok    install.sh --dry-run --uninstall %s\n' "$t"
+    else
+        printf '  FAIL  install.sh --dry-run --uninstall %s\n' "$t"
+        bash "$ROOT/install.sh" --dry-run --uninstall "$t" 2>&1 | tail -5
+        fail=1
+    fi
+done
+
+# 3. The always-safe read-only entrypoints.
+echo
+echo "== read-only entrypoints =="
+for cmd in "--list" "-h"; do
+    if bash "$ROOT/install.sh" "$cmd" >/dev/null 2>&1; then
+        printf '  ok    install.sh %s\n' "$cmd"
+    else
+        printf '  FAIL  install.sh %s\n' "$cmd"
+        fail=1
+    fi
+done
+
+echo
+if [ "$fail" -eq 0 ]; then
+    echo "bash 3.2 smoke: PASS"
+else
+    echo "bash 3.2 smoke: FAIL"
+fi
+exit "$fail"

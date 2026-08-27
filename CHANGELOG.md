@@ -19,6 +19,11 @@ semantic versioning.
   languages (`actions`, `javascript-typescript`, `swift` vs `javascript`).
 - Runs are now cancelled per pull request on a force-push, and every job has a
   `timeout-minutes`.
+- **New `bash32` CI gate.** `scripts/bash32-smoke.sh` runs in a `bash:3.2`
+  container - the version macOS ships as `/bin/bash` - parsing every shell
+  script and dry-running every target `install.sh` advertises. The rest of the
+  shell suite runs on ubuntu's bash 5, which silently passes real 3.2 traps
+  such as expanding `"${arr[@]}"` on an empty array under `set -u`.
 
 ### Security
 
