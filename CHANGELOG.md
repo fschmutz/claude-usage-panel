@@ -8,6 +8,14 @@ semantic versioning.
 
 ### Added
 
+- **Session-window planner.** `sessionping` made you guess ping times; this
+  computes them. A 5-hour window is anchored to your first message, not the
+  clock, so a 09:00 start covers only 56% of a 09:00-18:00 day - pinging at
+  08:00 and 13:00 covers 100%. `./install.sh plan` prints a coverage bar and
+  the exact `sessionping` command; `--compare 09:00` scores the schedule you
+  already have. macOS Settings gains a **Suggest times** button and a live
+  coverage line. Overlapping windows are unioned rather than summed, so a
+  redundant schedule can never outrank a spread one.
 - **Every number now says where it came from.** Limit percentages are read from
   the account's usage endpoint (`official`); session cost and burn-rate
   projections are derived locally from logs and a price table (`est.`). Those

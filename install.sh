@@ -11,6 +11,9 @@
 #   ./install.sh sessionping [HH:MM ...] [--days=mon,wed,fri|all]
 #                                   ping claude at fixed times so the 5h session
 #                                   window opens on schedule (default 05:30, Mon-Fri)
+#   ./install.sh plan [--day HH:MM-HH:MM] [--pings N] [--compare a,b]
+#                                   recommend sessionping times for your working
+#                                   day, and score the schedule you already have
 #   ./install.sh gnome statusline   any combination
 #   ./install.sh update [target...]        reinstall what's already installed (upgrade)
 #   ./install.sh update --pull             git pull --ff-only first, then upgrade
@@ -884,6 +887,19 @@ usage() {
 }
 
 # ── Main ────────────────────────────────────────────────────────────────────────
+
+# `plan` is a read-only helper, not an install target. It has to be handled
+# before the argument loop, which would otherwise reject the planner's own
+# flags (--day, --pings, --compare) as unknown options.
+if [ "${1:-}" = plan ]; then
+    shift
+    if ! command -v node >/dev/null; then
+        echo "install: plan needs node on PATH" >&2
+        exit 1
+    fi
+    exec node "$ROOT/scripts/plan-windows.mjs" "$@"
+fi
+
 action=install
 targets=()
 for arg in "$@"; do

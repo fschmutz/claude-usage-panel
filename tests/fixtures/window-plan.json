@@ -1,0 +1,52 @@
+{
+  "_comment": "Shared contract for the session-window planner. Asserted by tests/windowplan.test.js (GNOME lib/pure.js) and ClaudeUsageCoreTests/WindowPlannerTests (macOS WindowPlanner.swift). Change a port and this file together, never one alone.",
+  "plan": [
+    {
+      "name": "two pings cover a 9h day completely",
+      "day": {"startMinute": 540, "endMinute": 1080},
+      "count": 2,
+      "pingTimes": ["08:00", "13:00"],
+      "coveredMinutes": 540,
+      "coveragePercent": 100
+    },
+    {
+      "name": "one ping cannot cover a 9h day",
+      "day": {"startMinute": 540, "endMinute": 1080},
+      "count": 1,
+      "pingTimes": ["09:00"],
+      "coveredMinutes": 300,
+      "coveragePercent": 56
+    },
+    {
+      "name": "asking for more windows than the day can use is capped",
+      "day": {"startMinute": 540, "endMinute": 1080},
+      "count": 99,
+      "pingTimes": ["08:00", "13:00"],
+      "coveredMinutes": 540,
+      "coveragePercent": 100
+    }
+  ],
+  "evaluate": [
+    {
+      "name": "naive 09:00 start leaves the afternoon uncovered",
+      "day": {"startMinute": 540, "endMinute": 1080},
+      "pingTimes": ["09:00"],
+      "coveredMinutes": 300,
+      "coveragePercent": 56
+    },
+    {
+      "name": "overlapping pings are unioned, never summed",
+      "day": {"startMinute": 540, "endMinute": 1080},
+      "pingTimes": ["09:00", "10:00"],
+      "coveredMinutes": 360,
+      "coveragePercent": 67
+    },
+    {
+      "name": "a spread schedule beats a redundant one",
+      "day": {"startMinute": 540, "endMinute": 1080},
+      "pingTimes": ["09:00", "14:00"],
+      "coveredMinutes": 540,
+      "coveragePercent": 100
+    }
+  ]
+}

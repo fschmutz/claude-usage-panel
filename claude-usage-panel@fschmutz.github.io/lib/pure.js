@@ -285,3 +285,109 @@ export function summarizeCursorToday(events) {
         cents += e.chargedCents ?? 0;
     return cents / 100;
 }
+
+// ── Session-window planner ──────────────────────────────────────────────────
+// Twin of ClaudeUsageCore/WindowPlanner.swift, kept identical by
+// tests/fixtures/window-plan.json (asserted from both ports).
+//
+// Claude's 5-hour window is anchored to your first message, not the clock, so a
+// 09:00 start fits only two full windows into a 09:00-18:00 day and the second
+// runs out mid-afternoon. `install.sh sessionping` schedules pings; this
+// decides WHEN, instead of making the user guess. It does not raise quota - it
+// lines the windows up with the hours actually worked.
+
+export const WINDOW_MINUTES = 5 * 60;
+
+export function parseHHMM(s) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(s));
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return h * 60 + min;
+}
+
+export function formatHHMM(minute) {
+    const m = ((minute % 1440) + 1440) % 1440;
+    return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+function coveragePercent(covered, day) {
+    const len = day.endMinute - day.startMinute;
+    return len > 0 ? Math.round((covered / len) * 100) : 0;
+}
+
+function summarize(pingTimes, coverage, day) {
+    return (
+        `${pingTimes.join(' ')} · ${coverage}% of ` +
+        `${formatHHMM(day.startMinute)}-${formatHHMM(day.endMinute)} covered`
+    );
+}
+
+/**
+ * Plan `count` back-to-back windows across a working day.
+ * A ping inside an already-open window is wasted (the window stays anchored to
+ * its own first message), so the only real choice is where the FIRST one goes.
+ */
+export function planWindows(day, count = 2) {
+    const dayLen = day.endMinute - day.startMinute;
+    // More windows than the day can use is meaningless: the extras start after
+    // the day is over (and used to wrap past midnight). Cap at the number it
+    // takes to blanket the working day.
+    const useful = Math.max(1, Math.ceil(dayLen / WINDOW_MINUTES));
+    const n = Math.max(1, Math.min(count, useful));
+    const span = n * WINDOW_MINUTES;
+    let first = span >= dayLen ? day.endMinute - span : day.startMinute;
+    first = Math.max(0, Math.min(first, day.startMinute));
+
+    const windows = [];
+    let covered = 0;
+    for (let i = 0; i < n; i++) {
+        const open = first + i * WINDOW_MINUTES;
+        const close = open + WINDOW_MINUTES;
+        const overlap = Math.max(
+            0,
+            Math.min(close, day.endMinute) - Math.max(open, day.startMinute),
+        );
+        covered += overlap;
+        windows.push({openMinute: open, usefulMinutes: overlap});
+    }
+    const pingTimes = windows.map((w) => formatHHMM(w.openMinute));
+    const coveredMinutes = Math.min(covered, dayLen);
+    const pct = coveragePercent(coveredMinutes, day);
+    return {pingTimes, windows, coveredMinutes, coveragePercent: pct, summary: summarize(pingTimes, pct, day)};
+}
+
+/**
+ * Coverage of a schedule the user already has, so the UI can say
+ * "yours covers 56%, this would cover 100%". Overlapping windows are unioned,
+ * never summed - a naive sum ranks a redundant schedule above a spread one.
+ */
+export function evaluateWindows(pingTimes, day) {
+    const opens = pingTimes
+        .map(parseHHMM)
+        .filter((v) => v !== null)
+        .sort((a, b) => a - b);
+    if (!opens.length) return null;
+
+    const windows = [];
+    const merged = [];
+    for (const open of opens) {
+        const close = open + WINDOW_MINUTES;
+        const overlap = Math.max(
+            0,
+            Math.min(close, day.endMinute) - Math.max(open, day.startMinute),
+        );
+        windows.push({openMinute: open, usefulMinutes: overlap});
+        const lo = Math.max(open, day.startMinute);
+        const hi = Math.min(close, day.endMinute);
+        if (hi <= lo) continue;
+        const last = merged[merged.length - 1];
+        if (last && lo <= last[1]) last[1] = Math.max(last[1], hi);
+        else merged.push([lo, hi]);
+    }
+    const coveredMinutes = merged.reduce((a, [lo, hi]) => a + (hi - lo), 0);
+    const times = opens.map(formatHHMM);
+    const pct = coveragePercent(coveredMinutes, day);
+    return {pingTimes: times, windows, coveredMinutes, coveragePercent: pct, summary: summarize(times, pct, day)};
+}

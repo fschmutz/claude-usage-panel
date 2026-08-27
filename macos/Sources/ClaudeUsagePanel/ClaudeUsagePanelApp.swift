@@ -95,6 +95,8 @@ final class UsageModel: ObservableObject {
     private var loopTask: Task<Void, Never>?
 
     init() {
+        workDayStart = UserDefaults.standard.string(forKey: "workDayStart") ?? "09:00"
+        workDayEnd = UserDefaults.standard.string(forKey: "workDayEnd") ?? "18:00"
         refreshMinutes = UserDefaults.standard.object(forKey: "refreshMinutes") as? Int ?? 10
         showCost = UserDefaults.standard.bool(forKey: "showCost")
         alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
@@ -288,6 +290,36 @@ final class UsageModel: ObservableObject {
                 self.updateBusy = false
             }
         }
+    }
+
+    /// Working day used to plan pings. Same @Published + UserDefaults idiom as
+    /// every other persisted setting here - @AppStorage does not publish from an
+    /// ObservableObject.
+    @Published var workDayStart: String {
+        didSet { UserDefaults.standard.set(workDayStart, forKey: "workDayStart") }
+    }
+    @Published var workDayEnd: String {
+        didSet { UserDefaults.standard.set(workDayEnd, forKey: "workDayEnd") }
+    }
+
+    private var workDay: WorkDay {
+        WorkDay(start: workDayStart, end: workDayEnd) ?? .default
+    }
+
+    /// Replace the schedule with the one that covers the working day best.
+    func suggestSessionPingTimes() {
+        sessionPingTimes = WindowPlanner.plan(day: workDay, pings: 2).pingTimes
+    }
+
+    /// "56% of 09:00-18:00 covered" for the current schedule.
+    var sessionPingCoverage: String {
+        guard let p = WindowPlanner.evaluate(pingTimes: sessionPingTimes, day: workDay) else {
+            return "No valid ping times."
+        }
+        let best = WindowPlanner.plan(day: workDay, pings: 2)
+        if p.coveragePercent >= best.coveragePercent { return p.summary }
+        return p.summary + " · \(best.pingTimes.joined(separator: " ")) would cover "
+            + "\(best.coveragePercent)%"
     }
 
     /// "06:00 11:00 · Mon-Fri" - the dropdown's one-line schedule summary.
@@ -631,12 +663,26 @@ struct SettingsView: View {
                             .disabled(model.sessionPingTimes.count == 1)
                         }
                     }
-                    Button {
-                        model.sessionPingTimes.append("09:00")
-                    } label: {
-                        Label("Add a ping", systemImage: "plus.circle")
+                    HStack {
+                        Button {
+                            model.sessionPingTimes.append("09:00")
+                        } label: {
+                            Label("Add a ping", systemImage: "plus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        Spacer()
+                        // Stop making the user guess: a 5h window is anchored to
+                        // its first message, so the only real choice is where the
+                        // chain starts. Compute it from the working day instead.
+                        Button {
+                            model.suggestSessionPingTimes()
+                        } label: {
+                            Label("Suggest times", systemImage: "wand.and.stars")
+                        }
+                        .buttonStyle(.borderless)
                     }
-                    .buttonStyle(.borderless)
+                    Text(model.sessionPingCoverage)
+                        .font(.footnote).foregroundColor(.secondary)
                     HStack(spacing: 4) {
                         ForEach(1...7, id: \.self) { d in
                             Toggle(Self.dayNames[d - 1], isOn: dayBinding(d))

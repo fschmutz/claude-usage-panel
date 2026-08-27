@@ -43,6 +43,7 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
 | `mcp` | `get_usage` tool inside Claude Code **and** Cursor - ask "how much of my plan have I used?" | [mcp/README.md](mcp/README.md) |
 | `autoupdate` | Daily check for a new release, installed automatically (on by default) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#staying-up-to-date) |
+| `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
 
 The status line renders like this, right under the prompt input:
