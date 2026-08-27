@@ -17,6 +17,13 @@ semantic versioning.
 
 ### Added
 
+- **Token attribution: where the tokens actually went.** `node
+  scripts/token-attribution.mjs` splits your spend across exploration,
+  implementation, verification, **rework** (editing a file this session already
+  edited) and **correction** (the turn after a tool call errored). Totals tell
+  you that you spent a lot; they never tell you on what, which is the only
+  version that changes behaviour. Clearly marked estimated - it is reconstructed
+  from local session logs, not reported by Anthropic.
 - **Linux status bars.** `linux/usage-bar.mjs` prints one usage line for waybar
   (`--format waybar`, with `class` and `percentage` taken from the worst limit),
   tmux (`--format tmux`, per-severity colour tags), polybar and i3blocks. It

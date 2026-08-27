@@ -46,6 +46,11 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
 
+**Where did the tokens go?** `node scripts/token-attribution.mjs --days 7`
+breaks your spend into exploration / implementation / verification / rework /
+correction, so you can see whether the budget went into progress or into
+re-doing things.
+
 **Any other Linux bar** - waybar, tmux, polybar, i3blocks - is one command, no
 install target needed: `node linux/usage-bar.mjs --format waybar` (see
 [linux/README.md](linux/README.md)). **Not sure when to schedule your session
