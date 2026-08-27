@@ -59,6 +59,15 @@ repos:
     hooks:
       - id: actionlint
 
+  # GitHub Actions SECURITY - actionlint checks that a workflow is valid, zizmor
+  # checks that it is safe: unpinned actions, over-broad permissions, credential
+  # persistence, template injection. Offline mode so it needs no token in CI.
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.29.0
+    hooks:
+      - id: zizmor
+        args: [--no-progress, --no-online-audits]
+
   # Project-local guards
   - repo: local
     hooks:

@@ -4,3 +4,18 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # A freshly published release is not proposed for 7 days. A compromised
+    # upstream is usually caught and yanked inside that window, so the bump
+    # never reaches a PR - the cheapest supply-chain control there is.
+    cooldown:
+      default-days: 7
+
+    # Actions are pinned to a commit SHA in the workflows (a tag is mutable).
+    # Dependabot rewrites the SHA and refreshes the trailing version comment,
+    # so pinning costs no manual upkeep.
+    groups:
+      # One PR a week for the routine bumps instead of one per action.
+      actions-minor:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    open-pull-requests-limit: 5

@@ -14,16 +14,21 @@ on:
         description: "Existing tag to (re)release, e.g. v1.4.0"
         required: true
 
-permissions:
-  contents: write
+# Least privilege: nothing at the workflow level; each job asks for exactly
+# what it writes (both publish release assets, so both need contents: write).
+permissions: {}
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.t.outputs.tag }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Resolve tag
         id: t
@@ -94,8 +99,12 @@ jobs:
   macos-asset:
     needs: release
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build the .app (no /Applications install)
         run: ./install.sh macos --build-only
       - name: Zip and upload to the release
