@@ -43,7 +43,12 @@ EOT
 #    day it lands.
 echo
 echo "== install.sh --dry-run, every advertised target =="
-targets="$(bash "$ROOT/install.sh" --list | awk -F: '/^ *all:/ {print $2; exit}')"
+# Capture first, then parse. Piping install.sh straight into an awk that
+# `exit`s on the first match closes the pipe while install.sh is still
+# writing, and under `set -o pipefail` that SIGPIPE (141) fails the job -
+# a race that passes locally and fails on a CI runner.
+list_out="$(bash "$ROOT/install.sh" --list)"
+targets="$(printf '%s\n' "$list_out" | awk -F: '/^ *all:/ {print $2}')"
 [ -n "$targets" ] || { echo "  FAIL  could not read the target list from --list"; exit 1; }
 
 for t in $targets; do
