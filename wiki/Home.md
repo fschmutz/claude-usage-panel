@@ -26,6 +26,7 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 - [[MCP Tool]] - ask Claude or Cursor for your usage in-conversation
 - [[Troubleshooting]] - common issues and fixes
 - [[Architecture]] - how the code is laid out
+- [[CI]] - what gates a merge, and the workflow supply-chain rules
 - [[FAQ]]
 
 ## What it shows

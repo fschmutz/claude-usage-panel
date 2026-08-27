@@ -25,9 +25,10 @@ node --test --test-name-pattern="sparkline" tests/pure.test.js  # single test
 # Swift core unit tests (runs on Linux CI too - no macOS needed)
 cd macos && swift test
 
-# Lint / format everything (same set runs in CI on every push)
+# Lint / format everything (same set runs in CI on every push, as the `lint` job)
 pre-commit run --all-files
 pre-commit run eslint --all-files   # single hook
+pre-commit run zizmor --all-files   # workflow security audit (actionlint = validity)
 
 # Install - one unified entrypoint for all clients (also reachable with
 # curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash [-s -- target…])
@@ -61,6 +62,34 @@ each of those guards against a throwaway local bare remote (offline).
 
 There is **no build step for the GNOME extension or the status line** - they run
 the source files directly. `npm` is only a test runner; there are no runtime deps.
+
+## CI - one required check, never edit branch protection
+
+Every gate is a job in `.github/workflows/ci.yml`. The `ci-gate` job `needs:`
+all of them and is the **only** context the branch ruleset requires.
+
+**To add a gate: add the job, add its id to `ci-gate`'s `needs:`. Never add a
+required status check to the ruleset.** A required context that names a
+specific job goes stale the moment that job is renamed or disabled, and a
+stale context blocks every PR forever with nothing red to point at - which is
+exactly what happened here with CodeQL's `analyze` job. `ci-gate` also runs
+`if: always()` on purpose: a skipped required check reports neutral, which
+GitHub counts as a pass, so without it a failed dependency would wave the PR
+through.
+
+Workflow rules, enforced by `zizmor` in pre-commit (it will fail the build):
+actions pinned to a full commit SHA with the version in a trailing comment
+(Dependabot maintains both), `persist-credentials: false` on every checkout,
+`permissions:` at job level with `{}` at workflow level.
+
+CodeQL runs via **default setup**, not a workflow file - do not create one, it
+would be auto-disabled and become a dead file. Its PR check is neutral by
+design and is deliberately not part of `ci-gate`.
+
+Fork PRs need a one-time maintainer approval per new contributor
+(`fork-pr-contributor-approval: first_time_contributors`) - keep that setting.
+Diagnosing a `BLOCKED` PR whose checks are all green, and the rest of the
+process: `wiki/CI.md`.
 
 ## Architecture - one contract, three ports
 

@@ -10,8 +10,26 @@ pipx install pre-commit
 pre-commit install
 ```
 
-`pre-commit` runs ESLint, `swift-format`, shellcheck, shfmt, markdownlint, and
-gitleaks - the same set runs in CI on every push.
+`pre-commit` runs ESLint, `swift-format`, shellcheck, shfmt, markdownlint,
+gitleaks, `actionlint` and `zizmor` - the same set runs in CI on every push, as
+the `lint` job.
+
+## CI: one required check
+
+All gates live in `.github/workflows/ci.yml`. The job named **`ci-gate`** fans
+every other job in and is the only status check the branch ruleset requires, so
+adding or renaming a job never needs a branch-protection change.
+
+To add a gate: add the job, then add its id to `needs:` in `ci-gate`. Nothing
+else. Workflows must keep their actions pinned to a commit SHA (never a tag),
+`persist-credentials: false` on every checkout, and `permissions:` declared per
+job - `zizmor` fails the build otherwise.
+
+If you open the PR from a fork, a maintainer has to approve the first CI run;
+after that your PRs run automatically. Push with an email that is registered on
+your GitHub account, otherwise the commit counts as unattributed and needs an
+extra approval. Full details: the [CI](https://github.com/fschmutz/claude-usage-panel/wiki/CI)
+wiki page.
 
 ## Layout
 

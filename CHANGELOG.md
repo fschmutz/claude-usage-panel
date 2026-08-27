@@ -6,8 +6,30 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **CI is one workflow with one required check.** `test.yml` and
+  `pre-commit.yml` merged into `ci.yml`, where a `ci-gate` job fans in every
+  other job and is the only context branch protection requires - so adding or
+  renaming a job no longer needs a branch-protection change. This fixes pull
+  requests sitting at `BLOCKED` with every check green: the ruleset required
+  `analyze` from `codeql.yml`, a workflow GitHub had auto-disabled when CodeQL
+  default setup was enabled, so the context could never report again.
+- **`codeql.yml` deleted.** CodeQL default setup supersedes it and covers more
+  languages (`actions`, `javascript-typescript`, `swift` vs `javascript`).
+- Runs are now cancelled per pull request on a force-push, and every job has a
+  `timeout-minutes`.
+
 ### Security
 
+- **Workflow actions pinned to commit SHAs** instead of mutable tags, with
+  `persist-credentials: false` on every checkout and `permissions:` moved from
+  the workflow level to the jobs that actually write.
+- **`zizmor` added to pre-commit** to audit workflows for unpinned actions,
+  over-broad permissions, credential persistence and template injection -
+  alongside `actionlint`, which only checks validity.
+- **Dependabot now waits 7 days before proposing a new release** (`cooldown`),
+  so a compromised upstream has time to be yanked before it reaches a PR.
 - **macOS: the Cursor Admin API key moved from UserDefaults to the login
   Keychain** (CodeQL high: cleartext storage in a preference store). A key
   stored by earlier versions migrates on first launch and is scrubbed from the
