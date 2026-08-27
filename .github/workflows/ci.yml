@@ -1,0 +1,134 @@
+name: ci
+
+# One workflow, one required check. Every gate this repo has runs here, and the
+# `ci-gate` job at the bottom fans them all in: it is the ONLY context the
+# branch ruleset requires. Add, rename or drop a job freely - the ruleset never
+# has to change and can never go stale.
+#
+# (It went stale once: the ruleset required `analyze` from a CodeQL workflow that
+# GitHub had auto-disabled when CodeQL default setup was turned on, so the
+# context could never report and every PR sat BLOCKED forever. The fan-in job
+# makes that class of bug impossible.)
+#
+# Actions are pinned to a commit SHA, not a tag: a tag is mutable and a
+# compromised upstream can repoint it. Dependabot bumps the SHAs weekly and the
+# comment carries the human-readable version.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group: # so the same gate guards a merge queue if one is ever enabled
+
+# Least privilege: every job only reads the checkout
+# (CodeQL: actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
+# One run per PR: a force-push supersedes the previous run instead of racing it.
+# Never cancel a push to main or a merge-queue run - those results are recorded.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        env:
+          # swift-format needs the Swift toolchain, which isn't on the runner;
+          # it is still enforced locally. All other hooks run in CI.
+          SKIP: swift-format
+
+  js:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - run: node --test "tests/*.test.js"
+
+  # The screenshots in docs/ are GENERATED from scripts/screenshots/data.json by
+  # code that drives the real shared logic (normalize, forecast, labels). A
+  # UI-visible contract change that forgets to regenerate them fails here:
+  #   node scripts/screenshots/render.mjs
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - run: node scripts/screenshots/render.mjs --check
+
+  # Linux: fast parity gate - builds/tests only the Foundation-only core.
+  swift-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
+        with:
+          swift-version: "6.1"
+      - run: swift test
+        working-directory: macos
+
+  # macOS: compile the real SwiftUI menu-bar app (macOS-only target) so type
+  # errors in the app layer are caught in CI, not only when a Mac user builds it.
+  macos-app:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: swift build # includes the macOS-only ClaudeUsagePanel executable
+        working-directory: macos
+      - run: swift test # core + parity suites on Apple's toolchain too
+        working-directory: macos
+
+  # ── The one required check ──────────────────────────────────────────────────
+  # Requires every job above to have actually SUCCEEDED. `if: always()` is what
+  # makes that true: without it this job would be skipped when a dependency
+  # fails, and a skipped required check reports neutral - i.e. it would wave
+  # through exactly the failures it exists to catch. `cancelled` and `skipped`
+  # are failures here too, never a pass.
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [lint, js, screenshots, swift-core, macos-app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to have succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$RESULTS" | jq -r 'to_entries[] | "\(.value.result)\t\(.key)"' | sort
+          if printf '%s\n' "$RESULTS" | jq -e 'to_entries | map(.value.result == "success") | all' >/dev/null; then
+            echo "All CI jobs succeeded."
+          else
+            echo "::error::One or more CI jobs did not succeed (see the table above)."
+            exit 1
+          fi
