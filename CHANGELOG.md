@@ -8,6 +8,16 @@ semantic versioning.
 
 ### Added
 
+- **Updates section in Settings (macOS) and Preferences (GNOME).** Shows
+  installed vs latest, when the daily check last ran, and a Check now / Update
+  now button. Crucially it shows **why auto-update is not acting**: the
+  scheduler deliberately refuses a dirty, diverged or detached checkout and
+  only wrote the reason to its log, so a paused install was indistinguishable
+  from a current one. Both UIs read `scripts/auto-update.sh --status --json`,
+  the same script the timer runs, so they cannot disagree with it.
+- **`scripts/auto-update.sh --status --json`** - machine-readable status
+  (`updateAvailable`, `blocked`, `blockedReason`, `lastCheck`). The plain
+  `--status` output now also prints `update:` and, when relevant, `blocked:`.
 - **New `sessionping` install target**: schedules tiny `claude` pings (haiku,
   one turn) at fixed local times so the 5-hour session window opens on your
   schedule instead of at your first message of the day -

@@ -4,6 +4,7 @@
 #   scripts/auto-update.sh              check, and install a newer release if any
 #   scripts/auto-update.sh --check      report only, install nothing (exit 10 = update available)
 #   scripts/auto-update.sh --status     print local / latest / last check, then exit
+#   scripts/auto-update.sh --status --json   same, machine-readable (the UIs parse this)
 #   scripts/auto-update.sh --force      re-run the install even if already up to date
 #   scripts/auto-update.sh --quiet      log only, no stdout (this is what the timer runs)
 #
@@ -34,6 +35,7 @@ LOCK="$STATE_DIR/update.lock"
 QUIET=false
 FORCE=false
 MODE=run # run | check | status
+JSON=false
 
 log() {
     mkdir -p "$STATE_DIR" 2>/dev/null || return 0
@@ -157,6 +159,7 @@ while [ $# -gt 0 ]; do
             ;;
         --check) MODE=check ;;
         --status) MODE=status ;;
+        --json) JSON=true ;;
         --force) FORCE=true ;;
         --quiet | -q) QUIET=true ;;
         # Used by the unit tests to assert the ordering rules directly.
@@ -176,15 +179,52 @@ done
 
 mkdir -p "$STATE_DIR"
 
+# Minimal JSON string escaping - values here are paths and versions.
+json_escape() {
+    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
 if [ "$MODE" = status ]; then
-    printf 'checkout:   %s\n' "$ROOT"
-    printf 'installed:  %s\n' "$(local_version)"
-    printf 'latest:     %s\n' "$(latest_remote_version || true)"
-    if [ -f "$STATE_DIR/last-check" ]; then
-        printf 'last check: %s\n' "$(cat "$STATE_DIR/last-check")"
+    installed="$(local_version)"
+    latest="$(latest_remote_version || true)"
+    last_check="never"
+    [ -f "$STATE_DIR/last-check" ] && last_check="$(cat "$STATE_DIR/last-check")"
+
+    # Why a scheduled run would decline to act - the part that was invisible
+    # before: auto-update logs its reason and waits, so a user with a dirty or
+    # diverged checkout saw "up to date" forever with no hint why.
+    blocked_reason=""
+    if ! blocked_reason="$(repo_is_updatable)"; then
+        :
     else
-        printf 'last check: never\n'
+        blocked_reason=""
     fi
+
+    update_available=false
+    if [ -n "$latest" ] && [ "$(version_compare "$latest" "$installed")" = 1 ]; then
+        update_available=true
+    fi
+
+    if $JSON; then
+        printf '{\n'
+        printf '  "checkout": "%s",\n' "$(json_escape "$ROOT")"
+        printf '  "installed": "%s",\n' "$(json_escape "$installed")"
+        printf '  "latest": "%s",\n' "$(json_escape "$latest")"
+        printf '  "updateAvailable": %s,\n' "$update_available"
+        printf '  "blocked": %s,\n' "$([ -n "$blocked_reason" ] && echo true || echo false)"
+        printf '  "blockedReason": "%s",\n' "$(json_escape "$blocked_reason")"
+        printf '  "lastCheck": "%s",\n' "$(json_escape "$last_check")"
+        printf '  "log": "%s"\n' "$(json_escape "$LOG")"
+        printf '}\n'
+        exit 0
+    fi
+
+    printf 'checkout:   %s\n' "$ROOT"
+    printf 'installed:  %s\n' "$installed"
+    printf 'latest:     %s\n' "$latest"
+    printf 'update:     %s\n' "$($update_available && echo "available" || echo "up to date")"
+    [ -n "$blocked_reason" ] && printf 'blocked:    %s\n' "$blocked_reason"
+    printf 'last check: %s\n' "$last_check"
     printf 'log:        %s\n' "$LOG"
     exit 0
 fi

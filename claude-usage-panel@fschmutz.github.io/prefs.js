@@ -1,4 +1,6 @@
 import Adw from 'gi://Adw';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -101,6 +103,103 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         });
         cursor.add(keyRow);
         page.add(cursor);
+
+
+        // Updates: the same `scripts/auto-update.sh --status --json` the daily
+        // timer runs. Surfacing `blocked` is the point - auto-update refuses a
+        // dirty, diverged or detached checkout and only logs why, so a paused
+        // install used to look exactly like a current one.
+        const updates = new Adw.PreferencesGroup({
+            title: _('Updates'),
+            description: _('Daily check, and whether it is actually running.'),
+        });
+        const updateRow = new Adw.ActionRow({
+            title: _('Checking…'),
+            subtitle: '',
+        });
+        const updateBtn = new Gtk.Button({
+            label: _('Check now'),
+            valign: Gtk.Align.CENTER,
+        });
+        updateRow.add_suffix(updateBtn);
+        updates.add(updateRow);
+        page.add(updates);
+
+        const scriptPath = GLib.build_filenamev([this.path, 'scripts', 'auto-update.sh']);
+
+        const runUpdateScript = (args, onDone) => {
+            // Async: a git fetch must never freeze the prefs window.
+            let proc;
+            try {
+                proc = Gio.Subprocess.new(
+                    ['bash', scriptPath, ...args],
+                    Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+                );
+            } catch {
+                onDone(null);
+                return;
+            }
+            proc.communicate_utf8_async(null, null, (p, res) => {
+                try {
+                    const [, stdout] = p.communicate_utf8_finish(res);
+                    onDone(stdout);
+                } catch {
+                    onDone(null);
+                }
+            });
+        };
+
+        const renderUpdate = (stdout) => {
+            updateBtn.sensitive = true;
+            if (!stdout) {
+                updateRow.title = _('Cannot self-update');
+                updateRow.subtitle = _('No git checkout found for auto-update.sh.');
+                updateBtn.label = _('Check now');
+                return;
+            }
+            let st;
+            try {
+                st = JSON.parse(stdout);
+            } catch {
+                updateRow.title = _('Could not read the update status');
+                updateRow.subtitle = '';
+                return;
+            }
+            if (st.blocked) {
+                updateRow.title = _('Paused: %s').format(st.blockedReason);
+                updateRow.subtitle = _(
+                    'The daily check will not touch this checkout until that is resolved. ' +
+                        'It only ever fast-forwards a clean checkout.',
+                );
+                updateBtn.label = _('Check now');
+            } else if (st.updateAvailable) {
+                updateRow.title = _('Update available: %s → %s').format(st.installed, st.latest);
+                updateRow.subtitle = _('Last checked %s').format(st.lastCheck);
+                updateBtn.label = _('Update now');
+            } else {
+                updateRow.title = st.latest
+                    ? _('Up to date (%s)').format(st.installed)
+                    : _('%s (could not reach the remote)').format(st.installed);
+                updateRow.subtitle = _('Last checked %s').format(st.lastCheck);
+                updateBtn.label = _('Check now');
+            }
+        };
+
+        const refreshUpdate = () => {
+            updateBtn.sensitive = false;
+            runUpdateScript(['--status', '--json'], renderUpdate);
+        };
+
+        updateBtn.connect('clicked', () => {
+            updateBtn.sensitive = false;
+            const applying = updateBtn.label === _('Update now');
+            updateRow.subtitle = applying ? _('Updating…') : _('Checking…');
+            runUpdateScript(applying ? [] : ['--status', '--json'], (out) => {
+                if (applying) refreshUpdate();
+                else renderUpdate(out);
+            });
+        });
+        refreshUpdate();
 
         window.add(page);
     }

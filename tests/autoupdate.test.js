@@ -229,6 +229,33 @@ test('--status reports the local and remote versions', (t) => {
     assert.match(r.stdout, /latest: +1\.6\.0/);
 });
 
+// --status --json is the contract both UIs parse (macOS Settings > Updates,
+// GNOME prefs > Updates). Shape changes here break them silently, so pin it.
+test('--status --json emits the shape the UIs parse', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.6.0']});
+    const r = runScript(c, ['--status', '--json']);
+    assert.equal(r.status, 0);
+    const st = JSON.parse(r.stdout);
+    assert.equal(st.installed, '1.5.0');
+    assert.equal(st.latest, '1.6.0');
+    assert.equal(st.updateAvailable, true);
+    assert.equal(st.blocked, false);
+    assert.equal(st.blockedReason, '');
+    assert.equal(typeof st.lastCheck, 'string');
+    assert.equal(typeof st.log, 'string');
+});
+
+// The case the Updates section exists for: a checkout auto-update refuses to
+// touch must report blocked with a reason, not a bare "up to date".
+test('--status --json reports why a dirty checkout is skipped', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.6.0']});
+    const scratch = path.join(c.work, 'package.json');
+    fs.writeFileSync(scratch, fs.readFileSync(scratch, 'utf8') + '\n');
+    const st = JSON.parse(runScript(c, ['--status', '--json']).stdout);
+    assert.equal(st.blocked, true);
+    assert.match(st.blockedReason, /local changes/);
+});
+
 test('an unknown flag exits 2 with usage', (t) => {
     const c = makeCheckout(t, {localVersion: '1.5.0', tags: []});
     const r = runScript(c, ['--nope']);

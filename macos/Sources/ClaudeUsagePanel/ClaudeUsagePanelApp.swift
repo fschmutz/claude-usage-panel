@@ -75,6 +75,12 @@ final class UsageModel: ObservableObject {
         didSet { applySessionPing() }
     }
     @Published var sessionPingError: String?
+
+    // Updates: read from auto-update.sh, never cached across a Settings open -
+    // the scheduler can change the answer behind our back.
+    @Published var updateStatus: UpdateStatus?
+    @Published var updateBusy = false
+    @Published var updateError: String?
     /// Init reads the plist back through these properties; only user edits
     /// (after init) may rewrite it.
     private var sessionPingReady = false
@@ -251,6 +257,37 @@ final class UsageModel: ObservableObject {
         sessionPingTimes = sp.schedule.times
         sessionPingDays = sp.schedule.days
         sessionPingReady = true
+    }
+
+    /// Re-read update status. Cheap enough to run on every Settings appear;
+    /// the git fetch inside the script is the slow part, so it runs off-main.
+    func reloadUpdateStatus() {
+        DispatchQueue.global(qos: .utility).async {
+            let s = Updates.status()
+            DispatchQueue.main.async {
+                self.updateStatus = s
+                if s == nil {
+                    self.updateError =
+                        "No git checkout found - this build cannot self-update."
+                }
+            }
+        }
+    }
+
+    /// Install the available update, then refresh.
+    func applyUpdate() {
+        guard !updateBusy else { return }
+        updateBusy = true
+        updateError = nil
+        DispatchQueue.global(qos: .utility).async {
+            let err = Updates.applyUpdate()
+            let s = Updates.status()
+            DispatchQueue.main.async {
+                self.updateError = err
+                self.updateStatus = s
+                self.updateBusy = false
+            }
+        }
     }
 
     /// "06:00 11:00 · Mon-Fri" - the dropdown's one-line schedule summary.
@@ -432,6 +469,9 @@ struct PopupView: View {
                 Text("Session pings: \(model.sessionPingSummary)")
                     .font(.system(size: 11)).foregroundColor(.secondary)
             }
+            if let u = model.updateStatus, u.needsAttention {
+                Text(u.summary).font(.system(size: 11)).foregroundColor(.cuCritical)
+            }
 
             if model.cursorEnabled {
                 CursorSectionView(model: model)
@@ -487,7 +527,10 @@ struct PopupView: View {
         }
         .padding(14)
         .frame(width: 340)
-        .onAppear { model.reloadSessionPing() }
+        .onAppear {
+            model.reloadSessionPing()
+            model.reloadUpdateStatus()
+        }
     }
 }
 
@@ -601,6 +644,41 @@ struct SettingsView: View {
                 )
                 .font(.footnote).foregroundColor(.secondary)
             }
+            Section("Updates") {
+                if let u = model.updateStatus {
+                    HStack {
+                        Text(u.summary)
+                            .foregroundColor(u.needsAttention ? .cuCritical : .secondary)
+                        Spacer()
+                        if model.updateBusy {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Button(u.updateAvailable ? "Update now" : "Check now") {
+                                if u.updateAvailable {
+                                    model.applyUpdate()
+                                } else {
+                                    model.reloadUpdateStatus()
+                                }
+                            }
+                        }
+                    }
+                    // The reason auto-update is not acting is the whole point of
+                    // this section: without it a paused checkout is
+                    // indistinguishable from a current one.
+                    if u.blocked {
+                        Text(
+                            "The daily check will not touch this checkout until that is "
+                                + "resolved. It only ever fast-forwards a clean checkout."
+                        )
+                        .font(.footnote).foregroundColor(.secondary)
+                    }
+                    Text("Last checked \(u.lastCheck)   ·   \(u.checkout)")
+                        .font(.footnote).foregroundColor(.secondary)
+                } else {
+                    Text(model.updateError ?? "Checking…")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+            }
             Section("Cursor (optional)") {
                 Toggle("Show Cursor team spend", isOn: $model.cursorEnabled)
                 SecureField("Cursor Admin API key", text: $model.cursorApiKey)
@@ -612,7 +690,10 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .padding()
-        .onAppear { model.reloadSessionPing() }
+        .onAppear {
+            model.reloadSessionPing()
+            model.reloadUpdateStatus()
+        }
     }
 
     private static let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
