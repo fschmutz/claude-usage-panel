@@ -68,7 +68,33 @@ for t in $targets; do
     fi
 done
 
-# 3. The always-safe read-only entrypoints.
+# 3. The bare, no-target path - the one `curl … | bash` takes. It is a
+#    DIFFERENT code path from a named target (it has to derive the target list
+#    itself), and skipping it is how a bash-4-only `mapfile` shipped and broke
+#    `./install.sh` on every stock Mac with exit 127.
+#    "No installable target detected" is a legitimate outcome in a container
+#    with no GNOME and no macOS; a crash is not. Distinguish them by exit code:
+#    1 is the honest "nothing to do here", 127/2 are bugs.
+echo
+echo "== bare install.sh (no target named) =="
+for bare in "--dry-run" "--dry-run update"; do
+    # `|| rc=$?` and not a bare `rc=$?`: under `set -e` a non-zero exit aborts
+    # the script before the next line ever runs, and 1 is an EXPECTED outcome
+    # here (nothing installable in a container).
+    rc=0
+    # shellcheck disable=SC2086 # deliberate word-splitting of the flag pair
+    bash "$ROOT/install.sh" $bare >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ]; then
+        printf '  ok    install.sh %s (exit %s)\n' "$bare" "$rc"
+    else
+        printf '  FAIL  install.sh %s exited %s\n' "$bare" "$rc"
+        # shellcheck disable=SC2086
+        bash "$ROOT/install.sh" $bare 2>&1 | tail -5
+        fail=1
+    fi
+done
+
+# 4. The always-safe read-only entrypoints.
 echo
 echo "== read-only entrypoints =="
 for cmd in "--list" "-h"; do

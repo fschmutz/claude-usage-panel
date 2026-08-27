@@ -969,10 +969,15 @@ fi
 # Default target set: `update` reinstalls what's already installed; install and
 # uninstall fall back to what fits this OS.
 if [ ${#targets[@]} -eq 0 ]; then
+    # not mapfile: the stock macOS bash is 3.2, where it does not exist. This
+    # is the bare `./install.sh` path - the one the curl one-liner takes - so a
+    # mapfile here failed on every Mac that had not installed a newer bash.
     if [ "$action" = update ]; then
-        mapfile -t targets < <(installed_targets)
+        while IFS= read -r line; do [ -n "$line" ] && targets+=("$line"); done \
+            < <(installed_targets)
     else
-        mapfile -t targets < <(detect_targets)
+        while IFS= read -r line; do [ -n "$line" ] && targets+=("$line"); done \
+            < <(detect_targets)
     fi
 fi
 

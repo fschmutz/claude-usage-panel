@@ -6,8 +6,24 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`./install.sh` with no target crashed on stock macOS** with
+  `mapfile: command not found` (exit 127) - the bash 4 builtin on the exact path
+  the `curl … | bash` one-liner takes. Replaced with the bash 3.2 read loop the
+  rest of the script already uses. The `bash32` gate only ever exercised *named*
+  targets, so it never ran this path; it now covers the bare and `update` forms
+  too, and was verified to catch the regression.
+
 ### Added
 
+- **Linux status bars.** `linux/usage-bar.mjs` prints one usage line for waybar
+  (`--format waybar`, with `class` and `percentage` taken from the worst limit),
+  tmux (`--format tmux`, per-severity colour tags), polybar and i3blocks. It
+  reuses `mcp/server.js` wholesale, so there is no second copy of the
+  normalization contract. A network error, expired token or HTTP 429 prints `--`
+  and exits 0 - a status bar that prints a stack trace is worse than one that
+  prints nothing.
 - **Session-window planner.** `sessionping` made you guess ping times; this
   computes them. A 5-hour window is anchored to your first message, not the
   clock, so a 09:00 start covers only 56% of a 09:00-18:00 day - pinging at
