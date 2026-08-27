@@ -8,6 +8,13 @@ semantic versioning.
 
 ### Added
 
+- **Every number now says where it came from.** Limit percentages are read from
+  the account's usage endpoint (`official`); session cost and burn-rate
+  projections are derived locally from logs and a price table (`est.`). Those
+  fail in different ways - an official figure can be stale, an estimated one can
+  be quietly wrong - and rendering them identically is what makes a dashboard
+  untrustworthy. `Provenance` / `Sourced` in the shared core, surfaced in both
+  the macOS dropdown and the GNOME panel.
 - **Updates section in Settings (macOS) and Preferences (GNOME).** Shows
   installed vs latest, when the daily check last ran, and a Check now / Update
   now button. Crucially it shows **why auto-update is not acting**: the

@@ -462,9 +462,20 @@ struct PopupView: View {
             }
 
             if let cost = model.costText {
-                Text("Session cost: \(cost)").font(.system(size: 12, weight: .semibold))
+                HStack(spacing: 4) {
+                    Text("Session cost: \(cost)").font(.system(size: 12, weight: .semibold))
+                    // Cost is reconstructed from local logs and a price table,
+                    // unlike the limit percentages above, which are read from
+                    // the account's usage endpoint. Say which is which.
+                    Text(Provenances.cost.badge)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                        .help(Provenances.cost.explanation)
+                }
             }
-            Text("Updated \(model.updated)").font(.system(size: 11)).foregroundColor(.secondary)
+            Text("Updated \(model.updated) · limits \(Provenances.limits.badge)")
+                .font(.system(size: 11)).foregroundColor(.secondary)
+                .help(Provenances.limits.explanation)
             if model.sessionPingEnabled {
                 Text("Session pings: \(model.sessionPingSummary)")
                     .font(.system(size: 11)).foregroundColor(.secondary)

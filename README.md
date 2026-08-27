@@ -69,7 +69,15 @@ The MCP tool also installs without any clone - as a Claude Code plugin
 
 ## Why this one
 
-Most Claude usage indicators read the endpoint's legacy `five_hour` /
+**The numbers are read, not reconstructed.** Every other Claude usage tool in
+circulation rebuilds your cost by parsing local JSONL logs and multiplying by a
+price table it has to keep current. This one reads your account's own usage
+endpoint, so the limit percentages are the same figures `/usage` prints. Those
+are different classes of number - an official one can be stale or unreachable,
+an estimated one can be quietly wrong - so every value in the UI carries a
+provenance marker (`official` / `est.`) and the panel never blurs the two.
+
+Most Claude usage indicators also read the endpoint's legacy `five_hour` /
 `seven_day` fields and show only the aggregate session + weekly pair. This one
 reads the modern **`limits[]` array**, so it shows **every** limit the Claude
 app shows - including **per-model weekly limits** (Fable, Opus…) that the

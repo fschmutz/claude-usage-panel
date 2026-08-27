@@ -287,7 +287,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
                     return;
                 if (cost) {
                     this._lastCost = cost;
-                    this._costLabel.text = _('Session cost: $%s · %s tokens')
+                    // 'est.': cost is reconstructed from local logs and a price table, while
+                    // the limit percentages come from the usage endpoint.
+                    this._costLabel.text = _('Session cost: $%s · %s tokens (est.)')
                         .format(cost.costUSD.toFixed(2), this._compact(cost.tokens));
                 } else {
                     this._costLabel.text = _('Session cost: unavailable (install ccusage)');
