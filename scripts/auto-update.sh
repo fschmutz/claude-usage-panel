@@ -89,6 +89,30 @@ local_version() {
     sed -nE 's/.*"version": *"([^"]+)".*/\1/p' "$ROOT/package.json" | head -1
 }
 
+# What the INSTALLED clients are actually running, which is not the same thing
+# as the checkout version. A manual `git pull` moves the checkout forward while
+# the GNOME extension, status line and MCP server stay on the old release; this
+# script then compared checkout to latest, saw a match and never reinstalled -
+# reporting "up to date" while the panel ran a version behind, indefinitely.
+# Stamped after every successful reinstall; unknown before the first one.
+deployed_version() {
+    [ -f "$STATE_DIR/installed-version" ] && cat "$STATE_DIR/installed-version" && return 0
+    # No stamp yet: fall back to whatever the GNOME extension declares, which is
+    # the one client that records its version on disk.
+    local meta="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions"
+    meta="$meta/claude-usage-panel@fschmutz.github.io/metadata.json"
+    if [ -f "$meta" ]; then
+        sed -nE 's/.*"version-name": *"([^"]+)".*/\1/p' "$meta" | head -1
+        return 0
+    fi
+    return 0
+}
+
+stamp_deployed_version() {
+    mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+    printf '%s\n' "$1" >"$STATE_DIR/installed-version" 2>/dev/null || true
+}
+
 # Highest released vX.Y.Z tag on the remote. Prints nothing if the remote is
 # unreachable or has no version tags - callers treat that as "skip, try tomorrow".
 latest_remote_version() {
@@ -186,6 +210,8 @@ json_escape() {
 
 if [ "$MODE" = status ]; then
     installed="$(local_version)"
+    deployed="$(deployed_version)"
+    [ -n "$deployed" ] || deployed="$installed"
     latest="$(latest_remote_version || true)"
     last_check="never"
     [ -f "$STATE_DIR/last-check" ] && last_check="$(cat "$STATE_DIR/last-check")"
@@ -200,17 +226,30 @@ if [ "$MODE" = status ]; then
         blocked_reason=""
     fi
 
+    # Compare against what is DEPLOYED, not what the checkout says. Those drift
+    # apart the moment someone runs `git pull` by hand, and comparing the
+    # checkout is what made this report "up to date" while the clients were a
+    # release behind.
     update_available=false
-    if [ -n "$latest" ] && [ "$(version_compare "$latest" "$installed")" = 1 ]; then
+    if [ -n "$latest" ] && [ "$(version_compare "$latest" "$deployed")" = 1 ]; then
         update_available=true
+    fi
+    # Checkout ahead of the clients: the code is here, it just was never
+    # installed. `./install.sh update` fixes it; the daily run will not, because
+    # it only reinstalls after a fast-forward it performed itself.
+    clients_stale=false
+    if [ "$(version_compare "$installed" "$deployed")" = 1 ]; then
+        clients_stale=true
     fi
 
     if $JSON; then
         printf '{\n'
         printf '  "checkout": "%s",\n' "$(json_escape "$ROOT")"
-        printf '  "installed": "%s",\n' "$(json_escape "$installed")"
+        printf '  "installed": "%s",\n' "$(json_escape "$deployed")"
+        printf '  "checkout_version": "%s",\n' "$(json_escape "$installed")"
         printf '  "latest": "%s",\n' "$(json_escape "$latest")"
         printf '  "updateAvailable": %s,\n' "$update_available"
+        printf '  "clientsStale": %s,\n' "$clients_stale"
         printf '  "blocked": %s,\n' "$([ -n "$blocked_reason" ] && echo true || echo false)"
         printf '  "blockedReason": "%s",\n' "$(json_escape "$blocked_reason")"
         printf '  "lastCheck": "%s",\n' "$(json_escape "$last_check")"
@@ -220,9 +259,11 @@ if [ "$MODE" = status ]; then
     fi
 
     printf 'checkout:   %s\n' "$ROOT"
-    printf 'installed:  %s\n' "$installed"
+    printf 'installed:  %s\n' "$deployed"
+    [ "$installed" != "$deployed" ] && printf 'checkout:   %s  (code is newer than what is installed)\n' "$installed"
     printf 'latest:     %s\n' "$latest"
     printf 'update:     %s\n' "$($update_available && echo "available" || echo "up to date")"
+    $clients_stale && printf 'action:     run ./install.sh update - the clients are behind the checkout\n'
     [ -n "$blocked_reason" ] && printf 'blocked:    %s\n' "$blocked_reason"
     printf 'last check: %s\n' "$last_check"
     printf 'log:        %s\n' "$LOG"
@@ -291,6 +332,7 @@ say "fast-forwarded to v$now - reinstalling the targets already installed"
 # `install.sh update` reinstalls only what `--list` reports as installed, so
 # this never adds a client the user chose not to have.
 if "$ROOT/install.sh" update >>"$LOG" 2>&1; then
+    stamp_deployed_version "$now"
     say "updated to v$now"
     notify "Claude Usage Panel updated" "Now on v$now. GNOME: log out and back in to load it."
 else

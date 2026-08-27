@@ -51,6 +51,34 @@ final class UpdateStatusTests: XCTestCase {
         XCTAssertEqual(s?.summary, "1.8.0 (could not reach the remote)")
     }
 
+    // The bug this field exists for: a manual `git pull` moves the checkout to
+    // 1.8.0 while the installed clients stay on 1.7.0, and the daily run then
+    // compares checkout-to-latest, matches, and never reinstalls.
+    func testStaleClientsAreReportedEvenWhenTheCheckoutIsCurrent() {
+        let s = parse(
+            """
+            {"installed":"1.7.0","checkout_version":"1.8.0","latest":"1.8.0",
+             "updateAvailable":true,"clientsStale":true,"blocked":true,
+             "blockedReason":"local changes in /x - leaving them alone"}
+            """)
+        XCTAssertEqual(s?.installed, "1.7.0")
+        XCTAssertEqual(s?.checkoutVersion, "1.8.0")
+        XCTAssertEqual(s?.clientsStale, true)
+        XCTAssertEqual(s?.summary, "Update available: 1.7.0 → 1.8.0")
+        XCTAssertEqual(s?.needsAttention, true)
+    }
+
+    func testStaleClientsOutrankAPauseWhenNothingNewerExists() {
+        let s = parse(
+            """
+            {"installed":"1.7.0","checkout_version":"1.8.0","latest":"1.8.0",
+             "updateAvailable":false,"clientsStale":true,"blocked":true,
+             "blockedReason":"local changes"}
+            """)
+        XCTAssertEqual(
+            s?.summary, "Installed 1.7.0, checkout 1.8.0 - run ./install.sh update")
+    }
+
     func testRejectsGarbageAndMissingVersion() {
         XCTAssertNil(parse("not json"))
         XCTAssertNil(parse(#"{"latest":"1.8.0"}"#))

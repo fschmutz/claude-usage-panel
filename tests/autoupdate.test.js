@@ -245,6 +245,22 @@ test('--status --json emits the shape the UIs parse', (t) => {
     assert.equal(typeof st.log, 'string');
 });
 
+// A manual `git pull` moves the checkout ahead of the installed clients. The
+// daily run compares checkout-to-latest, matches, and never reinstalls - so the
+// panel ran a release behind while --status said "up to date".
+test('--status --json reports clients left behind by a manual pull', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.8.0', tags: ['v1.8.0']});
+    // XDG_STATE_HOME is <dir>/state; the script namespaces under it.
+    const stateDir = path.join(c.dir, 'state', 'claude-usage-panel');
+    fs.mkdirSync(stateDir, {recursive: true});
+    fs.writeFileSync(path.join(stateDir, 'installed-version'), '1.7.0\n');
+    const st = JSON.parse(runScript(c, ['--status', '--json']).stdout);
+    assert.equal(st.installed, '1.7.0', 'reports what is DEPLOYED');
+    assert.equal(st.checkout_version, '1.8.0');
+    assert.equal(st.clientsStale, true);
+    assert.equal(st.updateAvailable, true, '1.8.0 is newer than the deployed 1.7.0');
+});
+
 // The case the Updates section exists for: a checkout auto-update refuses to
 // touch must report blocked with a reason, not a bare "up to date".
 test('--status --json reports why a dirty checkout is skipped', (t) => {

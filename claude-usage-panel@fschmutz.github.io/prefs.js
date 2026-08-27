@@ -165,7 +165,14 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
                 updateRow.subtitle = '';
                 return;
             }
-            if (st.blocked) {
+            if (st.clientsStale && !st.updateAvailable) {
+                // The code is here but was never installed - the daily run only
+                // reinstalls after a fast-forward it performed itself, so a
+                // manual `git pull` leaves the clients behind indefinitely.
+                updateRow.title = _('Installed %s, checkout %s').format(st.installed, st.checkout_version);
+                updateRow.subtitle = _('Run ./install.sh update to install the newer code.');
+                updateBtn.label = _('Update now');
+            } else if (st.blocked) {
                 updateRow.title = _('Paused: %s').format(st.blockedReason);
                 updateRow.subtitle = _(
                     'The daily check will not touch this checkout until that is resolved. ' +

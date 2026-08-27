@@ -6,6 +6,19 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Up to date" could be a lie.** auto-update compared the *checkout* version
+  to the latest tag. A manual `git pull` moves the checkout forward while the
+  installed GNOME extension, status line and MCP server stay on the old release
+  - the daily run then saw checkout == latest, did nothing, and reported "up to
+  date" indefinitely while the panel ran a version behind. Verified on a real
+  install: checkout 1.8.0, extension still 1.7.0, timer logging "up to date".
+  The comparison is now against what is actually **deployed**, stamped after
+  each successful reinstall (falling back to the GNOME extension's own
+  `version-name` before the first stamp). `--status` reports both versions and
+  a `clientsStale` flag, and both Settings UIs surface it with the fix to run.
+
 ## [1.8.0] - 2026-08-27
 
 ### Fixed

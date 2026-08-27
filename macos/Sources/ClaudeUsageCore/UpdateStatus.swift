@@ -13,7 +13,12 @@ public struct UpdateStatus: Equatable {
     public var checkout: String
     public var installed: String
     public var latest: String
+    /// Version of the checkout, which drifts ahead of `installed` after a
+    /// manual `git pull` that was never followed by a reinstall.
+    public var checkoutVersion: String
     public var updateAvailable: Bool
+    /// The code is present but was never installed - `./install.sh update`.
+    public var clientsStale: Bool
     /// True when auto-update would decline to act on this checkout.
     public var blocked: Bool
     /// Why it would decline - empty when not blocked.
@@ -24,10 +29,13 @@ public struct UpdateStatus: Equatable {
 
     public init(
         checkout: String, installed: String, latest: String, updateAvailable: Bool,
-        blocked: Bool, blockedReason: String, lastCheck: String, log: String
+        blocked: Bool, blockedReason: String, lastCheck: String, log: String,
+        checkoutVersion: String = "", clientsStale: Bool = false
     ) {
         self.checkout = checkout
         self.installed = installed
+        self.checkoutVersion = checkoutVersion
+        self.clientsStale = clientsStale
         self.latest = latest
         self.updateAvailable = updateAvailable
         self.blocked = blocked
@@ -51,19 +59,26 @@ public struct UpdateStatus: Equatable {
             blocked: o["blocked"] as? Bool ?? false,
             blockedReason: o["blockedReason"] as? String ?? "",
             lastCheck: o["lastCheck"] as? String ?? "never",
-            log: o["log"] as? String ?? ""
+            log: o["log"] as? String ?? "",
+            checkoutVersion: o["checkout_version"] as? String ?? "",
+            clientsStale: o["clientsStale"] as? Bool ?? false
         )
     }
 
     /// One line for the Settings row and the dropdown.
     public var summary: String {
-        if blocked { return "Paused: \(blockedReason)" }
         if updateAvailable { return "Update available: \(installed) → \(latest)" }
+        // Stale clients outrank a pause: the pause explains why the daily run
+        // is idle, but the actionable fact is that the panel is running old code.
+        if clientsStale {
+            return "Installed \(installed), checkout \(checkoutVersion) - run ./install.sh update"
+        }
+        if blocked { return "Paused: \(blockedReason)" }
         if latest.isEmpty { return "\(installed) (could not reach the remote)" }
         return "Up to date (\(installed))"
     }
 
     /// Whether the user should be nudged - an available update, or a checkout
     /// auto-update has quietly stopped touching.
-    public var needsAttention: Bool { updateAvailable || blocked }
+    public var needsAttention: Bool { updateAvailable || blocked || clientsStale }
 }
