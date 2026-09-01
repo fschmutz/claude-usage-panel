@@ -30,6 +30,12 @@
     }
   ],
   "cost": "Session cost: $2.14 · 340k tokens",
+  "ping": {"last": "05:30", "next": "10:35"},
+  "sessions": [
+    {"label": "BAM-SALES", "tokens": 412000, "when": "16:02"},
+    {"label": "CONSOLE-DEV", "tokens": 180400, "when": "15:41"},
+    {"label": "claude-usage-panel", "tokens": 96500, "when": "14:12"}
+  ],
   "cursor": {
     "cycle": "This cycle: $842.10 · 3 members",
     "today": "Today: $28.40",

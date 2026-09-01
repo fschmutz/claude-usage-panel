@@ -15,9 +15,13 @@ Keychain access - click **Always Allow**.
 ## Settings
 
 Quick toggles (Cost, Alerts, Refresh) sit in the dropdown. A full **Settings**
-window (⌘, or the dropdown's **Settings…** button) holds every option,
-including the optional **Cursor** team-spend section (toggle + Admin API key).
-Preferences persist via `UserDefaults`.
+window (⌘, or the dropdown's **Settings…** button) holds every option:
+**Today's sessions** (list today's biggest token spenders in the dropdown, and
+which terminal - Automatic / Terminal / iTerm - a resume click opens),
+**Session pings** (schedule, suggested times, coverage, and when a ping last
+fired), Updates, and the optional **Cursor** team-spend section (toggle + Admin
+API key). Preferences persist via `UserDefaults`; the session-ping schedule
+lives in the launchd agent it shares with `./install.sh sessionping`.
 
 ## Requirements
 

@@ -12,6 +12,11 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {
+    DEFAULT_DAYS, daysArg, isValidPingTime, normalizePingTime,
+    parseServiceExec, parseTimerTimes, serviceText, timerText,
+} from '../claude-usage-panel@fschmutz.github.io/lib/sessionPingUnit.js';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'session-ping.sh');
 const INSTALL = path.join(ROOT, 'install.sh');
@@ -372,4 +377,44 @@ test('sessionping is a known, documented target of install.sh', () => {
     const r = run('bash', [INSTALL, '--help']);
     assert.equal(r.status, 0);
     assert.match(r.stdout, /sessionping \[HH:MM \.\.\.\]/);
+});
+
+// ── The units the GNOME preferences write (lib/sessionPingUnit.js) ──────────
+// Preferences and install.sh are two frontends over ONE schedule, so whatever
+// one writes the other has to read back - install.sh parses these files with
+// line-oriented sed, not a unit parser.
+test('units written by the extension are read back by install.sh', (t) => {
+    const home = makeSandbox(t);
+    const unit = path.join(home, '.config', 'systemd', 'user');
+    fs.mkdirSync(unit, {recursive: true});
+    fs.writeFileSync(
+        path.join(unit, 'claude-usage-panel-sessionping.service'),
+        serviceText('/x/session-ping.sh', [2, 4]),
+    );
+    fs.writeFileSync(
+        path.join(unit, 'claude-usage-panel-sessionping.timer'),
+        timerText(['06:00', '11:00']),
+    );
+    const r = runInstall(home, ['--dry-run', 'sessionping']);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /schedule: at 06:00 11:00 on days 2,4/);
+});
+
+test('the extension reads back its own units', () => {
+    assert.deepEqual(parseTimerTimes(timerText(['05:30', '10:35'])), ['05:30', '10:35']);
+    const {runner, days} = parseServiceExec(serviceText('/x/session-ping.sh', [3, 1]));
+    assert.equal(runner, '/x/session-ping.sh');
+    assert.deepEqual(days, [1, 3]);
+});
+
+test('a schedule with no days falls back to Mon-Fri rather than never firing', () => {
+    assert.equal(daysArg([]), DEFAULT_DAYS.join(','));
+    assert.equal(daysArg([9, 0, 3, 3]), '3');
+});
+
+test('ping times are validated and zero-padded', () => {
+    assert.equal(normalizePingTime('9:05'), '09:05');
+    assert.equal(normalizePingTime('23:59'), '23:59');
+    for (const bad of ['24:00', '9:5', '', 'noon', '10:60'])
+        assert.equal(isValidPingTime(bad), false, bad);
 });

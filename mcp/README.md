@@ -42,6 +42,12 @@ other MCP servers untouched).
   "limits": [
     {"key": "session", "label": "Current session", "percent": 26,
      "severity": "normal", "resetsAt": "2026-07-19T16:00:00Z", "active": true}
+  ],
+  "lastPing": {"at": "2026-09-01T03:30:12Z", "label": "05:30"},
+  "sessions": [
+    {"sessionId": "fd2d7081-…", "label": "BAM-SALES", "cwd": "/home/u/Git/BAM-SALES",
+     "tokens": 412000, "when": "16:02",
+     "resumeCommand": "cd '/home/u/Git/BAM-SALES' && claude --resume 'fd2d7081-…'"}
   ]
 }
 ```
@@ -49,6 +55,12 @@ other MCP servers untouched).
 plus a compact markdown rendering for the conversation. `severity` is the API's
 own normal / warning / critical. Errors (no token, expired session, network)
 come back as tool errors with a one-line fix hint.
+
+`lastPing` is when a scheduled session ping last opened the 5-hour window
+(`null` if you never set pings up). `sessions` is today's local Claude Code
+sessions, biggest token spender first, each with the command that resumes it -
+those token counts are **estimated** from the local transcripts (cache reads
+excluded), not reported by the API.
 
 ## How it works
 

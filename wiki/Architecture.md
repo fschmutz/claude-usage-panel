@@ -15,6 +15,18 @@ status line and MCP server share one sample file
 (`$TMPDIR/claude-usage-history.json`); GNOME and macOS persist their own
 pair-form history in GSettings / UserDefaults.
 
+**Session pings and today's sessions** are the third piece of the contract
+(`tests/fixtures/sessions.json`, asserted by `tests/sessions.test.js` and the
+Swift `SessionsParityTests`): the ping-stamp parser and its "last 05:30 /
+yesterday 05:30" formatting, the fold of one transcript line into per-day token
+totals, the ranking of today's sessions, and the `claude --resume` command
+built from a session's cwd + id. The transcripts are append-only and reach
+hundreds of megabytes a day, so every client folds each file **once** and
+thereafter only from the byte offset it stopped at, through one shared
+incremental index at `~/.cache/claude-usage-panel/sessions.json`
+(`~/Library/Caches/…` on macOS): whichever client runs keeps it warm for the
+others, and the status line only ever reads it.
+
 ```text
 claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
 ├── extension.js        # panel button, dropdown, alerts, sparkline, Cursor section
@@ -25,7 +37,10 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── pure.js         # the reference normalization (unit-tested under node)
     ├── claudeUsage.js  # token read + /oauth/usage fetch
     ├── cost.js         # optional ccusage cost (subprocess)
-    └── cursorUsage.js  # optional Cursor Admin API spend
+    ├── cursorUsage.js  # optional Cursor Admin API spend
+    ├── sessionIndex.js # incremental fold of ~/.claude/projects → today's sessions
+    ├── sessionPing.js  # reads/writes the systemd units + the last-ping stamp
+    └── sessionPingUnit.js # the unit text itself (pure, shared with install.sh)
 
 macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
 └── Sources/
@@ -34,6 +49,8 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── Usage.swift               # token (file + Keychain) + fetch
         ├── Cost.swift                # ccusage via Process
         ├── Cursor.swift              # Cursor Admin API
+        ├── Sessions.swift            # the same index + the terminal launch (osascript)
+        ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
         └── ClaudeUsagePanelApp.swift # MenuBarExtra, model, views, Settings
 
 claude-code/            # status line under the Claude Code prompt

@@ -23,6 +23,19 @@ const TOKENS_CACHE_PATH = path.join(os.tmpdir(), 'claude-usage-statusline-tokens
 // still no credentials and no network.
 const HISTORY_PATH = path.join(os.tmpdir(), 'claude-usage-history.json');
 
+// Where scripts/session-ping.sh records its last successful ping, and the
+// session index the MCP server / desktop panels maintain. The status line only
+// READS both: it must stay a sub-100ms command, so it never folds a transcript
+// of its own (the index is built by whichever client is running - see
+// mcp/server.js) and simply shows nothing when neither file exists.
+const STATE_DIR = process.env.XDG_STATE_HOME
+  ? path.join(process.env.XDG_STATE_HOME, 'claude-usage-panel')
+  : path.join(os.homedir(), '.local', 'state', 'claude-usage-panel');
+const LAST_PING_PATH = path.join(STATE_DIR, 'last-ping');
+const SESSION_INDEX_PATH = path.join(
+  process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), '.cache'),
+  'claude-usage-panel', 'sessions.json');
+
 // Short labels for the two rate-limit windows stdin exposes. Terse because the
 // status line has little horizontal room.
 const KIND_LABELS = {session: 'Session', weekly_all: 'Week'};
@@ -339,6 +352,99 @@ export function tokensSegment(stdinText, {
   return `${DIM}∑ ${formatTokens(total)} tok${RESET}`;
 }
 
+// ── Session pings and today's sessions ────────────────────────────────────────
+// Twins of the GNOME lib/pure.js functions of the same names, pinned by
+// tests/fixtures/sessions.json. The ping stamp's offset has no colon (+0200),
+// which Date.parse only accepts through a legacy path, so parse it explicitly.
+
+const STAMP_RE =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
+
+export function parseStamp(text) {
+  const m = STAMP_RE.exec(String(text ?? '').trim());
+  if (!m) return null;
+  const [, y, mo, d, h, mi, sec, zone] = m;
+  if (!zone) {
+    return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec))
+      .getTime();
+  }
+  let offsetMin = 0;
+  if (zone !== 'Z') {
+    const digits = zone.slice(1).replace(':', '');
+    offsetMin = (zone[0] === '-' ? -1 : 1) *
+      (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2)));
+  }
+  return Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec)) -
+    offsetMin * 60_000;
+}
+
+export function localDay(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
+    `${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function formatClock(ms) {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+export function formatLastPing(text, nowMs) {
+  const at = parseStamp(text);
+  if (at === null) return '';
+  const clock = formatClock(at);
+  const day = localDay(at);
+  if (day === localDay(nowMs)) return clock;
+  if (day === localDay(nowMs - 86_400_000)) return `yesterday ${clock}`;
+  if (nowMs - at < 6 * 86_400_000) return `${DAY_NAMES[(new Date(at).getDay() + 6) % 7]} ${clock}`;
+  return `${day} ${clock}`;
+}
+
+// "ping 05:30": the last time a scheduled ping opened a session window. Silent
+// for anyone who has not scheduled pings, which is why it can sit in the
+// default segment list.
+export function pingSegment({
+  nowMs = Date.now(),
+  readFile = (f) => fs.readFileSync(f, 'utf8'),
+  pingPath = LAST_PING_PATH,
+} = {}) {
+  let raw;
+  try {
+    raw = readFile(pingPath);
+  } catch {
+    return '';
+  }
+  const label = formatLastPing(raw, nowMs);
+  return label ? `${DIM}ping ${label}${RESET}` : '';
+}
+
+// "▸ BAM-SALES 412k": today's biggest token spender among the local sessions,
+// read from the shared index. Opt-in (--segments=…,sessions) because the status
+// line has little horizontal room.
+export function sessionsSegment({
+  nowMs = Date.now(),
+  readFile = (f) => fs.readFileSync(f, 'utf8'),
+  indexPath = SESSION_INDEX_PATH,
+} = {}) {
+  let index;
+  try {
+    index = JSON.parse(readFile(indexPath));
+  } catch {
+    return '';
+  }
+  const today = localDay(nowMs);
+  const top = Object.values(index?.files ?? {})
+    .map((e) => ({...e, tokens: (e.byDay ?? {})[today] ?? 0}))
+    .filter((e) => e.sessionId && e.tokens > 0)
+    .sort((a, b) => b.tokens - a.tokens)[0];
+  if (!top) return '';
+  const name = top.title || (top.cwd ?? '').replace(/\/+$/, '').split('/').pop() ||
+    top.sessionId.slice(0, 8);
+  return `${DIM}▸ ${name} ${formatTokens(top.tokens)}${RESET}`;
+}
+
 // The segments the line can show, keyed by the name used in --segments. Each
 // takes the stdin text and the parsed config and returns its rendered string.
 const SEGMENTS = {
@@ -356,8 +462,12 @@ const SEGMENTS = {
     return render(cards, {forecasts});
   },
   tokens: (stdin, cfg) => tokensSegment(stdin, {includeCacheRead: cfg.includeCacheRead}),
+  ping: () => pingSegment(),
+  sessions: () => sessionsSegment(),
 };
-const DEFAULT_SEGMENTS = ['context', 'limits', 'tokens'];
+// `ping` is in the default list but renders nothing until session pings are
+// scheduled, so it costs an unconfigured user no width. `sessions` is opt-in.
+const DEFAULT_SEGMENTS = ['context', 'limits', 'tokens', 'ping'];
 
 // Configure the line from the command's argv (install.sh bakes these into the
 // settings.json command): `--segments=a,b,c` picks which segments to show and in

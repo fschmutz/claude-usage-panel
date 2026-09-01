@@ -46,6 +46,12 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
 
+**Pick up where you left off.** The GNOME dropdown and the macOS menu list
+today's sessions ranked by the tokens each one spent; clicking one opens your
+terminal on that project with `claude --resume <that session>`. The MCP tool
+returns the same list (with the resume command) and the status line can show the
+day's biggest spender with `--segments=…,sessions`.
+
 **Where did the tokens go?** `node scripts/token-attribution.mjs --days 7`
 breaks your spend into exploration / implementation / verification / rework /
 correction, so you can see whether the budget went into progress or into
@@ -60,8 +66,11 @@ prints the better one.
 The status line renders like this, right under the prompt input:
 
 ```text
-Context ▌░░░░░ 8%  Session █▌░░░░ 26% 59m  Week █▌░░░░ 24% 4d2h  ∑ 1.2M tok
+Context ▌░░░░░ 8%  Session █▌░░░░ 26% 59m  Week █▌░░░░ 24% 4d2h  ∑ 1.2M tok  ping 05:30
 ```
+
+(`ping 05:30` appears only once you schedule session pings; it is silent
+otherwise.)
 
 Everything is reversible and idempotent: `update --pull` upgrades what you
 have, `--uninstall [target…]` reverses it, `--dry-run` previews, `--list`
@@ -102,6 +111,8 @@ plus terminal and in-conversation projections.
 | 📈 **Burn-rate forecast** | "↗ 4%/h - full ~Sat 21:24, 3d7h before reset": each limit is projected from your recent pace, the top bar turns amber the moment a limit is *on track* to run dry before its reset, and a notification fires once - trouble visible at 50%, not at 90% |
 | 🧮 **Pool-aware** | A per-model card (Fable) is labelled as a *share of* the weekly all-models limit, not extra quota - because that is what it is |
 | 🔔 **Alerts + sparklines** | Desktop notification at 90% / 100% and on projected exhaustion, tiny trend graph per limit |
+| ⏱️ **Session pings, everywhere** | Schedule the `claude` ping that opens the 5h window from the GNOME preferences or the macOS settings, not only from the CLI - and every client shows when it last fired |
+| ▶️ **Resume today's sessions** | The dropdown lists today's five biggest token spenders and opens one in a terminal, resumed where you left it, in its own project directory |
 | 💲 **Optional extras** | Local [`ccusage`](https://github.com/ryoppippi/ccusage) session cost · Cursor team spend via Admin API |
 | 🔒 **Read-only & private** | Uses your existing local token, never writes it, no telemetry, talks only to official APIs |
 

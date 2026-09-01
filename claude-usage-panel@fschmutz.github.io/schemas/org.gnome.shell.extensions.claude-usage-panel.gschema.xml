@@ -42,6 +42,26 @@
       <summary>Cursor key change stamp</summary>
       <description>Bumped by the preferences dialog after writing the key to the keyring, so the running extension knows to refresh. Carries no secret.</description>
     </key>
+    <key name="show-sessions" type="b">
+      <default>true</default>
+      <summary>Show today's sessions</summary>
+      <description>List today's Claude Code sessions, ranked by the tokens they spent, with a click to resume one in a terminal.</description>
+    </key>
+    <key name="terminal-command" type="s">
+      <default>''</default>
+      <summary>Terminal used to resume a session</summary>
+      <description>Terminal binary to open when a session row is clicked. Empty means autodetect ($TERMINAL, then the usual emulators).</description>
+    </key>
+    <key name="work-start" type="s">
+      <default>'09:00'</default>
+      <summary>Working day start (HH:MM)</summary>
+      <description>Used to suggest session-ping times that cover the hours actually worked.</description>
+    </key>
+    <key name="work-end" type="s">
+      <default>'18:00'</default>
+      <summary>Working day end (HH:MM)</summary>
+      <description>Used to suggest session-ping times that cover the hours actually worked.</description>
+    </key>
     <key name="history" type="s">
       <default>'{}'</default>
       <summary>Sparkline history</summary>

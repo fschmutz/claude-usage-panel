@@ -20,7 +20,8 @@
 #   ./install.sh --uninstall [target...]   reverse an install (default: all detected)
 #   ./install.sh --dry-run [target...]     print the actions without doing them (alias -n)
 #   ./install.sh macos --build-only        build the .app but don't install it (used by CI)
-#   ./install.sh statusline --segments=context,limits,tokens --tokens=all|fresh
+#   ./install.sh statusline --segments=context,limits,tokens,ping[,sessions] \
+#                           --tokens=all|fresh
 #                                          choose status-line segments + token mode
 #   ./install.sh --list             show detected + installed targets
 #   ./install.sh -h | --help
@@ -47,7 +48,7 @@ ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 DRY=false
 PULL=false
 BUILD_ONLY=false                    # macos: build the .app but don't install to /Applications (used by CI)
-SL_SEGMENTS="context,limits,tokens" # statusline: which segments, left→right
+SL_SEGMENTS="context,limits,tokens,ping" # statusline: which segments, left→right
 SL_TOKENS="all"                     # statusline: token-total mode (all|fresh)
 SP_TIMES=()                         # sessionping: HH:MM args from the command line
 SP_DAYS=""                          # sessionping: --days= value from the command line
@@ -68,6 +69,16 @@ install_gnome() {
     act mkdir -p "$dest"
     act cp -r "$src/." "$dest/"
     act glib-compile-schemas "$dest/schemas/"
+
+    # The worker scripts the extension drives itself: prefs.js runs
+    # auto-update.sh for the Updates row, and the session-ping preferences
+    # schedule session-ping.sh. An installed copy lives outside the checkout, so
+    # both have to travel with it - the same reason install.sh macos copies
+    # session-ping.sh into the app bundle's Resources.
+    act mkdir -p "$dest/scripts"
+    act cp "$ROOT/scripts/auto-update.sh" "$dest/scripts/auto-update.sh"
+    act cp "$ROOT/scripts/session-ping.sh" "$dest/scripts/session-ping.sh"
+    act chmod +x "$dest/scripts/auto-update.sh" "$dest/scripts/session-ping.sh"
 
     # Compile translations (po/*.po → locale/<lang>/LC_MESSAGES/<domain>.mo).
     if command -v msgfmt >/dev/null && [ -d "$src/po" ]; then
@@ -184,7 +195,7 @@ settings.statusLine = {type: 'command', command: process.env.COMMAND};
 fs.writeFileSync(path, JSON.stringify(settings, null, 2) + '\n');
 JS
     ok "installed to $dest (segments: $SL_SEGMENTS, tokens: $SL_TOKENS)"
-    echo "  Customize: re-run with --segments=context,limits,tokens and --tokens=all|fresh."
+    echo "  Customize: re-run with --segments=context,limits,tokens,ping,sessions and --tokens=all|fresh."
     echo "  Open a Claude Code session or run /statusline to see it."
 }
 

@@ -124,6 +124,31 @@
     padding-bottom: 2px;
 }
 
+/* ---- today's sessions (resume links) ---- */
+.cu-sessions {
+    spacing: 3px;
+    padding: 8px 8px 4px 8px;
+}
+.cu-session-btn {
+    border-radius: 8px;
+    padding: 4px 6px;
+}
+.cu-session-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+.cu-session-row {
+    spacing: 10px;
+}
+.cu-session-label {
+    color: #d1cbbf;
+    font-size: 12px;
+    font-weight: 600;
+}
+.cu-session-meta {
+    color: #9a948a;
+    font-size: 11px;
+}
+
 /* refresh button (stays-open) */
 .cu-refresh-btn {
     border-radius: 8px;
@@ -153,6 +178,9 @@
 .cu-light .cu-spark { color: #6b6b60; }
 .cu-light .cu-forecast.cu-warning { color: #b3742a; }
 .cu-light .cu-cost { color: #333; }
+.cu-light .cu-session-label { color: #333; }
+.cu-light .cu-session-meta { color: #6b6b60; }
+.cu-light .cu-session-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
 .cu-light .cu-plan { color: #666; }
 
 /* ---- status footer ---- */

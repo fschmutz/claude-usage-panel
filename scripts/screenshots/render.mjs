@@ -19,7 +19,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   normalizeUsage, poolNote, sparkline, formatResets, forecast, formatForecast,
-  severityClass,
+  severityClass, compactTokens,
 } from '../../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -135,6 +135,16 @@ y += 12;
 text(PAD, y, DATA.cost, 12, C.text, 'font-weight="600"');
 y += 18;
 text(PAD, y, `Updated ${DATA.updated}`, 11, C.dim);
+y += 17;
+text(PAD, y, `Session pings: last ${DATA.ping.last} · next ${DATA.ping.next}`, 11, C.dim);
+y += 26;
+// Today's sessions: ranked by the tokens they spent, each row a resume click.
+text(PAD, y, "Today's sessions (est.)", 13, C.text, 'font-weight="700"');
+for (const s of DATA.sessions) {
+  y += 19;
+  text(PAD, y, s.label, 12, C.text, 'font-weight="600"');
+  parts.push(`<text x="${W - PAD}" y="${y}" font-size="11" fill="${C.dim}" ${FONT} text-anchor="end">${esc(`${compactTokens(s.tokens)}  ${s.when}`)}</text>`);
+}
 y += 26;
 text(PAD, y, 'Cursor', 13, C.text, 'font-weight="700"');
 y += 18;

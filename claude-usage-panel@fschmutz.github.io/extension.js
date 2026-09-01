@@ -17,10 +17,13 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 import {fetchUsage} from './lib/claudeUsage.js';
 import {fetchActiveCost} from './lib/cost.js';
 import {fetchCursor} from './lib/cursorUsage.js';
+import {refreshSessions} from './lib/sessionIndex.js';
+import {readLastPing, readSchedule} from './lib/sessionPing.js';
 import {storeSecret, lookupSecret} from './lib/secretStore.js';
 import {
     severityClass, sparkline, formatResets, alertThreshold, poolNote,
     forecast, formatForecast, normalizeHistory, historyPercents,
+    compactTokens, formatLastPing, nextPing, interactiveResume, terminalArgv, TERMINALS,
 } from './lib/pure.js';
 
 const TRACK_WIDTH = 300; // px, must match .cu-track min-width in stylesheet.css
@@ -28,6 +31,12 @@ const TRACK_WIDTH = 300; // px, must match .cu-track min-width in stylesheet.css
 // window even at the 1-minute minimum refresh interval isn't needed; at the
 // 10-minute default this holds ~15 h of context. The sparkline shows the last 12.
 const HISTORY_MAX = 90;
+// How many of today's sessions the dropdown offers to resume.
+const SESSION_ROWS = 5;
+// While the index is still catching up (a cold cache, or a heavy day), retry
+// sooner than the usual refresh interval instead of leaving the list short for
+// ten minutes.
+const SESSION_CATCHUP_SECONDS = 20;
 
 // One limit row: label, percentage, colored progress bar, reset time.
 const UsageCard = GObject.registerClass(
@@ -108,6 +117,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._alertFired = new Map();  // limit id -> highest threshold already alerted
         this._paceAlerted = new Set();  // limit ids already warned about projected exhaustion
         this._forecasts = new Map();   // limit id -> latest forecast (or null)
+        this._sessionCatchupId = 0;
 
         // Panel button: brand glyph + compact worst-limit readout.
         const box = new St.BoxLayout({style_class: 'cu-panel'});
@@ -136,6 +146,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'changed::cursor-enabled', () => this.refresh(),
             'changed::cursor-api-key', () => this.refresh(),
             'changed::cursor-key-stamp', () => this.refresh(),
+            'changed::show-sessions', () => this.refresh(),
             this
         );
 
@@ -167,10 +178,31 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._statusBox = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'cu-status'});
         this._costLabel = new St.Label({text: '', style_class: 'cu-cost'});
         this._updatedLabel = new St.Label({text: '', style_class: 'cu-updated'});
+        // Scheduled session pings: when they last opened a window, and when the
+        // next one is due. Hidden unless pings are scheduled or have ever run.
+        this._pingLabel = new St.Label({text: '', style_class: 'cu-updated'});
+        this._pingLabel.visible = false;
         this._statusBox.add_child(this._costLabel);
         this._statusBox.add_child(this._updatedLabel);
+        this._statusBox.add_child(this._pingLabel);
         this._statusItem.add_child(this._statusBox);
         this.menu.addMenuItem(this._statusItem);
+
+        // Today's sessions: the work the plan was actually spent on, biggest
+        // spender first, each row a click away from being resumed in a terminal.
+        // Built as buttons inside ONE non-reactive item (like Refresh below) so
+        // the rows can be rebuilt on every refresh without reshuffling the menu.
+        this._sessionsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this._sessionsBox = new St.BoxLayout({
+            vertical: true, x_expand: true, style_class: 'cu-sessions'});
+        this._sessionsTitle = new St.Label({
+            text: _('Today\u2019s sessions'), style_class: 'cu-section-title'});
+        this._sessionsRows = new St.BoxLayout({vertical: true, x_expand: true});
+        this._sessionsBox.add_child(this._sessionsTitle);
+        this._sessionsBox.add_child(this._sessionsRows);
+        this._sessionsItem.add_child(this._sessionsBox);
+        this.menu.addMenuItem(this._sessionsItem);
+        this._sessionsItem.visible = false;
 
         // Optional Cursor section (hidden unless enabled + key set)
         this._cursorItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
@@ -275,6 +307,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._renderCards(result.cards);
             this._renderPanel();
             this._updatedLabel.text = _('Updated %s').format(this._nowString());
+            this._renderPing();
 
             // Plan label from the raw spend/extra hints, best-effort.
             this._planLabel.text = result.raw?.plan_label ?? '';
@@ -298,6 +331,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._costLabel.visible = false;
             }
 
+            await this._refreshSessions();
             await this._refreshCursor();
         } finally {
             this._refreshing = false;
@@ -358,6 +392,131 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._cursorTrack.visible = false;
             this._cursorToday.text = '';
             this._cursorTop.text = '';
+        }
+    }
+
+    // ── Scheduled session pings ─────────────────────────────────────────────
+    // The 5 h window is anchored to its first message, so a ping at 05:30 is
+    // what makes the day's windows line up with the hours worked. The schedule
+    // lives in the systemd units (shared with ./install.sh sessionping); this
+    // only reports what it did and what it will do next.
+    _renderPing() {
+        const schedule = readSchedule();
+        const last = formatLastPing(readLastPing(), Date.now());
+        if (!schedule.enabled && !last) {
+            this._pingLabel.visible = false;
+            return;
+        }
+        const parts = [_('last %s').format(last || _('never'))];
+        if (schedule.enabled) {
+            const next = nextPing(schedule.times, schedule.days, Date.now());
+            if (next)
+                parts.push(_('next %s').format(next));
+        }
+        this._pingLabel.text = _('Session pings: %s').format(parts.join(' · '));
+        this._pingLabel.visible = true;
+    }
+
+    // ── Today's sessions ────────────────────────────────────────────────────
+    async _refreshSessions() {
+        this._cancelSessionCatchup();
+        if (!this._settings.get_boolean('show-sessions')) {
+            this._sessionsItem.visible = false;
+            return;
+        }
+        try {
+            const {sessions, pending} = await refreshSessions({limit: SESSION_ROWS});
+            if (this._destroyed)
+                return;
+            this._renderSessions(sessions, pending);
+            if (pending)
+                this._scheduleSessionCatchup();
+        } catch (e) {
+            logError(e, 'claude-usage-panel: session scan failed');
+            this._sessionsItem.visible = false;
+        }
+    }
+
+    _scheduleSessionCatchup() {
+        this._sessionCatchupId = GLib.timeout_add_seconds(
+            GLib.PRIORITY_LOW, SESSION_CATCHUP_SECONDS, () => {
+                this._sessionCatchupId = 0;
+                this._refreshSessions();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _cancelSessionCatchup() {
+        if (this._sessionCatchupId) {
+            GLib.Source.remove(this._sessionCatchupId);
+            this._sessionCatchupId = 0;
+        }
+    }
+
+    _renderSessions(sessions, pending) {
+        this._sessionsRows.destroy_all_children();
+        this._sessionsItem.visible = sessions.length > 0;
+        if (!sessions.length)
+            return;
+        // "est." for the same reason the cost line carries it: these tokens are
+        // reconstructed from the local transcripts, not reported by the API.
+        this._sessionsTitle.text = pending
+            ? _('Today\u2019s sessions (est., still indexing)')
+            : _('Today\u2019s sessions (est.)');
+        for (const session of sessions) {
+            const row = new St.BoxLayout({style_class: 'cu-session-row', x_expand: true});
+            row.add_child(new St.Label({
+                text: session.label,
+                style_class: 'cu-session-label',
+                x_expand: true,
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+            row.add_child(new St.Label({
+                text: `${compactTokens(session.tokens)}  ${session.when}`,
+                style_class: 'cu-session-meta',
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+            const button = new St.Button({
+                style_class: 'cu-session-btn',
+                x_expand: true,
+                can_focus: true,
+                child: row,
+            });
+            button.connect('clicked', () => this._openSession(session));
+            this._sessionsRows.add_child(button);
+        }
+    }
+
+    // The terminal to open: the explicit setting first, then $TERMINAL, then
+    // the first emulator we know how to drive that is actually installed.
+    _detectTerminal() {
+        const configured = this._settings.get_string('terminal-command').trim();
+        if (configured)
+            return configured;
+        const env = GLib.getenv('TERMINAL');
+        if (env && GLib.find_program_in_path(env))
+            return env;
+        for (const term of TERMINALS) {
+            if (GLib.find_program_in_path(term.bin))
+                return term.bin;
+        }
+        return null;
+    }
+
+    _openSession(session) {
+        const bin = this._detectTerminal();
+        if (!bin) {
+            Main.notify(_('Claude usage'),
+                _('No terminal found - set one in the extension preferences.'));
+            return;
+        }
+        const argv = terminalArgv(bin, session.cwd, interactiveResume(session));
+        this.menu.close();
+        try {
+            Gio.Subprocess.new(argv, Gio.SubprocessFlags.NONE);
+        } catch (e) {
+            logError(e, 'claude-usage-panel: could not open a terminal');
+            Main.notify(_('Claude usage'), _('Could not open %s').format(bin));
         }
     }
 
@@ -512,6 +671,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             GLib.Source.remove(this._timerId);
             this._timerId = 0;
         }
+        this._cancelSessionCatchup();
         this._settings?.disconnectObject(this);
         this._ifaceSettings?.disconnectObject(this);
         this._httpSession?.abort();

@@ -53,6 +53,14 @@ gnome-extensions prefs claude-usage-panel@fschmutz.github.io
 - **Limit-crossing alerts** - notify at 90% / 100%.
 - **Show session cost** - optional local [`ccusage`](https://github.com/ryoppippi/ccusage)
   cost (needs Node.js / `npx`).
+- **Today's sessions** - toggle the dropdown list of today's sessions (biggest
+  token spender first, click to resume one in a terminal), plus the **Terminal**
+  to open. Empty means autodetect: `$TERMINAL`, then ghostty, kitty, wezterm,
+  alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm.
+- **Session pings** - schedule the one-turn `claude` ping that opens the 5-hour
+  window (on/off, times, weekdays, working day, **Suggest times**, coverage,
+  last ping). It writes the same systemd user units as
+  `./install.sh sessionping`, so the CLI and this dialog stay one schedule.
 - **Cursor (optional)** - toggle + Admin API key (create one at cursor.com →
   your team → Settings → Admin API). Calls `api.cursor.com` (`/teams/spend`,
   `/teams/filtered-usage-events`) and shows the billing-cycle spend, today's

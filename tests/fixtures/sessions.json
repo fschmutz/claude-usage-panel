@@ -1,0 +1,220 @@
+{
+  "_comment": [
+    "Shared contract for session pings and today's sessions, asserted by",
+    "tests/sessions.test.js (lib/pure.js), tests/parity.test.js (statusline.js,",
+    "mcp/server.js) and macos SessionsParityTests (ClaudeUsageCore).",
+    "Everything is pinned in UTC: the JS suites set TZ=UTC, the Swift test passes",
+    "the UTC time zone in, because localDay/formatClock are deliberately local."
+  ],
+  "tz": "UTC",
+  "nowMs": 1788264000000,
+  "stamps": [
+    {
+      "raw": "2026-09-01T05:30:12+0200",
+      "atMs": 1788233412000,
+      "lastPing": "03:30"
+    },
+    {
+      "raw": "2026-09-01T11:00:00Z",
+      "atMs": 1788260400000,
+      "lastPing": "11:00"
+    },
+    {
+      "raw": "2026-08-31T23:10:00+00:00",
+      "atMs": 1788217800000,
+      "lastPing": "yesterday 23:10"
+    },
+    {
+      "raw": "2026-08-28T09:00:00Z",
+      "atMs": 1787907600000,
+      "lastPing": "Fri 09:00"
+    },
+    {
+      "raw": "2026-08-12T05:30:00Z",
+      "atMs": 1786512600000,
+      "lastPing": "2026-08-12 05:30"
+    },
+    {
+      "raw": "not a stamp",
+      "atMs": null,
+      "lastPing": ""
+    }
+  ],
+  "nextPing": [
+    {
+      "times": [
+        "05:30",
+        "10:35"
+      ],
+      "days": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "expected": "Wed 05:30"
+    },
+    {
+      "times": [
+        "13:00",
+        "05:30"
+      ],
+      "days": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "expected": "13:00"
+    },
+    {
+      "times": [],
+      "days": [
+        1
+      ],
+      "expected": ""
+    },
+    {
+      "times": [
+        "09:00"
+      ],
+      "days": [
+        6
+      ],
+      "expected": "Sat 09:00"
+    }
+  ],
+  "fold": {
+    "defaultDay": "2026-09-01",
+    "lines": [
+      "{\"type\":\"custom-title\",\"customTitle\":\"BAM-SALES\",\"sessionId\":\"S1\"}",
+      "{\"type\":\"user\",\"sessionId\":\"S1\",\"cwd\":\"/home/u/Git/BAM-SALES\"}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-01T10:00:00Z\",\"message\":{\"id\":\"m1\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20,\"cache_creation_input_tokens\":5,\"cache_read_input_tokens\":9000}}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-01T10:05:00Z\",\"message\":{\"id\":\"m1\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20}}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-08-31T23:50:00Z\",\"message\":{\"id\":\"m2\",\"usage\":{\"input_tokens\":7,\"output_tokens\":3}}}",
+      "{\"type\":\"assistant\",\"message\":{\"id\":\"m3\",\"usage\":{\"output_tokens\":11}}}",
+      "{\"broken json",
+      ""
+    ],
+    "expected": {
+      "sessionId": "S1",
+      "cwd": "/home/u/Git/BAM-SALES",
+      "title": "BAM-SALES",
+      "lastMs": 1788256800000,
+      "byDay": {
+        "2026-09-01": 136,
+        "2026-08-31": 10
+      }
+    }
+  },
+  "rank": {
+    "limit": 5,
+    "entries": [
+      {
+        "sessionId": "A",
+        "cwd": "/home/u/Git/BAM-SALES",
+        "title": "BAM-SALES",
+        "lastMs": 1788253200000,
+        "byDay": {
+          "2026-09-01": 5000
+        }
+      },
+      {
+        "sessionId": "B",
+        "cwd": "/home/u/Git/CONSOLE-DEV/",
+        "title": null,
+        "lastMs": 1788262200000,
+        "byDay": {
+          "2026-09-01": 12000
+        }
+      },
+      {
+        "sessionId": "C",
+        "cwd": "/home/u/Git/old",
+        "title": null,
+        "lastMs": 1788199200000,
+        "byDay": {
+          "2026-08-31": 900
+        }
+      },
+      {
+        "sessionId": "D",
+        "cwd": "/home/u/Git/quiet",
+        "title": null,
+        "lastMs": 1788249600000,
+        "byDay": {}
+      },
+      {
+        "sessionId": null,
+        "cwd": "/home/u/Git/nameless",
+        "title": null,
+        "lastMs": 1788260400000,
+        "byDay": {
+          "2026-09-01": 999999
+        }
+      }
+    ],
+    "expected": [
+      {
+        "sessionId": "B",
+        "label": "CONSOLE-DEV",
+        "tokens": 12000,
+        "when": "11:30"
+      },
+      {
+        "sessionId": "A",
+        "label": "BAM-SALES",
+        "tokens": 5000,
+        "when": "09:00"
+      },
+      {
+        "sessionId": "D",
+        "label": "quiet",
+        "tokens": 0,
+        "when": "08:00"
+      }
+    ]
+  },
+  "resume": [
+    {
+      "cwd": "/home/u/Git/BAM-SALES",
+      "sessionId": "fd2d7081-86fa",
+      "command": "cd '/home/u/Git/BAM-SALES' && claude --resume 'fd2d7081-86fa'",
+      "interactive": "cd '/home/u/Git/BAM-SALES' && claude --resume 'fd2d7081-86fa'; exec \"$SHELL\" -i"
+    },
+    {
+      "cwd": "/home/u/it's here",
+      "sessionId": "abc",
+      "command": "cd '/home/u/it'\\''s here' && claude --resume 'abc'",
+      "interactive": "cd '/home/u/it'\\''s here' && claude --resume 'abc'; exec \"$SHELL\" -i"
+    },
+    {
+      "cwd": "",
+      "sessionId": "abc",
+      "command": "claude --resume 'abc'",
+      "interactive": "claude --resume 'abc'; exec \"$SHELL\" -i"
+    }
+  ],
+  "compactTokens": [
+    {
+      "n": 847,
+      "expected": "847"
+    },
+    {
+      "n": 16700,
+      "expected": "16.7k"
+    },
+    {
+      "n": 999999,
+      "expected": "1.0M"
+    },
+    {
+      "n": 1240000,
+      "expected": "1.2M"
+    }
+  ]
+}

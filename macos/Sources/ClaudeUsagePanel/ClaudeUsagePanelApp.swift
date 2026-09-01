@@ -63,6 +63,24 @@ final class UsageModel: ObservableObject {
     @Published var cursorSummary: CursorSummary?
     @Published var cursorError: String?
 
+    // Today's sessions: the work the plan was actually spent on, ranked by the
+    // tokens each one burned, each resumable in a terminal with one click.
+    @Published var showSessions: Bool {
+        didSet {
+            UserDefaults.standard.set(showSessions, forKey: "showSessions")
+            Task { await refreshSessions() }
+        }
+    }
+    @Published var terminalChoice: TerminalLauncher.Choice {
+        didSet { UserDefaults.standard.set(terminalChoice.rawValue, forKey: "terminalChoice") }
+    }
+    @Published var sessions: [RankedSession] = []
+    /// The index is still catching up, so the token numbers are a floor.
+    @Published var sessionsPending = false
+    @Published var sessionError: String?
+    /// When a scheduled ping last opened a 5-hour window ("" when never).
+    @Published var lastPing: String = ""
+
     // Session pings: the launchd agent plist is the source of truth (shared
     // with `./install.sh sessionping`), not UserDefaults - see SessionPing.
     @Published var sessionPingEnabled: Bool {
@@ -118,6 +136,11 @@ final class UsageModel: ObservableObject {
             return []
         }
         launchAtLogin = LoginItem.isEnabled
+        showSessions = UserDefaults.standard.object(forKey: "showSessions") as? Bool ?? true
+        terminalChoice =
+            TerminalLauncher.Choice(
+                rawValue: UserDefaults.standard.string(forKey: "terminalChoice") ?? "")
+            ?? .auto
         let sp = SessionPing.read()
         sessionPingEnabled = sp.enabled
         sessionPingTimes = sp.schedule.times
@@ -162,18 +185,52 @@ final class UsageModel: ObservableObject {
             errorText = error.localizedDescription
         }
 
-        guard showCost else {
-            costText = nil
-            return
-        }
-        costText = "computing…"
-        if let cost = await Cost.fetchActiveCost() {
-            costText = String(format: "$%.2f · %@ tokens", cost.costUSD, Self.compact(cost.tokens))
+        // Not a `guard … else { return }`: everything below is independent of
+        // the cost line, and returning early here used to skip it all whenever
+        // cost was switched off.
+        if showCost {
+            costText = "computing…"
+            if let cost = await Cost.fetchActiveCost() {
+                costText = String(
+                    format: "$%.2f · %@ tokens", cost.costUSD, Self.compact(cost.tokens))
+            } else {
+                costText = "unavailable (install ccusage)"
+            }
         } else {
-            costText = "unavailable (install ccusage)"
+            costText = nil
         }
 
+        lastPing = SessionPingStatus.formatLastPing(SessionStore.readLastPing(), now: Date())
+        await refreshSessions()
         await refreshCursor()
+    }
+
+    /// Fold whatever the transcripts appended since last time and re-rank.
+    /// Off the main actor: a cold index folds tens of megabytes, which must
+    /// never block the menu bar.
+    func refreshSessions() async {
+        guard showSessions else {
+            sessions = []
+            sessionsPending = false
+            return
+        }
+        let result = await Task.detached(priority: .utility) {
+            SessionStore.refresh()
+        }.value
+        sessions = result.sessions
+        sessionsPending = result.pending
+    }
+
+    /// Open one session's project in a terminal, resuming that exact session.
+    func resume(_ session: RankedSession) {
+        sessionError = TerminalLauncher.open(session: session, choice: terminalChoice)
+    }
+
+    /// The next scheduled ping, for the dropdown's ping line.
+    var nextPing: String {
+        guard sessionPingEnabled else { return "" }
+        return SessionPingStatus.nextPing(
+            times: sessionPingTimes, days: sessionPingDays, now: Date())
     }
 
     private func refreshCursor() async {
@@ -323,6 +380,15 @@ final class UsageModel: ObservableObject {
     }
 
     /// "06:00 11:00 · Mon-Fri" - the dropdown's one-line schedule summary.
+    /// "last 05:30 · next 10:35" for the dropdown - what the schedule actually
+    /// did, and what it will do next, rather than only what is configured.
+    var pingStatusLine: String {
+        var parts = ["last \(lastPing.isEmpty ? "never" : lastPing)"]
+        let next = nextPing
+        if !next.isEmpty { parts.append("next \(next)") }
+        return parts.joined(separator: " · ")
+    }
+
     var sessionPingSummary: String {
         let names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         let days: String
@@ -508,12 +574,16 @@ struct PopupView: View {
             Text("Updated \(model.updated) · limits \(Provenances.limits.badge)")
                 .font(.system(size: 11)).foregroundColor(.secondary)
                 .help(Provenances.limits.explanation)
-            if model.sessionPingEnabled {
-                Text("Session pings: \(model.sessionPingSummary)")
+            if model.sessionPingEnabled || !model.lastPing.isEmpty {
+                Text("Session pings: \(model.pingStatusLine)")
                     .font(.system(size: 11)).foregroundColor(.secondary)
             }
             if let u = model.updateStatus, u.needsAttention {
                 Text(u.summary).font(.system(size: 11)).foregroundColor(.cuCritical)
+            }
+
+            if model.showSessions && !model.sessions.isEmpty {
+                SessionsSectionView(model: model)
             }
 
             if model.cursorEnabled {
@@ -594,6 +664,43 @@ private struct OpenSettingsButton: View {
     }
 }
 
+// Today's sessions in the dropdown: biggest token spender first, one click to
+// resume it where it was left. Tokens are reconstructed from the local
+// transcripts, so the header says "est." for the same reason the cost line does.
+private struct SessionsSectionView: View {
+    @ObservedObject var model: UsageModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(
+                model.sessionsPending
+                    ? "Today's sessions (est., still indexing)" : "Today's sessions (est.)"
+            )
+            .font(.system(size: 13, weight: .bold))
+            ForEach(model.sessions) { session in
+                Button {
+                    model.resume(session)
+                } label: {
+                    HStack {
+                        Text(session.label).font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Text(
+                            "\(SessionFormat.compactTokens(session.tokens))  \(session.when)"
+                        )
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("Resume in a terminal: \(session.cwd)")
+            }
+            if let err = model.sessionError {
+                Text(err).font(.system(size: 11)).foregroundColor(.cuCritical)
+            }
+        }
+    }
+}
+
 // Cursor spend block in the dropdown (shown when enabled).
 private struct CursorSectionView: View {
     @ObservedObject var model: UsageModel
@@ -646,8 +753,26 @@ struct SettingsView: View {
                 Toggle("Show session cost (ccusage)", isOn: $model.showCost)
                 Toggle("Start at login", isOn: $model.launchAtLogin)
             }
+            Section("Today's sessions") {
+                Toggle("Show today's sessions in the dropdown", isOn: $model.showSessions)
+                Picker("Open in", selection: $model.terminalChoice) {
+                    ForEach(TerminalLauncher.Choice.allCases, id: \.self) { choice in
+                        Text(choice.label).tag(choice)
+                    }
+                }
+                .disabled(!model.showSessions)
+                Text(
+                    "Lists the sessions that spent the most tokens today, read from the local "
+                        + "transcripts in ~/.claude/projects. Clicking one resumes it in a "
+                        + "terminal, in its own project directory."
+                )
+                .font(.footnote).foregroundColor(.secondary)
+            }
             Section("Session pings") {
                 Toggle("Open the 5h session window on schedule", isOn: $model.sessionPingEnabled)
+                if !model.lastPing.isEmpty {
+                    LabeledContent("Last ping", value: model.lastPing)
+                }
                 if model.sessionPingEnabled {
                     ForEach(model.sessionPingTimes.indices, id: \.self) { i in
                         HStack {

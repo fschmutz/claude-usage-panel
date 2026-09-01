@@ -147,10 +147,20 @@ install command again with new times/days; it replaces the previous schedule
 in place. A plain `./install.sh update` keeps whatever times and days you
 configured.
 
-On macOS the same schedule is also editable in the **menu-bar app's Settings**
-(Session pings section: on/off, times, weekdays) - the app and the installer
-read and write the same launchd agent, so use whichever is closer to hand. The
-dropdown shows the active schedule when pings are on.
+The same schedule is also editable **in the desktop clients**, on both
+platforms: GNOME preferences and the macOS menu-bar app's Settings both carry a
+*Session pings* section (on/off, times, weekdays, a **Suggest times** button
+that computes the schedule covering your working day, and the coverage it
+reaches). Each is a frontend over the same scheduler artifact the installer
+writes - the systemd user units on Linux, the launchd agent on macOS - so the
+CLI and the UI always agree, and you can use whichever is closer to hand.
+
+**Every client also reports when a ping last fired**: the GNOME and macOS
+dropdowns show `Session pings: last 05:30 · next 10:35`, the macOS Settings
+window has a *Last ping* row, the status line renders `ping 05:30` (silent
+until you schedule pings), and the MCP `get_usage` tool returns a `lastPing`
+field. The source is the stamp `scripts/session-ping.sh` writes to
+`~/.local/state/claude-usage-panel/last-ping`.
 
 The ping goes through the `claude` CLI (which refreshes the OAuth token if it
 expired overnight - the panel's clients never write the token themselves), from

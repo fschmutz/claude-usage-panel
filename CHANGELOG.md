@@ -6,7 +6,48 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Resume today's session from the panel.** The GNOME dropdown and the macOS
+  menu now list today's five biggest token spenders - session title (or project
+  directory), estimated tokens, last-turn time - and clicking one opens your
+  terminal in that project running `claude --resume <that session>`. The
+  terminal is autodetected on Linux (`$TERMINAL`, then ghostty, kitty, wezterm,
+  alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm) or
+  named in the settings; macOS offers Automatic / Terminal / iTerm. The list is
+  a setting in both clients. The MCP `get_usage` tool returns the same sessions
+  with a ready-to-run `resumeCommand`, and the status line can render the day's
+  biggest spender with `--segments=…,sessions`.
+  Tokens are **estimated**, folded out of the local transcripts (cache reads
+  excluded) and labelled `est.` like the cost line. Those transcripts run to
+  hundreds of megabytes a day, so all clients share one incremental index at
+  `~/.cache/claude-usage-panel/sessions.json` and only ever read the bytes each
+  file has grown by: measured on a 160 MB day, a cold pass is ~720 ms of wall
+  time spread across async chunk reads and a warm refresh is ~3 ms.
+
+- **Session pings are configurable on Linux too, and every client says when one
+  last fired.** The schedule was editable from the macOS app but only from the
+  CLI on Linux; the GNOME preferences now carry the same *Session pings*
+  section (on/off, times, weekdays, **Suggest times** for your working day, and
+  the coverage it reaches), writing the very same systemd user units
+  `./install.sh sessionping` writes - `tests/sessionping.test.js` asserts the
+  installer reads back what the preferences write. Both dropdowns show
+  `Session pings: last 05:30 · next 10:35`, macOS Settings gained a *Last ping*
+  row, the status line renders `ping 05:30` (a default segment that stays
+  silent until pings are scheduled), and `get_usage` reports `lastPing`.
+
 ### Fixed
+
+- **The GNOME extension shipped without the scripts it drives.** `install.sh
+  gnome` copied only the extension directory, so the preferences' Updates row
+  could never find `auto-update.sh` and always reported "cannot self-update" on
+  an installed (non-checkout) copy. Both worker scripts now travel with the
+  extension, the way `install.sh macos` already copied `session-ping.sh` into
+  the app bundle.
+
+- **Turning the cost line off also silenced everything under it** in the macOS
+  app: `refresh()` returned early when `showCost` was false, skipping the
+  Cursor section (and now the sessions and ping lines) entirely.
 
 - **"Up to date" could be a lie.** auto-update compared the *checkout* version
   to the latest tag. A manual `git pull` moves the checkout forward while the

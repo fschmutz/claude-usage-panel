@@ -44,11 +44,20 @@ Choose which segments to show, in what order, and the token-total mode with two
 optional flags (baked into the installed command; re-run to change them):
 
 ```sh
-./install.sh statusline --segments=context,limits,tokens --tokens=all
+./install.sh statusline --segments=context,limits,tokens,ping --tokens=all
 ```
 
-- **`--segments`** - any order of `context`, `limits`, `tokens`; left-to-right on
-  the line. Unknown names are dropped; omitting the flag shows all three.
+- **`--segments`** - any order of `context`, `limits`, `tokens`, `ping`,
+  `sessions`; left-to-right on the line. Unknown names are dropped; omitting the
+  flag shows the default set (`context,limits,tokens,ping`).
+  - **`ping`** - `ping 05:30`, when a scheduled session ping last opened the 5h
+    window. It is in the default set because it renders **nothing** until you
+    schedule pings (`./install.sh sessionping`), so it costs an unconfigured
+    line no width.
+  - **`sessions`** - `▸ BAM-SALES 412.0k`, today's biggest token spender among
+    your local sessions. Opt-in: the status line has little horizontal room. It
+    only reads the session index the panels and the MCP server maintain, never
+    parsing a transcript itself.
 - **`--tokens`** - `all` (include cache reads; the true throughput) or `fresh`
   (only new tokens). Defaults to `all`.
 
@@ -68,13 +77,13 @@ Node treats it as ESM regardless of any nearby `package.json`:
 {
   "statusLine": {
     "type": "command",
-    "command": "node \"/absolute/path/to/statusline.mjs\" --segments=context,limits,tokens --tokens=all"
+    "command": "node \"/absolute/path/to/statusline.mjs\" --segments=context,limits,tokens,ping --tokens=all"
   }
 }
 ```
 
-The `--segments` / `--tokens` flags are optional - omitting them shows every
-segment with the `all` token total. They're exactly what `./install.sh
+The `--segments` / `--tokens` flags are optional - omitting them shows the
+default segments with the `all` token total. They're exactly what `./install.sh
 statusline` bakes in for you.
 
 ## How it works
