@@ -6,6 +6,18 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The progress fill still sat centered in its track after 1.9.1.** The fix
+  released there moved `x_align: START` onto the fill actor, which changes
+  nothing: `St.Bin` centers its child and offers no way to say otherwise. Its
+  only own property is `child`, and the `x_align` it inherits from
+  `ClutterActor` places the Bin inside its parent, not the child inside the Bin
+  (verified by introspecting `StBin` on Shell 46), so both that fix and
+  `db2b318` before it were unreachable by construction. The track is now a
+  horizontal `St.BoxLayout`, which packs from the start edge, on both gauges
+  (the limit cards and the Cursor spend bar).
+
 ## [1.9.1] - 2026-09-01
 
 ### Fixed

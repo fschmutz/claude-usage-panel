@@ -50,22 +50,20 @@ class UsageCard extends St.BoxLayout {
         head.add_child(this._label);
         head.add_child(this._pct);
 
-        // x_align on the Bin only places the track inside the card. What
-        // decides whether the fill grows from the left edge or sits centered
-        // on its CSS width is the fill's own x_align, so START belongs on
-        // both: on the child it is what actually left-aligns the bar.
-        const track = new St.Bin({
+        // The track is a BoxLayout, not a Bin, on purpose: St.Bin centers its
+        // child and offers no way to say otherwise (its only own property is
+        // `child`; the x_align it inherits from ClutterActor places the Bin in
+        // its parent, not the child in the Bin). A horizontal BoxLayout packs
+        // from the start edge, so a non-expanding fill sits flush left at its
+        // CSS width, which is what makes the bar read as a percentage.
+        const track = new St.BoxLayout({
             style_class: 'cu-track',
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.CENTER,
             x_expand: false,
         });
-        this._fill = new St.Widget({
-            style_class: 'cu-fill',
-            x_align: Clutter.ActorAlign.START,
-            x_expand: false,
-        });
-        track.set_child(this._fill);
+        this._fill = new St.Widget({style_class: 'cu-fill', x_expand: false});
+        track.add_child(this._fill);
 
         this._reset = new St.Label({style_class: 'cu-card-reset'});
         this._forecast = new St.Label({style_class: 'cu-forecast'});
@@ -216,18 +214,14 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._cursorTitle = new St.Label({text: 'Cursor', style_class: 'cu-section-title'});
         this._cursorCycle = new St.Label({text: '', style_class: 'cu-cost'});
         // Gauge bar, shown only when the team has a monthly spend limit set.
-        this._cursorTrack = new St.Bin({
+        this._cursorTrack = new St.BoxLayout({
             style_class: 'cu-track',
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.CENTER,
             x_expand: false,
         });
-        this._cursorFill = new St.Widget({
-            style_class: 'cu-fill',
-            x_align: Clutter.ActorAlign.START,
-            x_expand: false,
-        });
-        this._cursorTrack.set_child(this._cursorFill);
+        this._cursorFill = new St.Widget({style_class: 'cu-fill', x_expand: false});
+        this._cursorTrack.add_child(this._cursorFill);
         this._cursorTrack.visible = false;
         this._cursorToday = new St.Label({text: '', style_class: 'cu-updated'});
         this._cursorTop = new St.Label({text: '', style_class: 'cu-updated'});
