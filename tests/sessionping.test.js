@@ -300,8 +300,12 @@ test('a checkout path with XML metacharacters is escaped into the launchd plists
     for (const w of ['session-ping.sh', 'auto-update.sh']) {
         fs.copyFileSync(path.join(ROOT, 'scripts', w), path.join(checkout, 'scripts', w));
     }
-    // autoupdate refuses to schedule anything outside a git checkout.
-    run('git', ['init', '-q', checkout]);
+    // autoupdate refuses to schedule anything outside a git checkout. Global
+    // and system git config are switched off so a machine-wide init hook or
+    // template cannot reach into the sandbox.
+    run('git', ['init', '-q', checkout], {
+        env: {...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null'},
+    });
 
     const r = run('bash', [path.join(checkout, 'install.sh'), 'autoupdate', 'sessionping',
         '06:00', '--days=mon'], {env: env(home, {extra: {CUP_TEST_SCHEDULER: 'launchd'}})});

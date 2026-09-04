@@ -49,6 +49,17 @@ test('version_compare orders released versions', () => {
     assert.equal(compare('1.06.0', '1.6.0'), '0');
 });
 
+// Every git in here runs with the developer's own global and system config
+// switched off. A machine-wide `core.hooksPath` (a pre-push confirm guard, for
+// one) otherwise reaches into these throwaway repos and fails the seed push,
+// so the suite would pass in CI and on a fresh clone while going red on the
+// one machine that has the guard installed.
+const GIT_ENV = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+};
+
 // ── A throwaway checkout wired to a local bare "origin" ─────────────────────────
 // Layout mirrors the real repo closely enough for the script: package.json at
 // the root, scripts/auto-update.sh, and an install.sh it can invoke.
@@ -59,10 +70,10 @@ function makeCheckout(t, {localVersion, tags}) {
     const work = path.join(dir, 'work');
     const seed = path.join(dir, 'seed');
     const git = (cwd, ...args) =>
-        execFileSync('git', ['-C', cwd, ...args], {stdio: 'pipe', encoding: 'utf8'});
+        execFileSync('git', ['-C', cwd, ...args], {stdio: 'pipe', encoding: 'utf8', env: GIT_ENV});
 
-    execFileSync('git', ['init', '--bare', '-b', 'main', origin], {stdio: 'pipe'});
-    execFileSync('git', ['init', '-b', 'main', seed], {stdio: 'pipe'});
+    execFileSync('git', ['init', '--bare', '-b', 'main', origin], {stdio: 'pipe', env: GIT_ENV});
+    execFileSync('git', ['init', '-b', 'main', seed], {stdio: 'pipe', env: GIT_ENV});
     git(seed, 'config', 'user.email', 'test@example.com');
     git(seed, 'config', 'user.name', 'test');
 
@@ -93,14 +104,14 @@ function makeCheckout(t, {localVersion, tags}) {
     }
     if (tags?.length) git(seed, 'push', '-q', 'origin', '--tags');
 
-    execFileSync('git', ['clone', '-q', origin, work], {stdio: 'pipe'});
+    execFileSync('git', ['clone', '-q', origin, work], {stdio: 'pipe', env: GIT_ENV});
     return {dir, origin, work, seed, git};
 }
 
 // The script keeps its state under XDG_STATE_HOME - point it at the sandbox so
 // tests never touch the real ~/.local/state.
 const env = (dir) => ({
-    ...process.env,
+    ...GIT_ENV,
     XDG_STATE_HOME: path.join(dir, 'state'),
     HOME: dir,
 });
