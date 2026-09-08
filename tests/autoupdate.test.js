@@ -113,6 +113,9 @@ function makeCheckout(t, {localVersion, tags}) {
 const env = (dir) => ({
     ...GIT_ENV,
     XDG_STATE_HOME: path.join(dir, 'state'),
+    // Sandboxed too: the script reads the installed systemd unit from here to
+    // find the checkout, and must not see the developer's real one.
+    XDG_CONFIG_HOME: path.join(dir, 'config'),
     HOME: dir,
 });
 
@@ -141,6 +144,51 @@ test('a prerelease-only remote is ignored (released tags only)', (t) => {
     const r = runScript(c, ['--check']);
     assert.equal(r.status, 0);
     assert.match(r.stdout, /up to date/);
+});
+
+// `install.sh gnome` copies this script beside the extension so prefs.js can
+// run it, and that copy has no package.json and no git above it. Resolving the
+// root from $0 alone made it die on `sed: can't read .../package.json`, which
+// the Updates row rendered as "Cannot self-update / No git checkout found".
+test('an installed copy outside any checkout resolves the scheduled one', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0']});
+    const unitDir = path.join(c.dir, 'config', 'systemd', 'user');
+    fs.mkdirSync(unitDir, {recursive: true});
+    fs.writeFileSync(
+        path.join(unitDir, 'claude-usage-panel-update.service'),
+        `[Service]\nExecStart=${path.join(c.work, 'scripts', 'auto-update.sh')} --quiet\n`,
+    );
+    const installed = path.join(c.dir, 'extension', 'scripts');
+    fs.mkdirSync(installed, {recursive: true});
+    fs.copyFileSync(SCRIPT, path.join(installed, 'auto-update.sh'));
+
+    const r = run('bash', [path.join(installed, 'auto-update.sh'), '--status', '--json'], {
+        env: env(c.dir),
+        cwd: c.dir,
+    });
+    assert.equal(r.status, 0);
+    assert.equal(r.stderr, '');
+    const st = JSON.parse(r.stdout);
+    assert.equal(st.checkout, fs.realpathSync(c.work));
+    assert.equal(st.checkout_version, '1.5.0');
+    assert.equal(st.blocked, false);
+});
+
+test('with no checkout anywhere, --status stays valid JSON and says why', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0']});
+    const installed = path.join(c.dir, 'extension', 'scripts');
+    fs.mkdirSync(installed, {recursive: true});
+    fs.copyFileSync(SCRIPT, path.join(installed, 'auto-update.sh'));
+
+    const r = run('bash', [path.join(installed, 'auto-update.sh'), '--status', '--json'], {
+        env: env(c.dir),
+        cwd: c.dir,
+    });
+    assert.equal(r.status, 0);
+    assert.equal(r.stderr, '');
+    const st = JSON.parse(r.stdout);
+    assert.equal(st.blocked, true);
+    assert.match(st.blockedReason, /not a git checkout/);
 });
 
 test('a dirty worktree is skipped, never touched', (t) => {

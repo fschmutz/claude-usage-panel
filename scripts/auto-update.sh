@@ -26,7 +26,67 @@
 # (--check only), 1 = error, 2 = usage.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SELF_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# A directory is the checkout only if it has both halves: the manifest this
+# script reads the version from, and a git worktree it can fast-forward.
+is_checkout() {
+    [ -n "${1:-}" ] && [ -f "$1/package.json" ] &&
+        git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
+# First non-flag argument of a systemd ExecStart= line, a launchd
+# ProgramArguments array or a crontab line - i.e. the .sh path in it.
+runner_in() {
+    printf '%s' "$1" | tr '[:blank:]' '\n' |
+        sed -e 's@^ExecStart=[-@+!]*@@' -e 's@^<string>@@' -e 's@</string>$@@' |
+        grep -E '^/.*\.sh$' | head -1
+}
+
+# Every place an installed schedule records the path of the real checkout, in
+# the order the macOS app tries them. `install.sh gnome` copies this script
+# beside the GNOME extension so prefs.js can run it, and that copy has no
+# package.json and no git above it - resolving ROOT from $0 alone made every
+# run there die on `sed: can't read .../package.json`, which the Updates row
+# read as "no checkout at all".
+scheduled_runners() {
+    local cfg="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    local agents="$HOME/Library/LaunchAgents"
+    local f
+    for f in "$cfg/claude-usage-panel-update.service" \
+        "$cfg/claude-usage-panel-sessionping.service"; do
+        [ -f "$f" ] || continue
+        grep -h '^ExecStart=' "$f" 2>/dev/null || true
+    done
+    for f in "$agents/io.github.fschmutz.claude-usage-panel.update.plist" \
+        "$agents/io.github.fschmutz.claude-usage-panel.sessionping.plist"; do
+        [ -f "$f" ] || continue
+        grep -h '<string>' "$f" 2>/dev/null || true
+    done
+    crontab -l 2>/dev/null | grep -F 'claude-usage-panel' || true
+}
+
+resolve_root() {
+    if is_checkout "$SELF_ROOT"; then
+        printf '%s' "$SELF_ROOT"
+        return 0
+    fi
+    local line runner candidate
+    while IFS= read -r line; do
+        runner="$(runner_in "$line")"
+        [ -n "$runner" ] || continue
+        candidate="$(cd "$(dirname "$runner")/.." 2>/dev/null && pwd)" || continue
+        if is_checkout "$candidate"; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done < <(scheduled_runners)
+    # Nothing found: keep $0's own root so the "not a git checkout" message
+    # names the directory the user is actually looking at.
+    printf '%s' "$SELF_ROOT"
+}
+
+ROOT="$(resolve_root)"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"
 LOG="$STATE_DIR/auto-update.log"
 LOG_MAX_LINES=500
@@ -86,6 +146,9 @@ version_compare() {
 }
 
 local_version() {
+    # No manifest when this is the installed copy and no checkout was found;
+    # an empty version is a valid answer, a `sed: can't read` is not.
+    [ -f "$ROOT/package.json" ] || return 0
     sed -nE 's/.*"version": *"([^"]+)".*/\1/p' "$ROOT/package.json" | head -1
 }
 
