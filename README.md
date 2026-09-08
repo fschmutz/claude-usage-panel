@@ -109,11 +109,16 @@ plus terminal and in-conversation projections.
 |---|---|
 | 📊 **All plan limits** | Session, weekly, per-model - one card each, severity colors + reset timers from the API |
 | 📈 **Burn-rate forecast** | "↗ 4%/h - full ~Sat 21:24, 3d7h before reset": each limit is projected from your recent pace, the top bar turns amber the moment a limit is *on track* to run dry before its reset, and a notification fires once - trouble visible at 50%, not at 90% |
+| ⏱ **Against the clock** | A caret under each bar marks how much of the *window* has gone, so 60% used with 20% of the window left reads as trouble at a glance - the reading a burn rate alone cannot give |
 | 🧮 **Pool-aware** | A per-model card (Fable) is labelled as a *share of* the weekly all-models limit, not extra quota - because that is what it is |
 | 🔔 **Alerts + sparklines** | Desktop notification at 90% / 100% and on projected exhaustion, tiny trend graph per limit |
 | ⏱️ **Session pings, everywhere** | Schedule the `claude` ping that opens the 5h window from the GNOME preferences or the macOS settings, not only from the CLI - and every client shows when it last fired |
 | ▶️ **Resume today's sessions** | The dropdown lists today's five biggest token spenders and opens one in a terminal, resumed where you left it, in its own project directory |
+| 🪝 **Run your own command** | One setting: a shell command fired when a limit crosses 90/100% or a window resets, with the event, label, percent and threshold substituted (shell-quoted) |
+| 🗓 **90 days of history** | Every poll that moved is kept locally, so each card can say "peak 71% this week · 84% last" long after Claude's own 30-day cleanup |
+| 💤 **Polls when it matters** | Idle windows back off to 15 min, a poll always lands just after a reset, and both panels refresh on wake from sleep and when the network returns |
 | 💲 **Optional extras** | Local [`ccusage`](https://github.com/ryoppippi/ccusage) session cost · Cursor team spend via Admin API |
+| 🌍 **Seven languages** | English, French, German, Spanish, Italian, Portuguese, Japanese, Simplified Chinese - catalogs gated in CI |
 | 🔒 **Read-only & private** | Uses your existing local token, never writes it, no telemetry, talks only to official APIs |
 
 ## Screenshots

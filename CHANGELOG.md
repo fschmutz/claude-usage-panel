@@ -6,6 +6,36 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Usage against the clock.** Every card now shows how much of its *window*
+  has gone - a caret under the bar on GNOME, a tick on the bar on macOS,
+  `↑18` in the status line, a `vsClock` field in the MCP tool - and turns amber
+  when the quota is running more than 5 points ahead of it. The burn rate says
+  how fast; this says whether that is fast *for how much of the window is
+  left*, which a flat pace at 80% of a spent window cannot.
+- **Prepaid extra usage** is rendered when the account has it enabled:
+  "$12.40 of $50.00 (24% of the cap)" in both panels, `extraUsage` in the MCP
+  tool. It has no window and no reset, so it is a row of its own, not a card.
+- **Limit kinds we do not know yet get a readable label** (`weekly_cowork` →
+  "Weekly · cowork") instead of the raw key. The endpoint already ships
+  placeholders for kinds nobody has switched on.
+- **Adaptive polling.** Three polls with nothing moving back the rate off to at
+  most 15 minutes, a poll is always pulled forward to just after the nearest
+  reset, and nothing ever polls faster than the configured interval. Both
+  panels also refresh on wake from suspend and when the network returns.
+- **Run your own command on a crossing or a reset.** One setting in each panel:
+  a shell command with the event, label, percent, threshold and key
+  substituted - shell-quoted, because the label is API text.
+- **90 days of usage history.** Each poll that moved appends a line to
+  `~/.local/state/claude-usage-panel/history.jsonl` (Application Support on
+  macOS), so a card can say "peak 71% this week · 84% last" and the MCP tool
+  gains a `trend` field. Claude's own transcripts are cleaned up after 30 days.
+- **Six more locales** - German, Spanish, Italian, Portuguese, Japanese and
+  Simplified Chinese - plus `scripts/update-po.sh` and an `i18n` CI job that
+  fails on a stale template, a stale catalog, or a catalog that no longer
+  compiles.
+
 ### Fixed
 
 - **The progress fill still sat centered in its track after 1.9.1.** The fix

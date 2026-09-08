@@ -15,6 +15,19 @@ status line and MCP server share one sample file
 (`$TMPDIR/claude-usage-history.json`); GNOME and macOS persist their own
 pair-form history in GSettings / UserDefaults.
 
+**Usage against the clock** is the same idea without any history:
+`clockPace(card, now)` turns a reset time into how much of the window has gone
+(5 h for a session, 7 d for a weekly - the payload never says when a window
+opened) and calls a card more than 5 points over that "ahead". Pinned across
+all four ports by `tests/fixtures/pace.json`.
+
+The **durable warehouse** is the long half of the history: one JSONL line per
+poll that moved, under `XDG_STATE_HOME` (Application Support on macOS), pruned
+to 90 days, written by the two panels and read by everything -
+`tests/fixtures/warehouse.json`. **Event hooks** (`tests/fixtures/events.json`)
+detect the crossings and resets between two polls and expand the user's command
+template with shell-quoted values.
+
 **Session pings and today's sessions** are the third piece of the contract
 (`tests/fixtures/sessions.json`, asserted by `tests/sessions.test.js` and the
 Swift `SessionsParityTests`): the ping-stamp parser and its "last 05:30 /
