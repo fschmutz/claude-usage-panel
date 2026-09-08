@@ -17,120 +17,129 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: extension.js:199 prefs.js:113
+#: extension.js:241
+msgid "Extra usage"
+msgstr ""
+
+#: extension.js:272 prefs.js:138
 msgid "Today’s sessions"
 msgstr ""
 
-#: extension.js:244
+#: extension.js:317
 msgid "Refresh now"
 msgstr ""
 
-#: extension.js:257
+#: extension.js:330
 msgid "Settings"
 msgstr ""
 
-#: extension.js:261
+#: extension.js:334
 msgid "Quit"
 msgstr ""
 
-#: extension.js:309
+#: extension.js:447
 #, javascript-format
 msgid "Updated %s"
 msgstr ""
 
-#: extension.js:317
+#: extension.js:455
 msgid "Session cost: computing…"
 msgstr ""
 
-#: extension.js:325
+#: extension.js:463
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr ""
 
-#: extension.js:328
+#: extension.js:466
 msgid "Session cost: unavailable (install ccusage)"
 msgstr ""
 
-#: extension.js:363
+#: extension.js:505
 msgid "Loading…"
 msgstr ""
 
-#: extension.js:372
+#: extension.js:514
 #, javascript-format
 msgid "This cycle: $%s / $%s (%d%%) · %d members"
 msgstr ""
 
-#: extension.js:380
+#: extension.js:522
 #, javascript-format
 msgid "This cycle: $%s · %d members"
 msgstr ""
 
-#: extension.js:385
+#: extension.js:527
 #, javascript-format
 msgid "Today: $%s"
 msgstr ""
 
-#: extension.js:387
+#: extension.js:529
 #, javascript-format
 msgid "Top: %s $%s"
 msgstr ""
 
-#: extension.js:391
+#: extension.js:533
 #, javascript-format
 msgid "Cursor: %s"
 msgstr ""
 
-#: extension.js:410
+#: extension.js:567
+#, javascript-format
+msgid "%s (%d%% of the cap)"
+msgstr ""
+
+#: extension.js:584
 #, javascript-format
 msgid "last %s"
 msgstr ""
 
-#: extension.js:410 prefs.js:222
+#: extension.js:584 prefs.js:247
 msgid "never"
 msgstr ""
 
-#: extension.js:414
+#: extension.js:588
 #, javascript-format
 msgid "next %s"
 msgstr ""
 
-#: extension.js:416
+#: extension.js:590
 #, javascript-format
 msgid "Session pings: %s"
 msgstr ""
 
-#: extension.js:464
+#: extension.js:638
 msgid "Today’s sessions (est., still indexing)"
 msgstr ""
 
-#: extension.js:465
+#: extension.js:639
 msgid "Today’s sessions (est.)"
 msgstr ""
 
-#: extension.js:509 extension.js:519 extension.js:534 extension.js:548
+#: extension.js:685 extension.js:695 extension.js:710 extension.js:724
 msgid "Claude usage"
 msgstr ""
 
-#: extension.js:510
+#: extension.js:686
 msgid "No terminal found - set one in the extension preferences."
 msgstr ""
 
-#: extension.js:519
+#: extension.js:695
 #, javascript-format
 msgid "Could not open %s"
 msgstr ""
 
-#: extension.js:535
+#: extension.js:711
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr ""
 
-#: extension.js:549
+#: extension.js:725
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr ""
 
-#: extension.js:647
+#: extension.js:824
 msgid "Claude ?"
 msgstr ""
 
@@ -150,260 +159,277 @@ msgstr ""
 msgid "Refresh interval"
 msgstr ""
 
-#: prefs.js:29
-msgid "Minutes between updates (min 1)"
+#: prefs.js:30
+msgid ""
+"Minutes between updates (min 1). Idle windows back off to 15 minutes, and a "
+"poll always lands just after a reset, on wake and when the network returns."
 msgstr ""
 
-#: prefs.js:39
+#: prefs.js:42
 msgid "Top bar shows"
 msgstr ""
 
-#: prefs.js:40
+#: prefs.js:43
 msgid "Which limit to display in the panel"
 msgstr ""
 
-#: prefs.js:41
+#: prefs.js:44
 msgid "Worst limit"
 msgstr ""
 
-#: prefs.js:41
+#: prefs.js:44
 msgid "Current session"
 msgstr ""
 
-#: prefs.js:49
+#: prefs.js:52
 msgid "Limit-crossing alerts"
 msgstr ""
 
-#: prefs.js:50
+#: prefs.js:53
 msgid "Notify when a limit reaches 90% or 100%"
 msgstr ""
 
-#: prefs.js:58
+#: prefs.js:62
+msgid "Run on limit crossing or reset"
+msgstr ""
+
+#: prefs.js:71
+msgid "Placeholders"
+msgstr ""
+
+#: prefs.js:73
+msgid ""
+"%e event (threshold or reset) · %l label · %p percent · %t threshold · %k "
+"key · %% a literal %. Empty disables it. Example: notify-send \"Claude %l\" "
+"\"%e at %p%%\""
+msgstr ""
+
+#: prefs.js:83
 msgid "Cost"
 msgstr ""
 
-#: prefs.js:59
+#: prefs.js:84
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
 "this to compute it locally with ccusage (requires Node/npx)."
 msgstr ""
 
-#: prefs.js:62
+#: prefs.js:87
 msgid "Show session cost"
 msgstr ""
 
-#: prefs.js:63
+#: prefs.js:88
 msgid "Runs `ccusage blocks --active` on each refresh"
 msgstr ""
 
-#: prefs.js:70
+#: prefs.js:95
 msgid "Cursor (optional)"
 msgstr ""
 
-#: prefs.js:71
+#: prefs.js:96
 msgid ""
 "Show Cursor team spend using the Cursor Admin API. Create a key at "
 "cursor.com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
 
-#: prefs.js:74
+#: prefs.js:99
 msgid "Show Cursor usage"
 msgstr ""
 
-#: prefs.js:75
+#: prefs.js:100
 msgid "Adds a Cursor spend section to the dropdown"
 msgstr ""
 
-#: prefs.js:84
+#: prefs.js:109
 msgid "Cursor Admin API key"
 msgstr ""
 
-#: prefs.js:114
+#: prefs.js:139
 msgid ""
 "List the sessions that spent the most tokens today, biggest first, and "
 "resume one in a terminal with a click. Read from the local transcripts in "
 "~/.claude/projects."
 msgstr ""
 
-#: prefs.js:117
+#: prefs.js:142
 msgid "Show today’s sessions"
 msgstr ""
 
-#: prefs.js:118
+#: prefs.js:143
 msgid "Adds up to 5 resume links to the dropdown"
 msgstr ""
 
-#: prefs.js:123
+#: prefs.js:148
 msgid "Terminal"
 msgstr ""
 
-#: prefs.js:129
+#: prefs.js:154
 msgid ""
 "Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
 "alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
 msgstr ""
 
-#: prefs.js:139
+#: prefs.js:164
 msgid "Session pings"
 msgstr ""
 
-#: prefs.js:140
+#: prefs.js:165
 msgid ""
 "A 5-hour window is anchored to its first message, so pinging claude (haiku, "
 "one turn) at a fixed time lines the day’s windows up with the hours you "
 "actually work. Same schedule as ./install.sh sessionping."
 msgstr ""
 
-#: prefs.js:147
+#: prefs.js:172
 msgid "Open the 5h session window on schedule"
 msgstr ""
 
-#: prefs.js:149
+#: prefs.js:174
 msgid "Runs scripts/session-ping.sh from a systemd user timer"
 msgstr ""
 
-#: prefs.js:150
+#: prefs.js:175
 msgid "Needs a systemd user session - use ./install.sh sessionping here"
 msgstr ""
 
-#: prefs.js:156
+#: prefs.js:181
 msgid "Last ping"
 msgstr ""
 
-#: prefs.js:159
+#: prefs.js:184
 msgid "Coverage"
 msgstr ""
 
-#: prefs.js:163
+#: prefs.js:188
 msgid "Working day"
 msgstr ""
 
-#: prefs.js:181
+#: prefs.js:206
 msgid "Days"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:207
 msgid "Mon"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:207
 msgid "Tue"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:207
 msgid "Wed"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:207
 msgid "Thu"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:207
 msgid "Fri"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:207
 msgid "Sat"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:207
 msgid "Sun"
 msgstr ""
 
-#: prefs.js:206
+#: prefs.js:231
 msgid "Add a ping"
 msgstr ""
 
-#: prefs.js:209
+#: prefs.js:234
 msgid "Suggest times"
 msgstr ""
 
-#: prefs.js:225
+#: prefs.js:250
 #, javascript-format
 msgid "%d%% of %s-%s covered"
 msgstr ""
 
-#: prefs.js:227
+#: prefs.js:252
 msgid "no valid times yet"
 msgstr ""
 
-#: prefs.js:247
+#: prefs.js:272
 #, javascript-format
 msgid "Ping %d"
 msgstr ""
 
-#: prefs.js:316
+#: prefs.js:341
 msgid "Updates"
 msgstr ""
 
-#: prefs.js:317
+#: prefs.js:342
 msgid "Daily check, and whether it is actually running."
 msgstr ""
 
-#: prefs.js:320 prefs.js:406
+#: prefs.js:345 prefs.js:431
 msgid "Checking…"
 msgstr ""
 
-#: prefs.js:324 prefs.js:360 prefs.js:384 prefs.js:394
+#: prefs.js:349 prefs.js:385 prefs.js:409 prefs.js:419
 msgid "Check now"
 msgstr ""
 
-#: prefs.js:358
+#: prefs.js:383
 msgid "Cannot self-update"
 msgstr ""
 
-#: prefs.js:359
+#: prefs.js:384
 msgid "No git checkout found for auto-update.sh."
 msgstr ""
 
-#: prefs.js:367
+#: prefs.js:392
 msgid "Could not read the update status"
 msgstr ""
 
-#: prefs.js:375
+#: prefs.js:400
 #, javascript-format
 msgid "Installed %s, checkout %s"
 msgstr ""
 
-#: prefs.js:376
+#: prefs.js:401
 msgid "Run ./install.sh update to install the newer code."
 msgstr ""
 
-#: prefs.js:377 prefs.js:388 prefs.js:405
+#: prefs.js:402 prefs.js:413 prefs.js:430
 msgid "Update now"
 msgstr ""
 
-#: prefs.js:379
+#: prefs.js:404
 #, javascript-format
 msgid "Paused: %s"
 msgstr ""
 
-#: prefs.js:381
+#: prefs.js:406
 msgid ""
 "The daily check will not touch this checkout until that is resolved. It only "
 "ever fast-forwards a clean checkout."
 msgstr ""
 
-#: prefs.js:386
+#: prefs.js:411
 #, javascript-format
 msgid "Update available: %s → %s"
 msgstr ""
 
-#: prefs.js:387 prefs.js:393
+#: prefs.js:412 prefs.js:418
 #, javascript-format
 msgid "Last checked %s"
 msgstr ""
 
-#: prefs.js:391
+#: prefs.js:416
 #, javascript-format
 msgid "Up to date (%s)"
 msgstr ""
 
-#: prefs.js:392
+#: prefs.js:417
 #, javascript-format
 msgid "%s (could not reach the remote)"
 msgstr ""
 
-#: prefs.js:406
+#: prefs.js:431
 msgid "Updating…"
 msgstr ""

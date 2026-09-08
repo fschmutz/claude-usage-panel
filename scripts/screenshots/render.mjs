@@ -19,6 +19,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   normalizeUsage, poolNote, sparkline, formatResets, forecast, formatForecast,
+  clockPace,
   severityClass, compactTokens,
 } from '../../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
@@ -113,6 +114,9 @@ for (const [i, card] of cards.entries()) {
   const note = poolNote(card);
   const fcText = fmtForecastUTC(fc);
   const spark = sparkline(raw.history);
+  // Where the window's own clock stands - the caret the real cards draw under
+  // the bar, from the same clockPace() the panels use.
+  const pace = clockPace(card, NOW);
   const cardH = 96 + (fcText ? 16 : 0);
 
   parts.push(`<rect x="${PAD}" y="${y}" width="${CARD_W}" height="${cardH}" rx="14" fill="${C.card}" stroke="${C.cardBorder}"/>`);
@@ -123,6 +127,12 @@ for (const [i, card] of cards.entries()) {
   const barW = CARD_W - 28;
   parts.push(`<rect x="${PAD + 14}" y="${barY}" width="${barW}" height="8" rx="4" fill="${C.track}"/>`);
   parts.push(`<rect x="${PAD + 14}" y="${barY}" width="${Math.round((card.percent / 100) * barW)}" height="8" rx="4" fill="${color}"/>`);
+  if (pace) {
+    const markX = PAD + 14 + Math.round((pace.elapsedPercent / 100) * barW);
+    parts.push(
+      `<rect x="${markX - 1}" y="${barY - 2}" width="2" height="12" rx="1" fill="${
+        pace.state === 'ahead' ? C.warning : C.dim}"/>`);
+  }
   const resetLine = [formatResets(card.resetsAt, NOW), note].filter(Boolean).join(' · ');
   text(PAD + 14, barY + 24, resetLine, 11, C.dim);
   parts.push(`<text x="${W - PAD - 14}" y="${barY + 24}" font-size="10" fill="${C.dim}" ${MONO} text-anchor="end">${esc(spark)}</text>`);

@@ -1,144 +1,142 @@
-# French translations for Claude Usage package.
+# Portuguese translation of Claude Usage Panel.
 # Copyright (C) 2026 Falco Schmutz
 # This file is distributed under the same license as the Claude Usage Panel package.
-# Automatically generated, 2026.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: Claude Usage Panel\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-09-01 19:39+0200\n"
-"PO-Revision-Date: 2026-07-07 13:23+0200\n"
-"Last-Translator: Automatically generated\n"
-"Language-Team: none\n"
-"Language: fr\n"
+"PO-Revision-Date: 2026-09-09 00:00+0200\n"
+"Last-Translator: Falco Schmutz <fschmutz@premaccess.com>\n"
+"Language-Team: Portuguese\n"
+"Language: pt\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: extension.js:241
 msgid "Extra usage"
-msgstr "Utilisation supplémentaire"
+msgstr "Uso extra"
 
 #: extension.js:272 prefs.js:138
 msgid "Today’s sessions"
-msgstr "Sessions du jour"
+msgstr "Sessões de hoje"
 
 #: extension.js:317
 msgid "Refresh now"
-msgstr "Actualiser"
+msgstr "Atualizar agora"
 
 #: extension.js:330
 msgid "Settings"
-msgstr "Paramètres"
+msgstr "Definições"
 
 #: extension.js:334
 msgid "Quit"
-msgstr "Quitter"
+msgstr "Sair"
 
 #: extension.js:447
 #, javascript-format
 msgid "Updated %s"
-msgstr "Mis à jour %s"
+msgstr "Atualizado %s"
 
 #: extension.js:455
 msgid "Session cost: computing…"
-msgstr "Coût de session : calcul en cours…"
+msgstr "Custo da sessão: a calcular…"
 
 #: extension.js:463
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
-msgstr "Coût de session : %s $ · %s jetons (est.)"
+msgstr "Custo da sessão: $%s · %s tokens (est.)"
 
 #: extension.js:466
 msgid "Session cost: unavailable (install ccusage)"
-msgstr "Coût de session : indisponible (installe ccusage)"
+msgstr "Custo da sessão: indisponível (instale o ccusage)"
 
 #: extension.js:505
 msgid "Loading…"
-msgstr "Chargement…"
+msgstr "A carregar…"
 
 #: extension.js:514
 #, javascript-format
 msgid "This cycle: $%s / $%s (%d%%) · %d members"
-msgstr "Ce cycle : %s $ / %s $ (%d%%) · %d membres"
+msgstr "Este ciclo: $%s / $%s (%d%%) · %d membros"
 
 #: extension.js:522
 #, javascript-format
 msgid "This cycle: $%s · %d members"
-msgstr "Ce cycle : %s $ · %d membres"
+msgstr "Este ciclo: $%s · %d membros"
 
 #: extension.js:527
 #, javascript-format
 msgid "Today: $%s"
-msgstr "Aujourd'hui : %s $"
+msgstr "Hoje: $%s"
 
 #: extension.js:529
 #, javascript-format
 msgid "Top: %s $%s"
-msgstr "Top : %s %s $"
+msgstr "Máximo: %s $%s"
 
 #: extension.js:533
 #, javascript-format
 msgid "Cursor: %s"
-msgstr "Cursor : %s"
+msgstr "Cursor: %s"
 
 #: extension.js:567
 #, javascript-format
 msgid "%s (%d%% of the cap)"
-msgstr "%s (%d%% du plafond)"
+msgstr "%s (%d%% do limite)"
 
 #: extension.js:584
 #, javascript-format
 msgid "last %s"
-msgstr "dernier %s"
+msgstr "último %s"
 
 #: extension.js:584 prefs.js:247
 msgid "never"
-msgstr "jamais"
+msgstr "nunca"
 
 #: extension.js:588
 #, javascript-format
 msgid "next %s"
-msgstr "prochain %s"
+msgstr "próximo %s"
 
 #: extension.js:590
 #, javascript-format
 msgid "Session pings: %s"
-msgstr "Pings de session : %s"
+msgstr "Pings de sessão: %s"
 
 #: extension.js:638
 msgid "Today’s sessions (est., still indexing)"
-msgstr "Sessions du jour (est., indexation en cours)"
+msgstr "Sessões de hoje (est., ainda a indexar)"
 
 #: extension.js:639
 msgid "Today’s sessions (est.)"
-msgstr "Sessions du jour (est.)"
+msgstr "Sessões de hoje (est.)"
 
 #: extension.js:685 extension.js:695 extension.js:710 extension.js:724
 msgid "Claude usage"
-msgstr "Utilisation Claude"
+msgstr "Utilização do Claude"
 
 #: extension.js:686
 msgid "No terminal found - set one in the extension preferences."
-msgstr ""
-"Aucun terminal trouvé - indiquez-en un dans les préférences de l’extension."
+msgstr "Nenhum terminal encontrado - defina um nas preferências da extensão."
 
 #: extension.js:695
 #, javascript-format
 msgid "Could not open %s"
-msgstr "Impossible d’ouvrir %s"
+msgstr "Não foi possível abrir %s"
 
 #: extension.js:711
 #, javascript-format
 msgid "%s reached %d%%"
-msgstr "%s a atteint %d%%"
+msgstr "%s atingiu %d%%"
 
 #: extension.js:725
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
-msgstr "%s est en voie d’épuisement avant sa réinitialisation"
+msgstr "%s vai esgotar-se antes de reiniciar ao ritmo atual"
 
 #: extension.js:824
 msgid "Claude ?"
@@ -146,60 +144,60 @@ msgstr "Claude ?"
 
 #: prefs.js:17
 msgid "General"
-msgstr "Général"
+msgstr "Geral"
 
 #: prefs.js:22
 msgid "Behavior"
-msgstr "Comportement"
+msgstr "Comportamento"
 
 #: prefs.js:23
 msgid "How often to poll the Claude usage endpoint."
-msgstr "Fréquence d'interrogation du service Claude."
+msgstr "Com que frequência consultar o endpoint de utilização do Claude."
 
 #: prefs.js:28
 msgid "Refresh interval"
-msgstr "Intervalle d'actualisation"
+msgstr "Intervalo de atualização"
 
 #: prefs.js:30
 msgid ""
 "Minutes between updates (min 1). Idle windows back off to 15 minutes, and a "
 "poll always lands just after a reset, on wake and when the network returns."
 msgstr ""
-"Minutes entre les mises à jour (min 1). Les fenêtres inactives ralentissent "
-"jusqu'à 15 minutes, et une requête arrive toujours juste après une "
-"réinitialisation, au réveil et au retour du réseau."
+"Minutos entre atualizações (mín. 1). Janelas inativas abrandam até 15 "
+"minutos, e há sempre uma consulta logo após um reinício, ao acordar e quando "
+"a rede volta."
 
 #: prefs.js:42
 msgid "Top bar shows"
-msgstr "La barre affiche"
+msgstr "A barra superior mostra"
 
 #: prefs.js:43
 msgid "Which limit to display in the panel"
-msgstr "Quelle limite afficher dans le panneau"
+msgstr "Que limite mostrar no painel"
 
 #: prefs.js:44
 msgid "Worst limit"
-msgstr "Limite la plus critique"
+msgstr "Limite mais crítico"
 
 #: prefs.js:44
 msgid "Current session"
-msgstr "Session actuelle"
+msgstr "Sessão atual"
 
 #: prefs.js:52
 msgid "Limit-crossing alerts"
-msgstr "Alertes de seuil"
+msgstr "Alertas ao ultrapassar limites"
 
 #: prefs.js:53
 msgid "Notify when a limit reaches 90% or 100%"
-msgstr "Notifier quand une limite atteint 90% ou 100%"
+msgstr "Notificar quando um limite atingir 90% ou 100%"
 
 #: prefs.js:62
 msgid "Run on limit crossing or reset"
-msgstr "Exécuter au franchissement d'une limite ou à la réinitialisation"
+msgstr "Executar ao ultrapassar um limite ou ao reiniciar"
 
 #: prefs.js:71
 msgid "Placeholders"
-msgstr "Variables"
+msgstr "Marcadores"
 
 #: prefs.js:73
 msgid ""
@@ -207,55 +205,54 @@ msgid ""
 "key · %% a literal %. Empty disables it. Example: notify-send \"Claude %l\" "
 "\"%e at %p%%\""
 msgstr ""
-"%e événement (threshold ou reset) · %l libellé · %p pourcentage · %t seuil · "
-"%k clé · %% un % littéral. Vide pour désactiver. Exemple : notify-send "
-"\"Claude %l\" \"%e à %p%%\""
+"%e evento (threshold ou reset) · %l etiqueta · %p percentagem · %t limiar · "
+"%k chave · %% um % literal. Vazio desativa. Exemplo: notify-send \"Claude "
+"%l\" \"%e a %p%%\""
 
 #: prefs.js:83
 msgid "Cost"
-msgstr "Coût"
+msgstr "Custo"
 
 #: prefs.js:84
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
 "this to compute it locally with ccusage (requires Node/npx)."
 msgstr ""
-"L’API officielle n’expose pas le coût en dollars sur les formules par "
-"abonnement. Activez cette option pour le calculer localement avec ccusage "
-"(nécessite Node/npx)."
+"A API oficial não expõe o custo em dólares nos planos de subscrição. Ative "
+"para o calcular localmente com o ccusage (requer Node/npx)."
 
 #: prefs.js:87
 msgid "Show session cost"
-msgstr "Afficher le coût de session"
+msgstr "Mostrar o custo da sessão"
 
 #: prefs.js:88
 msgid "Runs `ccusage blocks --active` on each refresh"
-msgstr "Exécute `ccusage blocks --active` à chaque actualisation"
+msgstr "Executa `ccusage blocks --active` em cada atualização"
 
 #: prefs.js:95
 msgid "Cursor (optional)"
-msgstr "Cursor (optionnel)"
+msgstr "Cursor (opcional)"
 
 #: prefs.js:96
 msgid ""
 "Show Cursor team spend using the Cursor Admin API. Create a key at "
 "cursor.com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
-"Affiche la dépense de l’équipe Cursor via l’API Admin de Cursor. Créez une "
-"clé sur cursor.com → équipe → Settings → Admin API. Stockée dans le "
-"trousseau du système."
+"Mostra a despesa da equipa Cursor através da API Admin do Cursor. Crie uma "
+"chave em cursor.com → equipa → Settings → Admin API. Guardada no chaveiro do "
+"sistema."
 
 #: prefs.js:99
 msgid "Show Cursor usage"
-msgstr "Afficher l'utilisation Cursor"
+msgstr "Mostrar a utilização do Cursor"
 
 #: prefs.js:100
 msgid "Adds a Cursor spend section to the dropdown"
-msgstr "Ajoute une section de dépenses Cursor au menu"
+msgstr "Adiciona uma secção de despesa do Cursor ao menu"
 
 #: prefs.js:109
 msgid "Cursor Admin API key"
-msgstr "Clé API Admin Cursor"
+msgstr "Chave da API Admin do Cursor"
 
 #: prefs.js:139
 msgid ""
@@ -263,17 +260,17 @@ msgid ""
 "resume one in a terminal with a click. Read from the local transcripts in "
 "~/.claude/projects."
 msgstr ""
-"Liste les sessions qui ont consommé le plus de jetons aujourd’hui, la plus "
-"grosse en premier, et en reprend une dans un terminal d’un clic. Lu depuis "
-"les transcriptions locales dans ~/.claude/projects."
+"Lista as sessões que gastaram mais tokens hoje, da maior para a menor, e "
+"retoma uma no terminal com um clique. Lido das transcrições locais em "
+"~/.claude/projects."
 
 #: prefs.js:142
 msgid "Show today’s sessions"
-msgstr "Afficher les sessions du jour"
+msgstr "Mostrar as sessões de hoje"
 
 #: prefs.js:143
 msgid "Adds up to 5 resume links to the dropdown"
-msgstr "Ajoute jusqu’à 5 liens de reprise au menu"
+msgstr "Adiciona até 5 ligações de retoma ao menu"
 
 #: prefs.js:148
 msgid "Terminal"
@@ -284,13 +281,13 @@ msgid ""
 "Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
 "alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
 msgstr ""
-"Laissez vide pour une détection automatique : $TERMINAL, puis ghostty, "
-"kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-"
-"terminal, xterm."
+"Deixe vazio para deteção automática: $TERMINAL, depois ghostty, kitty, "
+"wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, "
+"xterm."
 
 #: prefs.js:164
 msgid "Session pings"
-msgstr "Pings de session"
+msgstr "Pings de sessão"
 
 #: prefs.js:165
 msgid ""
@@ -298,85 +295,86 @@ msgid ""
 "one turn) at a fixed time lines the day’s windows up with the hours you "
 "actually work. Same schedule as ./install.sh sessionping."
 msgstr ""
-"Une fenêtre de 5 heures démarre à son premier message : envoyer un ping à "
-"claude (haiku, un seul tour) à heure fixe aligne les fenêtres de la journée "
-"sur vos heures de travail réelles. Même planification que ./install.sh "
-"sessionping."
+"Uma janela de 5 horas é ancorada na sua primeira mensagem, por isso um ping "
+"ao claude (haiku, um turno) a uma hora fixa alinha as janelas do dia com as "
+"horas em que trabalha. Mesmo agendamento que ./install.sh sessionping."
 
 #: prefs.js:172
 msgid "Open the 5h session window on schedule"
-msgstr "Ouvrir la fenêtre de session de 5 h à heure fixe"
+msgstr "Abrir a janela de 5 h conforme agendado"
 
 #: prefs.js:174
 msgid "Runs scripts/session-ping.sh from a systemd user timer"
-msgstr "Exécute scripts/session-ping.sh via un minuteur utilisateur systemd"
+msgstr ""
+"Executa scripts/session-ping.sh a partir de um temporizador de utilizador do "
+"systemd"
 
 #: prefs.js:175
 msgid "Needs a systemd user session - use ./install.sh sessionping here"
 msgstr ""
-"Nécessite une session utilisateur systemd - utilisez ./install.sh "
-"sessionping ici"
+"Requer uma sessão de utilizador do systemd - use ./install.sh sessionping "
+"aqui"
 
 #: prefs.js:181
 msgid "Last ping"
-msgstr "Dernier ping"
+msgstr "Último ping"
 
 #: prefs.js:184
 msgid "Coverage"
-msgstr "Couverture"
+msgstr "Cobertura"
 
 #: prefs.js:188
 msgid "Working day"
-msgstr "Journée de travail"
+msgstr "Dia de trabalho"
 
 #: prefs.js:206
 msgid "Days"
-msgstr "Jours"
+msgstr "Dias"
 
 #: prefs.js:207
 msgid "Mon"
-msgstr "lun"
+msgstr "seg"
 
 #: prefs.js:207
 msgid "Tue"
-msgstr "mar"
+msgstr "ter"
 
 #: prefs.js:207
 msgid "Wed"
-msgstr "mer"
+msgstr "qua"
 
 #: prefs.js:207
 msgid "Thu"
-msgstr "jeu"
+msgstr "qui"
 
 #: prefs.js:207
 msgid "Fri"
-msgstr "ven"
+msgstr "sex"
 
 #: prefs.js:207
 msgid "Sat"
-msgstr "sam"
+msgstr "sáb"
 
 #: prefs.js:207
 msgid "Sun"
-msgstr "dim"
+msgstr "dom"
 
 #: prefs.js:231
 msgid "Add a ping"
-msgstr "Ajouter un ping"
+msgstr "Adicionar um ping"
 
 #: prefs.js:234
 msgid "Suggest times"
-msgstr "Proposer des heures"
+msgstr "Sugerir horas"
 
 #: prefs.js:250
 #, javascript-format
 msgid "%d%% of %s-%s covered"
-msgstr "%d%% de %s-%s couvert"
+msgstr "%d%% de %s-%s coberto"
 
 #: prefs.js:252
 msgid "no valid times yet"
-msgstr "aucune heure valide pour l’instant"
+msgstr "ainda sem horas válidas"
 
 #: prefs.js:272
 #, javascript-format
@@ -385,81 +383,78 @@ msgstr "Ping %d"
 
 #: prefs.js:341
 msgid "Updates"
-msgstr "Mises à jour"
+msgstr "Atualizações"
 
 #: prefs.js:342
 msgid "Daily check, and whether it is actually running."
-msgstr "Vérification quotidienne, et si elle tourne réellement."
+msgstr "Verificação diária, e se está mesmo a correr."
 
 #: prefs.js:345 prefs.js:431
 msgid "Checking…"
-msgstr "Vérification…"
+msgstr "A verificar…"
 
 #: prefs.js:349 prefs.js:385 prefs.js:409 prefs.js:419
 msgid "Check now"
-msgstr "Vérifier maintenant"
+msgstr "Verificar agora"
 
 #: prefs.js:383
 msgid "Cannot self-update"
-msgstr "Mise à jour automatique impossible"
+msgstr "Não é possível atualizar sozinho"
 
 #: prefs.js:384
 msgid "No git checkout found for auto-update.sh."
-msgstr "Aucun dépôt git trouvé pour auto-update.sh."
+msgstr "Nenhum checkout git encontrado para auto-update.sh."
 
 #: prefs.js:392
 msgid "Could not read the update status"
-msgstr "Impossible de lire l’état de mise à jour"
+msgstr "Não foi possível ler o estado da atualização"
 
 #: prefs.js:400
 #, javascript-format
 msgid "Installed %s, checkout %s"
-msgstr "Installé %s, dépôt %s"
+msgstr "Instalado %s, checkout %s"
 
 #: prefs.js:401
 msgid "Run ./install.sh update to install the newer code."
-msgstr "Lancez ./install.sh update pour installer le code plus récent."
+msgstr "Execute ./install.sh update para instalar o código mais recente."
 
 #: prefs.js:402 prefs.js:413 prefs.js:430
 msgid "Update now"
-msgstr "Mettre à jour maintenant"
+msgstr "Atualizar agora"
 
 #: prefs.js:404
 #, javascript-format
 msgid "Paused: %s"
-msgstr "En pause : %s"
+msgstr "Em pausa: %s"
 
 #: prefs.js:406
 msgid ""
 "The daily check will not touch this checkout until that is resolved. It only "
 "ever fast-forwards a clean checkout."
 msgstr ""
-"La vérification quotidienne ne touchera pas ce dépôt tant que ce point n’est "
-"pas réglé. Elle n’avance que sur un dépôt propre, en fast-forward."
+"A verificação diária não toca neste checkout até isso ser resolvido. Só faz "
+"fast-forward num checkout limpo."
 
 #: prefs.js:411
 #, javascript-format
 msgid "Update available: %s → %s"
-msgstr "Mise à jour disponible : %s → %s"
+msgstr "Atualização disponível: %s → %s"
 
 #: prefs.js:412 prefs.js:418
 #, javascript-format
 msgid "Last checked %s"
-msgstr "Dernière vérification %s"
+msgstr "Última verificação %s"
 
 #: prefs.js:416
 #, javascript-format
 msgid "Up to date (%s)"
-msgstr "À jour (%s)"
+msgstr "Atualizado (%s)"
 
 #: prefs.js:417
 #, javascript-format
 msgid "%s (could not reach the remote)"
-msgstr "%s (dépôt distant injoignable)"
+msgstr "%s (não foi possível contactar o remoto)"
 
 #: prefs.js:431
 msgid "Updating…"
-msgstr "Mise à jour…"
-
-#~ msgid "Minutes between updates (min 1)"
-#~ msgstr "Minutes entre les mises à jour (min 1)"
+msgstr "A atualizar…"

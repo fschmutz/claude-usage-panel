@@ -1,144 +1,142 @@
-# French translations for Claude Usage package.
+# Chinese (Simplified) translation of Claude Usage Panel.
 # Copyright (C) 2026 Falco Schmutz
 # This file is distributed under the same license as the Claude Usage Panel package.
-# Automatically generated, 2026.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: Claude Usage Panel\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-09-01 19:39+0200\n"
-"PO-Revision-Date: 2026-07-07 13:23+0200\n"
-"Last-Translator: Automatically generated\n"
-"Language-Team: none\n"
-"Language: fr\n"
+"PO-Revision-Date: 2026-09-09 00:00+0200\n"
+"Last-Translator: Falco Schmutz <fschmutz@premaccess.com>\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 
 #: extension.js:241
 msgid "Extra usage"
-msgstr "Utilisation supplémentaire"
+msgstr "额外用量"
 
 #: extension.js:272 prefs.js:138
 msgid "Today’s sessions"
-msgstr "Sessions du jour"
+msgstr "今天的会话"
 
 #: extension.js:317
 msgid "Refresh now"
-msgstr "Actualiser"
+msgstr "立即刷新"
 
 #: extension.js:330
 msgid "Settings"
-msgstr "Paramètres"
+msgstr "设置"
 
 #: extension.js:334
 msgid "Quit"
-msgstr "Quitter"
+msgstr "退出"
 
 #: extension.js:447
 #, javascript-format
 msgid "Updated %s"
-msgstr "Mis à jour %s"
+msgstr "已更新 %s"
 
 #: extension.js:455
 msgid "Session cost: computing…"
-msgstr "Coût de session : calcul en cours…"
+msgstr "会话费用：计算中…"
 
 #: extension.js:463
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
-msgstr "Coût de session : %s $ · %s jetons (est.)"
+msgstr "会话费用：$%s · %s 个 token（估算）"
 
 #: extension.js:466
 msgid "Session cost: unavailable (install ccusage)"
-msgstr "Coût de session : indisponible (installe ccusage)"
+msgstr "会话费用：不可用（请安装 ccusage）"
 
 #: extension.js:505
 msgid "Loading…"
-msgstr "Chargement…"
+msgstr "加载中…"
 
 #: extension.js:514
 #, javascript-format
 msgid "This cycle: $%s / $%s (%d%%) · %d members"
-msgstr "Ce cycle : %s $ / %s $ (%d%%) · %d membres"
+msgstr "本周期：$%s / $%s (%d%%) · %d 名成员"
 
 #: extension.js:522
 #, javascript-format
 msgid "This cycle: $%s · %d members"
-msgstr "Ce cycle : %s $ · %d membres"
+msgstr "本周期：$%s · %d 名成员"
 
 #: extension.js:527
 #, javascript-format
 msgid "Today: $%s"
-msgstr "Aujourd'hui : %s $"
+msgstr "今天：$%s"
 
 #: extension.js:529
 #, javascript-format
 msgid "Top: %s $%s"
-msgstr "Top : %s %s $"
+msgstr "最高：%s $%s"
 
 #: extension.js:533
 #, javascript-format
 msgid "Cursor: %s"
-msgstr "Cursor : %s"
+msgstr "Cursor：%s"
 
 #: extension.js:567
 #, javascript-format
 msgid "%s (%d%% of the cap)"
-msgstr "%s (%d%% du plafond)"
+msgstr "%s（上限的 %d%%）"
 
 #: extension.js:584
 #, javascript-format
 msgid "last %s"
-msgstr "dernier %s"
+msgstr "上次 %s"
 
 #: extension.js:584 prefs.js:247
 msgid "never"
-msgstr "jamais"
+msgstr "从未"
 
 #: extension.js:588
 #, javascript-format
 msgid "next %s"
-msgstr "prochain %s"
+msgstr "下次 %s"
 
 #: extension.js:590
 #, javascript-format
 msgid "Session pings: %s"
-msgstr "Pings de session : %s"
+msgstr "会话 ping：%s"
 
 #: extension.js:638
 msgid "Today’s sessions (est., still indexing)"
-msgstr "Sessions du jour (est., indexation en cours)"
+msgstr "今天的会话（估算，仍在索引）"
 
 #: extension.js:639
 msgid "Today’s sessions (est.)"
-msgstr "Sessions du jour (est.)"
+msgstr "今天的会话（估算）"
 
 #: extension.js:685 extension.js:695 extension.js:710 extension.js:724
 msgid "Claude usage"
-msgstr "Utilisation Claude"
+msgstr "Claude 用量"
 
 #: extension.js:686
 msgid "No terminal found - set one in the extension preferences."
-msgstr ""
-"Aucun terminal trouvé - indiquez-en un dans les préférences de l’extension."
+msgstr "未找到终端 - 请在扩展设置中指定一个。"
 
 #: extension.js:695
 #, javascript-format
 msgid "Could not open %s"
-msgstr "Impossible d’ouvrir %s"
+msgstr "无法打开 %s"
 
 #: extension.js:711
 #, javascript-format
 msgid "%s reached %d%%"
-msgstr "%s a atteint %d%%"
+msgstr "%s 已达到 %d%%"
 
 #: extension.js:725
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
-msgstr "%s est en voie d’épuisement avant sa réinitialisation"
+msgstr "按当前速度，%s 将在重置前用尽"
 
 #: extension.js:824
 msgid "Claude ?"
@@ -146,60 +144,59 @@ msgstr "Claude ?"
 
 #: prefs.js:17
 msgid "General"
-msgstr "Général"
+msgstr "常规"
 
 #: prefs.js:22
 msgid "Behavior"
-msgstr "Comportement"
+msgstr "行为"
 
 #: prefs.js:23
 msgid "How often to poll the Claude usage endpoint."
-msgstr "Fréquence d'interrogation du service Claude."
+msgstr "轮询 Claude 用量接口的频率。"
 
 #: prefs.js:28
 msgid "Refresh interval"
-msgstr "Intervalle d'actualisation"
+msgstr "刷新间隔"
 
 #: prefs.js:30
 msgid ""
 "Minutes between updates (min 1). Idle windows back off to 15 minutes, and a "
 "poll always lands just after a reset, on wake and when the network returns."
 msgstr ""
-"Minutes entre les mises à jour (min 1). Les fenêtres inactives ralentissent "
-"jusqu'à 15 minutes, et une requête arrive toujours juste après une "
-"réinitialisation, au réveil et au retour du réseau."
+"更新间隔分钟数（最少 1）。空闲时最长退避到 15 分钟；重置之后、唤醒时以及网络"
+"恢复时都会立即拉取一次。"
 
 #: prefs.js:42
 msgid "Top bar shows"
-msgstr "La barre affiche"
+msgstr "顶栏显示"
 
 #: prefs.js:43
 msgid "Which limit to display in the panel"
-msgstr "Quelle limite afficher dans le panneau"
+msgstr "在面板中显示哪个限制"
 
 #: prefs.js:44
 msgid "Worst limit"
-msgstr "Limite la plus critique"
+msgstr "最紧张的限制"
 
 #: prefs.js:44
 msgid "Current session"
-msgstr "Session actuelle"
+msgstr "当前会话"
 
 #: prefs.js:52
 msgid "Limit-crossing alerts"
-msgstr "Alertes de seuil"
+msgstr "限制越线提醒"
 
 #: prefs.js:53
 msgid "Notify when a limit reaches 90% or 100%"
-msgstr "Notifier quand une limite atteint 90% ou 100%"
+msgstr "限制达到 90% 或 100% 时通知"
 
 #: prefs.js:62
 msgid "Run on limit crossing or reset"
-msgstr "Exécuter au franchissement d'une limite ou à la réinitialisation"
+msgstr "越线或重置时运行"
 
 #: prefs.js:71
 msgid "Placeholders"
-msgstr "Variables"
+msgstr "占位符"
 
 #: prefs.js:73
 msgid ""
@@ -207,55 +204,52 @@ msgid ""
 "key · %% a literal %. Empty disables it. Example: notify-send \"Claude %l\" "
 "\"%e at %p%%\""
 msgstr ""
-"%e événement (threshold ou reset) · %l libellé · %p pourcentage · %t seuil · "
-"%k clé · %% un % littéral. Vide pour désactiver. Exemple : notify-send "
-"\"Claude %l\" \"%e à %p%%\""
+"%e 事件（threshold 或 reset）· %l 名称 · %p 百分比 · %t 阈值 · %k 键 · %% 表"
+"示字面的 %。留空则关闭。示例：notify-send \"Claude %l\" \"%e at %p%%\""
 
 #: prefs.js:83
 msgid "Cost"
-msgstr "Coût"
+msgstr "费用"
 
 #: prefs.js:84
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
 "this to compute it locally with ccusage (requires Node/npx)."
 msgstr ""
-"L’API officielle n’expose pas le coût en dollars sur les formules par "
-"abonnement. Activez cette option pour le calculer localement avec ccusage "
-"(nécessite Node/npx)."
+"官方 API 不返回订阅套餐的美元费用。启用后用 ccusage 在本地计算（需要 Node/"
+"npx）。"
 
 #: prefs.js:87
 msgid "Show session cost"
-msgstr "Afficher le coût de session"
+msgstr "显示会话费用"
 
 #: prefs.js:88
 msgid "Runs `ccusage blocks --active` on each refresh"
-msgstr "Exécute `ccusage blocks --active` à chaque actualisation"
+msgstr "每次刷新时运行 `ccusage blocks --active`"
 
 #: prefs.js:95
 msgid "Cursor (optional)"
-msgstr "Cursor (optionnel)"
+msgstr "Cursor（可选）"
 
 #: prefs.js:96
 msgid ""
 "Show Cursor team spend using the Cursor Admin API. Create a key at "
 "cursor.com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
-"Affiche la dépense de l’équipe Cursor via l’API Admin de Cursor. Créez une "
-"clé sur cursor.com → équipe → Settings → Admin API. Stockée dans le "
-"trousseau du système."
+"使用 Cursor Admin API 显示团队支出。在 cursor.com → 团队 → Settings → Admin "
+"API 创建密钥。密钥保存在系统密钥环中。"
 
 #: prefs.js:99
 msgid "Show Cursor usage"
-msgstr "Afficher l'utilisation Cursor"
+msgstr "显示 Cursor 用量"
 
 #: prefs.js:100
 msgid "Adds a Cursor spend section to the dropdown"
-msgstr "Ajoute une section de dépenses Cursor au menu"
+msgstr "在下拉菜单中添加 Cursor 支出区块"
 
 #: prefs.js:109
 msgid "Cursor Admin API key"
-msgstr "Clé API Admin Cursor"
+msgstr "Cursor Admin API 密钥"
 
 #: prefs.js:139
 msgid ""
@@ -263,34 +257,32 @@ msgid ""
 "resume one in a terminal with a click. Read from the local transcripts in "
 "~/.claude/projects."
 msgstr ""
-"Liste les sessions qui ont consommé le plus de jetons aujourd’hui, la plus "
-"grosse en premier, et en reprend une dans un terminal d’un clic. Lu depuis "
-"les transcriptions locales dans ~/.claude/projects."
+"按今天消耗 token 最多的顺序列出会话，点击即可在终端中恢复。读取 ~/.claude/"
+"projects 中的本地记录。"
 
 #: prefs.js:142
 msgid "Show today’s sessions"
-msgstr "Afficher les sessions du jour"
+msgstr "显示今天的会话"
 
 #: prefs.js:143
 msgid "Adds up to 5 resume links to the dropdown"
-msgstr "Ajoute jusqu’à 5 liens de reprise au menu"
+msgstr "在下拉菜单中添加最多 5 个恢复链接"
 
 #: prefs.js:148
 msgid "Terminal"
-msgstr "Terminal"
+msgstr "终端"
 
 #: prefs.js:154
 msgid ""
 "Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
 "alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
 msgstr ""
-"Laissez vide pour une détection automatique : $TERMINAL, puis ghostty, "
-"kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-"
-"terminal, xterm."
+"留空则自动检测：$TERMINAL，然后依次是 ghostty、kitty、wezterm、alacritty、"
+"foot、gnome-terminal、konsole、tilix、xfce4-terminal、xterm。"
 
 #: prefs.js:164
 msgid "Session pings"
-msgstr "Pings de session"
+msgstr "会话 ping"
 
 #: prefs.js:165
 msgid ""
@@ -298,85 +290,81 @@ msgid ""
 "one turn) at a fixed time lines the day’s windows up with the hours you "
 "actually work. Same schedule as ./install.sh sessionping."
 msgstr ""
-"Une fenêtre de 5 heures démarre à son premier message : envoyer un ping à "
-"claude (haiku, un seul tour) à heure fixe aligne les fenêtres de la journée "
-"sur vos heures de travail réelles. Même planification que ./install.sh "
-"sessionping."
+"5 小时窗口以第一条消息为起点，因此在固定时间 ping 一次 claude（haiku，一轮）"
+"可让当天的窗口与实际工作时间对齐。与 ./install.sh sessionping 的计划相同。"
 
 #: prefs.js:172
 msgid "Open the 5h session window on schedule"
-msgstr "Ouvrir la fenêtre de session de 5 h à heure fixe"
+msgstr "按计划打开 5 小时会话窗口"
 
 #: prefs.js:174
 msgid "Runs scripts/session-ping.sh from a systemd user timer"
-msgstr "Exécute scripts/session-ping.sh via un minuteur utilisateur systemd"
+msgstr "通过 systemd 用户定时器运行 scripts/session-ping.sh"
 
 #: prefs.js:175
 msgid "Needs a systemd user session - use ./install.sh sessionping here"
-msgstr ""
-"Nécessite une session utilisateur systemd - utilisez ./install.sh "
-"sessionping ici"
+msgstr "需要 systemd 用户会话 - 请在此使用 ./install.sh sessionping"
 
 #: prefs.js:181
 msgid "Last ping"
-msgstr "Dernier ping"
+msgstr "上次 ping"
 
 #: prefs.js:184
 msgid "Coverage"
-msgstr "Couverture"
+msgstr "覆盖率"
 
 #: prefs.js:188
 msgid "Working day"
-msgstr "Journée de travail"
+msgstr "工作时段"
 
 #: prefs.js:206
 msgid "Days"
-msgstr "Jours"
+msgstr "星期"
 
 #: prefs.js:207
 msgid "Mon"
-msgstr "lun"
+msgstr "周一"
 
 #: prefs.js:207
 msgid "Tue"
-msgstr "mar"
+msgstr "周二"
 
 #: prefs.js:207
 msgid "Wed"
-msgstr "mer"
+msgstr "周三"
 
 #: prefs.js:207
 msgid "Thu"
-msgstr "jeu"
+msgstr "周四"
 
 #: prefs.js:207
 msgid "Fri"
-msgstr "ven"
+msgstr "周五"
 
 #: prefs.js:207
 msgid "Sat"
-msgstr "sam"
+msgstr "周六"
 
 #: prefs.js:207
 msgid "Sun"
-msgstr "dim"
+msgstr "周日"
 
 #: prefs.js:231
 msgid "Add a ping"
-msgstr "Ajouter un ping"
+msgstr "添加一个 ping"
 
 #: prefs.js:234
 msgid "Suggest times"
-msgstr "Proposer des heures"
+msgstr "推荐时间"
 
 #: prefs.js:250
 #, javascript-format
 msgid "%d%% of %s-%s covered"
-msgstr "%d%% de %s-%s couvert"
+msgstr "覆盖率 %d%%（%s-%s）"
 
 #: prefs.js:252
 msgid "no valid times yet"
-msgstr "aucune heure valide pour l’instant"
+msgstr "尚无有效时间"
 
 #: prefs.js:272
 #, javascript-format
@@ -385,81 +373,77 @@ msgstr "Ping %d"
 
 #: prefs.js:341
 msgid "Updates"
-msgstr "Mises à jour"
+msgstr "更新"
 
 #: prefs.js:342
 msgid "Daily check, and whether it is actually running."
-msgstr "Vérification quotidienne, et si elle tourne réellement."
+msgstr "每日检查，以及它是否真的在运行。"
 
 #: prefs.js:345 prefs.js:431
 msgid "Checking…"
-msgstr "Vérification…"
+msgstr "检查中…"
 
 #: prefs.js:349 prefs.js:385 prefs.js:409 prefs.js:419
 msgid "Check now"
-msgstr "Vérifier maintenant"
+msgstr "立即检查"
 
 #: prefs.js:383
 msgid "Cannot self-update"
-msgstr "Mise à jour automatique impossible"
+msgstr "无法自我更新"
 
 #: prefs.js:384
 msgid "No git checkout found for auto-update.sh."
-msgstr "Aucun dépôt git trouvé pour auto-update.sh."
+msgstr "未找到 auto-update.sh 所在的 git 检出目录。"
 
 #: prefs.js:392
 msgid "Could not read the update status"
-msgstr "Impossible de lire l’état de mise à jour"
+msgstr "无法读取更新状态"
 
 #: prefs.js:400
 #, javascript-format
 msgid "Installed %s, checkout %s"
-msgstr "Installé %s, dépôt %s"
+msgstr "已安装 %s，检出 %s"
 
 #: prefs.js:401
 msgid "Run ./install.sh update to install the newer code."
-msgstr "Lancez ./install.sh update pour installer le code plus récent."
+msgstr "运行 ./install.sh update 安装较新的代码。"
 
 #: prefs.js:402 prefs.js:413 prefs.js:430
 msgid "Update now"
-msgstr "Mettre à jour maintenant"
+msgstr "立即更新"
 
 #: prefs.js:404
 #, javascript-format
 msgid "Paused: %s"
-msgstr "En pause : %s"
+msgstr "已暂停：%s"
 
 #: prefs.js:406
 msgid ""
 "The daily check will not touch this checkout until that is resolved. It only "
 "ever fast-forwards a clean checkout."
 msgstr ""
-"La vérification quotidienne ne touchera pas ce dépôt tant que ce point n’est "
-"pas réglé. Elle n’avance que sur un dépôt propre, en fast-forward."
+"在解决之前，每日检查不会改动此检出目录。它只会对干净的检出执行 fast-forward。"
 
 #: prefs.js:411
 #, javascript-format
 msgid "Update available: %s → %s"
-msgstr "Mise à jour disponible : %s → %s"
+msgstr "有可用更新：%s → %s"
 
 #: prefs.js:412 prefs.js:418
 #, javascript-format
 msgid "Last checked %s"
-msgstr "Dernière vérification %s"
+msgstr "上次检查 %s"
 
 #: prefs.js:416
 #, javascript-format
 msgid "Up to date (%s)"
-msgstr "À jour (%s)"
+msgstr "已是最新 (%s)"
 
 #: prefs.js:417
 #, javascript-format
 msgid "%s (could not reach the remote)"
-msgstr "%s (dépôt distant injoignable)"
+msgstr "%s（无法连接远程）"
 
 #: prefs.js:431
 msgid "Updating…"
-msgstr "Mise à jour…"
-
-#~ msgid "Minutes between updates (min 1)"
-#~ msgstr "Minutes entre les mises à jour (min 1)"
+msgstr "更新中…"

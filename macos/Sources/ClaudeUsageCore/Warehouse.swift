@@ -34,14 +34,17 @@ public enum Warehouse {
 
     /// Same file the MCP server reads. macOS keeps it in Application Support;
     /// everything else follows XDG_STATE_HOME.
-    public static func defaultURL(environment: [String: String] = ProcessInfo.processInfo.environment)
+    public static func defaultURL(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    )
         -> URL
     {
         let home = FileManager.default.homeDirectoryForCurrentUser
         #if os(macOS)
             let base = home.appendingPathComponent("Library/Application Support")
         #else
-            let base = environment["XDG_STATE_HOME"].map { URL(fileURLWithPath: $0) }
+            let base =
+                environment["XDG_STATE_HOME"].map { URL(fileURLWithPath: $0) }
                 ?? home.appendingPathComponent(".local/state")
         #endif
         return base.appendingPathComponent("claude-usage-panel/history.jsonl")
@@ -56,7 +59,8 @@ public enum Warehouse {
         if kept.count != entries.count {
             let rewritten = kept.map { entry -> String in
                 let obj: [String: Any] = ["t": Int(entry.t.rounded()), "limits": entry.limits]
-                let data = (try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]))
+                let data =
+                    (try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]))
                 return data.map { String(decoding: $0, as: UTF8.self) } ?? ""
             }
             try? (rewritten.joined(separator: "\n") + (kept.isEmpty ? "" : "\n"))
@@ -68,7 +72,8 @@ public enum Warehouse {
     /// Append one poll. Best-effort: a failed write costs a data point, never a
     /// refresh.
     @discardableResult
-    public static func append(_ cards: [LimitCard], nowMs: Double, url: URL = defaultURL()) -> Bool {
+    public static func append(_ cards: [LimitCard], nowMs: Double, url: URL = defaultURL()) -> Bool
+    {
         let text = line(cards, nowMs: nowMs) + "\n"
         guard let data = text.data(using: .utf8) else { return false }
         let fm = FileManager.default

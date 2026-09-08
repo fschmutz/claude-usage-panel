@@ -80,6 +80,25 @@ jobs:
           node-version: "22"
       - run: node scripts/screenshots/render.mjs --check
 
+  # Translations are hand-written but the template and the merges are not: this
+  # fails when a new _() string was added without running scripts/update-po.sh,
+  # and when a catalog no longer compiles (a reordered %s in a format string is
+  # the usual way that happens).
+  i18n:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y gettext
+      - run: ./scripts/update-po.sh --check
+      - name: Every catalog compiles
+        run: |
+          for po in claude-usage-panel@fschmutz.github.io/po/*.po; do
+            msgfmt --check --statistics -o /dev/null "$po"
+          done
+
   # Linux: fast parity gate - builds/tests only the Foundation-only core.
   swift-core:
     runs-on: ubuntu-latest
@@ -134,7 +153,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [lint, js, screenshots, swift-core, macos-app, bash32]
+    needs: [lint, js, screenshots, i18n, swift-core, macos-app, bash32]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
