@@ -47,6 +47,11 @@ final class UsageModel: ObservableObject {
     @Published var alertsEnabled: Bool {
         didSet { UserDefaults.standard.set(alertsEnabled, forKey: "alertsEnabled") }
     }
+    /// Shell command run when a limit crosses 90/100 % or a window resets.
+    /// Empty disables it.
+    @Published var eventCommand: String {
+        didSet { UserDefaults.standard.set(eventCommand, forKey: "eventCommand") }
+    }
     @Published var launchAtLogin: Bool {
         didSet { LoginItem.setEnabled(launchAtLogin) }
     }
@@ -132,6 +137,7 @@ final class UsageModel: ObservableObject {
         refreshMinutes = UserDefaults.standard.object(forKey: "refreshMinutes") as? Int ?? 10
         showCost = UserDefaults.standard.bool(forKey: "showCost")
         alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
+        eventCommand = UserDefaults.standard.string(forKey: "eventCommand") ?? ""
         cursorEnabled = UserDefaults.standard.bool(forKey: "cursorEnabled")
         // Key lives in the Keychain. Migrate a value stored in UserDefaults by
         // pre-Keychain versions once, then scrub it from the plist.
@@ -228,6 +234,7 @@ final class UsageModel: ObservableObject {
         do {
             let result = try await ClaudeUsage.fetch()
             idleStreak = PollSchedule.sameUsage(cards, result.cards) ? idleStreak + 1 : 0
+            runEventCommand(EventHooks.detect(previous: cards, current: result.cards))
             cards = result.cards
             extraUsage = result.extraUsage
             planLabel = result.planLabel
@@ -316,6 +323,25 @@ final class UsageModel: ObservableObject {
                 samples: samples, resetsAt: c.resetsAt, nowMs: now)
         }
         UserDefaults.standard.set(history, forKey: "history")  // survive restarts
+    }
+
+    /// The user's own command for the two moments worth acting on: a limit
+    /// crossing 90/100 %, and a window rolling over. Run through bash -lc so a
+    /// one-liner with a pipe works; every substituted value is shell-quoted,
+    /// because the label comes from the API.
+    private func runEventCommand(_ events: [UsageEvent]) {
+        let template = eventCommand.trimmingCharacters(in: .whitespaces)
+        guard !template.isEmpty, !events.isEmpty else { return }
+        for event in events {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = ["-lc", EventHooks.expand(template, event)]
+            // Nothing reads the output, and an undrained pipe would deadlock
+            // the child once it fills.
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            try? process.run()
+        }
     }
 
     // Notify on first crossing of 90% / 100%, with hysteresis to re-arm.
@@ -850,6 +876,13 @@ struct SettingsView: View {
                 Toggle("Limit-crossing alerts (90% / 100%)", isOn: $model.alertsEnabled)
                 Toggle("Show session cost (ccusage)", isOn: $model.showCost)
                 Toggle("Start at login", isOn: $model.launchAtLogin)
+                TextField("Run on limit crossing or reset", text: $model.eventCommand)
+                Text(
+                    "%e event (threshold or reset) · %l label · %p percent · %t threshold · "
+                        + "%k key · %% a literal %. Empty disables it. Values are shell-quoted "
+                        + "when substituted."
+                )
+                .font(.footnote).foregroundColor(.secondary)
             }
             Section("Today's sessions") {
                 Toggle("Show today's sessions in the dropdown", isOn: $model.showSessions)

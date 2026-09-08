@@ -27,6 +27,16 @@
       <summary>Limit-crossing alerts</summary>
       <description>Notify when a limit crosses 90% or 100%.</description>
     </key>
+    <key name="event-command" type="s">
+      <default>''</default>
+      <summary>Command to run on a usage event</summary>
+      <description>
+        Shell command run when a limit crosses 90% or 100%, or when its window
+        resets. Empty disables it. Placeholders, each shell-quoted when
+        substituted: %e event (threshold|reset), %k limit key, %l label,
+        %p percent, %t threshold crossed, %% a literal percent sign.
+      </description>
+    </key>
     <key name="cursor-enabled" type="b">
       <default>false</default>
       <summary>Show Cursor usage</summary>

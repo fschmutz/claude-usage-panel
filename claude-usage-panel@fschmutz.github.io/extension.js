@@ -24,7 +24,7 @@ import {
     severityClass, sparkline, formatResets, alertThreshold, poolNote,
     forecast, formatForecast, normalizeHistory, historyPercents,
     clockPace, formatClockPace,
-    nextPollSeconds, nextResetMs, sameUsage,
+    nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     compactTokens, formatLastPing, nextPing, interactiveResume, terminalArgv, TERMINALS,
 } from './lib/pure.js';
 
@@ -416,6 +416,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 return;
             }
             this._idleStreak = sameUsage(this._latest, result.cards) ? this._idleStreak + 1 : 0;
+            this._runEventCommand(detectEvents(this._latest, result.cards));
             this._latest = result.cards;
             this._renderCards(result.cards);
             this._renderExtraUsage(result.extraUsage);
@@ -510,6 +511,26 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._cursorTrack.visible = false;
             this._cursorToday.text = '';
             this._cursorTop.text = '';
+        }
+    }
+
+    // The user's own command for the two moments worth acting on: a limit
+    // crossing 90/100 %, and a window rolling over. Run through bash -lc so a
+    // one-liner with a pipe works, with every substituted value shell-quoted -
+    // the label comes from the API.
+    _runEventCommand(events) {
+        if (!events.length)
+            return;
+        const template = this._settings.get_string('event-command').trim();
+        if (!template)
+            return;
+        for (const event of events) {
+            const command = expandEventCommand(template, event);
+            try {
+                Gio.Subprocess.new(['bash', '-lc', command], Gio.SubprocessFlags.NONE);
+            } catch (e) {
+                logError(e, `claude-usage-panel: event command failed (${event.event})`);
+            }
         }
     }
 

@@ -231,3 +231,26 @@ test('an idle poll is one where no limit moved', () => {
     assert.equal(sameUsage(a, [{key: 'session', percent: 10}]), false);
     assert.equal(sameUsage(null, []), true);
 });
+
+// ── Event hooks ─────────────────────────────────────────────────────────────────
+// Same fixture the Swift EventHooksParityTests asserts.
+import {
+    detectEvents, expandEventCommand,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+
+const eventFix = JSON.parse(
+    fs.readFileSync(
+        path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'events.json'),
+        'utf8'));
+
+for (const c of eventFix.cases) {
+    test(`detectEvents - ${c.name}`, () => {
+        assert.deepEqual(detectEvents(c.previous, c.current), c.expected);
+    });
+}
+
+for (const c of eventFix.expansions) {
+    test(`expandEventCommand - ${c.name}`, () => {
+        assert.equal(expandEventCommand(c.template, c.event), c.expected);
+    });
+}

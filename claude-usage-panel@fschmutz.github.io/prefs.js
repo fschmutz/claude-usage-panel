@@ -55,6 +55,28 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         settings.bind('alerts-enabled', alertsRow, 'active', 0);
         behavior.add(alertsRow);
 
+        // Run something of your own at the two moments worth acting on. Values
+        // are shell-quoted when substituted, so a label from the API cannot
+        // turn into part of the command.
+        const commandRow = new Adw.EntryRow({
+            title: _('Run on limit crossing or reset'),
+        });
+        commandRow.set_show_apply_button(true);
+        commandRow.set_text(settings.get_string('event-command'));
+        commandRow.connect('apply', row =>
+            settings.set_string('event-command', row.get_text().trim()));
+        behavior.add(commandRow);
+
+        const commandHelp = new Adw.ActionRow({
+            title: _('Placeholders'),
+            subtitle: _(
+                '%e event (threshold or reset) · %l label · %p percent · ' +
+                '%t threshold · %k key · %% a literal %. Empty disables it. ' +
+                'Example: notify-send "Claude %l" "%e at %p%%"'),
+        });
+        commandHelp.add_css_class('dim-label');
+        behavior.add(commandHelp);
+
         page.add(behavior);
 
         const cost = new Adw.PreferencesGroup({

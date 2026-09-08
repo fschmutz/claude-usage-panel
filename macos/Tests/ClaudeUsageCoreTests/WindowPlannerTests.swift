@@ -119,3 +119,54 @@ final class PollScheduleParityTests: XCTestCase {
         XCTAssertFalse(PollSchedule.sameUsage([a], []))
     }
 }
+
+/// Event-hook parity against the fixture pure.js asserts (tests/pure.test.js).
+final class EventHooksParityTests: XCTestCase {
+    private func card(_ o: [String: Any]) -> LimitCard {
+        LimitCard(
+            id: o["key"] as! String, label: o["label"] as! String,
+            percent: (o["percent"] as! NSNumber).intValue, severity: .normal, resetsAt: nil,
+            active: true, group: "session", scoped: false)
+    }
+
+    private func fixture() throws -> [String: Any] {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = root.appendingPathComponent("tests/fixtures/events.json")
+        return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    }
+
+    func testDetectMatchesSharedFixtures() throws {
+        for c in try fixture()["cases"] as! [[String: Any]] {
+            let name = c["name"] as? String ?? "?"
+            let got = EventHooks.detect(
+                previous: (c["previous"] as! [[String: Any]]).map(card),
+                current: (c["current"] as! [[String: Any]]).map(card))
+            let want = (c["expected"] as! [[String: Any]]).map {
+                UsageEvent(
+                    event: UsageEvent.Kind(rawValue: $0["event"] as! String)!,
+                    key: $0["key"] as! String, label: $0["label"] as! String,
+                    percent: ($0["percent"] as! NSNumber).intValue,
+                    threshold: ($0["threshold"] as! NSNumber).intValue)
+            }
+            XCTAssertEqual(got, want, name)
+        }
+    }
+
+    func testExpandMatchesSharedFixtures() throws {
+        for c in try fixture()["expansions"] as! [[String: Any]] {
+            let name = c["name"] as? String ?? "?"
+            let e = c["event"] as! [String: Any]
+            let event = UsageEvent(
+                event: UsageEvent.Kind(rawValue: e["event"] as! String)!,
+                key: e["key"] as! String, label: e["label"] as! String,
+                percent: (e["percent"] as! NSNumber).intValue,
+                threshold: (e["threshold"] as! NSNumber).intValue)
+            XCTAssertEqual(
+                EventHooks.expand(c["template"] as! String, event), c["expected"] as! String, name)
+        }
+    }
+}

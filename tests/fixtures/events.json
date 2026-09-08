@@ -1,0 +1,223 @@
+{
+  "cases": [
+    {
+      "name": "a percent drop is a window reset",
+      "previous": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 88
+        }
+      ],
+      "current": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 2
+        }
+      ],
+      "expected": [
+        {
+          "event": "reset",
+          "key": "session",
+          "label": "Current session",
+          "percent": 2,
+          "threshold": 0
+        }
+      ]
+    },
+    {
+      "name": "a one point wobble is not a reset",
+      "previous": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 41
+        }
+      ],
+      "current": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 40
+        }
+      ],
+      "expected": []
+    },
+    {
+      "name": "crossing ninety reports the threshold",
+      "previous": [
+        {
+          "key": "weekly_all",
+          "label": "Weekly · all models",
+          "percent": 86
+        }
+      ],
+      "current": [
+        {
+          "key": "weekly_all",
+          "label": "Weekly · all models",
+          "percent": 91
+        }
+      ],
+      "expected": [
+        {
+          "event": "threshold",
+          "key": "weekly_all",
+          "label": "Weekly · all models",
+          "percent": 91,
+          "threshold": 90
+        }
+      ]
+    },
+    {
+      "name": "jumping past both thresholds reports the higher one",
+      "previous": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 60
+        }
+      ],
+      "current": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 100
+        }
+      ],
+      "expected": [
+        {
+          "event": "threshold",
+          "key": "session",
+          "label": "Current session",
+          "percent": 100,
+          "threshold": 100
+        }
+      ]
+    },
+    {
+      "name": "staying above a threshold fires nothing",
+      "previous": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 93
+        }
+      ],
+      "current": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 95
+        }
+      ],
+      "expected": []
+    },
+    {
+      "name": "a limit seen for the first time fires nothing",
+      "previous": [],
+      "current": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 99
+        }
+      ],
+      "expected": []
+    },
+    {
+      "name": "every limit is judged on its own",
+      "previous": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 95
+        },
+        {
+          "key": "weekly_all",
+          "label": "Weekly · all models",
+          "percent": 10
+        }
+      ],
+      "current": [
+        {
+          "key": "session",
+          "label": "Current session",
+          "percent": 1
+        },
+        {
+          "key": "weekly_all",
+          "label": "Weekly · all models",
+          "percent": 90
+        }
+      ],
+      "expected": [
+        {
+          "event": "reset",
+          "key": "session",
+          "label": "Current session",
+          "percent": 1,
+          "threshold": 0
+        },
+        {
+          "event": "threshold",
+          "key": "weekly_all",
+          "label": "Weekly · all models",
+          "percent": 90,
+          "threshold": 90
+        }
+      ]
+    }
+  ],
+  "expansions": [
+    {
+      "name": "every placeholder is substituted, quoted",
+      "template": "notify-send %e %l %p %t %k",
+      "event": {
+        "event": "threshold",
+        "key": "weekly_all",
+        "label": "Weekly · all models",
+        "percent": 91,
+        "threshold": 90
+      },
+      "expected": "notify-send 'threshold' 'Weekly · all models' '91' '90' 'weekly_all'"
+    },
+    {
+      "name": "a quote in the label cannot break out of the command",
+      "template": "echo %l",
+      "event": {
+        "event": "reset",
+        "key": "session",
+        "label": "it's; touch /tmp/pwned",
+        "percent": 0,
+        "threshold": 0
+      },
+      "expected": "echo 'it'\\''s; touch /tmp/pwned'"
+    },
+    {
+      "name": "a double percent is a literal one, unknown escapes are left alone",
+      "template": "echo 100%% %z %p",
+      "event": {
+        "event": "reset",
+        "key": "session",
+        "label": "s",
+        "percent": 4,
+        "threshold": 0
+      },
+      "expected": "echo 100% %z '4'"
+    },
+    {
+      "name": "an empty template runs nothing",
+      "template": "",
+      "event": {
+        "event": "reset",
+        "key": "session",
+        "label": "s",
+        "percent": 4,
+        "threshold": 0
+      },
+      "expected": ""
+    }
+  ]
+}
