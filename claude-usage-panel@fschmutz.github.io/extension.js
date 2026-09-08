@@ -15,6 +15,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {fetchUsage} from './lib/claudeUsage.js';
+import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
 import {fetchCursor} from './lib/cursorUsage.js';
 import {refreshSessions} from './lib/sessionIndex.js';
@@ -25,6 +26,7 @@ import {
     forecast, formatForecast, normalizeHistory, historyPercents,
     clockPace, formatClockPace,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
+    weekOverWeek, formatWeekOverWeek,
     compactTokens, formatLastPing, nextPing, interactiveResume, terminalArgv, TERMINALS,
 } from './lib/pure.js';
 
@@ -90,6 +92,9 @@ class UsageCard extends St.BoxLayout {
         this._reset = new St.Label({style_class: 'cu-card-reset'});
         this._forecast = new St.Label({style_class: 'cu-forecast'});
         this._spark = new St.Label({style_class: 'cu-spark'});
+        // Week-over-week peak from the durable history - the one thing the
+        // 6-hour forecast window cannot say.
+        this._trend = new St.Label({style_class: 'cu-forecast'});
 
         this.add_child(head);
         this.add_child(track);
@@ -97,9 +102,10 @@ class UsageCard extends St.BoxLayout {
         this.add_child(this._reset);
         this.add_child(this._forecast);
         this.add_child(this._spark);
+        this.add_child(this._trend);
     }
 
-    update(card, history, fc) {
+    update(card, history, fc, trend) {
         const sev = severityClass(card.severity);
         this._label.text = card.label + (card.active ? '  ●' : '');
         this._pct.text = `${card.percent}%`;
@@ -137,6 +143,9 @@ class UsageCard extends St.BoxLayout {
         const spark = sparkline(historyPercents(history).slice(-12));
         this._spark.text = spark;
         this._spark.visible = spark.length > 0;
+        const trendText = formatWeekOverWeek(trend);
+        this._trend.text = trendText;
+        this._trend.visible = trendText.length > 0;
     }
 });
 
@@ -155,6 +164,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // Consecutive polls in which no limit moved - drives the backoff.
         this._idleStreak = 0;
         this._latest = [];
+        // 90 days of poll samples, for the week-over-week line. Loaded once;
+        // every later poll that moved appends to both the file and this list.
+        this._warehouse = loadWarehouse();
         this._lastCost = null;
         this._refreshing = false;
         this._destroyed = false;
@@ -415,7 +427,18 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._renderError(result.message);
                 return;
             }
-            this._idleStreak = sameUsage(this._latest, result.cards) ? this._idleStreak + 1 : 0;
+            const moved = !sameUsage(this._latest, result.cards);
+            this._idleStreak = moved ? 0 : this._idleStreak + 1;
+            // Only record what moved: a flat afternoon would otherwise write
+            // one identical line every poll for 90 days.
+            if (moved) {
+                const now = Date.now();
+                this._warehouse.push({
+                    t: now,
+                    limits: Object.fromEntries(result.cards.map(c => [c.key, c.percent])),
+                });
+                appendWarehouse(result.cards, now);
+            }
             this._runEventCommand(detectEvents(this._latest, result.cards));
             this._latest = result.cards;
             this._renderCards(result.cards);
@@ -762,7 +785,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._cards.set(card.key, widget);
                 this._cardsBox.add_child(widget);
             }
-            widget.update(card, hist, this._forecasts.get(card.key));
+            widget.update(card, hist, this._forecasts.get(card.key),
+                weekOverWeek(this._warehouse, card.key, now));
         }
         // Drop cards that disappeared.
         for (const [key, widget] of this._cards) {

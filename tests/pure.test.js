@@ -254,3 +254,40 @@ for (const c of eventFix.expansions) {
         assert.equal(expandEventCommand(c.template, c.event), c.expected);
     });
 }
+
+// ── Usage warehouse ─────────────────────────────────────────────────────────────
+// Same fixture the Swift WarehouseParityTests asserts.
+import {
+    warehouseLine, parseWarehouse, pruneWarehouse, weekOverWeek, formatWeekOverWeek,
+    WAREHOUSE_KEEP_DAYS,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+
+const houseFix = JSON.parse(
+    fs.readFileSync(
+        path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'warehouse.json'),
+        'utf8'));
+
+test('the retention window is part of the pinned contract', () => {
+    assert.equal(WAREHOUSE_KEEP_DAYS, houseFix.keepDays);
+});
+
+for (const c of houseFix.cases) {
+    test(`weekOverWeek - ${c.name}`, () => {
+        assert.deepEqual(weekOverWeek(houseFix.entries, c.key, houseFix.now), c.expected);
+    });
+}
+
+for (const c of houseFix.formats) {
+    test(`formatWeekOverWeek - ${c.name}`, () => {
+        assert.equal(formatWeekOverWeek(c.value), c.expected);
+    });
+}
+
+test('a torn or garbage line is skipped, never fatal', () => {
+    const line = warehouseLine([{key: 'session', percent: 42}], houseFix.now);
+    const parsed = parseWarehouse(`${line}\n{ not json\n\n`);
+    assert.deepEqual(parsed, [{t: houseFix.now, limits: {session: 42}}]);
+    // Older than the retention window, so it does not survive a prune.
+    const old = {t: houseFix.now - 91 * 86_400_000, limits: {session: 1}};
+    assert.deepEqual(pruneWarehouse([...parsed, old], houseFix.now), parsed);
+});

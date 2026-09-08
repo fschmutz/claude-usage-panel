@@ -128,6 +128,14 @@ final class UsageModel: ObservableObject {
     private var wakeTask: Task<Void, Never>?
     /// Consecutive polls in which no limit moved - drives the backoff.
     private var idleStreak = 0
+
+    /// Week-over-week peak for one card, from the durable history.
+    func trend(for id: String) -> WeekOverWeek? {
+        Warehouse.weekOverWeek(warehouse, key: id, nowMs: Date().timeIntervalSince1970 * 1000)
+    }
+    /// 90 days of poll samples for the week-over-week line. Loaded once; every
+    /// later poll that moved appends to both the file and this list.
+    private var warehouse: [WarehouseEntry] = []
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "claude-usage-panel.network")
 
@@ -178,6 +186,7 @@ final class UsageModel: ObservableObject {
             }
         }
 
+        warehouse = Warehouse.load(nowMs: Date().timeIntervalSince1970 * 1000)
         watchWakeAndNetwork()
         restart()  // didSet does not fire from init, so start the loop explicitly
     }
@@ -233,7 +242,20 @@ final class UsageModel: ObservableObject {
     func refresh() async {
         do {
             let result = try await ClaudeUsage.fetch()
-            idleStreak = PollSchedule.sameUsage(cards, result.cards) ? idleStreak + 1 : 0
+            let moved = !PollSchedule.sameUsage(cards, result.cards)
+            idleStreak = moved ? 0 : idleStreak + 1
+            // Only record what moved: a flat afternoon would otherwise write an
+            // identical line every poll for 90 days.
+            if moved {
+                let nowMs = Date().timeIntervalSince1970 * 1000
+                warehouse.append(
+                    WarehouseEntry(
+                        t: nowMs,
+                        limits: Dictionary(
+                            result.cards.map { ($0.id, $0.percent) },
+                            uniquingKeysWith: { a, _ in a })))
+                Warehouse.append(result.cards, nowMs: nowMs)
+            }
             runEventCommand(EventHooks.detect(previous: cards, current: result.cards))
             cards = result.cards
             extraUsage = result.extraUsage
@@ -592,6 +614,8 @@ private struct CardView: View {
     let card: LimitCard
     let spark: String
     let forecast: Forecast?
+    /// Week-over-week peak - the one thing the 6-hour forecast cannot say.
+    let trend: WeekOverWeek?
     var body: some View {
         let color = Color.severity(card.severity)
         let pace = UsageClock.pace(card)
@@ -629,6 +653,10 @@ private struct CardView: View {
                 Text(UsageForecast.format(fc)).font(.system(size: 11))
                     .foregroundColor(fc.exhaustsBeforeReset ? .cuWarning : .secondary)
             }
+            if let trend {
+                Text(Warehouse.format(trend)).font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.05)))
@@ -660,7 +688,7 @@ struct PopupView: View {
                 ForEach(model.cards) {
                     CardView(
                         card: $0, spark: model.spark(for: $0.id),
-                        forecast: model.forecasts[$0.id])
+                        forecast: model.forecasts[$0.id], trend: model.trend(for: $0.id))
                 }
             }
 

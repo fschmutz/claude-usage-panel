@@ -1,0 +1,83 @@
+{
+  "now": 1800000000000,
+  "keepDays": 90,
+  "entries": [
+    {
+      "t": 1798272000000,
+      "limits": {
+        "weekly_all": 99
+      }
+    },
+    {
+      "t": 1798963200000,
+      "limits": {
+        "weekly_all": 60
+      }
+    },
+    {
+      "t": 1799222400000,
+      "limits": {
+        "weekly_all": 84,
+        "session": 30
+      }
+    },
+    {
+      "t": 1799568000000,
+      "limits": {
+        "weekly_all": 40
+      }
+    },
+    {
+      "t": 1799913600000,
+      "limits": {
+        "weekly_all": 71,
+        "session": 12
+      }
+    }
+  ],
+  "cases": [
+    {
+      "name": "weekly peak against the week before",
+      "key": "weekly_all",
+      "expected": {
+        "thisWeekPeak": 71,
+        "lastWeekPeak": 84,
+        "deltaPoints": -13
+      }
+    },
+    {
+      "name": "a per-limit peak is computed for each key on its own",
+      "key": "session",
+      "expected": {
+        "thisWeekPeak": 12,
+        "lastWeekPeak": 30,
+        "deltaPoints": -18
+      }
+    },
+    {
+      "name": "an unknown key has nothing to report",
+      "key": "weekly_oauth_apps",
+      "expected": null
+    }
+  ],
+  "formats": [
+    {
+      "name": "both weeks",
+      "value": {
+        "thisWeekPeak": 71,
+        "lastWeekPeak": 84,
+        "deltaPoints": -13
+      },
+      "expected": "peak 71% this week · 84% last"
+    },
+    {
+      "name": "first week only",
+      "value": {
+        "thisWeekPeak": 40,
+        "lastWeekPeak": null,
+        "deltaPoints": null
+      },
+      "expected": "peak 40% this week"
+    }
+  ]
+}

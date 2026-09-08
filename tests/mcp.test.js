@@ -325,3 +325,33 @@ test('renderCards mentions an alarming pace', () => {
     }], Date.parse('2026-08-01T12:00:00Z'));
     assert.match(line, /↗ 4%\/h - ON PACE TO RUN OUT 8h before reset/);
 });
+
+// ── Warehouse-backed trend ──────────────────────────────────────────────────────
+// The desktop panels write the 90-day history; the server only reads it, and
+// must degrade to "no trend" rather than an error when there is no file.
+import {withTrend, weekOverWeek as weekOverWeekMcp} from '../mcp/server.js';
+
+test('withTrend attaches a week-over-week peak from the warehouse', () => {
+    const now = 1800000000000;
+    const day = 86_400_000;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-wh-'));
+    const file = path.join(dir, 'history.jsonl');
+    fs.writeFileSync(
+        file,
+        [
+            JSON.stringify({t: now - 9 * day, limits: {weekly_all: 84}}),
+            JSON.stringify({t: now - 1 * day, limits: {weekly_all: 71}}),
+            'torn line, still writing',
+        ].join('\n') + '\n');
+
+    const [card] = withTrend([{key: 'weekly_all', percent: 71}], {nowMs: now, warehouse: file});
+    assert.deepEqual(card.trend, {thisWeekPeak: 71, lastWeekPeak: 84, deltaPoints: -13});
+    fs.rmSync(dir, {recursive: true, force: true});
+});
+
+test('no warehouse file means no trend, not an error', () => {
+    const cards = [{key: 'session', percent: 4}];
+    assert.deepEqual(
+        withTrend(cards, {nowMs: Date.now(), warehouse: '/nonexistent/history.jsonl'}), cards);
+    assert.equal(weekOverWeekMcp([], 'session', Date.now()), null);
+});

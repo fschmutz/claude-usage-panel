@@ -205,6 +205,76 @@ const FORECAST_MIN_PACE = 0.2;
 // other's history.
 const HISTORY_PATH = path.join(os.tmpdir(), 'claude-usage-history.json');
 
+// ── Durable usage warehouse (mirrors lib/pure.js; tests/fixtures/warehouse.json) ─
+// The forecast history above is a rolling 6-hour window in a temp file. The
+// panels also keep 90 days of poll samples in one JSONL file; reading it is how
+// this tool can answer "is this week worse than last". Read-only here - the
+// desktop clients are the writers.
+
+export const WAREHOUSE_KEEP_DAYS = 90;
+
+export function warehousePath() {
+  if (process.platform === 'darwin') {
+    return path.join(
+      os.homedir(), 'Library', 'Application Support', 'claude-usage-panel', 'history.jsonl');
+  }
+  const state = process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state');
+  return path.join(state, 'claude-usage-panel', 'history.jsonl');
+}
+
+// Unreadable lines are skipped, never fatal: several processes append here, so
+// a torn last line is normal.
+export function parseWarehouse(text) {
+  const out = [];
+  for (const line of String(text ?? '').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const o = JSON.parse(line);
+      if (Number.isFinite(o?.t) && o.limits && typeof o.limits === 'object') {
+        out.push({t: o.t, limits: o.limits});
+      }
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+
+/** Peak of one limit over the last 7 days against the 7 before that. */
+export function weekOverWeek(entries, key, nowMs = Date.now()) {
+  const week = 7 * 86_400_000;
+  let thisWeek = null;
+  let lastWeek = null;
+  for (const e of entries ?? []) {
+    const p = e?.limits?.[key];
+    if (!Number.isFinite(p)) continue;
+    const age = nowMs - e.t;
+    if (age < 0 || age >= 2 * week) continue;
+    if (age < week) thisWeek = thisWeek === null ? p : Math.max(thisWeek, p);
+    else lastWeek = lastWeek === null ? p : Math.max(lastWeek, p);
+  }
+  if (thisWeek === null) return null;
+  return {
+    thisWeekPeak: thisWeek,
+    lastWeekPeak: lastWeek,
+    deltaPoints: lastWeek === null ? null : thisWeek - lastWeek,
+  };
+}
+
+/** Attach `trend` to every card the warehouse has samples for. */
+export function withTrend(cards, {nowMs = Date.now(), warehouse = warehousePath()} = {}) {
+  let entries = [];
+  try {
+    entries = parseWarehouse(fs.readFileSync(warehouse, 'utf8'));
+  } catch {
+    return cards; // no warehouse yet - the panels write it, this only reads
+  }
+  return cards.map((c) => {
+    const trend = weekOverWeek(entries, c.key, nowMs);
+    return trend ? {...c, trend} : c;
+  });
+}
+
 // Project when a limit hits 100% at the current pace - see pure.js for the
 // full contract; the three JS copies + Swift are pinned by one fixture.
 export function forecast(samples, resetsAt, nowMs) {
@@ -399,6 +469,12 @@ export function renderCards(cards, now = Date.now()) {
       parts.push(
         `⏱ ${c.vsClock.elapsedPercent}% of the window gone - ` +
         `${c.vsClock.deltaPoints} pts ahead of the clock`);
+    }
+    if (c.trend) {
+      parts.push(
+        c.trend.lastWeekPeak === null
+          ? `peak ${c.trend.thisWeekPeak}% this week`
+          : `peak ${c.trend.thisWeekPeak}% this week vs ${c.trend.lastWeekPeak}% last`);
     }
     if (c.pace) {
       parts.push(c.pace.exhaustsBeforeReset
@@ -796,6 +872,21 @@ const GET_USAGE_TOOL = {
                 state: {type: 'string', enum: ['ahead', 'even', 'behind']},
               },
             },
+            trend: {
+              type: 'object',
+              description:
+                'peak of this limit over the last 7 days against the 7 before ' +
+                'it, from the 90-day local history the desktop panels record; ' +
+                'absent when there is no history for it',
+              properties: {
+                thisWeekPeak: {type: 'integer'},
+                lastWeekPeak: {
+                  type: ['integer', 'null'],
+                  description: 'null on a fresh install - nothing to compare against yet',
+                },
+                deltaPoints: {type: ['integer', 'null']},
+              },
+            },
             pace: {
               type: 'object',
               description:
@@ -892,7 +983,7 @@ export async function handleRequest(msg, deps = {}) {
       const result = await fetchUsage(deps);
       if (!result.ok)
         return {content: [{type: 'text', text: `${result.code}: ${result.message}`}], isError: true};
-      const cards = withPace(result.cards, deps.paceOpts);
+      const cards = withTrend(withPace(result.cards, deps.paceOpts), deps.trendOpts);
       const lastPing = readLastPing(deps.pingOpts);
       const sessions = refreshSessions(deps.sessionOpts);
       const extraUsage = result.extraUsage ?? null;
