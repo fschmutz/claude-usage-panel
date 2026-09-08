@@ -209,6 +209,21 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._cardsItem.add_child(this._cardsBox);
         this.menu.addMenuItem(this._cardsItem);
 
+        // Prepaid credits, when the account has extra usage switched on. Money
+        // rather than a window: no reset, no clock caret, so it gets its own
+        // compact row instead of a card.
+        this._extraItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        const extraBox = new St.BoxLayout({
+            vertical: true, x_expand: true, style_class: 'cu-extra'});
+        this._extraTitle = new St.Label({
+            text: _('Extra usage'), style_class: 'cu-section-title'});
+        this._extraLine = new St.Label({text: '', style_class: 'cu-cost'});
+        extraBox.add_child(this._extraTitle);
+        extraBox.add_child(this._extraLine);
+        this._extraItem.add_child(extraBox);
+        this.menu.addMenuItem(this._extraItem);
+        this._extraItem.visible = false;
+
         // Status / cost line
         this._statusItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         this._statusBox = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'cu-status'});
@@ -341,6 +356,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             }
             this._latest = result.cards;
             this._renderCards(result.cards);
+            this._renderExtraUsage(result.extraUsage);
             this._renderPanel();
             this._updatedLabel.text = _('Updated %s').format(this._nowString());
             this._renderPing();
@@ -429,6 +445,18 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._cursorToday.text = '';
             this._cursorTop.text = '';
         }
+    }
+
+    // Prepaid credit already charged this cycle. Hidden entirely when the
+    // account has extra usage off - a disabled cap is not headroom.
+    _renderExtraUsage(extra) {
+        this._extraItem.visible = Boolean(extra);
+        if (!extra)
+            return;
+        this._extraLine.text = extra.limitAmount !== null
+            ? _('%s (%d%% of the cap)').format(extra.detail, extra.percent)
+            : extra.detail;
+        this._extraLine.style_class = `cu-cost ${severityClass(extra.severity)}`;
     }
 
     // ── Scheduled session pings ─────────────────────────────────────────────

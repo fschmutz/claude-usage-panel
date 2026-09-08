@@ -124,6 +124,13 @@
 }
 .cu-forecast.cu-warning { color: #e0a458; }
 
+/* prepaid extra-usage row: money, so no track - the severity carries the alarm */
+.cu-extra {
+    padding: 4px 14px 8px 14px;
+}
+.cu-cost.cu-warning  { color: #e0a458; }
+.cu-cost.cu-critical { color: #e5484d; }
+
 /* ---- optional Cursor section ---- */
 .cu-cursor {
     spacing: 3px;

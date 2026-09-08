@@ -34,8 +34,25 @@ function groupOf(kind, group) {
     return String(kind).startsWith('weekly') ? 'weekly' : String(kind);
 }
 
+// A label for a kind we have no entry for. The endpoint keeps adding kinds
+// (seven_day_cowork, seven_day_omelette and friends are already in the payload
+// as null placeholders); rendering the raw key is how a new one shows up as
+// `weekly_cowork` in the UI for however long it takes anyone to notice.
+export function kindLabel(kind) {
+    const known = KIND_LABELS[kind];
+    if (known)
+        return known;
+    const k = String(kind ?? '');
+    const words = w => w.replace(/_/g, ' ').trim();
+    if (k.startsWith('weekly_'))
+        return `Weekly · ${words(k.slice(7))}`;
+    if (k.startsWith('session_'))
+        return `Session · ${words(k.slice(8))}`;
+    return words(k) || 'Limit';
+}
+
 function normalizeLimit(entry) {
-    let label = KIND_LABELS[entry.kind] ?? entry.kind;
+    let label = kindLabel(entry.kind);
     const model = entry.scope?.model?.display_name;
     if (model)
         label = `${label} · ${model}`;
@@ -105,6 +122,59 @@ export function normalizeUsage(payload) {
 export function poolNote(card) {
     return card?.scoped && card.group === 'weekly'
         ? 'Share of the weekly all-models limit' : '';
+}
+
+// ── Extra usage (prepaid credits beyond the plan) ───────────────────────────
+// The payload's `spend` object: money already charged this cycle against the
+// cap the account allows. It is NOT one of the limits[] - it has no window and
+// no reset - so it stays out of normalizeUsage() and is rendered as its own
+// row. Reported only while the account has it switched on; a disabled one is
+// noise, not headroom. Mirrored in Model.swift / mcp/server.js, pinned by
+// tests/fixtures/extra-usage.json.
+
+function money(obj) {
+    const minor = Number(obj?.amount_minor);
+    if (!Number.isFinite(minor))
+        return null;
+    const exp = Number(obj?.exponent);
+    return minor / 10 ** (Number.isFinite(exp) ? exp : 2);
+}
+
+/** "$12.40", or "12.40 CHF" for anything but USD. */
+export function formatMoney(amount, currency = 'USD') {
+    if (!Number.isFinite(amount))
+        return '';
+    const n = amount.toFixed(2);
+    return currency === 'USD' ? `$${n}` : `${n} ${currency}`;
+}
+
+/**
+ * @returns {?{key: string, label: string, percent: number, severity: string,
+ *             usedAmount: number, limitAmount: ?number, currency: string,
+ *             detail: string}}
+ *   null when the account has no extra usage enabled.
+ */
+export function normalizeExtraUsage(payload) {
+    const spend = payload?.spend;
+    if (!spend || spend.enabled !== true)
+        return null;
+    const used = money(spend.used);
+    if (used === null)
+        return null;
+    const limit = money(spend.limit);
+    const currency = spend.used?.currency ?? spend.limit?.currency ?? 'USD';
+    return {
+        key: 'extra_usage',
+        label: 'Extra usage',
+        percent: clampPercent(spend.percent),
+        severity: spend.severity ?? 'normal',
+        usedAmount: used,
+        limitAmount: limit,
+        currency,
+        detail: limit !== null
+            ? `${formatMoney(used, currency)} of ${formatMoney(limit, currency)}`
+            : formatMoney(used, currency),
+    };
 }
 
 // Render a history array (percentages) as a unicode sparkline.

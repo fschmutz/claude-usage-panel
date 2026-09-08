@@ -5,7 +5,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
-import {normalizeUsage} from './pure.js';
+import {normalizeUsage, normalizeExtraUsage} from './pure.js';
 
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
@@ -73,7 +73,8 @@ export function fetchUsage(session) {
 
                 const decoder = new TextDecoder('utf-8');
                 const raw = JSON.parse(decoder.decode(bytes.get_data()));
-                resolve({ok: true, cards: normalizeUsage(raw), raw});
+                resolve({ok: true, cards: normalizeUsage(raw),
+                    extraUsage: normalizeExtraUsage(raw), raw});
             } catch (e) {
                 resolve({ok: false, code: 'parse_error', message: e.message});
             }

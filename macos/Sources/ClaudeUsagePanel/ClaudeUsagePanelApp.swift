@@ -24,6 +24,8 @@ extension Color {
 @MainActor
 final class UsageModel: ObservableObject {
     @Published var cards: [LimitCard] = []
+    /// Prepaid credit spend, when the account has extra usage enabled.
+    @Published var extraUsage: ExtraUsage?
     @Published var planLabel: String?
     @Published var errorText: String?
     @Published var costText: String?
@@ -182,6 +184,7 @@ final class UsageModel: ObservableObject {
         do {
             let result = try await ClaudeUsage.fetch()
             cards = result.cards
+            extraUsage = result.extraUsage
             planLabel = result.planLabel
             errorText = nil
             updated = Self.timeFormatter.string(from: Date())
@@ -587,6 +590,22 @@ struct PopupView: View {
                     CardView(
                         card: $0, spark: model.spark(for: $0.id),
                         forecast: model.forecasts[$0.id])
+                }
+            }
+
+            // Prepaid credit already charged this cycle. Absent entirely when
+            // the account has extra usage off - a disabled cap is not headroom.
+            if let extra = model.extraUsage {
+                HStack(spacing: 4) {
+                    Text("Extra usage").font(.system(size: 12, weight: .semibold))
+                    Text(
+                        extra.limitAmount != nil
+                            ? "\(extra.detail) (\(extra.percent)% of the cap)" : extra.detail
+                    )
+                    .font(.system(size: 12))
+                    .foregroundColor(
+                        extra.severity == .normal ? .secondary : Color.severity(extra.severity))
+                    Spacer()
                 }
             }
 

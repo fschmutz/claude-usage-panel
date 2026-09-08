@@ -51,8 +51,58 @@ function groupOf(kind, group) {
   return String(kind).startsWith('weekly') ? 'weekly' : String(kind);
 }
 
+// A label for a kind we have no entry for - the endpoint keeps adding them.
+// Mirrors pure.js kindLabel().
+export function kindLabel(kind) {
+  const known = KIND_LABELS[kind];
+  if (known) return known;
+  const k = String(kind ?? '');
+  const words = (w) => w.replace(/_/g, ' ').trim();
+  if (k.startsWith('weekly_')) return `Weekly · ${words(k.slice(7))}`;
+  if (k.startsWith('session_')) return `Session · ${words(k.slice(8))}`;
+  return words(k) || 'Limit';
+}
+
+// Prepaid credits already charged this cycle. Not a limits[] entry - no window,
+// no reset - and reported only while the account has it enabled. Mirrors
+// pure.js normalizeExtraUsage(); tests/fixtures/extra-usage.json pins both.
+function money(obj) {
+  const minor = Number(obj?.amount_minor);
+  if (!Number.isFinite(minor)) return null;
+  const exp = Number(obj?.exponent);
+  return minor / 10 ** (Number.isFinite(exp) ? exp : 2);
+}
+
+export function formatMoney(amount, currency = 'USD') {
+  if (!Number.isFinite(amount)) return '';
+  const n = amount.toFixed(2);
+  return currency === 'USD' ? `$${n}` : `${n} ${currency}`;
+}
+
+export function normalizeExtraUsage(payload) {
+  const spend = payload?.spend;
+  if (!spend || spend.enabled !== true) return null;
+  const used = money(spend.used);
+  if (used === null) return null;
+  const limit = money(spend.limit);
+  const currency = spend.used?.currency ?? spend.limit?.currency ?? 'USD';
+  return {
+    key: 'extra_usage',
+    label: 'Extra usage',
+    percent: clampPercent(spend.percent),
+    severity: spend.severity ?? 'normal',
+    usedAmount: used,
+    limitAmount: limit,
+    currency,
+    detail:
+      limit !== null
+        ? `${formatMoney(used, currency)} of ${formatMoney(limit, currency)}`
+        : formatMoney(used, currency),
+  };
+}
+
 function normalizeLimit(entry) {
-  let label = KIND_LABELS[entry.kind] ?? entry.kind;
+  let label = kindLabel(entry.kind);
   const model = entry.scope?.model?.display_name;
   if (model) label = `${label} · ${model}`;
   return {
@@ -327,7 +377,7 @@ export async function fetchUsage({fetchImpl = fetch, token = readAccessToken()} 
   if (!response.ok) return {ok: false, code: 'http_error', message: `HTTP ${response.status}`};
   try {
     const raw = await response.json();
-    return {ok: true, cards: normalizeUsage(raw), raw};
+    return {ok: true, cards: normalizeUsage(raw), extraUsage: normalizeExtraUsage(raw), raw};
   } catch (e) {
     return {ok: false, code: 'parse_error', message: e.message};
   }
@@ -359,6 +409,14 @@ export function renderCards(cards, now = Date.now()) {
   }).join('\n');
 }
 
+
+// One line for prepaid credit spend, when the account has any enabled.
+export function renderExtraUsage(extra) {
+  if (!extra) return '';
+  const parts = [`**Extra usage** - ${extra.detail}`, `${extra.percent}% of the cap`];
+  if (extra.severity !== 'normal') parts.push(extra.severity.toUpperCase());
+  return `- ${parts.join(' · ')}`;
+}
 
 // ── Session pings and today's sessions (mirrors lib/pure.js) ───────────────────
 // scripts/session-ping.sh writes its last successful ping here; the panels and
@@ -694,7 +752,9 @@ const GET_USAGE_TOOL = {
     'each limit also carries a `pace` projection: %/hour burn rate, the ' +
     'projected 100% instant, and whether that lands before the reset. Every ' +
     'limit with a reset also carries `vsClock`: how much of its window has ' +
-    'gone and whether usage is running ahead of that clock. Also ' +
+    'gone and whether usage is running ahead of that clock. `extraUsage` ' +
+    'reports prepaid credits charged beyond the plan, when the account has ' +
+    'them enabled. Also ' +
     'reports `lastPing` (when a scheduled session ping last opened a 5-hour ' +
     'window) and `sessions`: today\'s local Claude Code sessions ranked by the ' +
     'tokens they spent, each with the shell command that resumes it.',
@@ -759,6 +819,21 @@ const GET_USAGE_TOOL = {
           required: ['key', 'label', 'group', 'scoped', 'percent', 'severity'],
         },
       },
+      extraUsage: {
+        type: ['object', 'null'],
+        description:
+          'prepaid credits charged this cycle beyond the plan; null unless the ' +
+          'account has extra usage enabled. Money, not a window - it has no reset.',
+        properties: {
+          percent: {type: 'integer', minimum: 0, maximum: 100},
+          severity: {type: 'string', enum: ['normal', 'warning', 'critical']},
+          usedAmount: {type: 'number'},
+          limitAmount: {type: ['number', 'null'], description: 'cap, when the account has one'},
+          currency: {type: 'string'},
+          detail: {type: 'string', description: 'e.g. "$12.40 of $50.00"'},
+        },
+        required: ['percent', 'severity', 'usedAmount', 'currency', 'detail'],
+      },
       lastPing: {
         type: ['object', 'null'],
         description:
@@ -820,13 +895,16 @@ export async function handleRequest(msg, deps = {}) {
       const cards = withPace(result.cards, deps.paceOpts);
       const lastPing = readLastPing(deps.pingOpts);
       const sessions = refreshSessions(deps.sessionOpts);
+      const extraUsage = result.extraUsage ?? null;
       return {
         content: [{
           type: 'text',
-          text: [renderCards(cards), renderPing(lastPing), renderSessions(sessions)]
-            .filter(Boolean).join('\n\n'),
+          text: [
+            renderCards(cards), renderExtraUsage(extraUsage), renderPing(lastPing),
+            renderSessions(sessions),
+          ].filter(Boolean).join('\n\n'),
         }],
-        structuredContent: {limits: cards, lastPing, sessions},
+        structuredContent: {limits: cards, extraUsage, lastPing, sessions},
       };
     }
     default:

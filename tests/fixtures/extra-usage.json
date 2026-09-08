@@ -1,0 +1,141 @@
+{
+  "cases": [
+    {
+      "name": "enabled with a cap",
+      "payload": {
+        "spend": {
+          "enabled": true,
+          "percent": 24,
+          "severity": "normal",
+          "used": {
+            "amount_minor": 1240,
+            "currency": "USD",
+            "exponent": 2
+          },
+          "limit": {
+            "amount_minor": 5000,
+            "currency": "USD",
+            "exponent": 2
+          }
+        }
+      },
+      "expected": {
+        "percent": 24,
+        "severity": "normal",
+        "usedAmount": 12.4,
+        "limitAmount": 50.0,
+        "currency": "USD",
+        "detail": "$12.40 of $50.00"
+      }
+    },
+    {
+      "name": "enabled, no cap",
+      "payload": {
+        "spend": {
+          "enabled": true,
+          "percent": 0,
+          "severity": "normal",
+          "used": {
+            "amount_minor": 355,
+            "currency": "USD",
+            "exponent": 2
+          },
+          "limit": null
+        }
+      },
+      "expected": {
+        "percent": 0,
+        "severity": "normal",
+        "usedAmount": 3.55,
+        "limitAmount": null,
+        "currency": "USD",
+        "detail": "$3.55"
+      }
+    },
+    {
+      "name": "a non-USD currency keeps its code",
+      "payload": {
+        "spend": {
+          "enabled": true,
+          "percent": 90,
+          "severity": "warning",
+          "used": {
+            "amount_minor": 8999,
+            "currency": "CHF",
+            "exponent": 2
+          },
+          "limit": {
+            "amount_minor": 10000,
+            "currency": "CHF",
+            "exponent": 2
+          }
+        }
+      },
+      "expected": {
+        "percent": 90,
+        "severity": "warning",
+        "usedAmount": 89.99,
+        "limitAmount": 100.0,
+        "currency": "CHF",
+        "detail": "89.99 CHF of 100.00 CHF"
+      }
+    },
+    {
+      "name": "disabled extra usage is not headroom",
+      "payload": {
+        "spend": {
+          "enabled": false,
+          "percent": 0,
+          "used": {
+            "amount_minor": 0,
+            "currency": "USD",
+            "exponent": 2
+          },
+          "limit": {
+            "amount_minor": 5000,
+            "currency": "USD",
+            "exponent": 2
+          }
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "no spend object at all",
+      "payload": {
+        "limits": []
+      },
+      "expected": null
+    }
+  ],
+  "labels": [
+    {
+      "kind": "session",
+      "expected": "Current session"
+    },
+    {
+      "kind": "weekly_all",
+      "expected": "Weekly \u00b7 all models"
+    },
+    {
+      "kind": "weekly_cowork",
+      "expected": "Weekly \u00b7 cowork"
+    },
+    {
+      "kind": "weekly_opus_4_1",
+      "expected": "Weekly \u00b7 opus 4 1"
+    },
+    {
+      "kind": "session_burst",
+      "expected": "Session \u00b7 burst"
+    },
+    {
+      "kind": "nimbus_quill",
+      "expected": "nimbus quill"
+    },
+    {
+      "kind": "",
+      "expected": "Limit"
+    }
+  ]
+}

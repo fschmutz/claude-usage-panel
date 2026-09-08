@@ -89,3 +89,39 @@ for (const [portName, fn] of [
         });
     }
 }
+
+// ── Extra usage + unknown-kind labels ───────────────────────────────────────────
+// `spend` is prepaid credit, not a limit: no window, no reset, and only real
+// while the account has it enabled. Labels for kinds we do not know yet are
+// part of the same fixture - the endpoint already carries placeholders for
+// kinds nobody has enabled (seven_day_cowork and friends).
+import {
+    normalizeExtraUsage as extraPure, kindLabel as labelPure,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+import {
+    normalizeExtraUsage as extraMcp, kindLabel as labelMcp,
+} from '../mcp/server.js';
+
+const extraFix = JSON.parse(
+    fs.readFileSync(path.join(here, 'fixtures', 'extra-usage.json'), 'utf8'));
+
+// The key/label are port-facing; the fixture pins the numbers and the sentence.
+const extraCore = (e) => e && {
+    percent: e.percent, severity: e.severity, usedAmount: e.usedAmount,
+    limitAmount: e.limitAmount ?? null, currency: e.currency, detail: e.detail,
+};
+
+for (const [portName, extra, label] of [
+    ['pure.js', extraPure, labelPure],
+    ['mcp/server.js', extraMcp, labelMcp],
+]) {
+    for (const c of extraFix.cases) {
+        test(`${portName} extra usage - ${c.name}`, () => {
+            assert.deepEqual(extraCore(extra(c.payload)), c.expected);
+        });
+    }
+    test(`${portName} labels unknown kinds`, () => {
+        for (const l of extraFix.labels)
+            assert.equal(label(l.kind), l.expected, l.kind);
+    });
+}

@@ -44,6 +44,20 @@ public enum UsageNormalizer {
     ]
     static let kindOrder = ["session", "weekly_all", "weekly_scoped", "weekly_oauth_apps"]
 
+    /// A label for a kind we have no entry for - the endpoint keeps adding them
+    /// (seven_day_cowork and friends already sit in the payload as null
+    /// placeholders). Mirrors pure.js `kindLabel()`.
+    public static func kindLabel(_ kind: String) -> String {
+        if let known = kindLabels[kind] { return known }
+        func words(_ w: Substring) -> String {
+            w.replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespaces)
+        }
+        if kind.hasPrefix("weekly_") { return "Weekly · \(words(kind.dropFirst(7)))" }
+        if kind.hasPrefix("session_") { return "Session · \(words(kind.dropFirst(8)))" }
+        let plain = words(Substring(kind))
+        return plain.isEmpty ? "Limit" : plain
+    }
+
     static func parseDate(_ s: String?) -> Date? {
         guard let s else { return nil }
         let f = ISO8601DateFormatter()
@@ -91,7 +105,7 @@ public enum UsageNormalizer {
         if let limits = payload["limits"] as? [[String: Any]], !limits.isEmpty {
             let cards: [LimitCard] = limits.map { entry in
                 let kind = entry["kind"] as? String ?? "unknown"
-                var label = kindLabels[kind] ?? kind
+                var label = kindLabel(kind)
                 let scope = entry["scope"] as? [String: Any]
                 let model = (scope?["model"] as? [String: Any])?["display_name"] as? String
                 if let model { label += " · \(model)" }
@@ -127,6 +141,64 @@ public enum UsageNormalizer {
         legacy("five_hour", id: "session", "Current session", group: "session", active: true)
         legacy("seven_day", id: "weekly_all", "Weekly · all models", group: "weekly", active: false)
         return cards
+    }
+}
+
+// MARK: - Extra usage
+
+/// Prepaid credits already charged this cycle. Not a `limits[]` entry - it has
+/// no window and no reset - and reported only while the account has extra usage
+/// switched on. Mirrors pure.js `normalizeExtraUsage()`;
+/// tests/fixtures/extra-usage.json pins every port.
+public struct ExtraUsage: Equatable, Sendable {
+    public let percent: Int
+    public let severity: Severity
+    public let usedAmount: Double
+    public let limitAmount: Double?
+    public let currency: String
+    /// "$12.40 of $50.00" - or just the used amount when there is no cap.
+    public let detail: String
+
+    public init(
+        percent: Int, severity: Severity, usedAmount: Double, limitAmount: Double?,
+        currency: String, detail: String
+    ) {
+        self.percent = percent
+        self.severity = severity
+        self.usedAmount = usedAmount
+        self.limitAmount = limitAmount
+        self.currency = currency
+        self.detail = detail
+    }
+
+    public static func formatMoney(_ amount: Double, currency: String = "USD") -> String {
+        let n = String(format: "%.2f", amount)
+        return currency == "USD" ? "$\(n)" : "\(n) \(currency)"
+    }
+
+    static func money(_ obj: [String: Any]?) -> Double? {
+        guard let minor = (obj?["amount_minor"] as? NSNumber)?.doubleValue else { return nil }
+        let exp = (obj?["exponent"] as? NSNumber)?.doubleValue ?? 2
+        return minor / pow(10, exp)
+    }
+
+    public static func normalize(_ payload: [String: Any]) -> ExtraUsage? {
+        guard let spend = payload["spend"] as? [String: Any],
+            (spend["enabled"] as? Bool) == true,
+            let used = money(spend["used"] as? [String: Any])
+        else { return nil }
+        let limit = money(spend["limit"] as? [String: Any])
+        let currency =
+            (spend["used"] as? [String: Any])?["currency"] as? String
+            ?? (spend["limit"] as? [String: Any])?["currency"] as? String ?? "USD"
+        let usedText = formatMoney(used, currency: currency)
+        let detail =
+            limit.map { "\(usedText) of \(formatMoney($0, currency: currency))" } ?? usedText
+        return ExtraUsage(
+            percent: UsageNormalizer.clampPercent(
+                (spend["percent"] as? NSNumber)?.doubleValue ?? 0),
+            severity: Severity(rawValue: spend["severity"] as? String ?? "normal") ?? .normal,
+            usedAmount: used, limitAmount: limit, currency: currency, detail: detail)
     }
 }
 

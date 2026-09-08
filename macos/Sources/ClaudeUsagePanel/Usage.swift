@@ -10,6 +10,9 @@ import Foundation
 
 struct UsageResult {
     let cards: [LimitCard]
+    /// Prepaid credits charged beyond the plan; nil unless the account has
+    /// extra usage enabled. Money, so it is not one of the cards.
+    let extraUsage: ExtraUsage?
     let planLabel: String?
 }
 
@@ -108,6 +111,7 @@ enum ClaudeUsage {
         }
         return UsageResult(
             cards: UsageNormalizer.normalize(payload),
+            extraUsage: ExtraUsage.normalize(payload),
             planLabel: payload["plan_label"] as? String)
     }
 }

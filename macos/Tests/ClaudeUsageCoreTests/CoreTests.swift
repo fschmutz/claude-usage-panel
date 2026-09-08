@@ -144,6 +144,53 @@ final class CursorMathTests: XCTestCase {
     }
 }
 
+/// Extra-usage + unknown-kind-label parity against the fixture the JS ports
+/// assert (tests/parity.test.js).
+final class ExtraUsageParityTests: XCTestCase {
+    private func fixture() throws -> [String: Any] {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = root.appendingPathComponent("tests/fixtures/extra-usage.json")
+        return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    }
+
+    func testMatchesSharedFixtures() throws {
+        for c in try fixture()["cases"] as! [[String: Any]] {
+            let name = c["name"] as? String ?? "?"
+            let got = ExtraUsage.normalize(c["payload"] as! [String: Any])
+            guard let e = c["expected"] as? [String: Any] else {
+                XCTAssertNil(got, "expected nil - \(name)")
+                continue
+            }
+            let extra = try XCTUnwrap(got, "expected extra usage - \(name)")
+            XCTAssertEqual(extra.percent, (e["percent"] as! NSNumber).intValue, "percent - \(name)")
+            XCTAssertEqual(extra.severity.rawValue, e["severity"] as! String, "severity - \(name)")
+            XCTAssertEqual(
+                extra.usedAmount, (e["usedAmount"] as! NSNumber).doubleValue,
+                accuracy: 0.0001, "used - \(name)")
+            if let limit = e["limitAmount"] as? NSNumber {
+                XCTAssertEqual(
+                    try XCTUnwrap(extra.limitAmount), limit.doubleValue,
+                    accuracy: 0.0001, "limit - \(name)")
+            } else {
+                XCTAssertNil(extra.limitAmount, "limit nil - \(name)")
+            }
+            XCTAssertEqual(extra.currency, e["currency"] as! String, "currency - \(name)")
+            XCTAssertEqual(extra.detail, e["detail"] as! String, "detail - \(name)")
+        }
+    }
+
+    func testLabelsUnknownKinds() throws {
+        for l in try fixture()["labels"] as! [[String: Any]] {
+            let kind = l["kind"] as! String
+            XCTAssertEqual(UsageNormalizer.kindLabel(kind), l["expected"] as! String, kind)
+        }
+    }
+}
+
 /// Clock-pace parity: used-vs-elapsed against the same fixture the JS ports
 /// assert (tests/parity.test.js).
 final class ClockPaceParityTests: XCTestCase {
