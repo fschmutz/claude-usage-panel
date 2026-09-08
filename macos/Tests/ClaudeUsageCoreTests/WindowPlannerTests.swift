@@ -78,3 +78,44 @@ final class WindowPlannerTests: XCTestCase {
         XCTAssertEqual(plan.summary, "08:00 13:00 · 100% of 09:00-18:00 covered")
     }
 }
+
+/// Adaptive-poll parity against the fixture pure.js asserts (tests/pure.test.js).
+final class PollScheduleParityTests: XCTestCase {
+    func testMatchesSharedFixtures() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = root.appendingPathComponent("tests/fixtures/poll.json")
+        let fix =
+            try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        let now = Date(timeIntervalSince1970: (fix["now"] as! NSNumber).doubleValue / 1000)
+        XCTAssertEqual(PollSchedule.idleAfter, (fix["idleAfter"] as! NSNumber).intValue)
+
+        for c in fix["cases"] as! [[String: Any]] {
+            let name = c["name"] as? String ?? "?"
+            let reset = (c["nextResetMs"] as? NSNumber).map {
+                Date(timeIntervalSince1970: $0.doubleValue / 1000)
+            }
+            XCTAssertEqual(
+                PollSchedule.nextPollSeconds(
+                    baseSeconds: (c["baseSeconds"] as! NSNumber).intValue,
+                    idleStreak: (c["idleStreak"] as! NSNumber).intValue,
+                    nextReset: reset, now: now),
+                (c["expected"] as! NSNumber).intValue, name)
+        }
+    }
+
+    func testIdleStreakCountsUnmovedLimits() {
+        let a = LimitCard(
+            id: "session", label: "s", percent: 10, severity: .normal, resetsAt: nil,
+            active: true, group: "session", scoped: false)
+        let moved = LimitCard(
+            id: "session", label: "s", percent: 11, severity: .normal, resetsAt: nil,
+            active: true, group: "session", scoped: false)
+        XCTAssertTrue(PollSchedule.sameUsage([a], [a]))
+        XCTAssertFalse(PollSchedule.sameUsage([a], [moved]))
+        XCTAssertFalse(PollSchedule.sameUsage([a], []))
+    }
+}

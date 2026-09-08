@@ -1,0 +1,55 @@
+{
+  "now": 1800000000000,
+  "idleAfter": 3,
+  "cases": [
+    {
+      "name": "active polling stays at the configured base",
+      "baseSeconds": 300,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "expected": 300
+    },
+    {
+      "name": "an idle streak backs off by the factor",
+      "baseSeconds": 180,
+      "idleStreak": 3,
+      "nextResetMs": null,
+      "expected": 720
+    },
+    {
+      "name": "backoff is capped at fifteen minutes",
+      "baseSeconds": 600,
+      "idleStreak": 9,
+      "nextResetMs": null,
+      "expected": 900
+    },
+    {
+      "name": "a reset inside the idle delay pulls the poll to just after it",
+      "baseSeconds": 300,
+      "idleStreak": 5,
+      "nextResetMs": 1800000400000,
+      "expected": 405
+    },
+    {
+      "name": "a reset sooner than the base rate does not speed up polling",
+      "baseSeconds": 300,
+      "idleStreak": 0,
+      "nextResetMs": 1800000020000,
+      "expected": 300
+    },
+    {
+      "name": "a reset beyond the delay changes nothing",
+      "baseSeconds": 300,
+      "idleStreak": 0,
+      "nextResetMs": 1800003600000,
+      "expected": 300
+    },
+    {
+      "name": "below the one-minute floor the base is raised, not honoured",
+      "baseSeconds": 10,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "expected": 60
+    }
+  ]
+}

@@ -26,7 +26,10 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         // Refresh interval (minutes, mapped to seconds in the setting).
         const intervalRow = new Adw.SpinRow({
             title: _('Refresh interval'),
-            subtitle: _('Minutes between updates (min 1)'),
+            subtitle: _(
+                'Minutes between updates (min 1). Idle windows back off to 15 minutes, ' +
+                'and a poll always lands just after a reset, on wake and when the ' +
+                'network returns.'),
             adjustment: new Gtk.Adjustment({lower: 1, upper: 60, step_increment: 1}),
         });
         intervalRow.set_value(Math.max(1, Math.round(settings.get_int('refresh-interval') / 60)));

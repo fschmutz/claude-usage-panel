@@ -1,5 +1,6 @@
 import AppKit
 import ClaudeUsageCore
+import Network
 import SwiftUI
 
 // MARK: - Palette (matches the GNOME extension)
@@ -119,6 +120,11 @@ final class UsageModel: ObservableObject {
     private static let historyMax = 90
 
     private var loopTask: Task<Void, Never>?
+    private var wakeTask: Task<Void, Never>?
+    /// Consecutive polls in which no limit moved - drives the backoff.
+    private var idleStreak = 0
+    private let networkMonitor = NWPathMonitor()
+    private let networkQueue = DispatchQueue(label: "claude-usage-panel.network")
 
     init() {
         workDayStart = UserDefaults.standard.string(forKey: "workDayStart") ?? "09:00"
@@ -166,23 +172,62 @@ final class UsageModel: ObservableObject {
             }
         }
 
+        watchWakeAndNetwork()
         restart()  // didSet does not fire from init, so start the loop explicitly
     }
 
     private func restart() {
         loopTask?.cancel()
-        let minutes = max(1, refreshMinutes)
+        let base = max(1, refreshMinutes) * 60
         loopTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(nanoseconds: UInt64(minutes) * 60 * 1_000_000_000)
+                guard let self else { return }
+                // A fixed interval polls hardest exactly when nothing moves,
+                // and lands late on the one tick that matters - the reset.
+                let delay = await MainActor.run {
+                    PollSchedule.nextPollSeconds(
+                        baseSeconds: base, idleStreak: self.idleStreak,
+                        nextReset: PollSchedule.nextReset(self.cards))
+                }
+                try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
             }
+        }
+    }
+
+    /// A wake from sleep leaves every countdown on screen stale by however long
+    /// the lid was shut, and the polls during a network outage all failed. Both
+    /// are worth one immediate poll, coalesced so a burst of notifications does
+    /// not become a burst of requests.
+    private func watchWakeAndNetwork() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.refreshSoon()
+        }
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in self?.refreshSoon() }
+        }
+        networkMonitor.start(queue: networkQueue)
+    }
+
+    @MainActor
+    private func refreshSoon() {
+        wakeTask?.cancel()
+        wakeTask = Task { [weak self] in
+            // Let it settle: DNS and the Keychain are not necessarily ready the
+            // instant macOS says the machine is awake.
+            try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.refresh()
         }
     }
 
     func refresh() async {
         do {
             let result = try await ClaudeUsage.fetch()
+            idleStreak = PollSchedule.sameUsage(cards, result.cards) ? idleStreak + 1 : 0
             cards = result.cards
             extraUsage = result.extraUsage
             planLabel = result.planLabel

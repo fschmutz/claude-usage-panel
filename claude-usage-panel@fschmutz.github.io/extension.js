@@ -24,6 +24,7 @@ import {
     severityClass, sparkline, formatResets, alertThreshold, poolNote,
     forecast, formatForecast, normalizeHistory, historyPercents,
     clockPace, formatClockPace,
+    nextPollSeconds, nextResetMs, sameUsage,
     compactTokens, formatLastPing, nextPing, interactiveResume, terminalArgv, TERMINALS,
 } from './lib/pure.js';
 
@@ -31,6 +32,9 @@ const TRACK_WIDTH = 300; // px, must match .cu-track min-width in stylesheet.css
 // Half the caret glyph, so the mark's point - not its left edge - lands on the
 // elapsed fraction of the track above it.
 const CLOCK_MARK_HALF = 4;
+// How long to let a resume or a network change settle before polling: DNS and
+// the token file are not necessarily ready the instant logind says "resumed".
+const WAKE_SETTLE_SECONDS = 5;
 // Timestamped samples kept per limit - enough for the forecast's 6 h regression
 // window even at the 1-minute minimum refresh interval isn't needed; at the
 // 10-minute default this holds ~15 h of context. The sparkline shows the last 12.
@@ -146,6 +150,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._httpSession.set_user_agent('claude-usage-panel/1.0');
         this._cards = new Map();
         this._timerId = 0;
+        this._wakeId = 0;
+        this._logindId = 0;
+        // Consecutive polls in which no limit moved - drives the backoff.
+        this._idleStreak = 0;
+        this._latest = [];
         this._lastCost = null;
         this._refreshing = false;
         this._destroyed = false;
@@ -186,6 +195,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this
         );
 
+        this._watchWakeAndNetwork();
         this.refresh();
         this._restartTimer();
     }
@@ -328,15 +338,66 @@ class ClaudeUsageButton extends PanelMenu.Button {
         }
     }
 
+    // One-shot timer, re-armed after every poll: a fixed interval polls hardest
+    // exactly when nothing is happening, and lands minutes late on the one tick
+    // that matters (the reset). nextPollSeconds() decides the delay; this only
+    // arms it.
     _restartTimer() {
         if (this._timerId) {
             GLib.Source.remove(this._timerId);
             this._timerId = 0;
         }
-        const interval = Math.max(60, this._settings.get_int('refresh-interval'));
-        this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, interval, () => {
+        const delay = nextPollSeconds({
+            baseSeconds: this._settings.get_int('refresh-interval'),
+            idleStreak: this._idleStreak,
+            nextResetMs: nextResetMs(this._latest),
+            nowMs: Date.now(),
+        });
+        this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delay, () => {
+            this._timerId = 0;
             this.refresh();
-            return GLib.SOURCE_CONTINUE;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // Two things that make a poll worth doing right now, whatever the timer
+    // says: the machine came back from suspend (every countdown on screen is
+    // stale by however long the lid was shut), and the network came back (the
+    // polls during the outage all failed).
+    _watchWakeAndNetwork() {
+        try {
+            this._logindId = Gio.DBus.system.signal_subscribe(
+                'org.freedesktop.login1',
+                'org.freedesktop.login1.Manager',
+                'PrepareForSleep',
+                '/org/freedesktop/login1',
+                null,
+                Gio.DBusSignalFlags.NONE,
+                (conn, sender, path, iface, signal, params) => {
+                    // true = about to suspend, false = just resumed.
+                    if (!params.deepUnpack()[0])
+                        this._refreshSoon();
+                });
+        } catch (e) {
+            logError(e, 'claude-usage-panel: no logind resume signal');
+        }
+        this._networkMonitor = Gio.NetworkMonitor.get_default();
+        this._networkMonitor?.connectObject('network-changed', (_m, available) => {
+            if (available)
+                this._refreshSoon();
+        }, this);
+    }
+
+    // Coalesce a burst of wake/network signals into one refresh a few seconds
+    // later - DNS and the token file are not necessarily ready the instant
+    // logind says "resumed".
+    _refreshSoon() {
+        if (this._wakeId)
+            GLib.Source.remove(this._wakeId);
+        this._wakeId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, WAKE_SETTLE_SECONDS, () => {
+            this._wakeId = 0;
+            this.refresh();
+            return GLib.SOURCE_REMOVE;
         });
     }
 
@@ -354,6 +415,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._renderError(result.message);
                 return;
             }
+            this._idleStreak = sameUsage(this._latest, result.cards) ? this._idleStreak + 1 : 0;
             this._latest = result.cards;
             this._renderCards(result.cards);
             this._renderExtraUsage(result.extraUsage);
@@ -387,6 +449,10 @@ class ClaudeUsageButton extends PanelMenu.Button {
             await this._refreshCursor();
         } finally {
             this._refreshing = false;
+            // Re-arm from the numbers this poll just produced: the timer is
+            // one-shot, so a missed re-arm would stop the panel dead.
+            if (!this._destroyed)
+                this._restartTimer();
         }
     }
 
@@ -737,6 +803,16 @@ class ClaudeUsageButton extends PanelMenu.Button {
             GLib.Source.remove(this._timerId);
             this._timerId = 0;
         }
+        if (this._wakeId) {
+            GLib.Source.remove(this._wakeId);
+            this._wakeId = 0;
+        }
+        if (this._logindId) {
+            Gio.DBus.system.signal_unsubscribe(this._logindId);
+            this._logindId = 0;
+        }
+        this._networkMonitor?.disconnectObject(this);
+        this._networkMonitor = null;
         this._cancelSessionCatchup();
         this._settings?.disconnectObject(this);
         this._ifaceSettings?.disconnectObject(this);

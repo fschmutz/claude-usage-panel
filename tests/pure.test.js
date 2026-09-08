@@ -182,3 +182,52 @@ test('historyPercents projects pairs back to the sparkline series', () => {
     assert.deepEqual(historyPercents([[1, 40], [2, 50]]), [40, 50]);
     assert.deepEqual(historyPercents(undefined), []);
 });
+
+// ── Adaptive polling ────────────────────────────────────────────────────────────
+// Same fixture the Swift PollScheduleParityTests asserts.
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {
+    nextPollSeconds, nextResetMs, sameUsage, POLL_IDLE_AFTER,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+
+const pollFix = JSON.parse(
+    fs.readFileSync(
+        path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'poll.json'),
+        'utf8'));
+
+test('the idle threshold is part of the pinned contract', () => {
+    assert.equal(POLL_IDLE_AFTER, pollFix.idleAfter);
+});
+
+for (const c of pollFix.cases) {
+    test(`nextPollSeconds - ${c.name}`, () => {
+        assert.equal(
+            nextPollSeconds({
+                baseSeconds: c.baseSeconds, idleStreak: c.idleStreak,
+                nextResetMs: c.nextResetMs, nowMs: pollFix.now,
+            }),
+            c.expected);
+    });
+}
+
+test('the soonest reset wins, and no resets means no deadline', () => {
+    assert.equal(
+        nextResetMs([
+            {resetsAt: '2027-01-16T14:00:00.000Z'},
+            {resetsAt: '2027-01-15T06:00:00.000Z'},
+            {resetsAt: null},
+        ]),
+        Date.parse('2027-01-15T06:00:00.000Z'));
+    assert.equal(nextResetMs([{resetsAt: null}]), null);
+    assert.equal(nextResetMs([]), null);
+});
+
+test('an idle poll is one where no limit moved', () => {
+    const a = [{key: 'session', percent: 10}, {key: 'weekly_all', percent: 30}];
+    assert.equal(sameUsage(a, [{key: 'session', percent: 10}, {key: 'weekly_all', percent: 30}]), true);
+    assert.equal(sameUsage(a, [{key: 'session', percent: 11}, {key: 'weekly_all', percent: 30}]), false);
+    assert.equal(sameUsage(a, [{key: 'session', percent: 10}]), false);
+    assert.equal(sameUsage(null, []), true);
+});

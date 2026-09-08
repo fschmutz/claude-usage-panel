@@ -158,3 +158,42 @@ public enum WindowPlanner {
         )
     }
 }
+
+// MARK: - Adaptive polling
+
+/// A fixed interval polls hardest exactly when nothing is happening. Twin of
+/// pure.js `nextPollSeconds()`, pinned by tests/fixtures/poll.json.
+public enum PollSchedule {
+    public static let idleAfter = 3
+    public static let idleFactor = 4
+    public static let idleMaxSeconds = 15 * 60
+    /// Land just PAST a reset, never on it.
+    public static let resetLagSeconds = 5
+
+    /// - Parameter idleStreak: consecutive polls in which no limit moved.
+    public static func nextPollSeconds(
+        baseSeconds: Int, idleStreak: Int = 0, nextReset: Date? = nil, now: Date = Date()
+    ) -> Int {
+        let base = max(60, baseSeconds)
+        var delay = base
+        if idleStreak >= idleAfter { delay = min(idleMaxSeconds, base * idleFactor) }
+        if let nextReset {
+            let untilReset =
+                Int(ceil(nextReset.timeIntervalSince(now))) + resetLagSeconds
+            // Only ever pull the poll earlier, and never below the base rate.
+            if untilReset >= base && untilReset < delay { delay = untilReset }
+        }
+        return delay
+    }
+
+    /// Soonest reset among the cards, or nil when none has one.
+    public static func nextReset(_ cards: [LimitCard]) -> Date? {
+        cards.compactMap(\.resetsAt).min()
+    }
+
+    /// True when no limit moved between two polls - what idleStreak counts.
+    public static func sameUsage(_ previous: [LimitCard], _ current: [LimitCard]) -> Bool {
+        guard previous.count == current.count else { return false }
+        return zip(previous, current).allSatisfy { $0.id == $1.id && $0.percent == $1.percent }
+    }
+}
