@@ -124,6 +124,7 @@ export function cardsFromStdin(stdinText) {
     cards.push({
       kind,
       label,
+      group: kind === 'session' ? 'session' : 'weekly',
       percent: p,
       severity: thresholdSeverity(p),
       resetsAt: Number.isFinite(secs) ? new Date(secs * 1000).toISOString() : null,
@@ -133,6 +134,32 @@ export function cardsFromStdin(stdinText) {
   add(rl?.five_hour, 'session', KIND_LABELS.session);
   add(rl?.seven_day, 'weekly_all', KIND_LABELS.weekly_all);
   return cards;
+}
+
+// ── Usage against the clock (mirrors lib/pure.js; tests/fixtures/pace.json) ────
+// The payload dates the reset but never the window's start, so the length comes
+// from the group: 5 h session, 7 d weekly. A card ahead of the clock is burning
+// faster than the window it lives in - which a flat burn rate cannot show.
+
+export const WINDOW_MS = {session: 5 * 3600_000, weekly: 7 * 86400_000};
+export const PACE_TOLERANCE = 5;
+
+export function elapsedPercent(card, nowMs = Date.now()) {
+  const span = WINDOW_MS[card?.group];
+  if (!span || !card?.resetsAt) return null;
+  const reset = Date.parse(card.resetsAt);
+  if (!Number.isFinite(reset)) return null;
+  const ratio = 1 - (reset - nowMs) / span;
+  return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+}
+
+export function clockPace(card, nowMs = Date.now()) {
+  const elapsed = elapsedPercent(card, nowMs);
+  if (elapsed === null) return null;
+  const pct = Math.max(0, Math.min(100, Math.round(Number(card.percent) || 0)));
+  const delta = pct - elapsed;
+  const state = delta > PACE_TOLERANCE ? 'ahead' : delta < -PACE_TOLERANCE ? 'behind' : 'even';
+  return {elapsedPercent: elapsed, deltaPoints: delta, state};
 }
 
 // ── Burn-rate forecast (mirrors lib/pure.js; tests/fixtures/forecast.json) ──────
@@ -222,7 +249,14 @@ export function exhaustionMarker(fc) {
   return ` ${SEV_COLOR.warning}⚠full ${day}${hm}${RESET}`;
 }
 
-export function render(cards, {forecasts = new Map()} = {}) {
+// "↑18" after a gauge: 18 points more of the quota is gone than of the window
+// it lives in. Silent unless the card is actually ahead - the line stays short.
+export function paceMarker(pace) {
+  if (pace?.state !== 'ahead') return '';
+  return ` ${SEV_COLOR.warning}↑${pace.deltaPoints}${RESET}`;
+}
+
+export function render(cards, {forecasts = new Map(), nowMs = Date.now()} = {}) {
   const active = cards.filter((c) => c.active || c.percent > 0);
   const shown = active.length ? active : cards;
   if (!shown.length) return '';
@@ -240,7 +274,8 @@ export function render(cards, {forecasts = new Map()} = {}) {
       const color = SEV_COLOR[c.severity] ?? SEV_COLOR.normal;
       const reset = lastWithHint.get(hints[i]) === i ? `${DIM}${hints[i]}${RESET}` : '';
       const marker = exhaustionMarker(forecasts.get(c.kind));
-      return `${c.label} ${gauge(c.percent, color)} ${color}${c.percent}%${RESET}${reset}${marker}`;
+      const clock = paceMarker(clockPace(c, nowMs));
+      return `${c.label} ${gauge(c.percent, color)} ${color}${c.percent}%${RESET}${reset}${clock}${marker}`;
     })
     .join('  ');
 }
@@ -459,7 +494,7 @@ const SEGMENTS = {
     const forecasts = new Map(
       cards.map((c) => [c.kind, forecast(hist[c.kind] ?? [], c.resetsAt, nowMs)]),
     );
-    return render(cards, {forecasts});
+    return render(cards, {forecasts, nowMs});
   },
   tokens: (stdin, cfg) => tokensSegment(stdin, {includeCacheRead: cfg.includeCacheRead}),
   ping: () => pingSegment(),

@@ -493,12 +493,21 @@ private func resetsText(_ date: Date?) -> String {
 private struct ProgressBar: View {
     let percent: Int
     let color: Color
+    /// Where the window's own clock stands, 0...100. A tick here says how much
+    /// of the quota the elapsed time has already earned; fill past it is usage
+    /// running ahead of its window.
+    var elapsedPercent: Int?
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.12))
                 Capsule().fill(color)
                     .frame(width: max(0, geo.size.width * CGFloat(percent) / 100))
+                if let elapsedPercent {
+                    Rectangle().fill(Color.primary.opacity(0.55))
+                        .frame(width: 2, height: 12)
+                        .offset(x: max(0, geo.size.width * CGFloat(elapsedPercent) / 100 - 1))
+                }
             }
         }
         .frame(height: 8)
@@ -511,6 +520,7 @@ private struct CardView: View {
     let forecast: Forecast?
     var body: some View {
         let color = Color.severity(card.severity)
+        let pace = UsageClock.pace(card)
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(card.label).font(.system(size: 13, weight: .semibold))
@@ -520,14 +530,17 @@ private struct CardView: View {
                 Text("\(card.percent)%").font(.system(size: 15, weight: .heavy))
                     .foregroundColor(color).monospacedDigit()
             }
-            ProgressBar(percent: card.percent, color: color)
+            ProgressBar(percent: card.percent, color: color, elapsedPercent: pace?.elapsedPercent)
             HStack {
                 // A per-model card (Fable) caps a share of the weekly pool rather
                 // than adding one, so its reset line carries that note - same
                 // reset as the all-models card it draws from.
                 Text(
-                    [resetsText(card.resetsAt), UsageNormalizer.poolNote(card)]
-                        .filter { !$0.isEmpty }.joined(separator: " · ")
+                    [
+                        resetsText(card.resetsAt), UsageNormalizer.poolNote(card),
+                        UsageClock.format(pace),
+                    ]
+                    .filter { !$0.isEmpty }.joined(separator: " · ")
                 ).font(.system(size: 11))
                     .foregroundColor(.secondary)
                 Spacer()

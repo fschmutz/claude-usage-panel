@@ -23,10 +23,14 @@ import {storeSecret, lookupSecret} from './lib/secretStore.js';
 import {
     severityClass, sparkline, formatResets, alertThreshold, poolNote,
     forecast, formatForecast, normalizeHistory, historyPercents,
+    clockPace, formatClockPace,
     compactTokens, formatLastPing, nextPing, interactiveResume, terminalArgv, TERMINALS,
 } from './lib/pure.js';
 
 const TRACK_WIDTH = 300; // px, must match .cu-track min-width in stylesheet.css
+// Half the caret glyph, so the mark's point - not its left edge - lands on the
+// elapsed fraction of the track above it.
+const CLOCK_MARK_HALF = 4;
 // Timestamped samples kept per limit - enough for the forecast's 6 h regression
 // window even at the 1-minute minimum refresh interval isn't needed; at the
 // 10-minute default this holds ~15 h of context. The sparkline shows the last 12.
@@ -65,12 +69,27 @@ class UsageCard extends St.BoxLayout {
         this._fill = new St.Widget({style_class: 'cu-fill', x_expand: false});
         track.add_child(this._fill);
 
+        // Where the clock is, under the bar. A caret at the elapsed fraction
+        // of the window, pushed into place by a spacer: two children in a row
+        // always allocate in order, unlike an overlay, which St cannot place
+        // proportionally without a fixed layout.
+        this._clockRow = new St.BoxLayout({
+            style_class: 'cu-clock-row',
+            x_align: Clutter.ActorAlign.START,
+            x_expand: false,
+        });
+        this._clockSpacer = new St.Widget({x_expand: false});
+        this._clockMark = new St.Label({style_class: 'cu-clock-mark', text: '▲'});
+        this._clockRow.add_child(this._clockSpacer);
+        this._clockRow.add_child(this._clockMark);
+
         this._reset = new St.Label({style_class: 'cu-card-reset'});
         this._forecast = new St.Label({style_class: 'cu-forecast'});
         this._spark = new St.Label({style_class: 'cu-spark'});
 
         this.add_child(head);
         this.add_child(track);
+        this.add_child(this._clockRow);
         this.add_child(this._reset);
         this.add_child(this._forecast);
         this.add_child(this._spark);
@@ -87,9 +106,22 @@ class UsageCard extends St.BoxLayout {
         // A per-model card (Fable) caps a share of the weekly pool rather than
         // adding one, so its reset line carries that note - same reset as the
         // all-models card it draws from.
+        // How far into the window we are, as a caret under the bar: quota to
+        // the left of it is spent on schedule, quota to the right of the fill
+        // is what the clock has not yet earned. Hidden when the window length
+        // is unknown (no reset, or a group we have no span for).
+        const pace = clockPace(card);
+        this._clockRow.visible = pace !== null;
+        if (pace) {
+            const markPx = Math.round((pace.elapsedPercent / 100) * TRACK_WIDTH);
+            this._clockSpacer.style = `width: ${Math.max(0, markPx - CLOCK_MARK_HALF)}px;`;
+            this._clockMark.style_class =
+                `cu-clock-mark${pace.state === 'ahead' ? ' cu-warning' : ''}`;
+        }
         const reset = formatResets(card.resetsAt);
         const note = poolNote(card);
-        this._reset.text = [reset, note].filter(s => s).join(' · ');
+        const paceText = formatClockPace(pace);
+        this._reset.text = [reset, note, paceText].filter(s => s).join(' · ');
         // Burn-rate projection: amber when the limit runs out before its reset,
         // quiet grey when the pace outlasts it, hidden when there is no honest
         // pace to project (idle, too few samples).

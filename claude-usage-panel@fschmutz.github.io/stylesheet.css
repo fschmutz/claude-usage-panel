@@ -99,6 +99,18 @@
 .cu-fill.cu-warning  { background-color: #e0a458; }
 .cu-fill.cu-critical { background-color: #e5484d; }
 
+/* clock caret under the bar: where the window is, against where usage is.
+   Amber only when the quota is running ahead of its own window. */
+.cu-clock-row {
+    min-width: 300px;
+    height: 9px;
+}
+.cu-clock-mark {
+    color: #6f6a62;
+    font-size: 8px;
+}
+.cu-clock-mark.cu-warning { color: #e0a458; }
+
 .cu-card-reset {
     color: #8f897e;
     font-size: 11px;
@@ -174,6 +186,7 @@
 .cu-light .cu-track { background-color: rgba(0, 0, 0, 0.12); }
 .cu-light .cu-card-reset,
 .cu-light .cu-updated,
+.cu-light .cu-clock-mark { color: #9b958a; }
 .cu-light .cu-forecast,
 .cu-light .cu-spark { color: #6b6b60; }
 .cu-light .cu-forecast.cu-warning { color: #b3742a; }

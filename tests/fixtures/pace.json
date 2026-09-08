@@ -1,0 +1,128 @@
+{
+  "now": 1800000000000,
+  "tolerance": 5,
+  "cases": [
+    {
+      "name": "session burning ahead of its 5h window",
+      "card": {
+        "group": "session",
+        "percent": 85,
+        "resetsAt": "2027-01-15T10:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 60,
+        "deltaPoints": 25,
+        "state": "ahead"
+      }
+    },
+    {
+      "name": "session tracking its window",
+      "card": {
+        "group": "session",
+        "percent": 62,
+        "resetsAt": "2027-01-15T10:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 60,
+        "deltaPoints": 2,
+        "state": "even"
+      }
+    },
+    {
+      "name": "session comfortably behind the clock",
+      "card": {
+        "group": "session",
+        "percent": 20,
+        "resetsAt": "2027-01-15T10:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 60,
+        "deltaPoints": -40,
+        "state": "behind"
+      }
+    },
+    {
+      "name": "five points over is still even",
+      "card": {
+        "group": "session",
+        "percent": 65,
+        "resetsAt": "2027-01-15T10:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 60,
+        "deltaPoints": 5,
+        "state": "even"
+      }
+    },
+    {
+      "name": "six points over tips to ahead",
+      "card": {
+        "group": "session",
+        "percent": 66,
+        "resetsAt": "2027-01-15T10:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 60,
+        "deltaPoints": 6,
+        "state": "ahead"
+      }
+    },
+    {
+      "name": "weekly two days from reset",
+      "card": {
+        "group": "weekly",
+        "percent": 90,
+        "resetsAt": "2027-01-17T08:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 71,
+        "deltaPoints": 19,
+        "state": "ahead"
+      }
+    },
+    {
+      "name": "a fresh window has nothing elapsed",
+      "card": {
+        "group": "session",
+        "percent": 3,
+        "resetsAt": "2027-01-15T13:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 0,
+        "deltaPoints": 3,
+        "state": "even"
+      }
+    },
+    {
+      "name": "a reset in the past clamps to a spent window",
+      "card": {
+        "group": "session",
+        "percent": 40,
+        "resetsAt": "2027-01-15T07:00:00.000Z"
+      },
+      "expected": {
+        "elapsedPercent": 100,
+        "deltaPoints": -60,
+        "state": "behind"
+      }
+    },
+    {
+      "name": "no reset means no clock to compare against",
+      "card": {
+        "group": "session",
+        "percent": 40,
+        "resetsAt": null
+      },
+      "expected": null
+    },
+    {
+      "name": "an unknown group has no defined window length",
+      "card": {
+        "group": "monthly",
+        "percent": 40,
+        "resetsAt": "2027-01-15T10:00:00.000Z"
+      },
+      "expected": null
+    }
+  ]
+}

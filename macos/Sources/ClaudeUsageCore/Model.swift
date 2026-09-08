@@ -130,6 +130,59 @@ public enum UsageNormalizer {
     }
 }
 
+// MARK: - Usage against the clock
+
+/// Usage measured against the window it lives in. Mirrors pure.js
+/// `clockPace()`; tests/fixtures/pace.json pins both ports (ClockPaceParityTests).
+public struct ClockPace: Equatable, Sendable {
+    /// How much of the window has gone, 0...100.
+    public let elapsedPercent: Int
+    /// percent − elapsed. Positive means the quota outruns its window.
+    public let deltaPoints: Int
+    public let state: State
+
+    public enum State: String, Sendable { case ahead, even, behind }
+
+    public init(elapsedPercent: Int, deltaPoints: Int, state: State) {
+        self.elapsedPercent = elapsedPercent
+        self.deltaPoints = deltaPoints
+        self.state = state
+    }
+}
+
+public enum UsageClock {
+    /// The payload dates every reset but never says when the window opened, so
+    /// the length comes from the group: 5 h session, 7 d weekly.
+    public static let windowSeconds: [String: Double] = [
+        "session": 5 * 3600, "weekly": 7 * 86400,
+    ]
+    /// Points of divergence below which used ≈ elapsed; under it a card would
+    /// flicker between ahead and behind on rounding alone.
+    public static let tolerance = 5
+
+    public static func elapsedPercent(_ card: LimitCard, now: Date = Date()) -> Int? {
+        guard let span = windowSeconds[card.group], let reset = card.resetsAt else { return nil }
+        let ratio = 1 - (reset.timeIntervalSince(now) / span)
+        return max(0, min(100, Int((ratio * 100).rounded())))
+    }
+
+    public static func pace(_ card: LimitCard, now: Date = Date()) -> ClockPace? {
+        guard let elapsed = elapsedPercent(card, now: now) else { return nil }
+        let delta = card.percent - elapsed
+        let state: ClockPace.State =
+            delta > tolerance ? .ahead : (delta < -tolerance ? .behind : .even)
+        return ClockPace(elapsedPercent: elapsed, deltaPoints: delta, state: state)
+    }
+
+    /// "62% of the window gone - 18 pts ahead of the clock". Only the ahead case
+    /// earns a sub-line; even and behind are the healthy states.
+    public static func format(_ pace: ClockPace?) -> String {
+        guard let pace, pace.state == .ahead else { return "" }
+        return "\(pace.elapsedPercent)% of the window gone - "
+            + "\(pace.deltaPoints) pts ahead of the clock"
+    }
+}
+
 // MARK: - Burn-rate forecast
 
 /// Projection of when a limit hits 100% at the current pace. Mirrors pure.js

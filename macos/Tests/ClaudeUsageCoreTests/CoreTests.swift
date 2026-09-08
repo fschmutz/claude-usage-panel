@@ -144,6 +144,55 @@ final class CursorMathTests: XCTestCase {
     }
 }
 
+/// Clock-pace parity: used-vs-elapsed against the same fixture the JS ports
+/// assert (tests/parity.test.js).
+final class ClockPaceParityTests: XCTestCase {
+    func testMatchesSharedFixtures() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = root.appendingPathComponent("tests/fixtures/pace.json")
+        let obj = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+        let fix = obj as! [String: Any]
+        let now = Date(timeIntervalSince1970: (fix["now"] as! NSNumber).doubleValue / 1000)
+        XCTAssertEqual(UsageClock.tolerance, (fix["tolerance"] as! NSNumber).intValue)
+
+        for c in fix["cases"] as! [[String: Any]] {
+            let name = c["name"] as? String ?? "?"
+            let raw = c["card"] as! [String: Any]
+            let card = LimitCard(
+                id: name, label: name,
+                percent: (raw["percent"] as! NSNumber).intValue, severity: .normal,
+                resetsAt: UsageNormalizer.parseDate(raw["resetsAt"] as? String), active: true,
+                group: raw["group"] as! String, scoped: false)
+            let got = UsageClock.pace(card, now: now)
+
+            guard let e = c["expected"] as? [String: Any] else {
+                XCTAssertNil(got, "expected nil - \(name)")
+                continue
+            }
+            let pace = try XCTUnwrap(got, "expected a pace - \(name)")
+            XCTAssertEqual(
+                pace.elapsedPercent, (e["elapsedPercent"] as! NSNumber).intValue,
+                "elapsed - \(name)")
+            XCTAssertEqual(
+                pace.deltaPoints, (e["deltaPoints"] as! NSNumber).intValue, "delta - \(name)")
+            XCTAssertEqual(pace.state.rawValue, e["state"] as! String, "state - \(name)")
+        }
+    }
+
+    func testFormatOnlySpeaksWhenAhead() {
+        XCTAssertEqual(
+            UsageClock.format(ClockPace(elapsedPercent: 60, deltaPoints: 25, state: .ahead)),
+            "60% of the window gone - 25 pts ahead of the clock")
+        XCTAssertEqual(
+            UsageClock.format(ClockPace(elapsedPercent: 60, deltaPoints: 2, state: .even)), "")
+        XCTAssertEqual(UsageClock.format(nil), "")
+    }
+}
+
 /// Forecast parity: the burn-rate projection against the same fixture the three
 /// JS copies assert (tests/parity.test.js). Numbers must match exactly - the
 /// fixture is designed away from rounding boundaries so double math agrees

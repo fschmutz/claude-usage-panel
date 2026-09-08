@@ -63,3 +63,29 @@ for (const [portName, fn] of [
         });
     }
 }
+
+// ── Clock-pace parity ───────────────────────────────────────────────────────────
+// used-vs-elapsed, pinned across the three JS copies (Swift asserts the same
+// file in ClockPaceParityTests). Window lengths are a contract, not a payload
+// field: the endpoint dates the reset and never the window's start.
+import {clockPace as pacePure, PACE_TOLERANCE} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+import {clockPace as paceStatusline} from '../claude-code/statusline.js';
+import {clockPace as paceMcp} from '../mcp/server.js';
+
+const paceFix = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'pace.json'), 'utf8'));
+
+test('the tolerance itself is part of the pinned contract', () => {
+    assert.equal(PACE_TOLERANCE, paceFix.tolerance);
+});
+
+for (const [portName, fn] of [
+    ['pure.js', pacePure],
+    ['statusline.js', paceStatusline],
+    ['mcp/server.js', paceMcp],
+]) {
+    for (const c of paceFix.cases) {
+        test(`${portName} clockPace - ${c.name}`, () => {
+            assert.deepEqual(fn(c.card, paceFix.now), c.expected);
+        });
+    }
+}

@@ -146,6 +146,63 @@ export function alertThreshold(percent) {
     return percent >= 100 ? 100 : (percent >= 90 ? 90 : 0);
 }
 
+// ── Usage against the clock ─────────────────────────────────────────────────
+// The payload dates every reset but never says when the window OPENED, so the
+// window length comes from the group: 5 h for a session, 7 days for a weekly.
+// elapsed = 1 − remaining/length. Burning ahead of the clock is the reading the
+// forecast cannot give at a glance - a pace of 0 %/h right now still runs out
+// early when the window is already mostly spent, and a steep pace in the first
+// ten minutes of a fresh window is nothing to act on. Part of the shared
+// cross-port contract (Model.swift / statusline.js / mcp/server.js mirror it;
+// tests/fixtures/pace.json pins the numbers).
+
+export const WINDOW_MS = {session: 5 * 3600_000, weekly: 7 * 86400_000};
+
+// Points of divergence below which used ≈ elapsed. Under it every card would
+// flicker between ahead and behind on rounding alone.
+export const PACE_TOLERANCE = 5;
+
+/**
+ * How much of a limit's window has already gone, 0..100, or null when it can't
+ * be known (no reset, or a group with no defined window length).
+ */
+export function elapsedPercent(card, nowMs = Date.now()) {
+    const span = WINDOW_MS[card?.group];
+    if (!span || !card?.resetsAt)
+        return null;
+    const reset = Date.parse(card.resetsAt);
+    if (!Number.isFinite(reset))
+        return null;
+    const ratio = 1 - (reset - nowMs) / span;
+    return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+}
+
+/**
+ * Usage measured against the clock.
+ * @returns {?{elapsedPercent: number, deltaPoints: number,
+ *             state: 'ahead'|'even'|'behind'}}
+ *   deltaPoints is percent − elapsed: positive means the quota is going faster
+ *   than the window it lives in. null whenever the window is unknown.
+ */
+export function clockPace(card, nowMs = Date.now()) {
+    const elapsed = elapsedPercent(card, nowMs);
+    if (elapsed === null)
+        return null;
+    const delta = clampPercent(card.percent) - elapsed;
+    const state = delta > PACE_TOLERANCE ? 'ahead'
+        : (delta < -PACE_TOLERANCE ? 'behind' : 'even');
+    return {elapsedPercent: elapsed, deltaPoints: delta, state};
+}
+
+// "62% of the window gone - 18 pts ahead of the clock". Only the ahead case is
+// worth a sub-line; even and behind are the normal state of a healthy window.
+export function formatClockPace(pace) {
+    if (!pace || pace.state !== 'ahead')
+        return '';
+    return `${pace.elapsedPercent}% of the window gone - ` +
+        `${pace.deltaPoints} pts ahead of the clock`;
+}
+
 // ── Burn-rate forecast ──────────────────────────────────────────────────────────
 // From timestamped percent samples, project when a limit hits 100% at the
 // current pace and whether that lands before its reset. Part of the shared

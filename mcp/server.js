@@ -117,6 +117,32 @@ export function poolNote(card) {
   return card?.scoped && card.group === 'weekly' ? 'share of the weekly all-models limit' : '';
 }
 
+// ── Usage against the clock (mirrors lib/pure.js; tests/fixtures/pace.json) ────
+// The payload dates the reset but never the window's start, so the length comes
+// from the group: 5 h session, 7 d weekly. A card ahead of the clock is burning
+// faster than the window it lives in - which a flat burn rate cannot show.
+
+export const WINDOW_MS = {session: 5 * 3600_000, weekly: 7 * 86400_000};
+export const PACE_TOLERANCE = 5;
+
+export function elapsedPercent(card, nowMs = Date.now()) {
+  const span = WINDOW_MS[card?.group];
+  if (!span || !card?.resetsAt) return null;
+  const reset = Date.parse(card.resetsAt);
+  if (!Number.isFinite(reset)) return null;
+  const ratio = 1 - (reset - nowMs) / span;
+  return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+}
+
+export function clockPace(card, nowMs = Date.now()) {
+  const elapsed = elapsedPercent(card, nowMs);
+  if (elapsed === null) return null;
+  const pct = Math.max(0, Math.min(100, Math.round(Number(card.percent) || 0)));
+  const delta = pct - elapsed;
+  const state = delta > PACE_TOLERANCE ? 'ahead' : delta < -PACE_TOLERANCE ? 'behind' : 'even';
+  return {elapsedPercent: elapsed, deltaPoints: delta, state};
+}
+
 // ── Burn-rate forecast (mirrors lib/pure.js; tests/fixtures/forecast.json) ──────
 
 const FORECAST_WINDOW_MS = 6 * 3600_000;
@@ -205,7 +231,10 @@ export function withPace(cards, {nowMs = Date.now(), historyPath = HISTORY_PATH}
   const hist = recordHistory(cards, {nowMs, historyPath});
   return cards.map((c) => {
     const fc = forecast(hist[c.key] ?? [], c.resetsAt, nowMs);
-    return fc ? {...c, pace: fc} : c;
+    // vsClock needs no history at all - it is the reset time against the
+    // window length - so it is attached even on the very first call.
+    const vsClock = clockPace(c, nowMs);
+    return {...c, ...(fc ? {pace: fc} : {}), ...(vsClock ? {vsClock} : {})};
   });
 }
 
@@ -316,6 +345,11 @@ export function renderCards(cards, now = Date.now()) {
     if (reset) parts.push(`resets in ${reset}`);
     const note = poolNote(c);
     if (note) parts.push(note);
+    if (c.vsClock?.state === 'ahead') {
+      parts.push(
+        `⏱ ${c.vsClock.elapsedPercent}% of the window gone - ` +
+        `${c.vsClock.deltaPoints} pts ahead of the clock`);
+    }
     if (c.pace) {
       parts.push(c.pace.exhaustsBeforeReset
         ? `↗ ${c.pace.pctPerHour}%/h - ON PACE TO RUN OUT ${Math.abs(c.pace.marginHours)}h before reset (~${c.pace.projectedFullAt})`
@@ -658,7 +692,9 @@ const GET_USAGE_TOOL = {
     '(scoped:true, e.g. Fable) caps a share of the weekly all-models pool and ' +
     'draws from it - it is not extra quota. When enough local history exists, ' +
     'each limit also carries a `pace` projection: %/hour burn rate, the ' +
-    'projected 100% instant, and whether that lands before the reset. Also ' +
+    'projected 100% instant, and whether that lands before the reset. Every ' +
+    'limit with a reset also carries `vsClock`: how much of its window has ' +
+    'gone and whether usage is running ahead of that clock. Also ' +
     'reports `lastPing` (when a scheduled session ping last opened a 5-hour ' +
     'window) and `sessions`: today\'s local Claude Code sessions ranked by the ' +
     'tokens they spent, each with the shell command that resumes it.',
@@ -682,6 +718,24 @@ const GET_USAGE_TOOL = {
             severity: {type: 'string', enum: ['normal', 'warning', 'critical']},
             resetsAt: {type: ['string', 'null']},
             active: {type: 'boolean'},
+            vsClock: {
+              type: 'object',
+              description:
+                'usage measured against the window it lives in (5 h session, ' +
+                '7 d weekly); needs no history, so it is always present when ' +
+                'the limit has a reset time',
+              properties: {
+                elapsedPercent: {
+                  type: 'integer',
+                  description: 'how much of the window has already gone, 0-100',
+                },
+                deltaPoints: {
+                  type: 'integer',
+                  description: 'percent − elapsed; positive = burning faster than the clock',
+                },
+                state: {type: 'string', enum: ['ahead', 'even', 'behind']},
+              },
+            },
             pace: {
               type: 'object',
               description:
