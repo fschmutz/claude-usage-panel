@@ -50,12 +50,22 @@ if [ -f "$POT" ]; then
     fi
 fi
 
+# The msgids a catalog file declares, one per line, normalized. Comments, line
+# references, wrapping and header fields are all deliberately excluded: they
+# differ between gettext versions, and a check that compares them is green on
+# one machine and red on the CI runner for no real reason.
+msgids() {
+    msgcat --no-wrap --no-location "$1" | sed -n 's/^msgid //p' | sort
+}
+
 status=0
 if $CHECK; then
-    diff -u "$POT" "$tmp/template.pot" >/dev/null 2>&1 || {
-        echo "update-po: $POT is out of date - run scripts/update-po.sh" >&2
+    if ! diff -u <(msgids "$POT") <(msgids "$tmp/template.pot") >/dev/null; then
+        echo "update-po: the template is missing strings from the source" >&2
+        echo "           (or carries strings the source no longer has)" >&2
+        diff -u <(msgids "$POT") <(msgids "$tmp/template.pot") | sed -n '3,$p' >&2
         status=1
-    }
+    fi
 else
     cp "$tmp/template.pot" "$POT"
 fi
@@ -63,15 +73,17 @@ fi
 for po in "$PO_DIR"/*.po; do
     [ -e "$po" ] || continue
     if $CHECK; then
-        msgmerge --quiet --output-file="$tmp/merged.po" "$po" "$tmp/template.pot"
-        diff -u "$po" "$tmp/merged.po" >/dev/null 2>&1 || {
+        # msgcmp is the semantic form of "this catalog is current": it fails on
+        # a msgid the template has and the catalog lacks, and on one the
+        # catalog leaves untranslated.
+        msgcmp "$po" "$POT" 2>"$tmp/cmp.err" || {
             echo "update-po: $(basename "$po") is out of date - run scripts/update-po.sh" >&2
+            sed 's/^/           /' "$tmp/cmp.err" >&2
             status=1
         }
     else
         # Always merge through --output-file, never --update: the in-place form
-        # leaves an already-current file untouched, including its line wrapping,
-        # so --check (which always rewraps) would disagree with it forever.
+        # leaves an already-current file untouched, wrapping included.
         msgmerge --quiet --output-file="$tmp/merged.po" "$po" "$POT"
         cp "$tmp/merged.po" "$po"
     fi
