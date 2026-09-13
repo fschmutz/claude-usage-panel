@@ -51,7 +51,8 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 other one once, `claude-account save PERSO` - then switch from any client in one
 click, with each account's usage side by side, and an optional auto-switch to
 the account with the most headroom when the one you are on hits 90%. Only the
-login changes; settings, hooks, MCP servers and history stay. Details and the
+login changes; settings, hooks, MCP servers and history stay. Off by default in
+the panels - one switch in the preferences turns it on. Details and the
 exact files touched: [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts).
 
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list

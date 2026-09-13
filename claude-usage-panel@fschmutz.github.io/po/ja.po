@@ -16,155 +16,155 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:252
+#: extension.js:253
 msgid "Extra usage"
 msgstr "追加利用"
 
-#: extension.js:283 prefs.js:248
+#: extension.js:284 prefs.js:259
 msgid "Today’s sessions"
 msgstr "今日のセッション"
 
-#: extension.js:346
+#: extension.js:347
 msgid "Refresh now"
 msgstr "今すぐ更新"
 
-#: extension.js:359
+#: extension.js:360
 msgid "Settings"
 msgstr "設定"
 
-#: extension.js:363
+#: extension.js:364
 msgid "Quit"
 msgstr "終了"
 
-#: extension.js:476
+#: extension.js:477
 #, javascript-format
 msgid "Updated %s"
 msgstr "更新 %s"
 
-#: extension.js:484
+#: extension.js:485
 msgid "Session cost: computing…"
 msgstr "セッション費用: 計算中…"
 
-#: extension.js:492
+#: extension.js:493
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "セッション費用: $%s · %s トークン (推定)"
 
-#: extension.js:495
+#: extension.js:496
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "セッション費用: 利用不可 (ccusage をインストール)"
 
-#: extension.js:535
+#: extension.js:536
 msgid "Loading…"
 msgstr "読み込み中…"
 
-#: extension.js:544
+#: extension.js:545
 #, javascript-format
 msgid "This cycle: $%s / $%s (%d%%) · %d members"
 msgstr "今サイクル: $%s / $%s (%d%%) · %d 人"
 
-#: extension.js:552
+#: extension.js:553
 #, javascript-format
 msgid "This cycle: $%s · %d members"
 msgstr "今サイクル: $%s · %d 人"
 
-#: extension.js:557
+#: extension.js:558
 #, javascript-format
 msgid "Today: $%s"
 msgstr "今日: $%s"
 
-#: extension.js:559
+#: extension.js:560
 #, javascript-format
 msgid "Top: %s $%s"
 msgstr "最多: %s $%s"
 
-#: extension.js:563
+#: extension.js:564
 #, javascript-format
 msgid "Cursor: %s"
 msgstr "Cursor: %s"
 
-#: extension.js:575
+#: extension.js:576
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr "%d%% で自動切替"
 
-#: extension.js:632
+#: extension.js:641
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "%s → %s に切り替えました: %s は %d%% でした"
 
-#: extension.js:634
+#: extension.js:643
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "%s → %s に切り替えました"
 
-#: extension.js:636
+#: extension.js:645
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr " - 実行中の %d セッションは再起動まで以前のログインのままです"
 
-#: extension.js:639 extension.js:645 extension.js:796 extension.js:806
-#: extension.js:821 extension.js:835
+#: extension.js:648 extension.js:654 extension.js:805 extension.js:815
+#: extension.js:830 extension.js:844
 msgid "Claude usage"
 msgstr "Claude の使用状況"
 
-#: extension.js:645
+#: extension.js:654
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "%s に切り替えられませんでした: %s"
 
-#: extension.js:678
+#: extension.js:687
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (上限の %d%%)"
 
-#: extension.js:695
+#: extension.js:704
 #, javascript-format
 msgid "last %s"
 msgstr "前回 %s"
 
-#: extension.js:695 prefs.js:357
+#: extension.js:704 prefs.js:368
 msgid "never"
 msgstr "なし"
 
-#: extension.js:699
+#: extension.js:708
 #, javascript-format
 msgid "next %s"
 msgstr "次回 %s"
 
-#: extension.js:701
+#: extension.js:710
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
-#: extension.js:749
+#: extension.js:758
 msgid "Today’s sessions (est., still indexing)"
 msgstr "今日のセッション (推定・インデックス作成中)"
 
-#: extension.js:750
+#: extension.js:759
 msgid "Today’s sessions (est.)"
 msgstr "今日のセッション (推定)"
 
-#: extension.js:797
+#: extension.js:806
 msgid "No terminal found - set one in the extension preferences."
 msgstr "ターミナルが見つかりません - 拡張機能の設定で指定してください。"
 
-#: extension.js:806
+#: extension.js:815
 #, javascript-format
 msgid "Could not open %s"
 msgstr "%s を開けませんでした"
 
-#: extension.js:822
+#: extension.js:831
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s が %d%% に達しました"
 
-#: extension.js:836
+#: extension.js:845
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s は現在のペースだとリセット前に上限に達します"
 
-#: extension.js:939
+#: extension.js:948
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -300,23 +300,31 @@ msgstr ""
 "~/.claude.json のアカウント欄だけで、設定・フック・プラグイン・履歴はそのまま"
 "です。実行中の Claude Code セッションは再起動まで以前のログインのままです。"
 
-#: prefs.js:152
+#: prefs.js:153
+msgid "Enable named accounts"
+msgstr "名前付きアカウントを有効にする"
+
+#: prefs.js:154
+msgid "Off by default - nothing account-related is shown until you turn it on"
+msgstr "既定ではオフ。有効にするまでアカウント関連は何も表示されません"
+
+#: prefs.js:161
 msgid "Current login"
 msgstr "現在のログイン"
 
-#: prefs.js:154
+#: prefs.js:163
 msgid "Save the current login as"
 msgstr "現在のログインを次の名前で保存"
 
-#: prefs.js:155
+#: prefs.js:164
 msgid "Save"
 msgstr "保存"
 
-#: prefs.js:163
+#: prefs.js:172
 msgid "Switch accounts automatically"
 msgstr "アカウントを自動で切り替える"
 
-#: prefs.js:164
+#: prefs.js:173
 msgid ""
 "When the active account reaches the threshold, move to the saved account "
 "with the most headroom"
@@ -324,49 +332,49 @@ msgstr ""
 "アクティブなアカウントがしきい値に達したら、最も余裕のある保存済みアカウント"
 "へ移る"
 
-#: prefs.js:169
+#: prefs.js:178
 msgid "Auto-switch threshold"
 msgstr "自動切替のしきい値"
 
-#: prefs.js:170
+#: prefs.js:179
 msgid "Worst limit percentage that counts as full"
 msgstr "満杯とみなす最悪の上限の割合"
 
-#: prefs.js:178
+#: prefs.js:187
 msgid "Show the account name in the top bar"
 msgstr "トップバーにアカウント名を表示"
 
-#: prefs.js:179
+#: prefs.js:188
 msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
 msgstr "「Session 42%」の代わりに「PRO · Session 42%」"
 
-#: prefs.js:194
+#: prefs.js:205
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s（%s として保存済み）"
 
-#: prefs.js:195
+#: prefs.js:206
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（未保存）"
 
-#: prefs.js:196
+#: prefs.js:207
 msgid "No Claude Code login found"
 msgstr "Claude Code のログインが見つかりません"
 
-#: prefs.js:202
+#: prefs.js:213
 msgid "login expired - sign in and save it again"
 msgstr "ログイン期限切れ - 再度サインインして保存し直してください"
 
-#: prefs.js:209
+#: prefs.js:220
 msgid "Forget this saved login"
 msgstr "この保存済みログインを削除"
 
-#: prefs.js:229
+#: prefs.js:240
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名前に使えるのは英数字と . _ - のみ(最大 32 文字)"
 
-#: prefs.js:249
+#: prefs.js:260
 msgid ""
 "List the sessions that spent the most tokens today, biggest first, and "
 "resume one in a terminal with a click. Read from the local transcripts in "
@@ -375,19 +383,19 @@ msgstr ""
 "今日もっともトークンを消費したセッションを多い順に並べ、クリックでターミナル"
 "から再開します。~/.claude/projects のローカル記録を読み取ります。"
 
-#: prefs.js:252
+#: prefs.js:263
 msgid "Show today’s sessions"
 msgstr "今日のセッションを表示"
 
-#: prefs.js:253
+#: prefs.js:264
 msgid "Adds up to 5 resume links to the dropdown"
 msgstr "ドロップダウンに最大 5 件の再開リンクを追加します"
 
-#: prefs.js:258
+#: prefs.js:269
 msgid "Terminal"
 msgstr "ターミナル"
 
-#: prefs.js:264
+#: prefs.js:275
 msgid ""
 "Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
 "alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
@@ -395,11 +403,11 @@ msgstr ""
 "空にすると自動検出します: $TERMINAL、次に ghostty, kitty, wezterm, "
 "alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm。"
 
-#: prefs.js:274
+#: prefs.js:285
 msgid "Session pings"
 msgstr "セッション ping"
 
-#: prefs.js:275
+#: prefs.js:286
 msgid ""
 "A 5-hour window is anchored to its first message, so pinging claude (haiku, "
 "one turn) at a fixed time lines the day’s windows up with the hours you "
@@ -409,133 +417,133 @@ msgstr ""
 "(haiku、1 ターン) へ ping を送ると、その日のウィンドウが実際の勤務時間に揃い"
 "ます。./install.sh sessionping と同じスケジュールです。"
 
-#: prefs.js:282
+#: prefs.js:293
 msgid "Open the 5h session window on schedule"
 msgstr "5 時間ウィンドウをスケジュールで開く"
 
-#: prefs.js:284
+#: prefs.js:295
 msgid "Runs scripts/session-ping.sh from a systemd user timer"
 msgstr "systemd ユーザータイマーから scripts/session-ping.sh を実行します"
 
-#: prefs.js:285
+#: prefs.js:296
 msgid "Needs a systemd user session - use ./install.sh sessionping here"
 msgstr ""
 "systemd のユーザーセッションが必要です - ここでは ./install.sh sessionping を"
 "使ってください"
 
-#: prefs.js:291
+#: prefs.js:302
 msgid "Last ping"
 msgstr "前回の ping"
 
-#: prefs.js:294
+#: prefs.js:305
 msgid "Coverage"
 msgstr "カバー率"
 
-#: prefs.js:298
+#: prefs.js:309
 msgid "Working day"
 msgstr "勤務時間"
 
-#: prefs.js:316
+#: prefs.js:327
 msgid "Days"
 msgstr "曜日"
 
-#: prefs.js:317
+#: prefs.js:328
 msgid "Mon"
 msgstr "月"
 
-#: prefs.js:317
+#: prefs.js:328
 msgid "Tue"
 msgstr "火"
 
-#: prefs.js:317
+#: prefs.js:328
 msgid "Wed"
 msgstr "水"
 
-#: prefs.js:317
+#: prefs.js:328
 msgid "Thu"
 msgstr "木"
 
-#: prefs.js:317
+#: prefs.js:328
 msgid "Fri"
 msgstr "金"
 
-#: prefs.js:317
+#: prefs.js:328
 msgid "Sat"
 msgstr "土"
 
-#: prefs.js:317
+#: prefs.js:328
 msgid "Sun"
 msgstr "日"
 
-#: prefs.js:341
+#: prefs.js:352
 msgid "Add a ping"
 msgstr "ping を追加"
 
-#: prefs.js:344
+#: prefs.js:355
 msgid "Suggest times"
 msgstr "時刻を提案"
 
-#: prefs.js:360
+#: prefs.js:371
 #, javascript-format
 msgid "%d%% of %s-%s covered"
 msgstr "%d%% をカバー (%s-%s)"
 
-#: prefs.js:362
+#: prefs.js:373
 msgid "no valid times yet"
 msgstr "有効な時刻がまだありません"
 
-#: prefs.js:382
+#: prefs.js:393
 #, javascript-format
 msgid "Ping %d"
 msgstr "ping %d"
 
-#: prefs.js:451
+#: prefs.js:462
 msgid "Updates"
 msgstr "更新"
 
-#: prefs.js:452
+#: prefs.js:463
 msgid "Daily check, and whether it is actually running."
 msgstr "毎日のチェックと、それが実際に動いているか。"
 
-#: prefs.js:455 prefs.js:541
+#: prefs.js:466 prefs.js:552
 msgid "Checking…"
 msgstr "確認中…"
 
-#: prefs.js:459 prefs.js:495 prefs.js:519 prefs.js:529
+#: prefs.js:470 prefs.js:506 prefs.js:530 prefs.js:540
 msgid "Check now"
 msgstr "今すぐ確認"
 
-#: prefs.js:493
+#: prefs.js:504
 msgid "Cannot self-update"
 msgstr "自己更新できません"
 
-#: prefs.js:494
+#: prefs.js:505
 msgid "No git checkout found for auto-update.sh."
 msgstr "auto-update.sh の git チェックアウトが見つかりません。"
 
-#: prefs.js:502
+#: prefs.js:513
 msgid "Could not read the update status"
 msgstr "更新状態を読み取れませんでした"
 
-#: prefs.js:510
+#: prefs.js:521
 #, javascript-format
 msgid "Installed %s, checkout %s"
 msgstr "インストール済み %s、チェックアウト %s"
 
-#: prefs.js:511
+#: prefs.js:522
 msgid "Run ./install.sh update to install the newer code."
 msgstr "新しいコードを入れるには ./install.sh update を実行してください。"
 
-#: prefs.js:512 prefs.js:523 prefs.js:540
+#: prefs.js:523 prefs.js:534 prefs.js:551
 msgid "Update now"
 msgstr "今すぐ更新"
 
-#: prefs.js:514
+#: prefs.js:525
 #, javascript-format
 msgid "Paused: %s"
 msgstr "一時停止: %s"
 
-#: prefs.js:516
+#: prefs.js:527
 msgid ""
 "The daily check will not touch this checkout until that is resolved. It only "
 "ever fast-forwards a clean checkout."
@@ -543,26 +551,26 @@ msgstr ""
 "解消されるまで、毎日のチェックはこのチェックアウトに触れません。クリーンな"
 "チェックアウトを fast-forward するだけです。"
 
-#: prefs.js:521
+#: prefs.js:532
 #, javascript-format
 msgid "Update available: %s → %s"
 msgstr "更新があります: %s → %s"
 
-#: prefs.js:522 prefs.js:528
+#: prefs.js:533 prefs.js:539
 #, javascript-format
 msgid "Last checked %s"
 msgstr "最終確認 %s"
 
-#: prefs.js:526
+#: prefs.js:537
 #, javascript-format
 msgid "Up to date (%s)"
 msgstr "最新です (%s)"
 
-#: prefs.js:527
+#: prefs.js:538
 #, javascript-format
 msgid "%s (could not reach the remote)"
 msgstr "%s (リモートに接続できませんでした)"
 
-#: prefs.js:541
+#: prefs.js:552
 msgid "Updating…"
 msgstr "更新中…"

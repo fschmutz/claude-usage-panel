@@ -24,8 +24,12 @@ semantic versioning.
   `0600` store only. Optional **auto-switch** (off by default, a toggle right
   in the dropdown / menu, threshold 50-100) moves to the account with the most
   headroom when the active one crosses 90%, with a 15-point margin and a
-  5-minute cooldown so two busy accounts never ping-pong. One shared fixture,
-  `tests/fixtures/accounts.json`, pins the rule across the three ports.
+  5-minute cooldown so two busy accounts never ping-pong. The whole thing is
+  **off by default** in the panels (one *Enable named accounts* switch in the
+  GNOME preferences / macOS Settings) and opt-in in the status line
+  (`--segments=…,account`); the CLI and the MCP tools work regardless. One
+  shared fixture, `tests/fixtures/accounts.json`, pins the rule across the
+  three ports.
 - **Usage against the clock.** Every card now shows how much of its *window*
   has gone - a caret under the bar on GNOME, a tick on the bar on macOS,
   `↑18` in the status line, a `vsClock` field in the MCP tool - and turns amber

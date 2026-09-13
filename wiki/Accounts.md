@@ -26,6 +26,11 @@ The desktop panels and the MCP server need nothing extra: the same module is
 installed alongside them by `./install.sh statusline` / `mcp`, and the GNOME
 extension and the macOS app carry their own port of it.
 
+**Off by default in the panels.** Nothing account-related is drawn until you
+turn on *Enable named accounts* in the GNOME preferences or the macOS Settings
+(Accounts section); the status line shows its `[PRO]` tag only with
+`--segments=…,account`. The CLI and the MCP tools work regardless.
+
 ## What a switch does
 
 A Claude Code login is exactly two things:

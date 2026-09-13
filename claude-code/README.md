@@ -92,9 +92,9 @@ Everything comes from what Claude Code gives the command locally - the session
 JSON piped on stdin, plus the local transcript file it points to - with **no
 credentials, no network, no cache, no other host**:
 
-- **[PRO]** (the `account` segment, first by default) from `~/.claude.json`'s
-  `oauthAccount` matched against the logins saved with `claude-account`; blank
-  until one is saved. `[PRO ⇢ PERSO]` in yellow means this session is at the
+- **[PRO]** (the `account` segment, opt-in: `--segments=account,…`) from
+  `~/.claude.json`'s `oauthAccount` matched against the logins saved with
+  `claude-account`; blank until one is saved. `[PRO ⇢ PERSO]` in yellow means this session is at the
   auto-switch threshold and the panels' last snapshot says PERSO has room - a
   hint, never a switch. See the
   [Accounts wiki page](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts).

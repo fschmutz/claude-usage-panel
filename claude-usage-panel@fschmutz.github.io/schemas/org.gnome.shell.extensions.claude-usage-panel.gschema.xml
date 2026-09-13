@@ -72,6 +72,11 @@
       <summary>Working day end (HH:MM)</summary>
       <description>Used to suggest session-ping times that cover the hours actually worked.</description>
     </key>
+    <key name="accounts-enabled" type="b">
+      <default>false</default>
+      <summary>Named accounts</summary>
+      <description>Show the saved Claude logins in the dropdown and allow switching between them. Off by default: nothing account-related is shown until it is turned on.</description>
+    </key>
     <key name="accounts-auto-switch" type="b">
       <default>false</default>
       <summary>Switch accounts automatically</summary>

@@ -44,13 +44,13 @@ Pick the segments, their order, and the token mode (baked into the installed
 command; re-run to change):
 
 ```bash
-./install.sh statusline --segments=account,context,limits,tokens --tokens=all|fresh
+./install.sh statusline --segments=context,limits,tokens,account --tokens=all|fresh
 ```
 
-- `--segments` - any order of `account`, `context`, `limits`, `tokens`, `ping`,
-  `sessions`.
-- `account` renders `[PRO]`: the saved account this session runs on (nothing
-  until a login is saved, see [[Accounts]]). When this session is at the
+- `--segments` - any order of `context`, `limits`, `tokens`, `ping`, `account`,
+  `sessions`. Default: `context,limits,tokens,ping`.
+- `account` (opt-in) renders `[PRO]`: the saved account this session runs on
+  (nothing until a login is saved, see [[Accounts]]). When this session is at the
   auto-switch threshold and the panels' last snapshot says another saved
   account has room, it turns yellow: `[PRO ⇢ PERSO]`. A hint only - the status
   line has no credentials and never switches.

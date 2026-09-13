@@ -31,7 +31,8 @@ extension UsageModel {
     /// line's cache, then let the auto-switch decide. Runs at the end of every
     /// poll; the active account's cards are the ones just fetched.
     func refreshAccounts() async {
-        let profiles = AccountStore.list()
+        // Off by default: no rows, no menu-bar prefix, no fetch.
+        let profiles = accountsEnabled ? AccountStore.list() : []
         guard !profiles.isEmpty else {
             accounts = []
             activeAccount = nil

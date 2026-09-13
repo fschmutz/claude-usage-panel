@@ -74,6 +74,14 @@ final class UsageModel: ObservableObject {
     // Named accounts: saved logins, the active one, and the opt-in auto-switch.
     // Behavior lives in Accounts.swift (extension UsageModel); only the stored
     // properties are here because extensions cannot declare them.
+    /// The master switch - off by default, so nothing account-related shows
+    /// until the user asks for it.
+    @Published var accountsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(accountsEnabled, forKey: "accountsEnabled")
+            Task { await refreshAccounts() }
+        }
+    }
     @Published var accounts: [AccountRow] = []
     @Published var activeAccount: String?
     @Published var accountsError: String?
@@ -167,6 +175,7 @@ final class UsageModel: ObservableObject {
         alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
         eventCommand = UserDefaults.standard.string(forKey: "eventCommand") ?? ""
         cursorEnabled = UserDefaults.standard.bool(forKey: "cursorEnabled")
+        accountsEnabled = UserDefaults.standard.bool(forKey: "accountsEnabled")
         accountsAutoSwitch = UserDefaults.standard.bool(forKey: "accountsAutoSwitch")
         accountsSwitchThreshold =
             UserDefaults.standard.object(forKey: "accountsSwitchThreshold") as? Int
@@ -768,7 +777,7 @@ struct PopupView: View {
                 CursorSectionView(model: model)
             }
 
-            if !model.accounts.isEmpty {
+            if model.accountsEnabled && !model.accounts.isEmpty {
                 AccountsSectionView(model: model)
             }
 

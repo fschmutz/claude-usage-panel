@@ -212,6 +212,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'changed::cursor-api-key', () => this.refresh(),
             'changed::cursor-key-stamp', () => this.refresh(),
             'changed::show-sessions', () => this.refresh(),
+            'changed::accounts-enabled', () => this.refresh(),
             'changed::accounts-auto-switch', () => this._syncAutoSwitchItem(),
             'changed::accounts-switch-threshold', () => this._syncAutoSwitchItem(),
             'changed::panel-show-account', () => this._renderPanel(),
@@ -582,6 +583,14 @@ class ClaudeUsageButton extends PanelMenu.Button {
     // Then, if auto-switch is on and the active account is over the
     // threshold, move to the freest one.
     async _refreshAccounts(activeCards) {
+        // Off by default: no rows, no toggle, no panel prefix, no fetch.
+        if (!this._settings.get_boolean('accounts-enabled')) {
+            this._activeAccount = null;
+            this._accountsItem.visible = false;
+            this._autoSwitchItem.visible = false;
+            this._renderPanel();
+            return;
+        }
         let profiles;
         try {
             profiles = listProfiles();

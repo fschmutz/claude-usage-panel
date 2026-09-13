@@ -551,10 +551,10 @@ const SEGMENTS = {
   ping: () => pingSegment(),
   sessions: () => sessionsSegment(),
 };
-// `account` and `ping` are in the default list but render nothing until an
-// account is saved / session pings are scheduled, so they cost an unconfigured
-// user no width. `sessions` is opt-in.
-const DEFAULT_SEGMENTS = ['account', 'context', 'limits', 'tokens', 'ping'];
+// `ping` is in the default list but renders nothing until session pings are
+// scheduled, so it costs an unconfigured user no width. `account` and
+// `sessions` are opt-in (--segments=account,…).
+const DEFAULT_SEGMENTS = ['context', 'limits', 'tokens', 'ping'];
 
 // Configure the line from the command's argv (install.sh bakes these into the
 // settings.json command): `--segments=a,b,c` picks which segments to show and in

@@ -22,7 +22,7 @@
 #   ./install.sh --uninstall [target...]   reverse an install (default: all detected)
 #   ./install.sh --dry-run [target...]     print the actions without doing them (alias -n)
 #   ./install.sh macos --build-only        build the .app but don't install it (used by CI)
-#   ./install.sh statusline --segments=account,context,limits,tokens,ping[,sessions] \
+#   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions] \
 #                           --tokens=all|fresh
 #                                          choose status-line segments + token mode
 #   ./install.sh --list             show detected + installed targets
@@ -50,7 +50,7 @@ ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 DRY=false
 PULL=false
 BUILD_ONLY=false                    # macos: build the .app but don't install to /Applications (used by CI)
-SL_SEGMENTS="account,context,limits,tokens,ping" # statusline: which segments, left→right
+SL_SEGMENTS="context,limits,tokens,ping" # statusline: which segments, left→right
 SL_TOKENS="all"                     # statusline: token-total mode (all|fresh)
 SP_TIMES=()                         # sessionping: HH:MM args from the command line
 SP_DAYS=""                          # sessionping: --days= value from the command line
@@ -221,7 +221,7 @@ settings.statusLine = {type: 'command', command: process.env.COMMAND};
 fs.writeFileSync(path, JSON.stringify(settings, null, 2) + '\n');
 JS
     ok "installed to $dest (segments: $SL_SEGMENTS, tokens: $SL_TOKENS)"
-    echo "  Customize: re-run with --segments=account,context,limits,tokens,ping,sessions and --tokens=all|fresh."
+    echo "  Customize: re-run with --segments=context,limits,tokens,ping,account,sessions and --tokens=all|fresh."
     echo "  Open a Claude Code session or run /statusline to see it."
 }
 

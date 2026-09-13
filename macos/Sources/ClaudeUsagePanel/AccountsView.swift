@@ -76,6 +76,17 @@ struct AccountsSettingsSection: View {
 
     var body: some View {
         Section("Accounts") {
+            Toggle("Enable named accounts", isOn: $model.accountsEnabled)
+            if !model.accountsEnabled {
+                Text("Off by default - nothing account-related is shown until you turn it on.")
+                    .font(.footnote).foregroundColor(.secondary)
+            }
+        }
+        if model.accountsEnabled { accountsBody }
+    }
+
+    private var accountsBody: some View {
+        Section {
             HStack {
                 TextField("Save the current login as (e.g. PRO)", text: $newName)
                     .onSubmit(save)

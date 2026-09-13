@@ -147,6 +147,15 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         });
         page.add(accounts);
 
+        // The master switch. Everything below it is hidden while it is off, so
+        // a user who never asked for accounts never sees them.
+        const accountsEnableRow = new Adw.SwitchRow({
+            title: _('Enable named accounts'),
+            subtitle: _('Off by default - nothing account-related is shown until you turn it on'),
+        });
+        settings.bind('accounts-enabled', accountsEnableRow, 'active', 0);
+        accounts.add(accountsEnableRow);
+
         // An EntryRow has no subtitle, so the "which login is this" line is a
         // row of its own right above it.
         const loginRow = new Adw.ActionRow({title: _('Current login'), subtitle: ''});
@@ -184,6 +193,8 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         // One row per saved login, rebuilt after every save or remove.
         const listGroup = new Adw.PreferencesGroup();
         page.add(listGroup);
+        for (const w of [loginRow, saveRow, autoRow, thresholdRow, showRow, listGroup])
+            settings.bind('accounts-enabled', w, 'visible', 0);
         const accountRows = [];
         const renderAccounts = () => {
             accountRows.splice(0).forEach(row => listGroup.remove(row));

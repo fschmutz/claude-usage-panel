@@ -144,16 +144,17 @@ test('transcriptTotals caches by path+mtime+size, skipping re-read when unchange
 });
 
 test('parseConfig picks segments/order and token mode, dropping unknowns', () => {
-    // `account` and `ping` ship in the default list but render nothing until an
-    // account is saved / session pings are scheduled, so they cost an
-    // unconfigured line no width.
+    // `ping` ships in the default list but renders nothing until session pings
+    // are scheduled, so it costs an unconfigured line no width. `account` is
+    // opt-in.
     assert.deepEqual(
         parseConfig([]),
-        {segments: ['account', 'context', 'limits', 'tokens', 'ping'], includeCacheRead: true});
+        {segments: ['context', 'limits', 'tokens', 'ping'], includeCacheRead: true});
+    assert.deepEqual(parseConfig(['--segments=account,limits']).segments, ['account', 'limits']);
     assert.deepEqual(parseConfig(['--segments=tokens,context']).segments, ['tokens', 'context']);
     assert.deepEqual(parseConfig(['--segments=limits,bogus,tokens']).segments, ['limits', 'tokens']);
     assert.deepEqual(
-        parseConfig(['--segments=nope,']).segments, ['account', 'context', 'limits', 'tokens', 'ping']);
+        parseConfig(['--segments=nope,']).segments, ['context', 'limits', 'tokens', 'ping']);
     assert.deepEqual(parseConfig(['--segments=sessions']).segments, ['sessions']);
     assert.equal(parseConfig(['--tokens=fresh']).includeCacheRead, false);
     assert.equal(parseConfig(['--tokens=all']).includeCacheRead, true);

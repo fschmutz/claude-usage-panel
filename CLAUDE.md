@@ -126,7 +126,9 @@ writes only to our store, never to `~/.claude`; a switch writes exactly the
 credentials (file, or the macOS Keychain item) and the `oauthAccount` key. The
 panels/MCP write `<accounts dir>/.usage-cache.json` (`{at, accounts:
 {NAME: {worst, session, weekly}}}`, 30 min validity) so the credential-less
-status line can hint at a freer account.
+status line can hint at a freer account. The panels gate all of it behind
+`accounts-enabled` (GSettings) / `accountsEnabled` (UserDefaults), **off by
+default**; the status line segment is opt-in. The CLI + MCP tools are always on.
 
 ## Architecture - one contract, three ports
 
