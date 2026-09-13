@@ -66,12 +66,16 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
         └── ClaudeUsagePanelApp.swift # MenuBarExtra, model, views, Settings
 
-claude-code/            # status line under the Claude Code prompt
-├── statusline.js       # renders purely from Claude Code's stdin - no network
-└── accounts.js         # named accounts: store, switch, refresh; CLI + shared by mcp/statusline
+claude-code/            # the Node clients (installed together under ~/.claude/claude-usage-panel/)
+├── statusline.js       # status line: renders from Claude Code's stdin - no network
+├── normalize.js        # the Node port of the normalizer (shared by mcp + accounts)
+├── accounts.js         # named accounts: pure contract + openStore(io) - store, switch, refresh
+└── claude-account.js   # the claude-account CLI over accounts.js
 
-mcp/                    # MCP server: get_usage tool (Claude Code, Cursor…)
-└── server.js           # zero-dep stdio JSON-RPC, also the npx bin
+mcp/                    # MCP server (Claude Code, Cursor…)
+├── server.js           # stdio JSON-RPC transport + get_usage; also the npx bin
+├── tools.js            # tool schemas, renderers, the account tool calls
+└── sessions.js         # today's sessions + session-ping index
 
 plugin/                 # Claude Code plugin wrapping the MCP server
 docs/                   # GitHub Pages site + the /install bootstrap

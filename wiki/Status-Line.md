@@ -32,7 +32,7 @@ knowing. Samples are recorded to a local tmp file shared with the MCP server
 curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash -s -- statusline
 ```
 
-Copies the script to `~/.claude/claude-usage-statusline.mjs` and merges a
+Copies the Node clients to `~/.claude/claude-usage-panel/` and merges a
 `statusLine` entry into `~/.claude/settings.json` without clobbering other
 settings (a foreign status line is backed up and restored on `--uninstall`).
 Open a new session or run `/statusline` to see it. Needs only Node.js (already

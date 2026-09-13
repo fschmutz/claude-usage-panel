@@ -6,6 +6,45 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **The Node clients install as one tree.** `install.sh` now copies `mcp/`
+  and `claude-code/` into `~/.claude/claude-usage-panel/` (with a
+  `{"type":"module"}` package.json) instead of loose `.mjs` copies next to
+  `settings.json`, so the status line, the MCP server and the `claude-account`
+  CLI import each other by plain relative path - no runtime module probing.
+  `update` migrates an existing install and removes the old copies.
+- **Structure, no behavior change:** `mcp/server.js` (1295 lines) is now the
+  transport + `get_usage` over `mcp/tools.js` (schemas, renderers, account
+  tools) and `mcp/sessions.js`; the Node normalizer lives once in
+  `claude-code/normalize.js`; `claude-code/accounts.js` exposes `openStore(io)`
+  instead of threading paths through every call, and the CLI is its own file
+  (`claude-code/claude-account.js`). GNOME: `lib/pure.js` is a barrel over
+  `lib/pure/{accounts,sessions,pings}.js`, the accounts and sessions
+  orchestration moved out of `extension.js` (1004 → 784 lines) into
+  controllers, one `lib/paths.js` owns the state / config paths. macOS:
+  `ClaudeUsagePanelApp.swift` (1152 lines) split into `UsageModel.swift`,
+  `PopupView.swift` and `SettingsView.swift`.
+
+### Fixed
+
+- **The auto-switch cooldown is shared.** Every `switchTo` now writes
+  `<accounts dir>/.last-switch.json`, and every auto-switch caller (both
+  panels, the status line hint) reads it, so a switch made from the CLI, the
+  MCP tool or the other panel counts. Before, each process kept its own stamp
+  and the GNOME and macOS panels disagreed on which switches counted.
+- **`CLAUDE_CONFIG_DIR` is honored everywhere.** The usage fetch in every
+  client read `~/.claude/.credentials.json` unconditionally while the account
+  store followed `CLAUDE_CONFIG_DIR`; with it set, `get_usage` could report
+  one login while `switch_account` swapped another.
+- **A broken status line no longer renders an empty line forever.** Errors
+  outside the account segment surface again; the segment itself never throws.
+- **One normalizer per port.** The account store's usage summaries were a
+  fifth, unpinned normalizer that had already drifted from `normalizeUsage`
+  (it accepted `utilization` and required a truthy `kind`); the same payload
+  was normalized twice per `list_accounts`. Deleted, along with the unused
+  `headroom` contract entry and the unused cache readers in GNOME / macOS.
+
 ## [1.10.0] - 2026-09-13
 
 ### Added

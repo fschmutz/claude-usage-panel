@@ -104,16 +104,18 @@ process: `wiki/CI.md`.
 ## Named accounts - one store, three ports
 
 `claude-code/accounts.js` is the single implementation behind the
-`claude-account` CLI, the MCP server's `list_accounts` / `save_account` /
-`switch_account` tools and the status line's `account` segment (the last two
-`import()` it lazily: installed next to them as `claude-usage-accounts.mjs`,
-`../claude-code/accounts.js` in the checkout). The GNOME extension
-(`lib/pure.js` pure part + `lib/accounts.js` I/O) and the macOS app
-(`ClaudeUsageCore/Accounts.swift` + `ClaudeUsagePanel/AccountStore.swift`)
-mirror it; `tests/fixtures/accounts.json` pins what they must agree on:
-profile validity + names, which saved profile the live login is (uuid, then
-email), `tokenState` (valid / stale within 5 min of expiry / expired once the
-refresh token is gone), `headroom`, and `autoSwitchTarget` (threshold 90,
+`claude-account` CLI (`claude-code/claude-account.js`), the MCP server's
+`list_accounts` / `save_account` / `switch_account` tools (`mcp/tools.js`) and
+the status line's `account` segment - all static imports. Its pure half is the
+contract; `openStore(io)` binds the I/O (home, platform, clock, fetch, exec -
+every one overridable, read at call time) and returns the operations, so no
+consumer threads paths around. The GNOME extension (`lib/pure/accounts.js`
+pure part + `lib/accounts.js` I/O + `lib/accountsSection.js` controller) and
+the macOS app (`ClaudeUsageCore/Accounts.swift` + `AccountStore.swift` +
+`Accounts.swift`) mirror it; `tests/fixtures/accounts.json` pins what they
+must agree on: profile validity + names, which saved profile the live login is
+(uuid, then email), `tokenState` (valid / stale within 5 min of expiry /
+expired once the refresh token is gone), and `autoSwitchTarget` (threshold 90,
 margin 15, cooldown 5 min, most headroom wins, ties by code-point name order).
 
 A profile is `{version, name, savedAt, account: <oauthAccount block of
@@ -123,10 +125,14 @@ port keeps: sync the live login back into its profile (or park an unsaved one
 under its email) BEFORE overwriting anything; refresh a stale target BEFORE
 installing it, so a failed refresh leaves the current login untouched; refresh
 writes only to our store, never to `~/.claude`; a switch writes exactly the
-credentials (file, or the macOS Keychain item) and the `oauthAccount` key. The
-panels/MCP write `<accounts dir>/.usage-cache.json` (`{at, accounts:
+credentials (file, or the macOS Keychain item) and the `oauthAccount` key;
+every port reads the live login from the same path (`CLAUDE_CONFIG_DIR` when
+set). The panels/MCP write `<accounts dir>/.usage-cache.json` (`{at, accounts:
 {NAME: {worst, session, weekly}}}`, 30 min validity) so the credential-less
-status line can hint at a freer account. The panels gate all of it behind
+status line can hint at a freer account, and every `switchTo` writes
+`<accounts dir>/.last-switch.json` (`{at, from, to}`) - the auto-switch
+cooldown is store state, so a switch made by the CLI, the MCP tool or the
+other panel counts for everyone. The panels gate all of it behind
 `accounts-enabled` (GSettings) / `accountsEnabled` (UserDefaults), **off by
 default**; the status line segment is opt-in. The CLI + MCP tools are always on.
 
@@ -144,14 +150,23 @@ summarization, you must change it in **every** port and keep them matching.
   Foundation-only mirror of `pure.js`. No networking/SwiftUI, so it unit-tests on
   Linux CI. Comment in the file explicitly says "Mirrors the GNOME extension's
   lib/pure.js" - keep it that way.
-- **`claude-code/statusline.js`** - standalone, zero-dependency Node; re-derives
-  the same normalization for the terminal one-liner.
-- **`mcp/server.js`** - standalone, zero-dependency Node MCP server (stdio
-  JSON-RPC); duplicates `normalizeUsage` as the fourth port and is asserted
-  against the shared fixture in `tests/parity.test.js`. Carries an exported
+- **`claude-code/normalize.js`** - the Node port of the normalizer, imported
+  by the MCP server and the account store; asserted against the shared fixture
+  through `mcp/server.js`'s re-exports in `tests/parity.test.js`.
+- **`claude-code/statusline.js`** - zero-dependency Node; renders from Claude
+  Code's stdin and re-derives the forecast / clock contract for the one-liner.
+- **`mcp/server.js`** - zero-dependency Node MCP server (stdio JSON-RPC):
+  transport, `get_usage` assembly, and the forecast / clock / warehouse
+  contract copies. `mcp/tools.js` has the tool schemas, renderers and account
+  tool calls; `mcp/sessions.js` the session/ping index. Carries an exported
   `VERSION` const kept in sync by `scripts/bump-version.sh` and guarded by
   `scripts/check-versions.sh` (with `plugin/.claude-plugin/plugin.json` and
   `.claude-plugin/marketplace.json`).
+- **Installed as one tree.** `install.sh` copies `mcp/` and `claude-code/`
+  into `~/.claude/claude-usage-panel/` (plus a `{"type":"module"}`
+  package.json) so the relative imports resolve exactly as in the checkout;
+  the status line command, the MCP registration and the `claude-account` shim
+  point into it. Pre-1.11 loose `.mjs` copies are removed on update.
 
 **Parity is CI-enforced.** `tests/fixtures/normalize.json` is one shared set of
 raw payloads + expected core output; `tests/parity.test.js` runs it through both

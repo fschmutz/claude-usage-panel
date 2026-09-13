@@ -80,8 +80,7 @@ to refresh it."*
 
 ## Account tools
 
-Three more tools appear once the accounts module is installed alongside the
-server (it is, by `./install.sh mcp`, and in the plugin / npx form):
+Three more tools manage the saved logins (every install form has them):
 
 | Tool | Does |
 |---|---|
