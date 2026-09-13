@@ -36,16 +36,12 @@ enum ClaudeUsage {
     private static let endpoint = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let betaHeader = "oauth-2025-04-20"
 
-    private static var credentialsURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/.credentials.json")
-    }
-
     /// Read the OAuth access token. On Linux it lives in
-    /// ~/.claude/.credentials.json; on macOS, Claude Code stores it in the
+    /// .credentials.json under the Claude config dir (AccountStore.credentialsURL,
+    /// which honors CLAUDE_CONFIG_DIR); on macOS, Claude Code stores it in the
     /// login Keychain, so we fall back to that.
     static func readAccessToken() -> String? {
-        if let data = try? Data(contentsOf: credentialsURL),
+        if let data = try? Data(contentsOf: AccountStore.credentialsURL),
             let token = tokenFromJSON(data)
         {
             return token

@@ -179,11 +179,6 @@ public enum Accounts {
         cards.map { max(0, min(100, $0.percent)) }.max()
     }
 
-    /// 100 minus the worst limit; nil without cards.
-    public static func headroom(_ cards: [LimitCard]) -> Int? {
-        worstPercent(cards).map { 100 - $0 }
-    }
-
     /// The account to switch to, or nil to stay. `worst` maps each saved name
     /// to its worst limit percent (nil = usage unknown). Switch only when the
     /// active account is at/over the threshold, to the candidate with the most

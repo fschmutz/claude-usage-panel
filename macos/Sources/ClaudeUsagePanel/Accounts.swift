@@ -76,11 +76,11 @@ extension UsageModel {
         guard
             let decision = Accounts.autoSwitchTarget(
                 active: active, worst: worst, threshold: accountsSwitchThreshold,
-                lastSwitchMs: lastSwitchMs, nowMs: Date().timeIntervalSince1970 * 1000)
+                lastSwitchMs: AccountStore.readLastSwitchMs(),
+                nowMs: Date().timeIntervalSince1970 * 1000)
         else { return }
         do {
             let r = try await AccountStore.switchTo(decision.to)
-            lastSwitchMs = Date().timeIntervalSince1970 * 1000
             var body =
                 "Switched \(decision.from) → \(decision.to): "
                 + "\(decision.from) was at \(decision.activePercent)%"

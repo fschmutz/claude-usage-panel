@@ -27,16 +27,6 @@ struct SwitchResult {
     let email: String?
 }
 
-struct AccountUsageCache {
-    struct Entry {
-        let worst: Int?
-        let session: Int?
-        let weekly: Int?
-    }
-    let at: Double
-    let accounts: [String: Entry]
-}
-
 enum AccountError: LocalizedError {
     case message(String)
     var errorDescription: String? {
@@ -50,8 +40,8 @@ enum AccountStore {
     /// Claude Code's public OAuth client - the same id the CLI refreshes with.
     static let clientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     static let keychainService = "Claude Code-credentials"
-    static let usageCacheMaxAgeMs = 30 * 60_000.0
     private static let usageCacheFile = ".usage-cache.json"
+    private static let lastSwitchFile = ".last-switch.json"
 
     // MARK: paths
 
@@ -445,8 +435,27 @@ enum AccountStore {
         }
         try writeLiveCredentials(target.credentials)
         try writeLiveAccount(target.account)
+        writeLastSwitch(from: from, to: name)
         return SwitchResult(
             from: from, to: name, changed: true, running: runningClaudeCount(), email: target.email)
+    }
+
+    // MARK: last switch (the auto-switch cooldown, shared by every client)
+
+    // Store state, not process state: a switch made by the CLI, the MCP tool
+    // or the other panel counts against the cooldown too. Same file and shape
+    // as the node ports.
+    static var lastSwitchURL: URL { directory.appendingPathComponent(lastSwitchFile) }
+
+    private static func writeLastSwitch(from: String?, to: String) {
+        let obj: [String: Any] = ["at": nowMs(), "from": from as Any? ?? NSNull(), "to": to]
+        guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
+        try? writePrivate(data, to: lastSwitchURL)
+    }
+
+    /// When the last switch happened (any client), or nil if never.
+    static func readLastSwitchMs() -> Double? {
+        ((readJSON(lastSwitchURL) as? [String: Any])?["at"] as? NSNumber)?.doubleValue
     }
 
     // MARK: per-account usage
@@ -474,22 +483,5 @@ enum AccountStore {
         let obj: [String: Any] = ["at": nowMs(), "accounts": accounts]
         guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
         try? writePrivate(data, to: usageCacheURL)
-    }
-
-    /// The cached snapshot when fresh enough, else nil.
-    static func readUsageCache(maxAgeMs: Double = usageCacheMaxAgeMs) -> AccountUsageCache? {
-        guard let obj = readJSON(usageCacheURL) as? [String: Any],
-            let at = (obj["at"] as? NSNumber)?.doubleValue, nowMs() - at <= maxAgeMs,
-            let raw = obj["accounts"] as? [String: Any]
-        else { return nil }
-        var accounts: [String: AccountUsageCache.Entry] = [:]
-        for (name, v) in raw {
-            let e = v as? [String: Any] ?? [:]
-            accounts[name] = AccountUsageCache.Entry(
-                worst: (e["worst"] as? NSNumber)?.intValue,
-                session: (e["session"] as? NSNumber)?.intValue,
-                weekly: (e["weekly"] as? NSNumber)?.intValue)
-        }
-        return AccountUsageCache(at: at, accounts: accounts)
     }
 }

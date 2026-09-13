@@ -87,15 +87,6 @@ final class AccountsParityTests: XCTestCase {
         }
     }
 
-    func testHeadroom() throws {
-        let fix = try fixture()
-        for c in fix["headroom"] as! [[String: Any]] {
-            let name = c["name"] as! String
-            let got = Accounts.headroom(cards(c["cards"] as! [[String: Any]]))
-            XCTAssertEqual(got, (c["expected"] as? NSNumber)?.intValue, name)
-        }
-    }
-
     func testAutoSwitchTarget() throws {
         let fix = try fixture()
         let now = (fix["now"] as! NSNumber).doubleValue

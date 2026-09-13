@@ -1,0 +1,328 @@
+import AppKit
+import ClaudeUsageCore
+import Network
+import SwiftUI
+
+// MARK: - Reset-time helper
+
+private func resetsText(_ date: Date?) -> String {
+    guard let date else { return "" }
+    let delta = Int(date.timeIntervalSinceNow)
+    if delta <= 0 { return "Resetting…" }
+    let d = delta / 86400
+    let h = (delta % 86400) / 3600
+    let m = (delta % 3600) / 60
+    if d > 0 { return "Resets in \(d)d \(h)h" }
+    if h > 0 { return String(format: "Resets in %dh %02dm", h, m) }
+    return "Resets in \(m)m"
+}
+
+// MARK: - Views
+
+private struct ProgressBar: View {
+    let percent: Int
+    let color: Color
+    /// Where the window's own clock stands, 0...100. A tick here says how much
+    /// of the quota the elapsed time has already earned; fill past it is usage
+    /// running ahead of its window.
+    var elapsedPercent: Int?
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.12))
+                Capsule().fill(color)
+                    .frame(width: max(0, geo.size.width * CGFloat(percent) / 100))
+                if let elapsedPercent {
+                    Rectangle().fill(Color.primary.opacity(0.55))
+                        .frame(width: 2, height: 12)
+                        .offset(x: max(0, geo.size.width * CGFloat(elapsedPercent) / 100 - 1))
+                }
+            }
+        }
+        .frame(height: 8)
+    }
+}
+
+private struct CardView: View {
+    let card: LimitCard
+    let spark: String
+    let forecast: Forecast?
+    /// Week-over-week peak - the one thing the 6-hour forecast cannot say.
+    let trend: WeekOverWeek?
+    var body: some View {
+        let color = Color.severity(card.severity)
+        let pace = UsageClock.pace(card)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(card.label).font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.85))
+                if card.active { Circle().fill(color).frame(width: 6, height: 6) }
+                Spacer()
+                Text("\(card.percent)%").font(.system(size: 15, weight: .heavy))
+                    .foregroundColor(color).monospacedDigit()
+            }
+            ProgressBar(percent: card.percent, color: color, elapsedPercent: pace?.elapsedPercent)
+            HStack {
+                // A per-model card (Fable) caps a share of the weekly pool rather
+                // than adding one, so its reset line carries that note - same
+                // reset as the all-models card it draws from.
+                Text(
+                    [
+                        resetsText(card.resetsAt), UsageNormalizer.poolNote(card),
+                        UsageClock.format(pace),
+                    ]
+                    .filter { !$0.isEmpty }.joined(separator: " · ")
+                ).font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                Spacer()
+                if !spark.isEmpty {
+                    Text(spark).font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+            // Burn-rate projection: amber when the limit runs out before its
+            // reset, quiet when the pace outlasts it, absent when idle.
+            if let fc = forecast {
+                Text(UsageForecast.format(fc)).font(.system(size: 11))
+                    .foregroundColor(fc.exhaustsBeforeReset ? .cuWarning : .secondary)
+            }
+            if let trend {
+                Text(Warehouse.format(trend)).font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.05)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    card.severity == .critical ? color.opacity(0.35) : Color.primary.opacity(0.08)))
+    }
+}
+
+struct PopupView: View {
+    @ObservedObject var model: UsageModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Claude usage").font(.system(size: 15, weight: .bold))
+                Spacer()
+                if let plan = model.planLabel, !plan.isEmpty {
+                    Text(plan).font(.system(size: 12, weight: .semibold)).foregroundColor(
+                        .secondary)
+                }
+            }
+
+            if let err = model.errorText, model.cards.isEmpty {
+                Text(err).font(.system(size: 12)).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(model.cards) {
+                    CardView(
+                        card: $0, spark: model.spark(for: $0.id),
+                        forecast: model.forecasts[$0.id], trend: model.trend(for: $0.id))
+                }
+            }
+
+            // Prepaid credit already charged this cycle. Absent entirely when
+            // the account has extra usage off - a disabled cap is not headroom.
+            if let extra = model.extraUsage {
+                HStack(spacing: 4) {
+                    Text("Extra usage").font(.system(size: 12, weight: .semibold))
+                    Text(
+                        extra.limitAmount != nil
+                            ? "\(extra.detail) (\(extra.percent)% of the cap)" : extra.detail
+                    )
+                    .font(.system(size: 12))
+                    .foregroundColor(
+                        extra.severity == .normal ? .secondary : Color.severity(extra.severity))
+                    Spacer()
+                }
+            }
+
+            if let cost = model.costText {
+                HStack(spacing: 4) {
+                    Text("Session cost: \(cost)").font(.system(size: 12, weight: .semibold))
+                    // Cost is reconstructed from local logs and a price table,
+                    // unlike the limit percentages above, which are read from
+                    // the account's usage endpoint. Say which is which.
+                    Text(Provenances.cost.badge)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                        .help(Provenances.cost.explanation)
+                }
+            }
+            Text("Updated \(model.updated) · limits \(Provenances.limits.badge)")
+                .font(.system(size: 11)).foregroundColor(.secondary)
+                .help(Provenances.limits.explanation)
+            if model.sessionPingEnabled || !model.lastPing.isEmpty {
+                Text("Session pings: \(model.pingStatusLine)")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+            if let u = model.updateStatus, u.needsAttention {
+                Text(u.summary).font(.system(size: 11)).foregroundColor(.cuCritical)
+            }
+
+            if model.showSessions && !model.sessions.isEmpty {
+                SessionsSectionView(model: model)
+            }
+
+            if model.cursorEnabled {
+                CursorSectionView(model: model)
+            }
+
+            if model.accountsEnabled && !model.accounts.isEmpty {
+                AccountsSectionView(model: model)
+            }
+
+            Divider()
+
+            HStack {
+                Toggle("Cost", isOn: $model.showCost).toggleStyle(.checkbox).font(.system(size: 12))
+                Toggle("Alerts", isOn: $model.alertsEnabled).toggleStyle(.checkbox).font(
+                    .system(size: 12))
+                Spacer()
+                Text("Refresh").font(.system(size: 12)).foregroundColor(.secondary)
+                Picker("", selection: $model.refreshMinutes) {
+                    ForEach([1, 5, 10, 15, 30, 60], id: \.self) { Text("\($0)m").tag($0) }
+                }.labelsHidden().frame(width: 70)
+            }
+
+            HStack {
+                Button {
+                    Task { await model.refresh() }
+                } label: {
+                    Label("Refresh now", systemImage: "arrow.clockwise")
+                }
+                if #available(macOS 14.0, *) {
+                    OpenSettingsButton()
+                } else {
+                    Button {
+                        // An .accessory app is not active when the popup is
+                        // clicked - without activate the window opens behind
+                        // everything (or seemingly not at all).
+                        NSApp.activate(ignoringOtherApps: true)
+                        // Renamed across versions; try both.
+                        if !NSApp.sendAction(
+                            Selector(("showSettingsWindow:")), to: nil, from: nil)
+                        {
+                            NSApp.sendAction(
+                                Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                        }
+                    } label: {
+                        Label("Settings…", systemImage: "gearshape")
+                    }
+                }
+                Spacer()
+                Button(role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                } label: {
+                    Label("Quit", systemImage: "power")
+                }
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 12))
+        }
+        .padding(14)
+        .frame(width: 340)
+        .onAppear {
+            model.reloadSessionPing()
+            model.reloadUpdateStatus()
+        }
+    }
+}
+
+// Settings opener for macOS 14+. SettingsLink alone does not activate an
+// .accessory (menu-bar only) app, so the window opens behind everything and
+// looks like it never appeared; the openSettings environment action plus an
+// explicit activate brings it to front reliably.
+@available(macOS 14.0, *)
+private struct OpenSettingsButton: View {
+    @Environment(\.openSettings) private var openSettings
+    var body: some View {
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            openSettings()
+        } label: {
+            Label("Settings…", systemImage: "gearshape")
+        }
+    }
+}
+
+// Today's sessions in the dropdown: biggest token spender first, one click to
+// resume it where it was left. Tokens are reconstructed from the local
+// transcripts, so the header says "est." for the same reason the cost line does.
+private struct SessionsSectionView: View {
+    @ObservedObject var model: UsageModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(
+                model.sessionsPending
+                    ? "Today's sessions (est., still indexing)" : "Today's sessions (est.)"
+            )
+            .font(.system(size: 13, weight: .bold))
+            ForEach(model.sessions) { session in
+                Button {
+                    model.resume(session)
+                } label: {
+                    HStack {
+                        // The glyph marks the row as an action - a hover
+                        // highlight alone is invisible until you are on it.
+                        Text("\u{25b8} \(session.label)")
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Text(
+                            "\(SessionFormat.compactTokens(session.tokens))  \(session.when)"
+                        )
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("Resume in a terminal: \(session.cwd)")
+            }
+            if let err = model.sessionError {
+                Text(err).font(.system(size: 11)).foregroundColor(.cuCritical)
+            }
+        }
+    }
+}
+
+// Cursor spend block in the dropdown (shown when enabled).
+private struct CursorSectionView: View {
+    @ObservedObject var model: UsageModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Cursor").font(.system(size: 13, weight: .bold))
+            if let s = model.cursorSummary {
+                if let pct = s.percent {
+                    Text(
+                        String(
+                            format: "This cycle: $%.2f / $%.0f (%d%%) · %d members",
+                            s.cycleUSD, s.limitUSD, pct, s.members)
+                    ).font(.system(size: 12, weight: .semibold))
+                    ProgressBar(
+                        percent: pct,
+                        color: pct >= 100 ? .cuCritical : (pct >= 90 ? .cuWarning : .cuAccent))
+                } else {
+                    Text(String(format: "This cycle: $%.2f · %d members", s.cycleUSD, s.members))
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                if let today = s.todayUSD {
+                    Text(String(format: "Today: $%.2f", today))
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                }
+                if let top = s.top {
+                    Text(String(format: "Top: %@ $%.2f", top.email, top.usd))
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                }
+            } else if let err = model.cursorError {
+                Text("Cursor: \(err)").font(.system(size: 12)).foregroundColor(.secondary)
+            } else {
+                Text("Loading…").font(.system(size: 12)).foregroundColor(.secondary)
+            }
+        }
+    }
+}
