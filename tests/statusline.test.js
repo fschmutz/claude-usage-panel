@@ -6,7 +6,9 @@ import path from 'node:path';
 import {
     gauge, resetHint, render, contextSegment, cardsFromStdin,
     formatTokens, sumTranscriptTokens, tokensSegment, transcriptTotals, parseConfig,
+    accountSegment,
 } from '../claude-code/statusline.js';
+import * as accounts from '../claude-code/accounts.js';
 
 // Strip ANSI so we can assert on the visible glyphs. Built via RegExp
 // constructor to keep the ESC control char out of a regex literal.
@@ -142,15 +144,16 @@ test('transcriptTotals caches by path+mtime+size, skipping re-read when unchange
 });
 
 test('parseConfig picks segments/order and token mode, dropping unknowns', () => {
-    // `ping` ships in the default list but renders nothing until session pings
-    // are scheduled, so it costs an unconfigured line no width.
+    // `account` and `ping` ship in the default list but render nothing until an
+    // account is saved / session pings are scheduled, so they cost an
+    // unconfigured line no width.
     assert.deepEqual(
         parseConfig([]),
-        {segments: ['context', 'limits', 'tokens', 'ping'], includeCacheRead: true});
+        {segments: ['account', 'context', 'limits', 'tokens', 'ping'], includeCacheRead: true});
     assert.deepEqual(parseConfig(['--segments=tokens,context']).segments, ['tokens', 'context']);
     assert.deepEqual(parseConfig(['--segments=limits,bogus,tokens']).segments, ['limits', 'tokens']);
     assert.deepEqual(
-        parseConfig(['--segments=nope,']).segments, ['context', 'limits', 'tokens', 'ping']);
+        parseConfig(['--segments=nope,']).segments, ['account', 'context', 'limits', 'tokens', 'ping']);
     assert.deepEqual(parseConfig(['--segments=sessions']).segments, ['sessions']);
     assert.equal(parseConfig(['--tokens=fresh']).includeCacheRead, false);
     assert.equal(parseConfig(['--tokens=all']).includeCacheRead, true);
@@ -208,4 +211,41 @@ test('render appends the marker to the matching limit', () => {
     assert.match(line, /Week .*52%.*⚠full /);
     // Without a forecast the line is unchanged.
     assert.doesNotMatch(strip(render(cards)), /⚠full/);
+});
+
+// ── account segment ─────────────────────────────────────────────────────────────
+
+const NOW = Date.parse('2026-09-13T12:00:00Z');
+function accountWorld() {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cus-acc-'));
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify({claudeAiOauth: {
+        accessToken: 'at', refreshToken: 'rt', expiresAt: NOW + 3_600_000}}));
+    fs.writeFileSync(path.join(home, '.claude.json'),
+        JSON.stringify({oauthAccount: {accountUuid: 'u-pro', emailAddress: 'pro@example.com'}}));
+    return {homedir: home, platform: 'linux', env: {}, nowMs: NOW};
+}
+const rateLimits = (session, week) => JSON.stringify({rate_limits: {
+    five_hour: {used_percentage: session, resets_at: NOW / 1000 + 3600},
+    seven_day: {used_percentage: week, resets_at: NOW / 1000 + 86400},
+}});
+
+test('accountSegment is blank without the module or an unsaved login', async () => {
+    assert.equal(await accountSegment('{}', {accounts: null}), '');
+    const io = accountWorld();
+    assert.equal(await accountSegment(rateLimits(10, 10), {accounts, io, nowMs: NOW}), '');
+});
+
+test('accountSegment names the active account, and points at a freer one from the cache', async () => {
+    const io = accountWorld();
+    accounts.saveCurrent('PRO', io);
+    assert.equal(strip(await accountSegment(rateLimits(10, 10), {accounts, io, nowMs: NOW})), '[PRO]');
+    accounts.writeProfile({version: 1, name: 'PERSO', account: {accountUuid: 'u-perso'},
+        credentials: {claudeAiOauth: {accessToken: 'x', refreshToken: 'y'}}}, io);
+    accounts.writeUsageCache({PERSO: {ok: true, percents: {session: 20, weekly_all: 30}}}, io);
+    // own usage from stdin (fresh) beats the cache: at 95% here, PERSO has room
+    assert.equal(strip(await accountSegment(rateLimits(95, 40), {accounts, io, nowMs: NOW})), '[PRO ⇢ PERSO]');
+    assert.equal(strip(await accountSegment(rateLimits(50, 40), {accounts, io, nowMs: NOW})), '[PRO]');
+    // a stale cache says nothing about the others
+    assert.equal(strip(await accountSegment(rateLimits(95, 40), {accounts, io, nowMs: NOW + 3_600_000})), '[PRO]');
 });
