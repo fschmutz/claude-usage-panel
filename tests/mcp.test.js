@@ -183,9 +183,9 @@ test('ping - empty result', async () => {
     assert.deepEqual(await handleRequest({method: 'ping'}), {});
 });
 
-test('tools/list - exposes get_usage with schemas', async () => {
-    const r = await handleRequest({method: 'tools/list'}, {accounts: null});
-    assert.equal(r.tools.length, 1);
+test('tools/list - exposes get_usage (with schemas) and the account tools', async () => {
+    const r = await handleRequest({method: 'tools/list'});
+    assert.deepEqual(r.tools.map(t => t.name), ['get_usage', 'list_accounts', 'save_account', 'switch_account']);
     const tool = r.tools[0];
     assert.equal(tool.name, 'get_usage');
     assert.equal(tool.inputSchema.type, 'object');
@@ -198,10 +198,13 @@ test('tools/list - exposes get_usage with schemas', async () => {
 const rnd = () => Math.random().toString(36).slice(2);
 const paceTmp = () => ({historyPath: path.join(os.tmpdir(), `cu-mcp-hist-${rnd()}.json`)});
 
+// A store bound to an empty throwaway HOME, so get_usage never reads the real one.
+const noAccounts = () => ({homedir: fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-noacc-')), platform: 'linux', env: {}});
+
 test('tools/call get_usage - text + structuredContent', async () => {
     const r = await handleRequest(
         {method: 'tools/call', params: {name: 'get_usage'}},
-        {fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp()});
+        {fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp(), accountsIo: noAccounts()});
     assert.equal(r.isError, undefined);
     assert.match(r.content[0].text, /Current session.*26%/);
     assert.equal(r.structuredContent.limits.length, 2);
@@ -357,9 +360,10 @@ test('no warehouse file means no trend, not an error', () => {
 });
 
 // ── Named accounts ──────────────────────────────────────────────────────────────
-// The tools come from claude-code/accounts.js, injected here with an io bound
-// to a throwaway HOME (the module's own behavior is covered in accounts.test.js).
-import * as accountsModule from '../claude-code/accounts.js';
+// The tools sit on claude-code/accounts.js's store, bound here to a throwaway
+// HOME through deps.accountsIo (the store's own behavior is covered in
+// accounts.test.js).
+import {openStore} from '../claude-code/accounts.js';
 
 const NOW = Date.parse('2026-09-13T12:00:00Z');
 const accountCreds = (tag) => ({claudeAiOauth: {
@@ -382,9 +386,8 @@ function accountsWorld() {
     return {home, io};
 }
 
-test('tools/list - adds the account tools when the module is present', async () => {
-    const r = await handleRequest({method: 'tools/list'}, {accounts: accountsModule});
-    assert.deepEqual(r.tools.map(t => t.name), ['get_usage', 'list_accounts', 'save_account', 'switch_account']);
+test('tools/list - account tool annotations', async () => {
+    const r = await handleRequest({method: 'tools/list'});
     assert.equal(r.tools[1].annotations.readOnlyHint, true);
     assert.equal(r.tools[3].annotations.readOnlyHint, false);
     assert.equal(r.tools[3].annotations.destructiveHint, false);
@@ -392,7 +395,8 @@ test('tools/list - adds the account tools when the module is present', async () 
 
 test('save_account / list_accounts / switch_account round-trip through the server', async () => {
     const {io} = accountsWorld();
-    const deps = {accounts: accountsModule, accountsIo: io, token: 'at-pro', paceOpts: paceTmp()};
+    const deps = {accountsIo: io, token: 'at-pro', paceOpts: paceTmp()};
+    const store = openStore(io);
     const call = (name, args) => handleRequest({method: 'tools/call', params: {name, arguments: args}}, deps);
 
     let r = await call('list_accounts');
@@ -407,9 +411,9 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /invalid name/);
 
-    accountsModule.writeProfile({version: 1, name: 'PERSO',
+    store.writeProfile({version: 1, name: 'PERSO',
         account: {accountUuid: 'u-perso', emailAddress: 'perso@example.com'},
-        credentials: accountCreds('perso')}, io);
+        credentials: accountCreds('perso')});
 
     r = await call('list_accounts');
     assert.equal(r.structuredContent.active, 'PRO');
@@ -430,7 +434,7 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     assert.equal(r.isError, undefined);
     assert.match(r.content[0].text, /Switched PRO → \*\*PERSO\*\* \(perso@example.com\)\. 1 Claude Code session is still running/);
     assert.equal(r.structuredContent.changed, true);
-    assert.equal(accountsModule.liveAccountName(io), 'PERSO');
+    assert.equal(store.liveAccountName(), 'PERSO');
 
     r = await call('switch_account', {name: 'PERSO'});
     assert.match(r.content[0].text, /already the current login/);
@@ -439,22 +443,16 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     assert.match(r.content[0].text, /no saved account named NOPE/);
 });
 
-test('get_usage reports account: null for an unsaved login, and without the module', async () => {
+test('get_usage reports account: null for an unsaved login', async () => {
     const {io} = accountsWorld();
-    let r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
-        {accounts: accountsModule, accountsIo: io, fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp()});
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
+        {accountsIo: io, fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp()});
     assert.equal(r.structuredContent.account, null);
     assert.doesNotMatch(r.content[0].text, /^Account:/);
-    r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
-        {accounts: null, fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp()});
-    assert.equal(r.structuredContent.account, null);
-    await assert.rejects(
-        handleRequest({method: 'tools/call', params: {name: 'switch_account', arguments: {name: 'X'}}}, {accounts: null}),
-        e => e.code === -32602);
 });
 
-test('loadAccounts finds the module next to the checkout', async () => {
-    const {loadAccounts} = await import('../mcp/server.js');
-    const mod = await loadAccounts();
-    assert.equal(typeof mod?.switchTo, 'function');
+test('readAccessToken follows CLAUDE_CONFIG_DIR like the account store', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-cfg-'));
+    fs.writeFileSync(path.join(dir, '.credentials.json'), JSON.stringify({claudeAiOauth: {accessToken: 'tok-cfg'}}));
+    assert.equal(readAccessToken({homedir: '/nowhere', platform: 'linux', env: {CLAUDE_CONFIG_DIR: dir}}), 'tok-cfg');
 });

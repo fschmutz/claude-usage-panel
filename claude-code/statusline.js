@@ -11,7 +11,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {fileURLToPath, URL} from 'node:url';
+import {fileURLToPath} from 'node:url';
+
+import {autoSwitchTarget, openStore, worstFromCache, worstPercent} from './accounts.js';
 
 // Compact per-transcript token sums are cached here so a multi-MB JSONL isn't
 // re-read and re-parsed on every refresh (see transcriptTotals).
@@ -35,24 +37,6 @@ const LAST_PING_PATH = path.join(STATE_DIR, 'last-ping');
 const SESSION_INDEX_PATH = path.join(
   process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), '.cache'),
   'claude-usage-panel', 'sessions.json');
-
-// Named accounts (optional): the shared module is installed next to this file
-// as claude-usage-accounts.mjs, and sits one directory over in the checkout.
-// Without it the account segment renders nothing.
-let accountsModule;
-async function loadAccounts() {
-  if (accountsModule !== undefined) return accountsModule;
-  accountsModule = null;
-  for (const rel of ['./claude-usage-accounts.mjs', './accounts.js']) {
-    try {
-      accountsModule = await import(new URL(rel, import.meta.url).href);
-      break;
-    } catch (e) {
-      if (e?.code !== 'ERR_MODULE_NOT_FOUND') throw e;
-    }
-  }
-  return accountsModule;
-}
 
 // Short labels for the two rate-limit windows stdin exposes. Terse because the
 // status line has little horizontal room.
@@ -503,35 +487,27 @@ export function sessionsSegment({
 // auto-switch threshold, "[PRO ⇢ PERSO]" in yellow. No network and no token
 // here: the name comes from ~/.claude.json against the saved profiles, the
 // other accounts' usage from the cache the panels / MCP server keep, and this
-// session's own usage from the stdin rate limits.
-export async function accountSegment(stdinText, {
-  nowMs = Date.now(),
-  accounts = undefined, // the module; null = "not installed", for tests
-  io = {},
-} = {}) {
-  const mod = accounts === undefined ? await loadAccounts() : accounts;
-  if (!mod) return '';
-  const ctx = {...io, nowMs};
-  let active;
+// session's own usage from the stdin rate limits. Never throws: a status line
+// must render whatever the store looks like.
+export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
   try {
-    active = mod.liveAccountName(ctx);
+    const store = openStore({...io, nowMs});
+    const active = store.liveAccountName();
+    if (!active) return '';
+    const worst = worstFromCache(store.readUsageCache());
+    // This session's own numbers are fresher than any cache entry.
+    const own = worstPercent(cardsFromStdin(stdinText));
+    if (own !== null) worst[active] = own;
+    const target = autoSwitchTarget({active, worst, nowMs, lastSwitchMs: store.readLastSwitchMs()});
+    if (target) return `${SEV_COLOR.warning}[${active} ⇢ ${target.to}]${RESET}`;
+    return `${DIM}[${active}]${RESET}`;
   } catch {
     return '';
   }
-  if (!active) return '';
-  const cache = mod.readUsageCache(ctx);
-  const worst = mod.worstFromCache(cache);
-  // This session's own numbers are fresher than any cache entry.
-  const own = mod.worstPercent(cardsFromStdin(stdinText));
-  if (own !== null) worst[active] = own;
-  const target = mod.autoSwitchTarget({active, worst, nowMs});
-  if (target) return `${SEV_COLOR.warning}[${active} ⇢ ${target.to}]${RESET}`;
-  return `${DIM}[${active}]${RESET}`;
 }
 
 // The segments the line can show, keyed by the name used in --segments. Each
-// takes the stdin text and the parsed config and returns its rendered string
-// (or a promise of it).
+// takes the stdin text and the parsed config and returns its rendered string.
 const SEGMENTS = {
   account: (stdin) => accountSegment(stdin),
   context: (stdin) => contextSegment(stdin),
@@ -584,14 +560,13 @@ function readStdin() {
   }
 }
 
-async function main() {
+function main() {
   const cfg = parseConfig(process.argv.slice(2));
   const stdin = readStdin();
   // Claude Code left-anchors the status line (indent via the settings `padding`
   // field), so we emit the chosen segments in order, left-aligned. Context is
   // always available; Session/Week appear once Claude Code provides rate_limits.
-  const parts = (await Promise.all(cfg.segments.map((key) => SEGMENTS[key](stdin, cfg))))
-    .filter(Boolean);
+  const parts = cfg.segments.map((key) => SEGMENTS[key](stdin, cfg)).filter(Boolean);
   process.stdout.write(parts.join('  '));
 }
 
@@ -602,5 +577,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (e.code === 'EPIPE') process.exit(0);
     throw e;
   });
-  main().catch(() => process.exit(0));
+  main();
 }

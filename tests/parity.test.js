@@ -132,21 +132,20 @@ for (const [portName, extra, label] of [
 // AccountsParityTests. Both JS copies must give the fixture's answers.
 import {
     accountSummary as summaryPure, activeAccountName as activePure,
-    headroom as headroomPure, autoSwitchTarget as switchPure, parseProfile as profilePure,
+    autoSwitchTarget as switchPure, parseProfile as profilePure,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import {
     accountSummary as summaryNode, activeAccountName as activeNode,
-    headroom as headroomNode, autoSwitchTarget as switchNode, parseProfile as profileNode,
+    autoSwitchTarget as switchNode, parseProfile as profileNode,
 } from '../claude-code/accounts.js';
 
 const accountsFix = JSON.parse(
     fs.readFileSync(path.join(here, 'fixtures', 'accounts.json'), 'utf8'));
 
 for (const [portName, fns] of [
-    ['pure.js', {summary: summaryPure, active: activePure, headroom: headroomPure,
-        target: switchPure, parse: profilePure}],
+    ['pure.js', {summary: summaryPure, active: activePure, target: switchPure, parse: profilePure}],
     ['claude-code/accounts.js', {summary: summaryNode, active: activeNode,
-        headroom: headroomNode, target: switchNode, parse: profileNode}],
+        target: switchNode, parse: profileNode}],
 ]) {
     const profiles = accountsFix.profiles.map(fns.parse);
     test(`${portName} accounts - summaries`, () => {
@@ -155,11 +154,6 @@ for (const [portName, fns] of [
     for (const c of accountsFix.active) {
         test(`${portName} accounts - active: ${c.name}`, () => {
             assert.equal(fns.active(profiles, c.live), c.expected);
-        });
-    }
-    for (const c of accountsFix.headroom) {
-        test(`${portName} accounts - headroom: ${c.name}`, () => {
-            assert.equal(fns.headroom(c.cards), c.expected);
         });
     }
     for (const c of accountsFix.autoSwitch) {

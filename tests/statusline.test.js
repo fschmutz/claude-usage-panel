@@ -8,7 +8,7 @@ import {
     formatTokens, sumTranscriptTokens, tokensSegment, transcriptTotals, parseConfig,
     accountSegment,
 } from '../claude-code/statusline.js';
-import * as accounts from '../claude-code/accounts.js';
+import {openStore} from '../claude-code/accounts.js';
 
 // Strip ANSI so we can assert on the visible glyphs. Built via RegExp
 // constructor to keep the ESC control char out of a regex literal.
@@ -231,22 +231,26 @@ const rateLimits = (session, week) => JSON.stringify({rate_limits: {
     seven_day: {used_percentage: week, resets_at: NOW / 1000 + 86400},
 }});
 
-test('accountSegment is blank without the module or an unsaved login', async () => {
-    assert.equal(await accountSegment('{}', {accounts: null}), '');
+test('accountSegment is blank for an unsaved login, and never throws', () => {
     const io = accountWorld();
-    assert.equal(await accountSegment(rateLimits(10, 10), {accounts, io, nowMs: NOW}), '');
+    assert.equal(accountSegment(rateLimits(10, 10), {io, nowMs: NOW}), '');
+    assert.equal(accountSegment('{}', {io: {homedir: '/nonexistent', platform: 'linux', env: {}}}), '');
 });
 
-test('accountSegment names the active account, and points at a freer one from the cache', async () => {
+test('accountSegment names the active account, and points at a freer one from the cache', () => {
     const io = accountWorld();
-    accounts.saveCurrent('PRO', io);
-    assert.equal(strip(await accountSegment(rateLimits(10, 10), {accounts, io, nowMs: NOW})), '[PRO]');
-    accounts.writeProfile({version: 1, name: 'PERSO', account: {accountUuid: 'u-perso'},
-        credentials: {claudeAiOauth: {accessToken: 'x', refreshToken: 'y'}}}, io);
-    accounts.writeUsageCache({PERSO: {ok: true, percents: {session: 20, weekly_all: 30}}}, io);
+    const store = openStore({...io, nowMs: NOW});
+    store.saveCurrent('PRO');
+    assert.equal(strip(accountSegment(rateLimits(10, 10), {io, nowMs: NOW})), '[PRO]');
+    store.writeProfile({version: 1, name: 'PERSO', account: {accountUuid: 'u-perso'},
+        credentials: {claudeAiOauth: {accessToken: 'x', refreshToken: 'y'}}});
+    store.writeUsageCache({PERSO: {ok: true, cards: [{key: 'session', percent: 20}, {key: 'weekly_all', percent: 30}]}});
     // own usage from stdin (fresh) beats the cache: at 95% here, PERSO has room
-    assert.equal(strip(await accountSegment(rateLimits(95, 40), {accounts, io, nowMs: NOW})), '[PRO ⇢ PERSO]');
-    assert.equal(strip(await accountSegment(rateLimits(50, 40), {accounts, io, nowMs: NOW})), '[PRO]');
+    assert.equal(strip(accountSegment(rateLimits(95, 40), {io, nowMs: NOW})), '[PRO ⇢ PERSO]');
+    assert.equal(strip(accountSegment(rateLimits(50, 40), {io, nowMs: NOW})), '[PRO]');
     // a stale cache says nothing about the others
-    assert.equal(strip(await accountSegment(rateLimits(95, 40), {accounts, io, nowMs: NOW + 3_600_000})), '[PRO]');
+    assert.equal(strip(accountSegment(rateLimits(95, 40), {io, nowMs: NOW + 3_600_000})), '[PRO]');
+    // a switch just made (by anyone) holds the hint back for the cooldown
+    store.writeLastSwitch({from: 'PERSO', to: 'PRO'});
+    assert.equal(strip(accountSegment(rateLimits(95, 40), {io, nowMs: NOW + 60_000})), '[PRO]');
 });

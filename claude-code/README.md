@@ -35,7 +35,8 @@ From the repo root, use the unified installer:
 ./install.sh statusline
 ```
 
-This copies the script to `~/.claude/claude-usage-statusline.mjs` and merges a
+This copies the Node clients to `~/.claude/claude-usage-panel/` (the status
+line, the account store it reads, the MCP server) and merges a
 `statusLine` entry into `~/.claude/settings.json` (other settings are left
 untouched; re-running is safe). Open a new Claude Code session - or run
 `/statusline` - to see it.

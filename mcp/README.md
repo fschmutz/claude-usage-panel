@@ -57,8 +57,7 @@ own normal / warning / critical. Errors (no token, expired session, network)
 come back as tool errors with a one-line fix hint. `account` names the saved
 account the numbers belong to (`null` if the current login was never saved).
 
-With the accounts module next to the server (always, in every install form)
-three more tools are listed: `list_accounts` (every saved login with its own
+Three more tools manage the saved logins: `list_accounts` (every saved login with its own
 usage and whether it is active), `save_account {name}` and `switch_account
 {name}` - so "switch me to PERSO" works in-conversation. What a switch touches,
 and the token refresh behind it, is on the

@@ -6,7 +6,7 @@
   "type": "module",
   "bin": {
     "claude-usage-panel": "mcp/server.js",
-    "claude-account": "claude-code/accounts.js"
+    "claude-account": "claude-code/claude-account.js"
   },
   "engines": {
     "node": ">=18"

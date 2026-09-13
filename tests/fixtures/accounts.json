@@ -1,5 +1,5 @@
 {
-  "_comment": "Named-account contract, pinned across lib/pure.js (GNOME), claude-code/accounts.js (CLI + MCP + status line) and ClaudeUsageCore/Accounts.swift (macOS). A profile is one saved Claude Code login: the credentials blob plus the oauthAccount block of ~/.claude.json. tokenState decides whether a stored login can be used as is (valid), needs its refresh token exchanged first (stale), or must be logged in again (expired). autoSwitch picks the account to move to when the active one crosses the threshold - the candidate with the most headroom, only if it sits at least `margin` points under the threshold, never twice within `cooldownMs`.",
+  "_comment": "Named-account contract, pinned across lib/pure.js (GNOME), claude-code/accounts.js (CLI + MCP + status line) and ClaudeUsageCore/Accounts.swift (macOS). A profile is one saved Claude Code login: the credentials blob plus the oauthAccount block of ~/.claude.json. tokenState decides whether a stored login can be used as is (valid), needs its refresh token exchanged first (stale), or must be logged in again (expired). autoSwitch picks the account to move to when the active one crosses the threshold - the candidate with the most headroom, only if it sits at least `margin` points under the threshold, never twice within `cooldownMs` of the last switch. That last switch is store state, not process state: every port's switchTo writes <accounts dir>/.last-switch.json = {at: <epochMs>, from: <name or null>, to: <name>} and every autoSwitch caller reads `at` from it, so a switch made by the CLI, the MCP tool or the other panel counts.",
   "now": 1789300000000,
   "refreshLeadMs": 300000,
   "threshold": 90,
@@ -134,12 +134,6 @@
     {"name": "email fallback", "live": {"emailAddress": "PRO@example.com"}, "expected": "PRO"},
     {"name": "unknown login", "live": {"accountUuid": "u-x", "emailAddress": "x@example.com"}, "expected": null},
     {"name": "no live login", "live": null, "expected": null}
-  ],
-  "headroom": [
-    {"name": "worst pooled limit", "cards": [{"key": "session", "percent": 40}, {"key": "weekly_all", "percent": 70}], "expected": 30},
-    {"name": "scoped counts too", "cards": [{"key": "session", "percent": 10}, {"key": "weekly_scoped:Fable", "percent": 95}], "expected": 5},
-    {"name": "no cards", "cards": [], "expected": null},
-    {"name": "clamped", "cards": [{"key": "session", "percent": 140}], "expected": 0}
   ],
   "autoSwitch": [
     {
