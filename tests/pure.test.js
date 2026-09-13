@@ -298,7 +298,7 @@ test('a torn or garbage line is skipped, never fatal', () => {
 // against each other.
 import {
     AUTO_SWITCH, REFRESH_LEAD_MS, accountSummary, activeAccountName, autoSwitchTarget,
-    formatAccountUsage, headroom, isValidName, parseProfile, tokenState,
+    formatAccountUsage, isValidName, parseProfile, tokenState, usageSeverity,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 const accountsFix = JSON.parse(fs.readFileSync(
@@ -345,9 +345,11 @@ test('accounts: activeAccountName matches the fixture', () => {
         assert.equal(activeAccountName(profiles, c.live), c.expected, c.name);
 });
 
-test('accounts: headroom matches the fixture', () => {
-    for (const c of accountsFix.headroom)
-        assert.equal(headroom(c.cards), c.expected, c.name);
+test('accounts: usageSeverity colours by the 70 / 90 thresholds', () => {
+    assert.equal(usageSeverity(null), 'normal');
+    assert.equal(usageSeverity(69), 'normal');
+    assert.equal(usageSeverity(70), 'warning');
+    assert.equal(usageSeverity(90), 'critical');
 });
 
 test('accounts: autoSwitchTarget matches the fixture', () => {

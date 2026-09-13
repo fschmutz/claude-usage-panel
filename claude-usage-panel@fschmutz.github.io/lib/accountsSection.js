@@ -1,16 +1,24 @@
 // The "Accounts" section of the dropdown: one row per saved Claude Code login,
 // the active one marked, every other one a click away from becoming the live
-// login. Rows are rebuilt on every refresh inside ONE widget (like the
-// sessions rows in extension.js) so the menu never reshuffles.
+// login, and the auto-switch toggle under them. Rows are rebuilt on every
+// refresh inside ONE widget (like the sessions rows) so the menu never
+// reshuffles. AccountsController at the bottom owns the whole flow -
+// extension.js only calls refresh() and reads activeName for the panel prefix.
 
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {usageFor, writeUsageCache} from './accounts.js';
-import {accountSummary, formatAccountUsage, severityClass, worstPercent} from './pure.js';
+import {
+    listProfiles, liveAccountName, readLastSwitchMs, switchTo, usageFor, writeUsageCache,
+} from './accounts.js';
+import {
+    accountSummary, autoSwitchTarget, formatAccountUsage, severityClass, usageSeverity,
+    worstPercent,
+} from './pure.js';
 
 /**
  * The rows for the section, and the worst limit per account for the
@@ -37,15 +45,6 @@ export async function collectAccountRows(session, profiles, active, activeCards)
     const worst = Object.fromEntries(
         profiles.map(p => [p.name, results[p.name]?.ok ? worstPercent(results[p.name].cards) : null]));
     return {rows, worst};
-}
-
-// Colour the usage figures by the worst limit, with the same thresholds the
-// status line uses for values that carry no API severity.
-function usageSeverity(cards) {
-    const worst = worstPercent(cards);
-    if (worst === null)
-        return 'normal';
-    return worst >= 90 ? 'critical' : worst >= 70 ? 'warning' : 'normal';
 }
 
 export const AccountsSection = GObject.registerClass(
@@ -92,7 +91,7 @@ class AccountsSection extends St.BoxLayout {
             }));
             const meta = new St.Label({
                 text: this._metaText(row),
-                style_class: `cu-account-meta ${severityClass(usageSeverity(row.cards))}`,
+                style_class: `cu-account-meta ${severityClass(usageSeverity(worstPercent(row.cards)))}`,
                 y_align: Clutter.ActorAlign.CENTER,
             });
             line.add_child(meta);
@@ -124,3 +123,142 @@ class AccountsSection extends St.BoxLayout {
         return '';
     }
 });
+
+// ── The flow behind the section ─────────────────────────────────────────────────
+
+export class AccountsController {
+    /**
+     * @param {object} deps
+     * @param {Gio.Settings} deps.settings the extension settings
+     * @param {Soup.Session} deps.session for the usage + refresh calls
+     * @param {PopupMenu.PopupMenu} deps.menu the dropdown; both items are
+     *   appended at construction, so build in menu order
+     * @param {(title: string, body: string) => void} deps.notify
+     * @param {() => void} deps.refreshSoon re-poll shortly (as the new account)
+     * @param {() => void} deps.onActiveChanged the panel prefix may have moved
+     * @param {() => boolean} deps.isDestroyed true once the button is gone
+     */
+    constructor({settings, session, menu, notify, refreshSoon, onActiveChanged, isDestroyed}) {
+        this._settings = settings;
+        this._session = session;
+        this._notify = notify;
+        this._refreshSoon = refreshSoon;
+        this._onActiveChanged = onActiveChanged;
+        this._isDestroyed = isDestroyed;
+        this._switching = false;
+        /** The saved name of the live login, for the top-bar prefix. */
+        this.activeName = null;
+
+        this._item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this._section = new AccountsSection(name => this.switchTo(name));
+        this._item.add_child(this._section);
+        menu.addMenuItem(this._item);
+        this._item.visible = false;
+
+        // Label and state of the toggle follow the settings, not the other way
+        // round, so the preferences window and the menu never disagree.
+        this._autoSwitchItem = new PopupMenu.PopupSwitchMenuItem('', false);
+        this._autoSwitchItem.connect('toggled', (_item, state) => {
+            if (this._settings.get_boolean('accounts-auto-switch') !== state)
+                this._settings.set_boolean('accounts-auto-switch', state);
+        });
+        menu.addMenuItem(this._autoSwitchItem);
+        this._autoSwitchItem.visible = false;
+        this.syncToggle();
+    }
+
+    syncToggle() {
+        const threshold = this._settings.get_int('accounts-switch-threshold');
+        this._autoSwitchItem.label.text = _('Auto-switch at %d%%').format(threshold);
+        const on = this._settings.get_boolean('accounts-auto-switch');
+        if (this._autoSwitchItem.state !== on)
+            this._autoSwitchItem.setToggleState(on);
+    }
+
+    _setActive(name) {
+        if (this.activeName === name)
+            return;
+        this.activeName = name;
+        this._onActiveChanged();
+    }
+
+    /**
+     * One row per saved login, then - if auto-switch is on and the active
+     * account is over the threshold - move to the freest one.
+     * @param {object[]} activeCards the cards the poll just fetched
+     */
+    async refresh(activeCards) {
+        // Off by default: no rows, no toggle, no panel prefix, no fetch.
+        if (!this._settings.get_boolean('accounts-enabled')) {
+            this._setActive(null);
+            this._item.visible = false;
+            this._autoSwitchItem.visible = false;
+            return;
+        }
+        let profiles;
+        try {
+            profiles = listProfiles();
+        } catch (e) {
+            logError(e, 'claude-usage-panel: could not read the saved accounts');
+            profiles = [];
+        }
+        const active = liveAccountName();
+        this._setActive(active);
+        this._item.visible = profiles.length > 0;
+        this._autoSwitchItem.visible = profiles.length > 1;
+        if (!profiles.length) {
+            this._section.update([], active);
+            return;
+        }
+        const {rows, worst} = await collectAccountRows(
+            this._session, profiles, active, activeCards);
+        if (this._isDestroyed())
+            return;
+        this._section.update(rows, active);
+
+        if (!this._settings.get_boolean('accounts-auto-switch') || this._switching)
+            return;
+        // The cooldown anchor is store state: a switch made by the CLI, the
+        // MCP tool or another panel counts here too.
+        const target = autoSwitchTarget({
+            active, worst,
+            threshold: this._settings.get_int('accounts-switch-threshold'),
+            lastSwitchMs: readLastSwitchMs(),
+        });
+        if (target)
+            await this.switchTo(target.to, target);
+    }
+
+    /**
+     * Make `name` the live login, tell the user, and poll again as that
+     * account. `auto` carries the numbers when the switch was automatic.
+     */
+    async switchTo(name, auto = null) {
+        if (this._switching)
+            return;
+        this._switching = true;
+        try {
+            const r = await switchTo(this._session, name);
+            if (this._isDestroyed() || !r.changed)
+                return;
+            let body = auto
+                ? _('Switched %s → %s: %s was at %d%%').format(
+                    r.from ?? '?', r.to, r.from ?? '?', auto.activePercent)
+                : _('Switched %s → %s').format(r.from ?? '?', r.to);
+            if (r.running > 0) {
+                body += _(' - %d running session(s) keep the old login until restarted')
+                    .format(r.running);
+            }
+            this._notify(_('Claude usage'), body);
+            this._refreshSoon();
+        } catch (e) {
+            if (this._isDestroyed())
+                return;
+            logError(e, 'claude-usage-panel: account switch failed');
+            this._notify(_('Claude usage'),
+                _('Could not switch to %s: %s').format(name, e.message));
+        } finally {
+            this._switching = false;
+        }
+    }
+}

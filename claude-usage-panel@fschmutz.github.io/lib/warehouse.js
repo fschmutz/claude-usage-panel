@@ -6,13 +6,12 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+import {stateDir} from './paths.js';
 import {warehouseLine, parseWarehouse, pruneWarehouse} from './pure.js';
 
 /** Same path the MCP server and the macOS app use, so all three write one file. */
 export function warehousePath() {
-    const state = GLib.getenv('XDG_STATE_HOME') ||
-        GLib.build_filenamev([GLib.get_home_dir(), '.local', 'state']);
-    return GLib.build_filenamev([state, 'claude-usage-panel', 'history.jsonl']);
+    return GLib.build_filenamev([stateDir(), 'history.jsonl']);
 }
 
 function readText(path) {

@@ -16,165 +16,166 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:253
+#: extension.js:239
 msgid "Extra usage"
 msgstr "额外用量"
 
-#: extension.js:284 prefs.js:259
-msgid "Today’s sessions"
-msgstr "今天的会话"
-
-#: extension.js:347
+#: extension.js:320
 msgid "Refresh now"
 msgstr "立即刷新"
 
-#: extension.js:360
+#: extension.js:333
 msgid "Settings"
 msgstr "设置"
 
-#: extension.js:364
+#: extension.js:337
 msgid "Quit"
 msgstr "退出"
 
-#: extension.js:477
+#: extension.js:450
 #, javascript-format
 msgid "Updated %s"
 msgstr "已更新 %s"
 
-#: extension.js:485
+#: extension.js:458
 msgid "Session cost: computing…"
 msgstr "会话费用：计算中…"
 
-#: extension.js:493
+#: extension.js:466
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "会话费用：$%s · %s 个 token（估算）"
 
-#: extension.js:496
+#: extension.js:469
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "会话费用：不可用（请安装 ccusage）"
 
-#: extension.js:536
+#: extension.js:509
 msgid "Loading…"
 msgstr "加载中…"
 
-#: extension.js:545
+#: extension.js:518
 #, javascript-format
 msgid "This cycle: $%s / $%s (%d%%) · %d members"
 msgstr "本周期：$%s / $%s (%d%%) · %d 名成员"
 
-#: extension.js:553
+#: extension.js:526
 #, javascript-format
 msgid "This cycle: $%s · %d members"
 msgstr "本周期：$%s · %d 名成员"
 
-#: extension.js:558
+#: extension.js:531
 #, javascript-format
 msgid "Today: $%s"
 msgstr "今天：$%s"
 
-#: extension.js:560
+#: extension.js:533
 #, javascript-format
 msgid "Top: %s $%s"
 msgstr "最高：%s $%s"
 
-#: extension.js:564
+#: extension.js:537
 #, javascript-format
 msgid "Cursor: %s"
 msgstr "Cursor：%s"
 
-#: extension.js:576
-#, javascript-format
-msgid "Auto-switch at %d%%"
-msgstr "达到 %d%% 时自动切换"
-
-#: extension.js:641
-#, javascript-format
-msgid "Switched %s → %s: %s was at %d%%"
-msgstr "已从 %s → %s 切换:%s 已达 %d%%"
-
-#: extension.js:643
-#, javascript-format
-msgid "Switched %s → %s"
-msgstr "已从 %s → %s 切换"
-
-#: extension.js:645
-#, javascript-format
-msgid " - %d running session(s) keep the old login until restarted"
-msgstr " - %d 个运行中的会话在重启前仍使用旧登录"
-
-#: extension.js:648 extension.js:654 extension.js:805 extension.js:815
-#: extension.js:830 extension.js:844
-msgid "Claude usage"
-msgstr "Claude 用量"
-
-#: extension.js:654
-#, javascript-format
-msgid "Could not switch to %s: %s"
-msgstr "无法切换到 %s:%s"
-
-#: extension.js:687
+#: extension.js:571
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s（上限的 %d%%）"
 
-#: extension.js:704
+#: extension.js:588
 #, javascript-format
 msgid "last %s"
 msgstr "上次 %s"
 
-#: extension.js:704 prefs.js:368
+#: extension.js:588 prefs.js:253
 msgid "never"
 msgstr "从未"
 
-#: extension.js:708
+#: extension.js:592
 #, javascript-format
 msgid "next %s"
 msgstr "下次 %s"
 
-#: extension.js:710
+#: extension.js:594
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "会话 ping：%s"
 
-#: extension.js:758
-msgid "Today’s sessions (est., still indexing)"
-msgstr "今天的会话（估算，仍在索引）"
+#: extension.js:609 extension.js:623 lib/accountsSection.js:252
+#: lib/accountsSection.js:258 lib/sessionsSection.js:144
+#: lib/sessionsSection.js:154
+msgid "Claude usage"
+msgstr "Claude 用量"
 
-#: extension.js:759
-msgid "Today’s sessions (est.)"
-msgstr "今天的会话（估算）"
-
-#: extension.js:806
-msgid "No terminal found - set one in the extension preferences."
-msgstr "未找到终端 - 请在扩展设置中指定一个。"
-
-#: extension.js:815
-#, javascript-format
-msgid "Could not open %s"
-msgstr "无法打开 %s"
-
-#: extension.js:831
+#: extension.js:610
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s 已达到 %d%%"
 
-#: extension.js:845
+#: extension.js:624
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "按当前速度，%s 将在重置前用尽"
 
-#: extension.js:948
+#: extension.js:728
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:60 prefs.js:145
+#: lib/accountsSection.js:59 prefs.js:458
 msgid "Accounts"
 msgstr "账户"
 
-#: lib/accountsSection.js:119
+#: lib/accountsSection.js:118
 msgid "(login expired)"
 msgstr "(登录已过期)"
+
+#: lib/accountsSection.js:172
+#, javascript-format
+msgid "Auto-switch at %d%%"
+msgstr "达到 %d%% 时自动切换"
+
+#: lib/accountsSection.js:245
+#, javascript-format
+msgid "Switched %s → %s: %s was at %d%%"
+msgstr "已从 %s → %s 切换:%s 已达 %d%%"
+
+#: lib/accountsSection.js:247
+#, javascript-format
+msgid "Switched %s → %s"
+msgstr "已从 %s → %s 切换"
+
+#: lib/accountsSection.js:249
+#, javascript-format
+msgid " - %d running session(s) keep the old login until restarted"
+msgstr " - %d 个运行中的会话在重启前仍使用旧登录"
+
+#: lib/accountsSection.js:259
+#, javascript-format
+msgid "Could not switch to %s: %s"
+msgstr "无法切换到 %s:%s"
+
+#: lib/sessionsSection.js:45 prefs.js:144
+msgid "Today’s sessions"
+msgstr "今天的会话"
+
+#: lib/sessionsSection.js:97
+msgid "Today’s sessions (est., still indexing)"
+msgstr "今天的会话（估算，仍在索引）"
+
+#: lib/sessionsSection.js:98
+msgid "Today’s sessions (est.)"
+msgstr "今天的会话（估算）"
+
+#: lib/sessionsSection.js:145
+msgid "No terminal found - set one in the extension preferences."
+msgstr "未找到终端 - 请在扩展设置中指定一个。"
+
+#: lib/sessionsSection.js:154
+#, javascript-format
+msgid "Could not open %s"
+msgstr "无法打开 %s"
 
 #: prefs.js:22
 msgid "General"
@@ -285,7 +286,204 @@ msgstr "在下拉菜单中添加 Cursor 支出区块"
 msgid "Cursor Admin API key"
 msgstr "Cursor Admin API 密钥"
 
-#: prefs.js:146
+#: prefs.js:145
+msgid ""
+"List the sessions that spent the most tokens today, biggest first, and "
+"resume one in a terminal with a click. Read from the local transcripts in "
+"~/.claude/projects."
+msgstr ""
+"按今天消耗 token 最多的顺序列出会话，点击即可在终端中恢复。读取 ~/.claude/"
+"projects 中的本地记录。"
+
+#: prefs.js:148
+msgid "Show today’s sessions"
+msgstr "显示今天的会话"
+
+#: prefs.js:149
+msgid "Adds up to 5 resume links to the dropdown"
+msgstr "在下拉菜单中添加最多 5 个恢复链接"
+
+#: prefs.js:154
+msgid "Terminal"
+msgstr "终端"
+
+#: prefs.js:160
+msgid ""
+"Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
+"alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
+msgstr ""
+"留空则自动检测：$TERMINAL，然后依次是 ghostty、kitty、wezterm、alacritty、"
+"foot、gnome-terminal、konsole、tilix、xfce4-terminal、xterm。"
+
+#: prefs.js:170
+msgid "Session pings"
+msgstr "会话 ping"
+
+#: prefs.js:171
+msgid ""
+"A 5-hour window is anchored to its first message, so pinging claude (haiku, "
+"one turn) at a fixed time lines the day’s windows up with the hours you "
+"actually work. Same schedule as ./install.sh sessionping."
+msgstr ""
+"5 小时窗口以第一条消息为起点，因此在固定时间 ping 一次 claude（haiku，一轮）"
+"可让当天的窗口与实际工作时间对齐。与 ./install.sh sessionping 的计划相同。"
+
+#: prefs.js:178
+msgid "Open the 5h session window on schedule"
+msgstr "按计划打开 5 小时会话窗口"
+
+#: prefs.js:180
+msgid "Runs scripts/session-ping.sh from a systemd user timer"
+msgstr "通过 systemd 用户定时器运行 scripts/session-ping.sh"
+
+#: prefs.js:181
+msgid "Needs a systemd user session - use ./install.sh sessionping here"
+msgstr "需要 systemd 用户会话 - 请在此使用 ./install.sh sessionping"
+
+#: prefs.js:187
+msgid "Last ping"
+msgstr "上次 ping"
+
+#: prefs.js:190
+msgid "Coverage"
+msgstr "覆盖率"
+
+#: prefs.js:194
+msgid "Working day"
+msgstr "工作时段"
+
+#: prefs.js:212
+msgid "Days"
+msgstr "星期"
+
+#: prefs.js:213
+msgid "Mon"
+msgstr "周一"
+
+#: prefs.js:213
+msgid "Tue"
+msgstr "周二"
+
+#: prefs.js:213
+msgid "Wed"
+msgstr "周三"
+
+#: prefs.js:213
+msgid "Thu"
+msgstr "周四"
+
+#: prefs.js:213
+msgid "Fri"
+msgstr "周五"
+
+#: prefs.js:213
+msgid "Sat"
+msgstr "周六"
+
+#: prefs.js:213
+msgid "Sun"
+msgstr "周日"
+
+#: prefs.js:237
+msgid "Add a ping"
+msgstr "添加一个 ping"
+
+#: prefs.js:240
+msgid "Suggest times"
+msgstr "推荐时间"
+
+#: prefs.js:256
+#, javascript-format
+msgid "%d%% of %s-%s covered"
+msgstr "覆盖率 %d%%（%s-%s）"
+
+#: prefs.js:258
+msgid "no valid times yet"
+msgstr "尚无有效时间"
+
+#: prefs.js:278
+#, javascript-format
+msgid "Ping %d"
+msgstr "Ping %d"
+
+#: prefs.js:347
+msgid "Updates"
+msgstr "更新"
+
+#: prefs.js:348
+msgid "Daily check, and whether it is actually running."
+msgstr "每日检查，以及它是否真的在运行。"
+
+#: prefs.js:351 prefs.js:437
+msgid "Checking…"
+msgstr "检查中…"
+
+#: prefs.js:355 prefs.js:391 prefs.js:415 prefs.js:425
+msgid "Check now"
+msgstr "立即检查"
+
+#: prefs.js:389
+msgid "Cannot self-update"
+msgstr "无法自我更新"
+
+#: prefs.js:390
+msgid "No git checkout found for auto-update.sh."
+msgstr "未找到 auto-update.sh 所在的 git 检出目录。"
+
+#: prefs.js:398
+msgid "Could not read the update status"
+msgstr "无法读取更新状态"
+
+#: prefs.js:406
+#, javascript-format
+msgid "Installed %s, checkout %s"
+msgstr "已安装 %s，检出 %s"
+
+#: prefs.js:407
+msgid "Run ./install.sh update to install the newer code."
+msgstr "运行 ./install.sh update 安装较新的代码。"
+
+#: prefs.js:408 prefs.js:419 prefs.js:436
+msgid "Update now"
+msgstr "立即更新"
+
+#: prefs.js:410
+#, javascript-format
+msgid "Paused: %s"
+msgstr "已暂停：%s"
+
+#: prefs.js:412
+msgid ""
+"The daily check will not touch this checkout until that is resolved. It only "
+"ever fast-forwards a clean checkout."
+msgstr ""
+"在解决之前，每日检查不会改动此检出目录。它只会对干净的检出执行 fast-forward。"
+
+#: prefs.js:417
+#, javascript-format
+msgid "Update available: %s → %s"
+msgstr "有可用更新：%s → %s"
+
+#: prefs.js:418 prefs.js:424
+#, javascript-format
+msgid "Last checked %s"
+msgstr "上次检查 %s"
+
+#: prefs.js:422
+#, javascript-format
+msgid "Up to date (%s)"
+msgstr "已是最新 (%s)"
+
+#: prefs.js:423
+#, javascript-format
+msgid "%s (could not reach the remote)"
+msgstr "%s（无法连接远程）"
+
+#: prefs.js:437
+msgid "Updating…"
+msgstr "更新中…"
+
+#: prefs.js:459
 msgid ""
 "Save the login Claude Code holds now under a name (PRO, PERSO) and switch "
 "between saved logins from the dropdown, no browser needed. Only the "
@@ -297,271 +495,74 @@ msgstr ""
 "的登录之间切换,无需浏览器。只有凭据和 ~/.claude.json 的账户块会改变;设置、钩"
 "子、插件和历史保持不变。已在运行的 Claude Code 会话在重启前仍使用旧登录。"
 
-#: prefs.js:153
+#: prefs.js:466
 msgid "Enable named accounts"
 msgstr "启用命名账户"
 
-#: prefs.js:154
+#: prefs.js:467
 msgid "Off by default - nothing account-related is shown until you turn it on"
 msgstr "默认关闭：开启前不会显示任何账户相关内容"
 
-#: prefs.js:161
+#: prefs.js:474
 msgid "Current login"
 msgstr "当前登录"
 
-#: prefs.js:163
+#: prefs.js:476
 msgid "Save the current login as"
 msgstr "将当前登录保存为"
 
-#: prefs.js:164
+#: prefs.js:477
 msgid "Save"
 msgstr "保存"
 
-#: prefs.js:172
+#: prefs.js:486
 msgid "Switch accounts automatically"
 msgstr "自动切换账户"
 
-#: prefs.js:173
+#: prefs.js:487
 msgid ""
 "When the active account reaches the threshold, move to the saved account "
 "with the most headroom"
 msgstr "当活动账户达到阈值时,切换到余量最多的已保存账户"
 
-#: prefs.js:178
+#: prefs.js:492
 msgid "Auto-switch threshold"
 msgstr "自动切换阈值"
 
-#: prefs.js:179
+#: prefs.js:493
 msgid "Worst limit percentage that counts as full"
 msgstr "视为已满的最差限额百分比"
 
-#: prefs.js:187
+#: prefs.js:501
 msgid "Show the account name in the top bar"
 msgstr "在顶栏显示账户名"
 
-#: prefs.js:188
+#: prefs.js:502
 msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
 msgstr "显示“PRO · Session 42%”而不是“Session 42%”"
 
-#: prefs.js:205
+#: prefs.js:519
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s，已保存为 %s"
 
-#: prefs.js:206
+#: prefs.js:520
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（尚未保存）"
 
-#: prefs.js:207
+#: prefs.js:521
 msgid "No Claude Code login found"
 msgstr "未找到 Claude Code 登录"
 
-#: prefs.js:213
+#: prefs.js:527
 msgid "login expired - sign in and save it again"
 msgstr "登录已过期 - 请重新登录并再次保存"
 
-#: prefs.js:220
+#: prefs.js:534
 msgid "Forget this saved login"
 msgstr "忘记此已保存的登录"
 
-#: prefs.js:240
+#: prefs.js:554
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名称只能使用字母、数字、. _ -(最多 32 个字符)"
-
-#: prefs.js:260
-msgid ""
-"List the sessions that spent the most tokens today, biggest first, and "
-"resume one in a terminal with a click. Read from the local transcripts in "
-"~/.claude/projects."
-msgstr ""
-"按今天消耗 token 最多的顺序列出会话，点击即可在终端中恢复。读取 ~/.claude/"
-"projects 中的本地记录。"
-
-#: prefs.js:263
-msgid "Show today’s sessions"
-msgstr "显示今天的会话"
-
-#: prefs.js:264
-msgid "Adds up to 5 resume links to the dropdown"
-msgstr "在下拉菜单中添加最多 5 个恢复链接"
-
-#: prefs.js:269
-msgid "Terminal"
-msgstr "终端"
-
-#: prefs.js:275
-msgid ""
-"Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
-"alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
-msgstr ""
-"留空则自动检测：$TERMINAL，然后依次是 ghostty、kitty、wezterm、alacritty、"
-"foot、gnome-terminal、konsole、tilix、xfce4-terminal、xterm。"
-
-#: prefs.js:285
-msgid "Session pings"
-msgstr "会话 ping"
-
-#: prefs.js:286
-msgid ""
-"A 5-hour window is anchored to its first message, so pinging claude (haiku, "
-"one turn) at a fixed time lines the day’s windows up with the hours you "
-"actually work. Same schedule as ./install.sh sessionping."
-msgstr ""
-"5 小时窗口以第一条消息为起点，因此在固定时间 ping 一次 claude（haiku，一轮）"
-"可让当天的窗口与实际工作时间对齐。与 ./install.sh sessionping 的计划相同。"
-
-#: prefs.js:293
-msgid "Open the 5h session window on schedule"
-msgstr "按计划打开 5 小时会话窗口"
-
-#: prefs.js:295
-msgid "Runs scripts/session-ping.sh from a systemd user timer"
-msgstr "通过 systemd 用户定时器运行 scripts/session-ping.sh"
-
-#: prefs.js:296
-msgid "Needs a systemd user session - use ./install.sh sessionping here"
-msgstr "需要 systemd 用户会话 - 请在此使用 ./install.sh sessionping"
-
-#: prefs.js:302
-msgid "Last ping"
-msgstr "上次 ping"
-
-#: prefs.js:305
-msgid "Coverage"
-msgstr "覆盖率"
-
-#: prefs.js:309
-msgid "Working day"
-msgstr "工作时段"
-
-#: prefs.js:327
-msgid "Days"
-msgstr "星期"
-
-#: prefs.js:328
-msgid "Mon"
-msgstr "周一"
-
-#: prefs.js:328
-msgid "Tue"
-msgstr "周二"
-
-#: prefs.js:328
-msgid "Wed"
-msgstr "周三"
-
-#: prefs.js:328
-msgid "Thu"
-msgstr "周四"
-
-#: prefs.js:328
-msgid "Fri"
-msgstr "周五"
-
-#: prefs.js:328
-msgid "Sat"
-msgstr "周六"
-
-#: prefs.js:328
-msgid "Sun"
-msgstr "周日"
-
-#: prefs.js:352
-msgid "Add a ping"
-msgstr "添加一个 ping"
-
-#: prefs.js:355
-msgid "Suggest times"
-msgstr "推荐时间"
-
-#: prefs.js:371
-#, javascript-format
-msgid "%d%% of %s-%s covered"
-msgstr "覆盖率 %d%%（%s-%s）"
-
-#: prefs.js:373
-msgid "no valid times yet"
-msgstr "尚无有效时间"
-
-#: prefs.js:393
-#, javascript-format
-msgid "Ping %d"
-msgstr "Ping %d"
-
-#: prefs.js:462
-msgid "Updates"
-msgstr "更新"
-
-#: prefs.js:463
-msgid "Daily check, and whether it is actually running."
-msgstr "每日检查，以及它是否真的在运行。"
-
-#: prefs.js:466 prefs.js:552
-msgid "Checking…"
-msgstr "检查中…"
-
-#: prefs.js:470 prefs.js:506 prefs.js:530 prefs.js:540
-msgid "Check now"
-msgstr "立即检查"
-
-#: prefs.js:504
-msgid "Cannot self-update"
-msgstr "无法自我更新"
-
-#: prefs.js:505
-msgid "No git checkout found for auto-update.sh."
-msgstr "未找到 auto-update.sh 所在的 git 检出目录。"
-
-#: prefs.js:513
-msgid "Could not read the update status"
-msgstr "无法读取更新状态"
-
-#: prefs.js:521
-#, javascript-format
-msgid "Installed %s, checkout %s"
-msgstr "已安装 %s，检出 %s"
-
-#: prefs.js:522
-msgid "Run ./install.sh update to install the newer code."
-msgstr "运行 ./install.sh update 安装较新的代码。"
-
-#: prefs.js:523 prefs.js:534 prefs.js:551
-msgid "Update now"
-msgstr "立即更新"
-
-#: prefs.js:525
-#, javascript-format
-msgid "Paused: %s"
-msgstr "已暂停：%s"
-
-#: prefs.js:527
-msgid ""
-"The daily check will not touch this checkout until that is resolved. It only "
-"ever fast-forwards a clean checkout."
-msgstr ""
-"在解决之前，每日检查不会改动此检出目录。它只会对干净的检出执行 fast-forward。"
-
-#: prefs.js:532
-#, javascript-format
-msgid "Update available: %s → %s"
-msgstr "有可用更新：%s → %s"
-
-#: prefs.js:533 prefs.js:539
-#, javascript-format
-msgid "Last checked %s"
-msgstr "上次检查 %s"
-
-#: prefs.js:537
-#, javascript-format
-msgid "Up to date (%s)"
-msgstr "已是最新 (%s)"
-
-#: prefs.js:538
-#, javascript-format
-msgid "%s (could not reach the remote)"
-msgstr "%s（无法连接远程）"
-
-#: prefs.js:552
-msgid "Updating…"
-msgstr "更新中…"

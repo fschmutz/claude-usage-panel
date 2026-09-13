@@ -16,6 +16,7 @@ import Gio from 'gi://Gio';
 import Soup from 'gi://Soup';
 
 import {fetchUsage} from './claudeUsage.js';
+import {claudeConfigPath, credentialsPath, stateDir} from './paths.js';
 import {
     PROFILE_VERSION, activeAccountName, isValidName, parseProfile, tokenState, worstPercent,
 } from './pure.js';
@@ -23,34 +24,18 @@ import {
 export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
 // Claude Code's public OAuth client - the same id the CLI itself refreshes with.
 export const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+// The status line reads this snapshot of every account's worst limit; the
+// last-switch stamp is what every auto-switch caller - this panel, the macOS
+// app, the MCP tool - checks its cooldown against, so a switch made anywhere
+// counts everywhere.
 const USAGE_CACHE_FILE = '.usage-cache.json';
-/** The status line trusts a cached usage snapshot this long. */
-export const USAGE_CACHE_MAX_AGE_MS = 30 * 60_000;
+const LAST_SWITCH_FILE = '.last-switch.json';
 
 // ── Paths ───────────────────────────────────────────────────────────────────────
 
 /** Same root as the usage warehouse, so every client reads one store. */
 export function accountsDir() {
-    const state = GLib.getenv('XDG_STATE_HOME') ||
-        GLib.build_filenamev([GLib.get_home_dir(), '.local', 'state']);
-    return GLib.build_filenamev([state, 'claude-usage-panel', 'accounts']);
-}
-
-function configDir() {
-    return GLib.getenv('CLAUDE_CONFIG_DIR') ||
-        GLib.build_filenamev([GLib.get_home_dir(), '.claude']);
-}
-
-/** Where Claude Code keeps the live credentials. */
-export function credentialsPath() {
-    return GLib.build_filenamev([configDir(), '.credentials.json']);
-}
-
-/** ~/.claude.json follows CLAUDE_CONFIG_DIR when that is set. */
-export function claudeConfigPath() {
-    return GLib.getenv('CLAUDE_CONFIG_DIR')
-        ? GLib.build_filenamev([configDir(), '.claude.json'])
-        : GLib.build_filenamev([GLib.get_home_dir(), '.claude.json']);
+    return GLib.build_filenamev([stateDir(), 'accounts']);
 }
 
 function profilePath(name) {
@@ -59,6 +44,10 @@ function profilePath(name) {
 
 export function usageCachePath() {
     return GLib.build_filenamev([accountsDir(), USAGE_CACHE_FILE]);
+}
+
+export function lastSwitchPath() {
+    return GLib.build_filenamev([accountsDir(), LAST_SWITCH_FILE]);
 }
 
 // ── Files ───────────────────────────────────────────────────────────────────────
@@ -374,7 +363,24 @@ export async function switchTo(session, name) {
         target = await refreshProfile(session, target);
     writeLiveCredentials(target.credentials);
     writeLiveAccount(target.account);
+    writeLastSwitch({from, to: name});
     return {from, to: name, changed: true, running: await runningClaudeCount(), email};
+}
+
+// ── The last switch (auto-switch cooldown, shared by every client) ──────────────
+
+export function writeLastSwitch({from, to}, nowMs = Date.now()) {
+    try {
+        writePrivate(lastSwitchPath(), JSON.stringify({at: nowMs, from: from ?? null, to}));
+    } catch (e) {
+        logError(e, 'claude-usage-panel: could not record the account switch');
+    }
+}
+
+/** When the last switch happened (by any client), or null. */
+export function readLastSwitchMs() {
+    const at = readJSON(lastSwitchPath())?.at;
+    return Number.isFinite(at) ? at : null;
 }
 
 // ── Per-account usage ───────────────────────────────────────────────────────────
@@ -409,12 +415,4 @@ export function writeUsageCache(results, nowMs = Date.now()) {
     } catch (e) {
         logError(e, 'claude-usage-panel: could not write the account usage cache');
     }
-}
-
-/** The cached snapshot when fresh enough, else null. */
-export function readUsageCache(nowMs = Date.now(), maxAgeMs = USAGE_CACHE_MAX_AGE_MS) {
-    const cache = readJSON(usageCachePath());
-    if (!cache || !Number.isFinite(cache.at) || nowMs - cache.at > maxAgeMs)
-        return null;
-    return cache.accounts && typeof cache.accounts === 'object' ? cache : null;
 }

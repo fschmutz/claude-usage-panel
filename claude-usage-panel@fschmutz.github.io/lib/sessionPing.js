@@ -7,6 +7,8 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+import {stateDir} from './paths.js';
+
 import {
     SP_UNIT, DEFAULT_DAYS, DEFAULT_TIMES,
     parseServiceExec, parseTimerTimes, serviceText, timerText,
@@ -22,9 +24,7 @@ function unitPath(ext) {
 
 /** Where scripts/session-ping.sh records its last successful ping. */
 export function lastPingPath() {
-    const state = GLib.getenv('XDG_STATE_HOME') ||
-        GLib.build_filenamev([GLib.get_home_dir(), '.local', 'state']);
-    return GLib.build_filenamev([state, 'claude-usage-panel', 'last-ping']);
+    return GLib.build_filenamev([stateDir(), 'last-ping']);
 }
 
 function readText(path) {

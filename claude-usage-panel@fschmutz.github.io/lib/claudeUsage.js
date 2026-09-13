@@ -5,21 +5,22 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
+import {credentialsPath} from './paths.js';
 import {normalizeUsage, normalizeExtraUsage} from './pure.js';
 
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
-const CREDENTIALS_PATH = `${GLib.get_home_dir()}/.claude/.credentials.json`;
 
 export {normalizeUsage};
 
 /**
- * Read the OAuth access token from ~/.claude/.credentials.json.
+ * Read the OAuth access token from the live credentials file - the same one
+ * the account store swaps, so CLAUDE_CONFIG_DIR is honored here too.
  * Returns the token string, or null when missing / unreadable.
  */
 export function readAccessToken() {
     try {
-        const file = Gio.File.new_for_path(CREDENTIALS_PATH);
+        const file = Gio.File.new_for_path(credentialsPath());
         const [ok, contents] = file.load_contents(null);
         if (!ok)
             return null;
