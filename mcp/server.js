@@ -9,13 +9,18 @@
 // This is the fourth port of the shared normalization contract (see CLAUDE.md
 // "one contract, N ports"): lib/pure.js (GNOME) · Model.swift (macOS) ·
 // statusline.js (terminal) · this file. tests/parity.test.js keeps them in sync.
+//
+// Named accounts (list_accounts / save_account / switch_account) come from the
+// shared claude-code/accounts.js module, loaded lazily: installed next to this
+// file as claude-usage-accounts.mjs, one directory over in the checkout and the
+// plugin. Without it the server simply exposes get_usage alone.
 
 import fs from 'node:fs';
 import os from 'node:os';
 import {Buffer} from 'node:buffer';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {pathToFileURL} from 'node:url';
+import {pathToFileURL, URL} from 'node:url';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
 export const VERSION = '1.9.1';
@@ -27,6 +32,25 @@ const FETCH_TIMEOUT_MS = 10_000;
 // Newest first; initialize echoes the client's requested version when we
 // support it, otherwise answers with our newest (per the MCP spec).
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+
+// ── Named accounts (optional module) ────────────────────────────────────────────
+
+let accountsModule; // undefined = not tried yet; null = not installed
+
+/** The shared accounts module, or null when it is not alongside this file. */
+export async function loadAccounts() {
+  if (accountsModule !== undefined) return accountsModule;
+  accountsModule = null;
+  for (const rel of ['./claude-usage-accounts.mjs', '../claude-code/accounts.js']) {
+    try {
+      accountsModule = await import(new URL(rel, import.meta.url).href);
+      break;
+    } catch (e) {
+      if (e?.code !== 'ERR_MODULE_NOT_FOUND') throw e;
+    }
+  }
+  return accountsModule;
+}
 
 // ── Shared normalization contract (mirrors lib/pure.js) ─────────────────────────
 
@@ -833,11 +857,23 @@ const GET_USAGE_TOOL = {
     'them enabled. Also ' +
     'reports `lastPing` (when a scheduled session ping last opened a 5-hour ' +
     'window) and `sessions`: today\'s local Claude Code sessions ranked by the ' +
-    'tokens they spent, each with the shell command that resumes it.',
+    'tokens they spent, each with the shell command that resumes it. `account` ' +
+    'names the saved account these numbers belong to (see list_accounts), ' +
+    'null when the current login was never saved.',
   inputSchema: {type: 'object', properties: {}, additionalProperties: false},
   outputSchema: {
     type: 'object',
     properties: {
+      account: {
+        type: ['object', 'null'],
+        description: 'the saved account the current login is; null when not saved',
+        properties: {
+          name: {type: 'string'},
+          email: {type: ['string', 'null']},
+          plan: {type: ['string', 'null']},
+        },
+        required: ['name'],
+      },
       limits: {
         type: 'array',
         items: {
@@ -961,6 +997,175 @@ const GET_USAGE_TOOL = {
   annotations: {readOnlyHint: true, openWorldHint: true},
 };
 
+const ACCOUNT_LIMIT_ITEM = GET_USAGE_TOOL.outputSchema.properties.limits.items;
+
+const ACCOUNT_TOOLS = [
+  {
+    name: 'list_accounts',
+    title: 'Saved Claude accounts',
+    description:
+      'The Claude Code logins saved under a name (e.g. PRO, PERSO) with each ' +
+      'one\'s plan usage, which one is active, and whether its stored login is ' +
+      'still usable. Usage for a non-active account is read with its own stored ' +
+      'token (refreshed when needed); nothing is switched.',
+    inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+    outputSchema: {
+      type: 'object',
+      properties: {
+        active: {type: ['string', 'null'], description: 'name of the active login, null if unsaved'},
+        accounts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: {type: 'string'},
+              email: {type: ['string', 'null']},
+              plan: {type: ['string', 'null'], description: 'e.g. max, pro'},
+              tier: {type: ['string', 'null']},
+              active: {type: 'boolean'},
+              tokenState: {
+                type: 'string', enum: ['valid', 'stale', 'expired'],
+                description: 'expired = a new `claude auth login` on that account is needed',
+              },
+              limits: {type: 'array', items: ACCOUNT_LIMIT_ITEM},
+              error: {type: ['string', 'null'], description: 'why usage could not be read'},
+            },
+            required: ['name', 'active', 'tokenState'],
+          },
+        },
+      },
+      required: ['active', 'accounts'],
+    },
+    annotations: {readOnlyHint: true, openWorldHint: true},
+  },
+  {
+    name: 'save_account',
+    title: 'Save the current Claude login under a name',
+    description:
+      'Save the login Claude Code holds right now as a named account, so it can ' +
+      'be switched back to later. Names: letters, digits, . _ - (e.g. PRO). ' +
+      'Refuses to reuse a name that belongs to another account or to save the ' +
+      'same account twice unless `force` is true.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$'},
+        force: {type: 'boolean', default: false},
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false},
+  },
+  {
+    name: 'switch_account',
+    title: 'Switch Claude Code to a saved account',
+    description:
+      'Make a saved account the current Claude Code login: the current login ' +
+      'is written back to its own saved profile first (or saved under its email ' +
+      'if it was never named), then the target credentials replace it. Only the ' +
+      'login changes; settings, MCP servers and history stay. Claude Code ' +
+      'sessions already running keep the old login until they restart - the ' +
+      'result says how many are running, including this one.',
+    inputSchema: {
+      type: 'object',
+      properties: {name: {type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$'}},
+      required: ['name'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        from: {type: ['string', 'null']},
+        to: {type: 'string'},
+        changed: {type: 'boolean', description: 'false when it already was the active login'},
+        running: {type: 'integer', description: 'Claude Code processes still on the old login'},
+        email: {type: ['string', 'null']},
+      },
+      required: ['to', 'changed', 'running'],
+    },
+    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true},
+  },
+];
+
+// One line: "Account: PRO (pro@example.com, max)".
+export function renderAccount(account) {
+  if (!account) return '';
+  const meta = [account.email, account.plan].filter(Boolean).join(', ');
+  return `Account: **${account.name}**${meta ? ` (${meta})` : ''}`;
+}
+
+export function renderAccounts({active, accounts}) {
+  if (!accounts.length) {
+    return 'No saved accounts yet - save_account names the current login.';
+  }
+  const lines = accounts.map((a) => {
+    const parts = [`${a.active ? '● ' : '○ '}**${a.name}**`];
+    if (a.email) parts.push(a.email);
+    if (a.plan) parts.push(a.plan);
+    if (a.tokenState === 'expired') parts.push('login EXPIRED - `claude auth login` on it and save again');
+    if (a.error) parts.push(a.error);
+    if (a.limits?.length) {
+      parts.push(a.limits.map((l) => `${l.label} ${l.percent}%`).join(' · '));
+    }
+    return `- ${parts.join(' · ')}`;
+  });
+  if (!active) lines.push('- current login is not one of the saved accounts');
+  return lines.join('\n');
+}
+
+// The saved account the live login is, as get_usage reports it.
+function currentAccount(accounts, io) {
+  const name = accounts.liveAccountName(io);
+  if (!name) return null;
+  const profile = accounts.readProfile(name, io);
+  const s = accounts.accountSummary(profile, io?.nowMs);
+  return {name: s.name, email: s.email, plan: s.plan};
+}
+
+async function callAccountTool(name, args, accounts, deps) {
+  const io = deps.accountsIo;
+  const nowMs = io?.nowMs ?? Date.now();
+  switch (name) {
+    case 'list_accounts': {
+      accounts.syncBack(io);
+      const profiles = accounts.listProfiles(io);
+      const active = accounts.liveAccountName(io);
+      const usage = await accounts.usageForAll(io);
+      accounts.writeUsageCache(usage, io);
+      const rows = profiles.map((p) => {
+        const s = accounts.accountSummary(p, nowMs);
+        const u = usage[p.name];
+        return {
+          ...s, active: p.name === active,
+          limits: u?.ok ? normalizeUsage(u.raw) : [],
+          error: u?.ok ? null : (u?.message ?? null),
+        };
+      });
+      const structured = {active, accounts: rows};
+      return {content: [{type: 'text', text: renderAccounts(structured)}], structuredContent: structured};
+    }
+    case 'save_account': {
+      const p = accounts.saveCurrent(args?.name, io, {force: args?.force === true});
+      const s = accounts.accountSummary(p, nowMs);
+      return {
+        content: [{type: 'text', text: `Saved the current login as **${s.name}** (${s.email ?? 'unknown email'}).`}],
+        structuredContent: {name: s.name, email: s.email, plan: s.plan},
+      };
+    }
+    case 'switch_account': {
+      const r = await accounts.switchTo(args?.name, io);
+      const text = r.changed
+        ? `Switched ${r.from ?? '?'} → **${r.to}**${r.email ? ` (${r.email})` : ''}.` +
+          (r.running ? ` ${r.running} Claude Code session${r.running > 1 ? 's are' : ' is'} still running on the old login - including this one - and will use ${r.to} once restarted.` : '')
+        : `**${r.to}** is already the current login.`;
+      return {content: [{type: 'text', text}], structuredContent: r};
+    }
+    default:
+      throw new RpcError(-32602, `Unknown tool: ${name}`);
+  }
+}
+
 export async function handleRequest(msg, deps = {}) {
   switch (msg.method) {
     case 'initialize': {
@@ -975,11 +1180,23 @@ export async function handleRequest(msg, deps = {}) {
     }
     case 'ping':
       return {};
-    case 'tools/list':
-      return {tools: [GET_USAGE_TOOL]};
+    case 'tools/list': {
+      const accounts = deps.accounts === undefined ? await loadAccounts() : deps.accounts;
+      return {tools: accounts ? [GET_USAGE_TOOL, ...ACCOUNT_TOOLS] : [GET_USAGE_TOOL]};
+    }
     case 'tools/call': {
-      if (msg.params?.name !== 'get_usage')
-        throw new RpcError(-32602, `Unknown tool: ${msg.params?.name}`);
+      const accounts = deps.accounts === undefined ? await loadAccounts() : deps.accounts;
+      const name = msg.params?.name;
+      if (accounts && ACCOUNT_TOOLS.some((t) => t.name === name)) {
+        try {
+          return await callAccountTool(name, msg.params?.arguments, accounts, deps);
+        } catch (e) {
+          if (e instanceof RpcError) throw e;
+          return {content: [{type: 'text', text: e.message}], isError: true};
+        }
+      }
+      if (name !== 'get_usage')
+        throw new RpcError(-32602, `Unknown tool: ${name}`);
       const result = await fetchUsage(deps);
       if (!result.ok)
         return {content: [{type: 'text', text: `${result.code}: ${result.message}`}], isError: true};
@@ -987,15 +1204,16 @@ export async function handleRequest(msg, deps = {}) {
       const lastPing = readLastPing(deps.pingOpts);
       const sessions = refreshSessions(deps.sessionOpts);
       const extraUsage = result.extraUsage ?? null;
+      const account = accounts ? currentAccount(accounts, deps.accountsIo) : null;
       return {
         content: [{
           type: 'text',
           text: [
-            renderCards(cards), renderExtraUsage(extraUsage), renderPing(lastPing),
-            renderSessions(sessions),
+            renderAccount(account), renderCards(cards), renderExtraUsage(extraUsage),
+            renderPing(lastPing), renderSessions(sessions),
           ].filter(Boolean).join('\n\n'),
         }],
-        structuredContent: {limits: cards, extraUsage, lastPing, sessions},
+        structuredContent: {account, limits: cards, extraUsage, lastPing, sessions},
       };
     }
     default:

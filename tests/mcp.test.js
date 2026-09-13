@@ -184,7 +184,7 @@ test('ping - empty result', async () => {
 });
 
 test('tools/list - exposes get_usage with schemas', async () => {
-    const r = await handleRequest({method: 'tools/list'});
+    const r = await handleRequest({method: 'tools/list'}, {accounts: null});
     assert.equal(r.tools.length, 1);
     const tool = r.tools[0];
     assert.equal(tool.name, 'get_usage');
@@ -354,4 +354,107 @@ test('no warehouse file means no trend, not an error', () => {
     assert.deepEqual(
         withTrend(cards, {nowMs: Date.now(), warehouse: '/nonexistent/history.jsonl'}), cards);
     assert.equal(weekOverWeekMcp([], 'session', Date.now()), null);
+});
+
+// ── Named accounts ──────────────────────────────────────────────────────────────
+// The tools come from claude-code/accounts.js, injected here with an io bound
+// to a throwaway HOME (the module's own behavior is covered in accounts.test.js).
+import * as accountsModule from '../claude-code/accounts.js';
+
+const NOW = Date.parse('2026-09-13T12:00:00Z');
+const accountCreds = (tag) => ({claudeAiOauth: {
+    accessToken: `at-${tag}`, refreshToken: `rt-${tag}`,
+    expiresAt: NOW + 3_600_000, refreshTokenExpiresAt: NOW + 30 * 86_400_000, subscriptionType: 'max',
+}});
+function accountsWorld() {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-acc-'));
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify(accountCreds('pro')));
+    fs.writeFileSync(path.join(home, '.claude.json'),
+        JSON.stringify({oauthAccount: {accountUuid: 'u-pro', emailAddress: 'pro@example.com'}}));
+    const io = {
+        homedir: home, platform: 'linux', env: {}, nowMs: NOW, exec: () => 'claude\n',
+        fetchImpl: async (url, init) => ({ok: true, status: 200, json: async () => ({limits: [
+            {kind: 'session', percent: init.headers.authorization.endsWith('perso') ? 20 : 95,
+                severity: 'normal', resets_at: '2026-09-13T16:00:00Z', is_active: true},
+        ]})}),
+    };
+    return {home, io};
+}
+
+test('tools/list - adds the account tools when the module is present', async () => {
+    const r = await handleRequest({method: 'tools/list'}, {accounts: accountsModule});
+    assert.deepEqual(r.tools.map(t => t.name), ['get_usage', 'list_accounts', 'save_account', 'switch_account']);
+    assert.equal(r.tools[1].annotations.readOnlyHint, true);
+    assert.equal(r.tools[3].annotations.readOnlyHint, false);
+    assert.equal(r.tools[3].annotations.destructiveHint, false);
+});
+
+test('save_account / list_accounts / switch_account round-trip through the server', async () => {
+    const {io} = accountsWorld();
+    const deps = {accounts: accountsModule, accountsIo: io, token: 'at-pro', paceOpts: paceTmp()};
+    const call = (name, args) => handleRequest({method: 'tools/call', params: {name, arguments: args}}, deps);
+
+    let r = await call('list_accounts');
+    assert.match(r.content[0].text, /No saved accounts yet/);
+    assert.deepEqual(r.structuredContent, {active: null, accounts: []});
+
+    r = await call('save_account', {name: 'PRO'});
+    assert.match(r.content[0].text, /Saved the current login as \*\*PRO\*\* \(pro@example.com\)/);
+    assert.deepEqual(r.structuredContent, {name: 'PRO', email: 'pro@example.com', plan: 'max'});
+
+    r = await call('save_account', {name: 'bad name'});
+    assert.equal(r.isError, true);
+    assert.match(r.content[0].text, /invalid name/);
+
+    accountsModule.writeProfile({version: 1, name: 'PERSO',
+        account: {accountUuid: 'u-perso', emailAddress: 'perso@example.com'},
+        credentials: accountCreds('perso')}, io);
+
+    r = await call('list_accounts');
+    assert.equal(r.structuredContent.active, 'PRO');
+    const rows = r.structuredContent.accounts;
+    assert.deepEqual(rows.map(a => [a.name, a.active, a.tokenState]), [['PERSO', false, 'valid'], ['PRO', true, 'valid']]);
+    assert.equal(rows[0].limits[0].percent, 20);
+    assert.equal(rows[1].limits[0].percent, 95);
+    assert.match(r.content[0].text, /● \*\*PRO\*\*.*Current session 95%/);
+    assert.match(r.content[0].text, /○ \*\*PERSO\*\*.*Current session 20%/);
+
+    // get_usage now says which saved account the numbers are for
+    r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
+        {...deps, fetchImpl: okFetch(LIMITS_PAYLOAD)});
+    assert.deepEqual(r.structuredContent.account, {name: 'PRO', email: 'pro@example.com', plan: 'max'});
+    assert.match(r.content[0].text, /^Account: \*\*PRO\*\* \(pro@example.com, max\)/);
+
+    r = await call('switch_account', {name: 'PERSO'});
+    assert.equal(r.isError, undefined);
+    assert.match(r.content[0].text, /Switched PRO → \*\*PERSO\*\* \(perso@example.com\)\. 1 Claude Code session is still running/);
+    assert.equal(r.structuredContent.changed, true);
+    assert.equal(accountsModule.liveAccountName(io), 'PERSO');
+
+    r = await call('switch_account', {name: 'PERSO'});
+    assert.match(r.content[0].text, /already the current login/);
+    r = await call('switch_account', {name: 'NOPE'});
+    assert.equal(r.isError, true);
+    assert.match(r.content[0].text, /no saved account named NOPE/);
+});
+
+test('get_usage reports account: null for an unsaved login, and without the module', async () => {
+    const {io} = accountsWorld();
+    let r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
+        {accounts: accountsModule, accountsIo: io, fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp()});
+    assert.equal(r.structuredContent.account, null);
+    assert.doesNotMatch(r.content[0].text, /^Account:/);
+    r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
+        {accounts: null, fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp()});
+    assert.equal(r.structuredContent.account, null);
+    await assert.rejects(
+        handleRequest({method: 'tools/call', params: {name: 'switch_account', arguments: {name: 'X'}}}, {accounts: null}),
+        e => e.code === -32602);
+});
+
+test('loadAccounts finds the module next to the checkout', async () => {
+    const {loadAccounts} = await import('../mcp/server.js');
+    const mod = await loadAccounts();
+    assert.equal(typeof mod?.switchTo, 'function');
 });
