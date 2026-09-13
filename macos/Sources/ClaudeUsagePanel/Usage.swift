@@ -91,9 +91,10 @@ enum ClaudeUsage {
         }
     #endif
 
-    /// Fetch usage from the endpoint.
-    static func fetch() async throws -> UsageResult {
-        guard let token = readAccessToken() else { throw UsageError.noToken }
+    /// Fetch usage from the endpoint - for the live login by default, or for
+    /// any saved account when its token is passed (AccountStore.accessTokenFor).
+    static func fetch(token explicit: String? = nil) async throws -> UsageResult {
+        guard let token = explicit ?? readAccessToken() else { throw UsageError.noToken }
 
         var req = URLRequest(url: endpoint)
         req.httpMethod = "GET"

@@ -7,9 +7,9 @@ import SwiftUI
 
 extension Color {
     // Claude orange
-    fileprivate static let cuAccent = Color(red: 0xd9 / 255, green: 0x77 / 255, blue: 0x57 / 255)
+    static let cuAccent = Color(red: 0xd9 / 255, green: 0x77 / 255, blue: 0x57 / 255)
     fileprivate static let cuWarning = Color(red: 0xe0 / 255, green: 0xa4 / 255, blue: 0x58 / 255)
-    fileprivate static let cuCritical = Color(red: 0xe5 / 255, green: 0x48 / 255, blue: 0x4d / 255)
+    static let cuCritical = Color(red: 0xe5 / 255, green: 0x48 / 255, blue: 0x4d / 255)
 
     fileprivate static func severity(_ s: Severity) -> Color {
         switch s {
@@ -70,6 +70,26 @@ final class UsageModel: ObservableObject {
     }
     @Published var cursorSummary: CursorSummary?
     @Published var cursorError: String?
+
+    // Named accounts: saved logins, the active one, and the opt-in auto-switch.
+    // Behavior lives in Accounts.swift (extension UsageModel); only the stored
+    // properties are here because extensions cannot declare them.
+    @Published var accounts: [AccountRow] = []
+    @Published var activeAccount: String?
+    @Published var accountsError: String?
+    @Published var accountsAutoSwitch: Bool {
+        didSet { UserDefaults.standard.set(accountsAutoSwitch, forKey: "accountsAutoSwitch") }
+    }
+    @Published var accountsSwitchThreshold: Int {
+        didSet {
+            UserDefaults.standard.set(accountsSwitchThreshold, forKey: "accountsSwitchThreshold")
+        }
+    }
+    @Published var showAccountInMenuBar: Bool {
+        didSet { UserDefaults.standard.set(showAccountInMenuBar, forKey: "showAccountInMenuBar") }
+    }
+    /// When the last automatic switch happened - the cooldown anchor.
+    var lastSwitchMs: Double?
 
     // Today's sessions: the work the plan was actually spent on, ranked by the
     // tokens each one burned, each resumable in a terminal with one click.
@@ -147,6 +167,12 @@ final class UsageModel: ObservableObject {
         alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
         eventCommand = UserDefaults.standard.string(forKey: "eventCommand") ?? ""
         cursorEnabled = UserDefaults.standard.bool(forKey: "cursorEnabled")
+        accountsAutoSwitch = UserDefaults.standard.bool(forKey: "accountsAutoSwitch")
+        accountsSwitchThreshold =
+            UserDefaults.standard.object(forKey: "accountsSwitchThreshold") as? Int
+            ?? AutoSwitch.threshold
+        showAccountInMenuBar =
+            UserDefaults.standard.object(forKey: "showAccountInMenuBar") as? Bool ?? true
         // Key lives in the Keychain. Migrate a value stored in UserDefaults by
         // pre-Keychain versions once, then scrub it from the plist.
         if let legacy = UserDefaults.standard.string(forKey: "cursorApiKey"), !legacy.isEmpty {
@@ -286,6 +312,7 @@ final class UsageModel: ObservableObject {
         lastPing = SessionPingStatus.formatLastPing(SessionStore.readLastPing(), now: Date())
         await refreshSessions()
         await refreshCursor()
+        await refreshAccounts()
     }
 
     /// Fold whatever the transcripts appended since last time and re-rank.
@@ -514,7 +541,7 @@ final class UsageModel: ObservableObject {
         return "\(sessionPingTimes.joined(separator: " ")) · \(days)"
     }
 
-    private func notify(_ title: String, _ body: String) {
+    func notify(_ title: String, _ body: String) {
         let esc = { (s: String) in s.replacingOccurrences(of: "\"", with: "\\\"") }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -554,7 +581,9 @@ final class UsageModel: ObservableObject {
         if sev == .normal, forecasts[worst.id]?.exhaustsBeforeReset == true {
             sev = .warning
         }
-        return "\(dot(sev)) \(short) \(worst.percent)%"
+        // "PRO · Session 42%" once the login is a saved, named account.
+        let prefix = showAccountInMenuBar ? activeAccount.map { "\($0) · " } ?? "" : ""
+        return "\(dot(sev)) \(prefix)\(short) \(worst.percent)%"
     }
 
     static func compact(_ n: Int) -> String {
@@ -737,6 +766,10 @@ struct PopupView: View {
 
             if model.cursorEnabled {
                 CursorSectionView(model: model)
+            }
+
+            if !model.accounts.isEmpty {
+                AccountsSectionView(model: model)
             }
 
             Divider()
@@ -985,6 +1018,7 @@ struct SettingsView: View {
                 )
                 .font(.footnote).foregroundColor(.secondary)
             }
+            AccountsSettingsSection(model: model)
             Section("Updates") {
                 if let u = model.updateStatus {
                     HStack {
