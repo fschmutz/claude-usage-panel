@@ -85,6 +85,16 @@ claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel
 
 See [[MCP Tool]].
 
+## Named accounts
+
+```bash
+./install.sh accounts     # claude-account on your PATH (~/.local/bin)
+claude-account save PRO   # then `claude auth login` to the other one, save PERSO
+claude-account use PERSO
+```
+
+The panels and the MCP server need no extra step. See [[Accounts]].
+
 ## Staying up to date
 
 ### Automatically (on by default)

@@ -8,6 +8,24 @@ semantic versioning.
 
 ### Added
 
+- **Named accounts.** Save each Claude Code login under a name
+  (`claude-account save PRO`, sign in to the other one, `save PERSO`) and
+  switch between them without a logout or a browser: the CLI, the GNOME
+  dropdown, the macOS menu and the MCP tool (`list_accounts`, `save_account`,
+  `switch_account`) all switch in place, the panels show every saved
+  account's limits side by side, and the status line tags the session with
+  its account (`[PRO]`, or `[PRO ⇢ PERSO]` when the one you are on is at the
+  threshold and another has room). A switch swaps exactly two things - the
+  credentials and the `oauthAccount` block of `~/.claude.json` - after writing
+  the login you are leaving back to its own profile (Claude Code rotates its
+  tokens), so nothing else in `~/.claude` moves and running sessions simply
+  keep their old login until restarted. An idle account's access token is
+  refreshed with its refresh token when it is needed, into the panel's own
+  `0600` store only. Optional **auto-switch** (off by default, a toggle right
+  in the dropdown / menu, threshold 50-100) moves to the account with the most
+  headroom when the active one crosses 90%, with a 15-point margin and a
+  5-minute cooldown so two busy accounts never ping-pong. One shared fixture,
+  `tests/fixtures/accounts.json`, pins the rule across the three ports.
 - **Usage against the clock.** Every card now shows how much of its *window*
   has gone - a caret under the bar on GNOME, a tick on the bar on macOS,
   `↑18` in the status line, a `vsClock` field in the MCP tool - and turns amber

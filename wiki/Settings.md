@@ -25,6 +25,8 @@ Quick toggles (Cost, Alerts, Refresh) live in the dropdown; a full **Settings** 
 | **Show Cursor usage** | Add the Cursor team-spend section (see [[Cursor Integration]]). |
 | **Session pings** | Schedule the `claude` ping that opens the 5h window: on/off, times, weekdays, **Suggest times** for your working day, and the coverage it reaches. Writes the same systemd units / launchd agent as `./install.sh sessionping`, and shows when a ping last fired (see [[Installation]]). |
 | **Show today's sessions** | List today's sessions in the dropdown, ranked by the tokens each spent, with a click to resume one (see below). |
+| **Accounts** | The saved Claude logins: save the current one under a name, remove one, and the auto-switch toggle + threshold. The same toggle also sits in the dropdown / menu next to the account rows. See [[Accounts]]. |
+| **Show the account name in the top bar / menu bar** | Prefix the readout with the active saved account's name: `PRO · Session 42%`. |
 | **Terminal** | Which terminal a resume click opens. GNOME: a binary name, empty means autodetect (`$TERMINAL`, then ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm). macOS: Automatic / Terminal / iTerm. |
 
 ## Resuming today's sessions

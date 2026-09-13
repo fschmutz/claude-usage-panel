@@ -67,7 +67,8 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         └── ClaudeUsagePanelApp.swift # MenuBarExtra, model, views, Settings
 
 claude-code/            # status line under the Claude Code prompt
-└── statusline.js       # renders purely from Claude Code's stdin - no network
+├── statusline.js       # renders purely from Claude Code's stdin - no network
+└── accounts.js         # named accounts: store, switch, refresh; CLI + shared by mcp/statusline
 
 mcp/                    # MCP server: get_usage tool (Claude Code, Cursor…)
 └── server.js           # zero-dep stdio JSON-RPC, also the npx bin
@@ -77,7 +78,7 @@ docs/                   # GitHub Pages site + the /install bootstrap
 scripts/                # bump-version · check-versions · wiki-sync · auto-update · session-ping
 ├── auto-update.sh      # daily: newest released tag → ff-only → install.sh update
 └── session-ping.sh     # scheduled: 1-turn haiku ping so the 5h window opens on time
-install.sh              # unified installer (gnome · statusline · mcp · macos · autoupdate · sessionping)
+install.sh              # unified installer (gnome · statusline · mcp · accounts · macos · autoupdate · sessionping)
 ```
 
 ## Staying current

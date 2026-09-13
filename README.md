@@ -41,10 +41,18 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `gnome` | Top-bar panel + dropdown, alerts, sparklines (GNOME Shell 45–50) | [docs/GNOME.md](docs/GNOME.md) |
 | `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+) | [macos/README.md](macos/README.md) |
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
-| `mcp` | `get_usage` tool inside Claude Code **and** Cursor - ask "how much of my plan have I used?" | [mcp/README.md](mcp/README.md) |
+| `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
+| `accounts` | `claude-account` CLI: save each Claude login under a name (`PRO`, `PERSO`) and switch between them without a browser | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) |
 | `autoupdate` | Daily check for a new release, installed automatically (on by default) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#staying-up-to-date) |
 | `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
+
+**Two subscriptions, one machine.** `claude-account save PRO`, sign in to the
+other one once, `claude-account save PERSO` - then switch from any client in one
+click, with each account's usage side by side, and an optional auto-switch to
+the account with the most headroom when the one you are on hits 90%. Only the
+login changes; settings, hooks, MCP servers and history stay. Details and the
+exact files touched: [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts).
 
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list
 today's sessions ranked by the tokens each one spent; clicking one opens your
@@ -114,12 +122,13 @@ plus terminal and in-conversation projections.
 | 🔔 **Alerts + sparklines** | Desktop notification at 90% / 100% and on projected exhaustion, tiny trend graph per limit |
 | ⏱️ **Session pings, everywhere** | Schedule the `claude` ping that opens the 5h window from the GNOME preferences or the macOS settings, not only from the CLI - and every client shows when it last fired |
 | ▶️ **Resume today's sessions** | The dropdown lists today's five biggest token spenders and opens one in a terminal, resumed where you left it, in its own project directory |
+| 👥 **Named accounts** | Save each login as `PRO` / `PERSO`, see every account's limits side by side, switch in one click (or let it switch for you at 90%) - no logout, no browser |
 | 🪝 **Run your own command** | One setting: a shell command fired when a limit crosses 90/100% or a window resets, with the event, label, percent and threshold substituted (shell-quoted) |
 | 🗓 **90 days of history** | Every poll that moved is kept locally, so each card can say "peak 71% this week · 84% last" long after Claude's own 30-day cleanup |
 | 💤 **Polls when it matters** | Idle windows back off to 15 min, a poll always lands just after a reset, and both panels refresh on wake from sleep and when the network returns |
 | 💲 **Optional extras** | Local [`ccusage`](https://github.com/ryoppippi/ccusage) session cost · Cursor team spend via Admin API |
 | 🌍 **Seven languages** | English, French, German, Spanish, Italian, Portuguese, Japanese, Simplified Chinese - catalogs gated in CI |
-| 🔒 **Read-only & private** | Uses your existing local token, never writes it, no telemetry, talks only to official APIs |
+| 🔒 **Read-only & private** | Uses your existing local token and never writes it - the one exception is a switch you ask for, which installs another login you saved. No telemetry, talks only to official APIs |
 
 ## Screenshots
 
@@ -141,9 +150,13 @@ GET https://api.anthropic.com/api/oauth/usage
 
 The response's `limits[]` array drives one card per limit. If the token
 expires, the panel tells you to run any Claude Code command (which refreshes
-it) - it never writes the token itself. The status line is even cheaper: it
-renders purely from what Claude Code pipes on stdin, no credentials or network
-at all. The optional extras stay just as private: cost runs `ccusage` locally
+it) - it never writes the token itself. The only time a client writes into
+`~/.claude` is a switch you asked for: `claude-account use PERSO` (or the same
+click in a panel) installs the tokens you saved for that account and updates
+`oauthAccount` in `~/.claude.json`, nothing else. An idle saved account's token
+is refreshed with its own refresh token when it is needed, into the panel's
+store only. The status line is even cheaper: it renders purely from what
+Claude Code pipes on stdin, no credentials or network at all. The optional extras stay just as private: cost runs `ccusage` locally
 against `~/.claude/projects/*.jsonl`, and Cursor spend calls `api.cursor.com`
 with your own admin key.
 
@@ -154,7 +167,8 @@ with your own admin key.
 | [docs/GNOME.md](docs/GNOME.md) | GNOME install, Wayland relog, settings, nested-shell testing |
 | [macos/README.md](macos/README.md) | macOS build, release, notarization, Homebrew cask |
 | [claude-code/README.md](claude-code/README.md) | Status line segments, token modes, manual setup |
-| [mcp/README.md](mcp/README.md) | MCP server, `get_usage` tool, all four install paths |
+| [mcp/README.md](mcp/README.md) | MCP server, `get_usage` + account tools, all four install paths |
+| [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) | Named accounts: what a switch touches, token refresh, auto-switch, CLI |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, pre-commit hooks, parity-test contract |
 | [PUBLISHING.md](PUBLISHING.md) | Store listings, release flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |

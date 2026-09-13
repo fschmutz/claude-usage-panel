@@ -36,6 +36,7 @@ pre-commit run zizmor --all-files   # workflow security audit (actionlint = vali
 ./install.sh gnome           # GNOME extension only → then log out/in (Wayland)
 ./install.sh statusline      # status line → merges into ~/.claude/settings.json
 ./install.sh mcp             # MCP server → claude mcp add + ~/.cursor/mcp.json
+./install.sh accounts        # claude-account CLI (named logins: save / use / list --usage)
 ./install.sh macos           # build macos/ClaudeUsagePanel.app
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
@@ -99,6 +100,33 @@ Fork PRs need a one-time maintainer approval per new contributor
 (`fork-pr-contributor-approval: first_time_contributors`) - keep that setting.
 Diagnosing a `BLOCKED` PR whose checks are all green, and the rest of the
 process: `wiki/CI.md`.
+
+## Named accounts - one store, three ports
+
+`claude-code/accounts.js` is the single implementation behind the
+`claude-account` CLI, the MCP server's `list_accounts` / `save_account` /
+`switch_account` tools and the status line's `account` segment (the last two
+`import()` it lazily: installed next to them as `claude-usage-accounts.mjs`,
+`../claude-code/accounts.js` in the checkout). The GNOME extension
+(`lib/pure.js` pure part + `lib/accounts.js` I/O) and the macOS app
+(`ClaudeUsageCore/Accounts.swift` + `ClaudeUsagePanel/AccountStore.swift`)
+mirror it; `tests/fixtures/accounts.json` pins what they must agree on:
+profile validity + names, which saved profile the live login is (uuid, then
+email), `tokenState` (valid / stale within 5 min of expiry / expired once the
+refresh token is gone), `headroom`, and `autoSwitchTarget` (threshold 90,
+margin 15, cooldown 5 min, most headroom wins, ties by code-point name order).
+
+A profile is `{version, name, savedAt, account: <oauthAccount block of
+~/.claude.json>, credentials: <the .credentials.json blob>}`, one `0600` file
+per name under `<state dir>/claude-usage-panel/accounts/`. Invariants every
+port keeps: sync the live login back into its profile (or park an unsaved one
+under its email) BEFORE overwriting anything; refresh a stale target BEFORE
+installing it, so a failed refresh leaves the current login untouched; refresh
+writes only to our store, never to `~/.claude`; a switch writes exactly the
+credentials (file, or the macOS Keychain item) and the `oauthAccount` key. The
+panels/MCP write `<accounts dir>/.usage-cache.json` (`{at, accounts:
+{NAME: {worst, session, weekly}}}`, 30 min validity) so the credential-less
+status line can hint at a freer account.
 
 ## Architecture - one contract, three ports
 

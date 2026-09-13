@@ -20,7 +20,7 @@ import {fileURLToPath} from 'node:url';
 import {
   normalizeUsage, poolNote, sparkline, formatResets, forecast, formatForecast,
   clockPace,
-  severityClass, compactTokens,
+  severityClass, compactTokens, formatAccountUsage,
 } from '../../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -163,6 +163,23 @@ y += 17;
 text(PAD, y, DATA.cursor.today, 11, C.dim);
 y += 16;
 text(PAD, y, DATA.cursor.top, 11, C.dim);
+y += 26;
+// Saved accounts: the active one marked, the other a click away, usage from the
+// same formatAccountUsage the extension's rows use, then the auto-switch toggle.
+text(PAD, y, 'Accounts', 13, C.text, 'font-weight="700"');
+for (const a of DATA.accounts) {
+  y += 19;
+  text(PAD, y, `${a.active ? '\u25cf' : '\u25cb'} ${a.name}`, 12, C.text,
+    `font-weight="${a.active ? 700 : 600}"`);
+  text(PAD + 70, y, a.email, 11, C.dim);
+  const usage = formatAccountUsage([
+    {key: 'session', percent: a.session}, {key: 'weekly_all', percent: a.weekly}]);
+  parts.push(`<text x="${W - PAD}" y="${y}" font-size="11" fill="${C.dim}" ${FONT} text-anchor="end">${esc(usage)}</text>`);
+}
+y += 20;
+text(PAD, y, `Auto-switch at ${DATA.autoSwitchThreshold}%`, 12, C.text);
+parts.push(`<rect x="${W - PAD - 30}" y="${y - 11}" width="30" height="16" rx="8" fill="${C.track}"/>`);
+parts.push(`<circle cx="${W - PAD - 22}" cy="${y - 3}" r="6" fill="${C.dim}"/>`);
 y += 24;
 parts.push(`<line x1="${PAD}" y1="${y}" x2="${W - PAD}" y2="${y}" stroke="${C.cardBorder}"/>`);
 y += 24;

@@ -70,9 +70,27 @@ against last week's. Absent when no panel has ever written that file.
 `extraUsage` reports prepaid credits charged beyond the plan, and is null
 unless the account has extra usage enabled.
 
+`account` names the saved account these numbers belong to (`{"name": "PRO",
+"email": …, "plan": "max"}`), or is `null` when the current login was never
+saved - see [[Accounts]].
+
 Errors (no token, expired session, network) come back as tool errors with a
 one-line fix hint - e.g. *"Claude session expired. Run any Claude Code command
 to refresh it."*
+
+## Account tools
+
+Three more tools appear once the accounts module is installed alongside the
+server (it is, by `./install.sh mcp`, and in the plugin / npx form):
+
+| Tool | Does |
+|---|---|
+| `list_accounts` | Every saved login with its plan usage (read with that account's own stored token, refreshed when needed), which one is active, and its `tokenState` (`valid` / `stale` / `expired`). Read-only. |
+| `save_account {name, force?}` | Save the login Claude Code holds now under `name`. |
+| `switch_account {name}` | Make a saved account the current login. The reply says how many Claude Code sessions are still running on the old login - including the one you are asking from, which keeps its login until restarted. |
+
+So *"switch me to PERSO"* works in the conversation. Ask *"which account has
+the most room?"* and the answer comes from `list_accounts`.
 
 ## Details
 

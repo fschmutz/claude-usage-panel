@@ -24,6 +24,7 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 - [[macOS]] - the SwiftUI menu-bar app
 - [[Status Line]] - condensed usage under the Claude Code prompt
 - [[MCP Tool]] - ask Claude or Cursor for your usage in-conversation
+- [[Accounts]] - save each Claude login under a name (PRO, PERSO) and switch without a browser
 - [[Troubleshooting]] - common issues and fixes
 - [[Architecture]] - how the code is laid out
 - [[CI]] - what gates a merge, and the workflow supply-chain rules

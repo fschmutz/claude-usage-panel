@@ -36,6 +36,11 @@
     {"label": "CONSOLE-DEV", "tokens": 180400, "when": "15:41"},
     {"label": "claude-usage-panel", "tokens": 96500, "when": "14:12"}
   ],
+  "accounts": [
+    {"name": "PRO", "email": "falco@premaccess.com", "session": 42, "weekly": 72, "active": true},
+    {"name": "PERSO", "email": "falco@example.com", "session": 8, "weekly": 15, "active": false}
+  ],
+  "autoSwitchThreshold": 90,
   "cursor": {
     "cycle": "This cycle: $842.10 · 3 members",
     "today": "Today: $28.40",
