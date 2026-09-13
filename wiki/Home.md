@@ -32,6 +32,10 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 
 ## What it shows
 
+Since 1.10 it also manages **named accounts**: save each Claude Code login as `PRO` / `PERSO`,
+see every account's limits side by side, switch in one click (or let it switch to the freest
+account at 90%) - no logout, no browser. Off by default; see [[Accounts]].
+
 Session, weekly (all models), and **per-model** weekly limits (Fable, Opus…) from the official
 `api.anthropic.com/api/oauth/usage` endpoint - with severity colors, reset timers, limit-crossing
 alerts, a usage sparkline, and an optional session cost.

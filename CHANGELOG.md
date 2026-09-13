@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-13
+
 ### Added
 
 - **Named accounts.** Save each Claude Code login under a name

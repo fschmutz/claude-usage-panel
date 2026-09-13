@@ -23,7 +23,7 @@ import {execFileSync} from 'node:child_process';
 import {pathToFileURL, URL} from 'node:url';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
-export const VERSION = '1.9.1';
+export const VERSION = '1.10.0';
 
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
