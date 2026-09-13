@@ -168,6 +168,38 @@
     font-size: 11px;
 }
 
+/* ---- saved accounts (switch links) ---- */
+.cu-accounts {
+    spacing: 3px;
+    padding: 8px 8px 4px 8px;
+}
+.cu-account-btn {
+    border-radius: 8px;
+    padding: 4px 6px;
+}
+.cu-account-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+.cu-account-row {
+    spacing: 10px;
+    padding: 4px 6px;
+}
+.cu-account-name {
+    color: #d1cbbf;
+    font-size: 12px;
+    font-weight: 600;
+}
+.cu-account-active .cu-account-name {
+    color: #ffffff;
+    font-weight: 800;
+}
+.cu-account-meta {
+    color: #9a948a;
+    font-size: 11px;
+}
+.cu-account-meta.cu-warning  { color: #e0a458; }
+.cu-account-meta.cu-critical { color: #e5484d; }
+
 /* refresh button (stays-open) */
 .cu-refresh-btn {
     border-radius: 8px;
@@ -201,6 +233,10 @@
 .cu-light .cu-session-label { color: #333; }
 .cu-light .cu-session-meta { color: #6b6b60; }
 .cu-light .cu-session-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
+.cu-light .cu-account-name { color: #333; }
+.cu-light .cu-account-active .cu-account-name { color: #1a1a1a; }
+.cu-light .cu-account-meta { color: #6b6b60; }
+.cu-light .cu-account-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
 .cu-light .cu-plan { color: #666; }
 
 /* ---- status footer ---- */

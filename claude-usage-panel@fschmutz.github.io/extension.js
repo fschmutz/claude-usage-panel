@@ -21,6 +21,8 @@ import {fetchCursor} from './lib/cursorUsage.js';
 import {refreshSessions} from './lib/sessionIndex.js';
 import {readLastPing, readSchedule} from './lib/sessionPing.js';
 import {storeSecret, lookupSecret} from './lib/secretStore.js';
+import {listProfiles, liveAccountName, switchTo} from './lib/accounts.js';
+import {AccountsSection, collectAccountRows} from './lib/accountsSection.js';
 import {
     severityClass, sparkline, formatResets, alertThreshold, poolNote,
     forecast, formatForecast, normalizeHistory, historyPercents,
@@ -28,6 +30,7 @@ import {
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     weekOverWeek, formatWeekOverWeek,
     compactTokens, formatLastPing, nextPing, interactiveResume, terminalArgv, TERMINALS,
+    autoSwitchTarget,
 } from './lib/pure.js';
 
 const TRACK_WIDTH = 300; // px, must match .cu-track min-width in stylesheet.css
@@ -175,6 +178,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._paceAlerted = new Set();  // limit ids already warned about projected exhaustion
         this._forecasts = new Map();   // limit id -> latest forecast (or null)
         this._sessionCatchupId = 0;
+        // Saved accounts: when the last automatic or manual switch happened
+        // (the auto-switch cooldown), and the active saved name for the panel.
+        this._lastSwitchMs = null;
+        this._activeAccount = null;
+        this._switching = false;
 
         // Panel button: brand glyph + compact worst-limit readout.
         const box = new St.BoxLayout({style_class: 'cu-panel'});
@@ -204,6 +212,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'changed::cursor-api-key', () => this.refresh(),
             'changed::cursor-key-stamp', () => this.refresh(),
             'changed::show-sessions', () => this.refresh(),
+            'changed::accounts-auto-switch', () => this._syncAutoSwitchItem(),
+            'changed::accounts-switch-threshold', () => this._syncAutoSwitchItem(),
+            'changed::panel-show-account', () => this._renderPanel(),
             this
         );
 
@@ -302,6 +313,24 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._cursorItem.add_child(cursorBox);
         this.menu.addMenuItem(this._cursorItem);
         this._cursorItem.visible = false;
+
+        // Saved accounts: one row per login, click to make it the live one,
+        // and the auto-switch toggle right under them. Both hidden until there
+        // is something to switch between.
+        this._accountsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this._accountsSection = new AccountsSection(name => this._switchAccount(name));
+        this._accountsItem.add_child(this._accountsSection);
+        this.menu.addMenuItem(this._accountsItem);
+        this._accountsItem.visible = false;
+
+        this._autoSwitchItem = new PopupMenu.PopupSwitchMenuItem('', false);
+        this._autoSwitchItem.connect('toggled', (_item, state) => {
+            if (this._settings.get_boolean('accounts-auto-switch') !== state)
+                this._settings.set_boolean('accounts-auto-switch', state);
+        });
+        this.menu.addMenuItem(this._autoSwitchItem);
+        this._autoSwitchItem.visible = false;
+        this._syncAutoSwitchItem();
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -471,6 +500,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
 
             await this._refreshSessions();
             await this._refreshCursor();
+            await this._refreshAccounts(result.cards);
         } finally {
             this._refreshing = false;
             // Re-arm from the numbers this poll just produced: the timer is
@@ -534,6 +564,87 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._cursorTrack.visible = false;
             this._cursorToday.text = '';
             this._cursorTop.text = '';
+        }
+    }
+
+    // ── Saved accounts ──────────────────────────────────────────────────────
+    // Label and state of the dropdown toggle follow the settings, not the
+    // other way round, so the preferences window and the menu never disagree.
+    _syncAutoSwitchItem() {
+        const threshold = this._settings.get_int('accounts-switch-threshold');
+        this._autoSwitchItem.label.text = _('Auto-switch at %d%%').format(threshold);
+        const on = this._settings.get_boolean('accounts-auto-switch');
+        if (this._autoSwitchItem.state !== on)
+            this._autoSwitchItem.setToggleState(on);
+    }
+
+    // One row per saved login (the fetching lives in accountsSection.js).
+    // Then, if auto-switch is on and the active account is over the
+    // threshold, move to the freest one.
+    async _refreshAccounts(activeCards) {
+        let profiles;
+        try {
+            profiles = listProfiles();
+        } catch (e) {
+            logError(e, 'claude-usage-panel: could not read the saved accounts');
+            profiles = [];
+        }
+        const active = liveAccountName();
+        this._activeAccount = active;
+        this._renderPanel();
+        this._accountsItem.visible = profiles.length > 0;
+        this._autoSwitchItem.visible = profiles.length > 1;
+        if (!profiles.length) {
+            this._accountsSection.update([], active);
+            return;
+        }
+        const {rows, worst} = await collectAccountRows(
+            this._httpSession, profiles, active, activeCards);
+        if (this._destroyed)
+            return;
+        this._accountsSection.update(rows, active);
+
+        if (!this._settings.get_boolean('accounts-auto-switch') || this._switching)
+            return;
+        const target = autoSwitchTarget({
+            active, worst,
+            threshold: this._settings.get_int('accounts-switch-threshold'),
+            lastSwitchMs: this._lastSwitchMs,
+        });
+        if (target)
+            await this._switchAccount(target.to, target);
+    }
+
+    // Make `name` the live login, tell the user, and poll again as that
+    // account. `auto` carries the numbers when the switch was automatic.
+    async _switchAccount(name, auto = null) {
+        if (this._switching)
+            return;
+        this._switching = true;
+        try {
+            const r = await switchTo(this._httpSession, name);
+            if (this._destroyed)
+                return;
+            if (!r.changed)
+                return;
+            this._lastSwitchMs = Date.now();
+            let body = auto
+                ? _('Switched %s → %s: %s was at %d%%').format(
+                    r.from ?? '?', r.to, r.from ?? '?', auto.activePercent)
+                : _('Switched %s → %s').format(r.from ?? '?', r.to);
+            if (r.running > 0) {
+                body += _(' - %d running session(s) keep the old login until restarted')
+                    .format(r.running);
+            }
+            Main.notify(_('Claude usage'), body);
+            this._refreshSoon();
+        } catch (e) {
+            if (this._destroyed)
+                return;
+            logError(e, 'claude-usage-panel: account switch failed');
+            Main.notify(_('Claude usage'), _('Could not switch to %s: %s').format(name, e.message));
+        } finally {
+            this._switching = false;
         }
     }
 
@@ -810,7 +921,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
             card = [...this._latest].sort((a, b) => b.percent - a.percent)[0];
 
         const shortLabel = card.label.split('·').pop().trim();
-        this._panelLabel.text = `${shortLabel} ${card.percent}%`;
+        // The saved name of the live login leads the readout, so a glance at
+        // the bar says which account is being spent.
+        const prefix = this._activeAccount && this._settings.get_boolean('panel-show-account')
+            ? `${this._activeAccount} · ` : '';
+        this._panelLabel.text = `${prefix}${shortLabel} ${card.percent}%`;
         // Predictive tint: a limit reading normal but on pace to run out before
         // its reset shows amber in the top bar - trouble at 50%, not at 90%.
         let sev = severityClass(card.severity);

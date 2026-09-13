@@ -34,13 +34,13 @@ export function readAccessToken() {
 }
 
 /**
- * Fetch usage from the endpoint.
+ * Fetch usage from the endpoint. `token` defaults to the live login's; a
+ * saved account's token (lib/accounts.js) reads that account's usage instead.
  * @returns {Promise<{ok: true, cards: object[], raw: object}
  *                   | {ok: false, code: string, message: string}>}
  */
-export function fetchUsage(session) {
+export function fetchUsage(session, token = readAccessToken()) {
     return new Promise(resolve => {
-        const token = readAccessToken();
         if (!token) {
             resolve({
                 ok: false,

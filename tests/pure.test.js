@@ -291,3 +291,82 @@ test('a torn or garbage line is skipped, never fatal', () => {
     const old = {t: houseFix.now - 91 * 86_400_000, limits: {session: 1}};
     assert.deepEqual(pruneWarehouse([...parsed, old], houseFix.now), parsed);
 });
+
+// ── Named accounts (tests/fixtures/accounts.json) ────────────────────────────────
+// The same contract claude-code/accounts.js (tests/accounts.test.js) and the
+// Swift AccountsParityTests assert; parity.test.js pins the two JS copies
+// against each other.
+import {
+    AUTO_SWITCH, REFRESH_LEAD_MS, accountSummary, activeAccountName, autoSwitchTarget,
+    formatAccountUsage, headroom, isValidName, parseProfile, tokenState,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+
+const accountsFix = JSON.parse(fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'accounts.json'), 'utf8'));
+const ACC_NOW = accountsFix.now;
+
+test('accounts: fixture constants are the module constants', () => {
+    assert.equal(REFRESH_LEAD_MS, accountsFix.refreshLeadMs);
+    assert.equal(AUTO_SWITCH.threshold, accountsFix.threshold);
+    assert.equal(AUTO_SWITCH.margin, accountsFix.margin);
+    assert.equal(AUTO_SWITCH.cooldownMs, accountsFix.cooldownMs);
+});
+
+test('accounts: parseProfile accepts the fixture profiles and rejects the invalid ones', () => {
+    for (const raw of accountsFix.profiles) {
+        const p = parseProfile(raw);
+        assert.ok(p, raw.name);
+        assert.equal(p.name, raw.name);
+        assert.deepEqual(p.credentials, raw.credentials);
+    }
+    for (const raw of accountsFix.invalidProfiles)
+        assert.equal(parseProfile(raw), null, JSON.stringify(raw));
+});
+
+test('accounts: name rules', () => {
+    for (const n of accountsFix.validNames)
+        assert.ok(isValidName(n), n);
+    for (const n of accountsFix.invalidNames)
+        assert.ok(!isValidName(n), n);
+});
+
+test('accounts: accountSummary + tokenState match the fixture', () => {
+    const profiles = accountsFix.profiles.map(parseProfile);
+    assert.deepEqual(profiles.map(p => accountSummary(p, ACC_NOW)), accountsFix.summaries);
+    for (const s of accountsFix.summaries) {
+        assert.equal(tokenState(profiles.find(p => p.name === s.name), ACC_NOW),
+            s.tokenState, s.name);
+    }
+});
+
+test('accounts: activeAccountName matches the fixture', () => {
+    const profiles = accountsFix.profiles.map(parseProfile);
+    for (const c of accountsFix.active)
+        assert.equal(activeAccountName(profiles, c.live), c.expected, c.name);
+});
+
+test('accounts: headroom matches the fixture', () => {
+    for (const c of accountsFix.headroom)
+        assert.equal(headroom(c.cards), c.expected, c.name);
+});
+
+test('accounts: autoSwitchTarget matches the fixture', () => {
+    for (const c of accountsFix.autoSwitch) {
+        const got = autoSwitchTarget({
+            active: c.active, worst: c.worst, lastSwitchMs: c.lastSwitchMs, nowMs: ACC_NOW,
+            threshold: accountsFix.threshold, margin: accountsFix.margin,
+            cooldownMs: accountsFix.cooldownMs,
+        });
+        assert.deepEqual(got, c.expected, c.name);
+    }
+});
+
+test('accounts: formatAccountUsage reads the session and weekly-all cards only', () => {
+    assert.equal(formatAccountUsage([
+        {key: 'session', percent: 42}, {key: 'weekly_all', percent: 12.4},
+        {key: 'weekly_scoped:Fable', percent: 99},
+    ]), 'S 42% · W 12%');
+    assert.equal(formatAccountUsage([{key: 'weekly_all', percent: 140}]), 'W 100%');
+    assert.equal(formatAccountUsage([]), '');
+    assert.equal(formatAccountUsage(null), '');
+});

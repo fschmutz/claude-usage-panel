@@ -72,6 +72,22 @@
       <summary>Working day end (HH:MM)</summary>
       <description>Used to suggest session-ping times that cover the hours actually worked.</description>
     </key>
+    <key name="accounts-auto-switch" type="b">
+      <default>false</default>
+      <summary>Switch accounts automatically</summary>
+      <description>When the active saved account reaches the threshold, switch the live Claude Code login to the saved account with the most headroom.</description>
+    </key>
+    <key name="accounts-switch-threshold" type="i">
+      <default>90</default>
+      <summary>Auto-switch threshold (percent)</summary>
+      <description>Worst-limit percentage at which the active account is considered full.</description>
+      <range min="50" max="100"/>
+    </key>
+    <key name="panel-show-account" type="b">
+      <default>true</default>
+      <summary>Show the account name in the top bar</summary>
+      <description>Prefix the panel readout with the name of the active saved account, e.g. "PRO · Session 42%".</description>
+    </key>
     <key name="history" type="s">
       <default>'{}'</default>
       <summary>Sparkline history</summary>

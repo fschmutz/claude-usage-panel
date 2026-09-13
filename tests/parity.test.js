@@ -125,3 +125,50 @@ for (const [portName, extra, label] of [
             assert.equal(label(l.kind), l.expected, l.kind);
     });
 }
+
+// ── Named accounts parity ───────────────────────────────────────────────────────
+// The account contract lives in pure.js (GNOME) and claude-code/accounts.js
+// (CLI, MCP, status line); Swift asserts the same fixture in
+// AccountsParityTests. Both JS copies must give the fixture's answers.
+import {
+    accountSummary as summaryPure, activeAccountName as activePure,
+    headroom as headroomPure, autoSwitchTarget as switchPure, parseProfile as profilePure,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+import {
+    accountSummary as summaryNode, activeAccountName as activeNode,
+    headroom as headroomNode, autoSwitchTarget as switchNode, parseProfile as profileNode,
+} from '../claude-code/accounts.js';
+
+const accountsFix = JSON.parse(
+    fs.readFileSync(path.join(here, 'fixtures', 'accounts.json'), 'utf8'));
+
+for (const [portName, fns] of [
+    ['pure.js', {summary: summaryPure, active: activePure, headroom: headroomPure,
+        target: switchPure, parse: profilePure}],
+    ['claude-code/accounts.js', {summary: summaryNode, active: activeNode,
+        headroom: headroomNode, target: switchNode, parse: profileNode}],
+]) {
+    const profiles = accountsFix.profiles.map(fns.parse);
+    test(`${portName} accounts - summaries`, () => {
+        assert.deepEqual(profiles.map(p => fns.summary(p, accountsFix.now)), accountsFix.summaries);
+    });
+    for (const c of accountsFix.active) {
+        test(`${portName} accounts - active: ${c.name}`, () => {
+            assert.equal(fns.active(profiles, c.live), c.expected);
+        });
+    }
+    for (const c of accountsFix.headroom) {
+        test(`${portName} accounts - headroom: ${c.name}`, () => {
+            assert.equal(fns.headroom(c.cards), c.expected);
+        });
+    }
+    for (const c of accountsFix.autoSwitch) {
+        test(`${portName} accounts - auto-switch: ${c.name}`, () => {
+            assert.deepEqual(fns.target({
+                active: c.active, worst: c.worst, lastSwitchMs: c.lastSwitchMs,
+                nowMs: accountsFix.now, threshold: accountsFix.threshold,
+                margin: accountsFix.margin, cooldownMs: accountsFix.cooldownMs,
+            }), c.expected);
+        });
+    }
+}

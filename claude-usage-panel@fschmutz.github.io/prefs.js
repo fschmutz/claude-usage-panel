@@ -5,7 +5,12 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {storeSecret, lookupSecret} from './lib/secretStore.js';
-import {formatLastPing, evaluateWindows, parseHHMM, planWindows} from './lib/pure.js';
+import {
+    accountSummary, formatLastPing, evaluateWindows, isValidName, parseHHMM, planWindows,
+} from './lib/pure.js';
+import {
+    listProfiles, liveAccountName, readLiveAccount, removeProfile, saveCurrent,
+} from './lib/accounts.js';
 import {isValidPingTime, normalizePingTime} from './lib/sessionPingUnit.js';
 import {applySchedule, hasSystemd, readLastPing, readSchedule} from './lib/sessionPing.js';
 
@@ -131,6 +136,111 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         });
         cursor.add(keyRow);
         page.add(cursor);
+
+        // ── Saved accounts ──────────────────────────────────────────────────
+        // A saved login is the credentials Claude Code holds right now plus the
+        // account block of ~/.claude.json, kept under a name. Switching swaps
+        // exactly those two; nothing else in ~/.claude changes.
+        const accounts = new Adw.PreferencesGroup({
+            title: _('Accounts'),
+            description: _('Save the login Claude Code holds now under a name (PRO, PERSO) and switch between saved logins from the dropdown, no browser needed. Only the credentials and the account block of ~/.claude.json change; settings, hooks, plugins and history stay. Claude Code sessions already running keep the old login until they restart.'),
+        });
+        page.add(accounts);
+
+        // An EntryRow has no subtitle, so the "which login is this" line is a
+        // row of its own right above it.
+        const loginRow = new Adw.ActionRow({title: _('Current login'), subtitle: ''});
+        accounts.add(loginRow);
+        const saveRow = new Adw.EntryRow({title: _('Save the current login as')});
+        const saveBtn = new Gtk.Button({label: _('Save'), valign: Gtk.Align.CENTER});
+        saveRow.add_suffix(saveBtn);
+        accounts.add(saveRow);
+        const saveError = new Adw.ActionRow({title: '', subtitle: ''});
+        saveError.visible = false;
+        accounts.add(saveError);
+
+        const autoRow = new Adw.SwitchRow({
+            title: _('Switch accounts automatically'),
+            subtitle: _('When the active account reaches the threshold, move to the saved account with the most headroom'),
+        });
+        settings.bind('accounts-auto-switch', autoRow, 'active', 0);
+        accounts.add(autoRow);
+        const thresholdRow = new Adw.SpinRow({
+            title: _('Auto-switch threshold'),
+            subtitle: _('Worst limit percentage that counts as full'),
+            adjustment: new Gtk.Adjustment({
+                lower: 50, upper: 100, step_increment: 5, page_increment: 10,
+            }),
+        });
+        settings.bind('accounts-switch-threshold', thresholdRow, 'value', 0);
+        accounts.add(thresholdRow);
+        const showRow = new Adw.SwitchRow({
+            title: _('Show the account name in the top bar'),
+            subtitle: _('"PRO · Session 42%" instead of "Session 42%"'),
+        });
+        settings.bind('panel-show-account', showRow, 'active', 0);
+        accounts.add(showRow);
+
+        // One row per saved login, rebuilt after every save or remove.
+        const listGroup = new Adw.PreferencesGroup();
+        page.add(listGroup);
+        const accountRows = [];
+        const renderAccounts = () => {
+            accountRows.splice(0).forEach(row => listGroup.remove(row));
+            const live = readLiveAccount();
+            const active = liveAccountName();
+            loginRow.subtitle = live?.emailAddress
+                ? (active
+                    ? _('%s, saved as %s').format(live.emailAddress, active)
+                    : _('%s (not saved yet)').format(live.emailAddress))
+                : _('No Claude Code login found');
+            for (const profile of listProfiles()) {
+                const a = accountSummary(profile);
+                const row = new Adw.ActionRow({
+                    title: `${profile.name === active ? '● ' : ''}${a.name}`,
+                    subtitle: [a.email, a.plan, a.tokenState === 'expired'
+                        ? _('login expired - sign in and save it again') : null]
+                        .filter(x => x).join(' · '),
+                });
+                const remove = new Gtk.Button({
+                    icon_name: 'user-trash-symbolic',
+                    valign: Gtk.Align.CENTER,
+                    has_frame: false,
+                    tooltip_text: _('Forget this saved login'),
+                });
+                remove.connect('clicked', () => {
+                    try {
+                        removeProfile(profile.name);
+                    } catch (e) {
+                        saveError.title = e.message;
+                        saveError.visible = true;
+                    }
+                    renderAccounts();
+                });
+                row.add_suffix(remove);
+                listGroup.add(row);
+                accountRows.push(row);
+            }
+        };
+        saveBtn.connect('clicked', () => {
+            const name = saveRow.text.trim();
+            saveError.visible = false;
+            if (!isValidName(name)) {
+                saveError.title = _('Names use letters, digits, . _ - only (up to 32 characters)');
+                saveError.visible = true;
+                return;
+            }
+            try {
+                saveCurrent(name);
+                saveRow.text = '';
+            } catch (e) {
+                saveError.title = e.message;
+                saveError.visible = true;
+            }
+            renderAccounts();
+        });
+        saveRow.connect('entry-activated', () => saveBtn.emit('clicked'));
+        renderAccounts();
 
 
         // ── Today's sessions ────────────────────────────────────────────────
