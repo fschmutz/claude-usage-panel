@@ -5,7 +5,9 @@
 #   ./install.sh                    auto-detect this OS and install the sensible set
 #   ./install.sh gnome              GNOME Shell extension only
 #   ./install.sh statusline         Claude Code status line only
-#   ./install.sh mcp                MCP server (get_usage tool in Claude Code + Cursor)
+#   ./install.sh mcp                MCP server (get_usage + account tools in Claude Code + Cursor)
+#   ./install.sh accounts           claude-account CLI: save the current login under a
+#                                   name (PRO, PERSO…) and switch between them
 #   ./install.sh macos              build the macOS .app bundle
 #   ./install.sh autoupdate         check for a new release once a day and install it
 #   ./install.sh sessionping [HH:MM ...] [--days=mon,wed,fri|all]
@@ -20,7 +22,7 @@
 #   ./install.sh --uninstall [target...]   reverse an install (default: all detected)
 #   ./install.sh --dry-run [target...]     print the actions without doing them (alias -n)
 #   ./install.sh macos --build-only        build the .app but don't install it (used by CI)
-#   ./install.sh statusline --segments=context,limits,tokens,ping[,sessions] \
+#   ./install.sh statusline --segments=account,context,limits,tokens,ping[,sessions] \
 #                           --tokens=all|fresh
 #                                          choose status-line segments + token mode
 #   ./install.sh --list             show detected + installed targets
@@ -48,7 +50,7 @@ ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 DRY=false
 PULL=false
 BUILD_ONLY=false                    # macos: build the .app but don't install to /Applications (used by CI)
-SL_SEGMENTS="context,limits,tokens,ping" # statusline: which segments, left→right
+SL_SEGMENTS="account,context,limits,tokens,ping" # statusline: which segments, left→right
 SL_TOKENS="all"                     # statusline: token-total mode (all|fresh)
 SP_TIMES=()                         # sessionping: HH:MM args from the command line
 SP_DAYS=""                          # sessionping: --days= value from the command line
@@ -150,6 +152,29 @@ subprocess.run(["gsettings", "set", *key,
 PY
 }
 
+# ── Named accounts: the shared module ──────────────────────────────────────────
+# claude-code/accounts.js is the one implementation behind the status line's
+# account segment, the MCP server's account tools and the claude-account CLI.
+# All three look for it next to their own installed file, so it is copied
+# alongside them under the same name.
+ACCOUNTS_MODULE="$HOME/.claude/claude-usage-accounts.mjs"
+ACCOUNTS_BIN="$HOME/.local/bin/claude-account"
+
+_install_accounts_module() {
+    act mkdir -p "$HOME/.claude"
+    act cp "$ROOT/claude-code/accounts.js" "$ACCOUNTS_MODULE"
+    act chmod +x "$ACCOUNTS_MODULE"
+}
+
+# Drop the module once nothing installed uses it any more.
+_prune_accounts_module() {
+    [ -f "$ACCOUNTS_MODULE" ] || return 0
+    [ -x "$ACCOUNTS_BIN" ] && return 0
+    [ -f "$HOME/.claude/claude-usage-statusline.mjs" ] && return 0
+    [ -f "$HOME/.claude/claude-usage-mcp.mjs" ] && return 0
+    act rm -f "$ACCOUNTS_MODULE"
+}
+
 # ── Claude Code status line ─────────────────────────────────────────────────────
 install_statusline() {
     info "Claude Code status line"
@@ -165,6 +190,7 @@ install_statusline() {
     act mkdir -p "$dest_dir"
     act cp "$src" "$dest"
     act chmod +x "$dest"
+    _install_accounts_module
 
     # Which segments to render and the token-total mode are baked into the
     # installed command from --segments= / --tokens= (defaults below). Kept
@@ -195,7 +221,7 @@ settings.statusLine = {type: 'command', command: process.env.COMMAND};
 fs.writeFileSync(path, JSON.stringify(settings, null, 2) + '\n');
 JS
     ok "installed to $dest (segments: $SL_SEGMENTS, tokens: $SL_TOKENS)"
-    echo "  Customize: re-run with --segments=context,limits,tokens,ping,sessions and --tokens=all|fresh."
+    echo "  Customize: re-run with --segments=account,context,limits,tokens,ping,sessions and --tokens=all|fresh."
     echo "  Open a Claude Code session or run /statusline to see it."
 }
 
@@ -226,6 +252,7 @@ if (s.statusLine && /claude-usage-statusline\.mjs/.test(s.statusLine.command || 
 JS
     fi
     act rm -f "$prev"
+    _prune_accounts_module
     ok "removed"
 }
 
@@ -242,6 +269,7 @@ install_mcp() {
     act mkdir -p "$HOME/.claude"
     act cp "$src" "$dest"
     act chmod +x "$dest"
+    _install_accounts_module
 
     # Claude Code: register at user scope via the official CLI. Remove-then-add
     # keeps the call idempotent (add fails if the name already exists).
@@ -282,6 +310,7 @@ JS
         return 0
     fi
     ok "installed to $dest - ask 'how much of my plan have I used?' in either app"
+    echo "  Saved accounts show up as list_accounts / save_account / switch_account tools."
 }
 
 uninstall_mcp() {
@@ -311,7 +340,47 @@ JS
         fi
     fi
     act rm -f "$dest"
+    _prune_accounts_module
     ok "removed"
+}
+
+# ── Named accounts CLI ──────────────────────────────────────────────────────────
+# A shim on PATH in front of the shared module: `claude-account save PRO`,
+# `claude-account use PERSO`, `claude-account list --usage`. The saved logins
+# live under the panel's state dir (0600); see the wiki page Accounts.
+install_accounts() {
+    info "Named accounts (claude-account CLI)"
+    if ! command -v node >/dev/null; then
+        skip "accounts: Node.js not found on PATH"
+        return 0
+    fi
+    _install_accounts_module
+    act mkdir -p "$(dirname "$ACCOUNTS_BIN")"
+    if $DRY; then
+        echo "  would: write $ACCOUNTS_BIN (exec node $ACCOUNTS_MODULE)"
+        ok "dry-run: no changes written"
+        return 0
+    fi
+    printf '#!/bin/sh\n# claude-usage-panel: named Claude Code accounts\nexec node "%s" "$@"\n' \
+        "$ACCOUNTS_MODULE" >"$ACCOUNTS_BIN"
+    chmod +x "$ACCOUNTS_BIN"
+    ok "installed $ACCOUNTS_BIN"
+    case ":$PATH:" in
+        *":$(dirname "$ACCOUNTS_BIN"):"*) ;;
+        *) echo "  $(dirname "$ACCOUNTS_BIN") is not on your PATH - add it, or call the full path." ;;
+    esac
+    echo "  Save the login you are on now:  claude-account save PRO"
+    echo "  Log in to the other one (claude auth login), then:  claude-account save PERSO"
+    echo "  Switch any time:  claude-account use PERSO   (running sessions keep the old login)"
+}
+
+uninstall_accounts() {
+    info "Named accounts (claude-account CLI)"
+    act rm -f "$ACCOUNTS_BIN"
+    _prune_accounts_module
+    ok "removed the CLI; the saved logins are kept (delete the folder to forget them):"
+    echo "  Linux:  \${XDG_STATE_HOME:-\$HOME/.local/state}/claude-usage-panel/accounts"
+    echo "  macOS:  \$HOME/Library/Application Support/claude-usage-panel/accounts"
 }
 
 # ── macOS .app bundle ───────────────────────────────────────────────────────────
@@ -869,7 +938,7 @@ uninstall_sessionping() {
 }
 
 # ── Target resolution ───────────────────────────────────────────────────────────
-ALL_TARGETS="gnome statusline mcp macos autoupdate sessionping"
+ALL_TARGETS="gnome statusline mcp accounts macos autoupdate sessionping"
 
 # Print the targets that make sense for this machine, one per line.
 detect_targets() {
@@ -887,6 +956,7 @@ detect_targets() {
         { command -v claude >/dev/null || [ -d "$HOME/.cursor" ]; }; then
         echo mcp
     fi
+    command -v node >/dev/null && echo accounts
     # Staying current is the default, but only where it can work: a git checkout
     # to pull from and something to run a daily job. Opt out any time with
     # `./install.sh --uninstall autoupdate`.
@@ -903,6 +973,7 @@ installed_targets() {
     [ -d "$HOME/.local/share/gnome-shell/extensions/$UUID" ] && echo gnome
     [ -f "$HOME/.claude/claude-usage-statusline.mjs" ] && echo statusline
     [ -f "$HOME/.claude/claude-usage-mcp.mjs" ] && echo mcp
+    [ -x "$ACCOUNTS_BIN" ] && echo accounts
     [ -d "/Applications/ClaudeUsagePanel.app" ] && echo macos
     _au_installed && echo autoupdate
     _sp_installed && echo sessionping
