@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-09-13
+
 ### Changed
 
 - **The Node clients install as one tree.** `install.sh` now copies `mcp/`

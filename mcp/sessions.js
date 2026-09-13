@@ -322,4 +322,3 @@ export function renderSessions(sessions) {
       `resume: \`${s.resumeCommand}\``))
     .join('\n');
 }
-

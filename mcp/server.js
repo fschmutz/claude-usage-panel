@@ -36,7 +36,7 @@ export * from './sessions.js';
 export {renderAccount, renderAccounts, renderCards, renderExtraUsage, resetHint} from './tools.js';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
-export const VERSION = '1.10.0';
+export const VERSION = '1.11.0';
 
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
