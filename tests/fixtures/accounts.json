@@ -1,0 +1,196 @@
+{
+  "_comment": "Named-account contract, pinned across lib/pure.js (GNOME), claude-code/accounts.js (CLI + MCP + status line) and ClaudeUsageCore/Accounts.swift (macOS). A profile is one saved Claude Code login: the credentials blob plus the oauthAccount block of ~/.claude.json. tokenState decides whether a stored login can be used as is (valid), needs its refresh token exchanged first (stale), or must be logged in again (expired). autoSwitch picks the account to move to when the active one crosses the threshold - the candidate with the most headroom, only if it sits at least `margin` points under the threshold, never twice within `cooldownMs`.",
+  "now": 1789300000000,
+  "refreshLeadMs": 300000,
+  "threshold": 90,
+  "margin": 15,
+  "cooldownMs": 300000,
+  "profiles": [
+    {
+      "version": 1,
+      "name": "PRO",
+      "savedAt": "2026-09-13T10:00:00.000Z",
+      "account": {
+        "accountUuid": "u-pro",
+        "emailAddress": "pro@example.com",
+        "organizationName": "Premaccess",
+        "organizationType": "claude_max",
+        "organizationRateLimitTier": "default_claude_max_20x",
+        "displayName": "Pro"
+      },
+      "credentials": {
+        "claudeAiOauth": {
+          "accessToken": "at-pro",
+          "refreshToken": "rt-pro",
+          "expiresAt": 1789303600000,
+          "refreshTokenExpiresAt": 1791892000000,
+          "scopes": ["user:inference", "user:profile"],
+          "subscriptionType": "max",
+          "rateLimitTier": "default_claude_max_20x"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "name": "PERSO",
+      "savedAt": "2026-09-13T10:05:00.000Z",
+      "account": {
+        "accountUuid": "u-perso",
+        "emailAddress": "perso@example.com",
+        "organizationType": "claude_pro",
+        "displayName": "Perso"
+      },
+      "credentials": {
+        "claudeAiOauth": {
+          "accessToken": "at-perso",
+          "refreshToken": "rt-perso",
+          "expiresAt": 1789300120000,
+          "refreshTokenExpiresAt": 1791892000000,
+          "subscriptionType": "pro"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "name": "OLD",
+      "savedAt": "2026-07-01T10:00:00.000Z",
+      "account": {
+        "accountUuid": "u-old",
+        "emailAddress": "old@example.com"
+      },
+      "credentials": {
+        "claudeAiOauth": {
+          "accessToken": "at-old",
+          "refreshToken": "rt-old",
+          "expiresAt": 1780000000000,
+          "refreshTokenExpiresAt": 1785000000000,
+          "subscriptionType": "pro"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "name": "NODATES",
+      "savedAt": "2026-09-13T10:10:00.000Z",
+      "account": {
+        "accountUuid": "u-nodates",
+        "emailAddress": "nodates@example.com"
+      },
+      "credentials": {
+        "claudeAiOauth": {
+          "accessToken": "at-nodates",
+          "refreshToken": "rt-nodates"
+        }
+      }
+    }
+  ],
+  "summaries": [
+    {
+      "name": "PRO",
+      "email": "pro@example.com",
+      "accountUuid": "u-pro",
+      "plan": "max",
+      "tier": "default_claude_max_20x",
+      "tokenState": "valid"
+    },
+    {
+      "name": "PERSO",
+      "email": "perso@example.com",
+      "accountUuid": "u-perso",
+      "plan": "pro",
+      "tier": null,
+      "tokenState": "stale"
+    },
+    {
+      "name": "OLD",
+      "email": "old@example.com",
+      "accountUuid": "u-old",
+      "plan": "pro",
+      "tier": null,
+      "tokenState": "expired"
+    },
+    {
+      "name": "NODATES",
+      "email": "nodates@example.com",
+      "accountUuid": "u-nodates",
+      "plan": null,
+      "tier": null,
+      "tokenState": "stale"
+    }
+  ],
+  "invalidProfiles": [
+    null,
+    "nope",
+    {"name": "X"},
+    {"name": "X", "credentials": {"claudeAiOauth": {}}},
+    {"name": "bad name", "credentials": {"claudeAiOauth": {"accessToken": "a"}}},
+    {"name": "", "credentials": {"claudeAiOauth": {"accessToken": "a"}}},
+    {"name": "../etc", "credentials": {"claudeAiOauth": {"accessToken": "a"}}}
+  ],
+  "validNames": ["PRO", "perso", "team-2", "a.b_c", "X"],
+  "invalidNames": ["", " ", "bad name", "../x", "-lead", ".hidden", "way-too-long-name-for-an-account-profile-x", "a/b"],
+  "active": [
+    {"name": "uuid wins", "live": {"accountUuid": "u-perso", "emailAddress": "pro@example.com"}, "expected": "PERSO"},
+    {"name": "email fallback", "live": {"emailAddress": "PRO@example.com"}, "expected": "PRO"},
+    {"name": "unknown login", "live": {"accountUuid": "u-x", "emailAddress": "x@example.com"}, "expected": null},
+    {"name": "no live login", "live": null, "expected": null}
+  ],
+  "headroom": [
+    {"name": "worst pooled limit", "cards": [{"key": "session", "percent": 40}, {"key": "weekly_all", "percent": 70}], "expected": 30},
+    {"name": "scoped counts too", "cards": [{"key": "session", "percent": 10}, {"key": "weekly_scoped:Fable", "percent": 95}], "expected": 5},
+    {"name": "no cards", "cards": [], "expected": null},
+    {"name": "clamped", "cards": [{"key": "session", "percent": 140}], "expected": 0}
+  ],
+  "autoSwitch": [
+    {
+      "name": "crosses threshold, one candidate with room",
+      "active": "PRO", "worst": {"PRO": 92, "PERSO": 30}, "lastSwitchMs": null,
+      "expected": {"from": "PRO", "to": "PERSO", "activePercent": 92, "targetPercent": 30}
+    },
+    {
+      "name": "under threshold - stay",
+      "active": "PRO", "worst": {"PRO": 85, "PERSO": 30}, "lastSwitchMs": null,
+      "expected": null
+    },
+    {
+      "name": "candidate too close to the threshold - stay",
+      "active": "PRO", "worst": {"PRO": 95, "PERSO": 80}, "lastSwitchMs": null,
+      "expected": null
+    },
+    {
+      "name": "cooldown still running - stay",
+      "active": "PRO", "worst": {"PRO": 95, "PERSO": 70}, "lastSwitchMs": 1789299940000,
+      "expected": null
+    },
+    {
+      "name": "cooldown elapsed - switch",
+      "active": "PRO", "worst": {"PRO": 95, "PERSO": 70}, "lastSwitchMs": 1789299400000,
+      "expected": {"from": "PRO", "to": "PERSO", "activePercent": 95, "targetPercent": 70}
+    },
+    {
+      "name": "most headroom wins",
+      "active": "PRO", "worst": {"PRO": 100, "PERSO": 70, "TEAM": 20}, "lastSwitchMs": null,
+      "expected": {"from": "PRO", "to": "TEAM", "activePercent": 100, "targetPercent": 20}
+    },
+    {
+      "name": "tie breaks by name",
+      "active": "PRO", "worst": {"PRO": 100, "TEAM": 20, "PERSO": 20}, "lastSwitchMs": null,
+      "expected": {"from": "PRO", "to": "PERSO", "activePercent": 100, "targetPercent": 20}
+    },
+    {
+      "name": "unknown active login - never switch",
+      "active": null, "worst": {"PRO": 100, "PERSO": 20}, "lastSwitchMs": null,
+      "expected": null
+    },
+    {
+      "name": "no usage for the others - stay",
+      "active": "PRO", "worst": {"PRO": 100, "PERSO": null}, "lastSwitchMs": null,
+      "expected": null
+    },
+    {
+      "name": "no usage for the active account - stay",
+      "active": "PRO", "worst": {"PRO": null, "PERSO": 10}, "lastSwitchMs": null,
+      "expected": null
+    }
+  ]
+}

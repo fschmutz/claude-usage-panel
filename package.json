@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "claude-usage-panel": "mcp/server.js"
+    "claude-usage-panel": "mcp/server.js",
+    "claude-account": "claude-code/accounts.js"
   },
   "engines": {
     "node": ">=18"
