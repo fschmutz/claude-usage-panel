@@ -152,27 +152,52 @@ subprocess.run(["gsettings", "set", *key,
 PY
 }
 
-# ── Named accounts: the shared module ──────────────────────────────────────────
-# claude-code/accounts.js is the one implementation behind the status line's
-# account segment, the MCP server's account tools and the claude-account CLI.
-# All three look for it next to their own installed file, so it is copied
-# alongside them under the same name.
-ACCOUNTS_MODULE="$HOME/.claude/claude-usage-accounts.mjs"
+# ── The Node clients: one installed tree ───────────────────────────────────────
+# The status line, the MCP server and the claude-account CLI are ES modules
+# that import each other by relative path (mcp/server.js -> ../claude-code/…).
+# They are installed as ONE tree that mirrors the checkout's layout, so every
+# import resolves exactly as it does in the repo - no per-file renaming, no
+# runtime path probing. The tree's package.json marks the files as ESM.
+NODE_TREE="$HOME/.claude/claude-usage-panel"
+SL_DEST="$NODE_TREE/claude-code/statusline.js"
+MCP_DEST="$NODE_TREE/mcp/server.js"
 ACCOUNTS_BIN="$HOME/.local/bin/claude-account"
+ACCOUNTS_CLI="$NODE_TREE/claude-code/claude-account.js"
 
-_install_accounts_module() {
-    act mkdir -p "$HOME/.claude"
-    act cp "$ROOT/claude-code/accounts.js" "$ACCOUNTS_MODULE"
-    act chmod +x "$ACCOUNTS_MODULE"
+_install_node_tree() {
+    act mkdir -p "$NODE_TREE/mcp" "$NODE_TREE/claude-code"
+    act cp "$ROOT"/mcp/*.js "$NODE_TREE/mcp/"
+    act cp "$ROOT"/claude-code/*.js "$NODE_TREE/claude-code/"
+    if $DRY; then
+        echo "  would: write $NODE_TREE/package.json ({\"type\": \"module\"})"
+    else
+        printf '{"type": "module", "private": true}\n' >"$NODE_TREE/package.json"
+    fi
+    # Pre-1.11 installs were loose .mjs copies next to settings.json.
+    act rm -f "$HOME/.claude/claude-usage-statusline.mjs" "$HOME/.claude/claude-usage-mcp.mjs" \
+        "$HOME/.claude/claude-usage-accounts.mjs"
 }
 
-# Drop the module once nothing installed uses it any more.
-_prune_accounts_module() {
-    [ -f "$ACCOUNTS_MODULE" ] || return 0
+# Drop the tree once nothing installed uses it any more.
+_prune_node_tree() {
+    [ -d "$NODE_TREE" ] || return 0
     [ -x "$ACCOUNTS_BIN" ] && return 0
-    [ -f "$HOME/.claude/claude-usage-statusline.mjs" ] && return 0
-    [ -f "$HOME/.claude/claude-usage-mcp.mjs" ] && return 0
-    act rm -f "$ACCOUNTS_MODULE"
+    _statusline_installed && return 0
+    _mcp_installed && return 0
+    act rm -rf "$NODE_TREE"
+}
+
+_statusline_installed() {
+    command -v node >/dev/null || return 1
+    node - "$HOME/.claude/settings.json" <<'JS' 2>/dev/null
+const fs = require('fs');
+let s; try { s = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')); } catch { process.exit(1); }
+process.exit(/claude-usage-panel\/claude-code\/statusline\.js|claude-usage-statusline\.mjs/.test(s.statusLine?.command || '') ? 0 : 1);
+JS
+}
+
+_mcp_installed() {
+    command -v claude >/dev/null && claude mcp get claude-usage >/dev/null 2>&1
 }
 
 # ── Claude Code status line ─────────────────────────────────────────────────────
@@ -182,15 +207,10 @@ install_statusline() {
         skip "statusline: Node.js not found on PATH"
         return 0
     fi
-    local src="$ROOT/claude-code/statusline.js"
     local dest_dir="$HOME/.claude"
-    # .mjs so Node always treats it as ESM regardless of any nearby package.json.
-    local dest="$dest_dir/claude-usage-statusline.mjs"
+    local dest="$SL_DEST"
     local prev="$dest_dir/claude-usage-statusline.prev.json"
-    act mkdir -p "$dest_dir"
-    act cp "$src" "$dest"
-    act chmod +x "$dest"
-    _install_accounts_module
+    _install_node_tree
 
     # Which segments to render and the token-total mode are baked into the
     # installed command from --segments= / --tokens= (defaults below). Kept
@@ -212,7 +232,7 @@ const path = process.argv[2];
 let settings = {};
 try { settings = JSON.parse(fs.readFileSync(path, 'utf8')); } catch { /* fresh */ }
 const existing = settings.statusLine;
-const ours = existing && /claude-usage-statusline\.mjs/.test(existing.command || '');
+const ours = existing && /claude-usage-panel\/claude-code\/statusline\.js|claude-usage-statusline\.mjs/.test(existing.command || '');
 if (existing && !ours) {
   fs.writeFileSync(process.env.PREV, JSON.stringify(existing, null, 2) + '\n');
   console.log('  backed up your previous statusLine → restored on `--uninstall statusline`');
@@ -229,7 +249,6 @@ uninstall_statusline() {
     info "Claude Code status line"
     local dest_dir="$HOME/.claude"
     local prev="$dest_dir/claude-usage-statusline.prev.json"
-    act rm -f "$dest_dir/claude-usage-statusline.mjs"
     if $DRY; then
         echo "  would: drop our statusLine from $dest_dir/settings.json, restoring $prev if present"
         ok "dry-run: no changes written"
@@ -242,7 +261,7 @@ uninstall_statusline() {
 const fs = require('fs');
 const path = process.argv[2];
 let s; try { s = JSON.parse(fs.readFileSync(path, 'utf8')); } catch { process.exit(0); }
-if (s.statusLine && /claude-usage-statusline\.mjs/.test(s.statusLine.command || '')) {
+if (s.statusLine && /claude-usage-panel\/claude-code\/statusline\.js|claude-usage-statusline\.mjs/.test(s.statusLine.command || '')) {
   let restored = false;
   try { s.statusLine = JSON.parse(fs.readFileSync(process.env.PREV, 'utf8')); restored = true; }
   catch { delete s.statusLine; }
@@ -252,7 +271,7 @@ if (s.statusLine && /claude-usage-statusline\.mjs/.test(s.statusLine.command || 
 JS
     fi
     act rm -f "$prev"
-    _prune_accounts_module
+    _prune_node_tree
     ok "removed"
 }
 
@@ -263,13 +282,8 @@ install_mcp() {
         skip "mcp: Node.js not found on PATH"
         return 0
     fi
-    local src="$ROOT/mcp/server.js"
-    # .mjs so Node always treats it as ESM regardless of any nearby package.json.
-    local dest="$HOME/.claude/claude-usage-mcp.mjs"
-    act mkdir -p "$HOME/.claude"
-    act cp "$src" "$dest"
-    act chmod +x "$dest"
-    _install_accounts_module
+    local dest="$MCP_DEST"
+    _install_node_tree
 
     # Claude Code: register at user scope via the official CLI. Remove-then-add
     # keeps the call idempotent (add fails if the name already exists).
@@ -315,7 +329,6 @@ JS
 
 uninstall_mcp() {
     info "MCP server"
-    local dest="$HOME/.claude/claude-usage-mcp.mjs"
     if command -v claude >/dev/null; then
         if $DRY; then
             echo "  would: claude mcp remove --scope user claude-usage"
@@ -339,8 +352,7 @@ if (cfg.mcpServers && cfg.mcpServers['claude-usage']) {
 JS
         fi
     fi
-    act rm -f "$dest"
-    _prune_accounts_module
+    _prune_node_tree
     ok "removed"
 }
 
@@ -354,15 +366,15 @@ install_accounts() {
         skip "accounts: Node.js not found on PATH"
         return 0
     fi
-    _install_accounts_module
+    _install_node_tree
     act mkdir -p "$(dirname "$ACCOUNTS_BIN")"
     if $DRY; then
-        echo "  would: write $ACCOUNTS_BIN (exec node $ACCOUNTS_MODULE)"
+        echo "  would: write $ACCOUNTS_BIN (exec node $ACCOUNTS_CLI)"
         ok "dry-run: no changes written"
         return 0
     fi
     printf '#!/bin/sh\n# claude-usage-panel: named Claude Code accounts\nexec node "%s" "$@"\n' \
-        "$ACCOUNTS_MODULE" >"$ACCOUNTS_BIN"
+        "$ACCOUNTS_CLI" >"$ACCOUNTS_BIN"
     chmod +x "$ACCOUNTS_BIN"
     ok "installed $ACCOUNTS_BIN"
     case ":$PATH:" in
@@ -377,7 +389,7 @@ install_accounts() {
 uninstall_accounts() {
     info "Named accounts (claude-account CLI)"
     act rm -f "$ACCOUNTS_BIN"
-    _prune_accounts_module
+    _prune_node_tree
     ok "removed the CLI; the saved logins are kept (delete the folder to forget them):"
     echo "  Linux:  \${XDG_STATE_HOME:-\$HOME/.local/state}/claude-usage-panel/accounts"
     echo "  macOS:  \$HOME/Library/Application Support/claude-usage-panel/accounts"
@@ -971,8 +983,8 @@ detect_targets() {
 # `update` (reinstall only what's actually there) and `--list`.
 installed_targets() {
     [ -d "$HOME/.local/share/gnome-shell/extensions/$UUID" ] && echo gnome
-    [ -f "$HOME/.claude/claude-usage-statusline.mjs" ] && echo statusline
-    [ -f "$HOME/.claude/claude-usage-mcp.mjs" ] && echo mcp
+    _statusline_installed && echo statusline
+    _mcp_installed && echo mcp
     [ -x "$ACCOUNTS_BIN" ] && echo accounts
     [ -d "/Applications/ClaudeUsagePanel.app" ] && echo macos
     _au_installed && echo autoupdate
