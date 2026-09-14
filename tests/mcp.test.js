@@ -1,7 +1,9 @@
-// MCP server unit tests: token reading, fetch + error paths, rendering, and
-// the JSON-RPC request handling - plus one end-to-end stdio round-trip that
-// spawns the real server binary. Normalization parity with the other ports is
-// asserted in parity.test.js against the shared fixture.
+// MCP server tests: the JSON-RPC request handling over a sandbox HOME (one
+// `io`, the same shape openStore takes), the tool renderers, the pace and
+// trend attachments, the account tools, plus one end-to-end stdio round-trip
+// that spawns the real server binary. Normalization parity with the other
+// ports is asserted in parity.test.js against the shared fixture; the live
+// login and the usage fetch are the store's (accounts.test.js).
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,14 +12,12 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-import {
-    fetchUsage,
-    handleRequest,
-    readAccessToken,
-    renderCards,
-    resetHint,
-    VERSION,
-} from '../mcp/server.js';
+import {handleRequest, VERSION} from '../mcp/server.js';
+import {renderCards} from '../mcp/tools.js';
+import {withPace, recordHistory, forecast} from '../claude-code/pace.js';
+import {withTrend, weekOverWeek} from '../mcp/warehouse.js';
+import {openStore} from '../claude-code/accounts.js';
+import {sandboxHome, writeLiveLogin} from './helpers.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(here, '..', 'mcp', 'server.js');
@@ -42,21 +42,19 @@ const okFetch = (payload, status = 200) => async () => ({
     json: async () => payload,
 });
 
-// ── resetHint ───────────────────────────────────────────────────────────────────
+const NOW = Date.parse('2026-09-13T12:00:00Z');
+const creds = (tag) => ({claudeAiOauth: {
+    accessToken: `at-${tag}`, refreshToken: `rt-${tag}`,
+    expiresAt: NOW + 3_600_000, refreshTokenExpiresAt: NOW + 30 * 86_400_000, subscriptionType: 'max',
+}});
+const account = (tag) => ({accountUuid: `u-${tag}`, emailAddress: `${tag}@example.com`});
 
-test('resetHint - two most significant units', () => {
-    const now = Date.parse('2026-07-19T12:00:00Z');
-    assert.equal(resetHint('2026-07-19T15:06:00Z', now), '3h06m');
-    assert.equal(resetHint('2026-07-23T14:00:00Z', now), '4d2h');
-    assert.equal(resetHint('2026-07-19T12:42:00Z', now), '42m');
-});
-
-test('resetHint - empty for past, null, and garbage', () => {
-    const now = Date.parse('2026-07-19T12:00:00Z');
-    assert.equal(resetHint('2026-07-19T11:00:00Z', now), '');
-    assert.equal(resetHint(null, now), '');
-    assert.equal(resetHint('not-a-date', now), '');
-});
+// A sandbox HOME holding a live login (or none), as the io the server takes.
+function world(t, {live = 'pro', fetchImpl = okFetch(LIMITS_PAYLOAD)} = {}) {
+    const io = {...sandboxHome(t, {prefix: 'cu-mcp-'}), nowMs: NOW, exec: () => 'claude\n', fetchImpl};
+    if (live) writeLiveLogin(io.home, creds(live), account(live));
+    return io;
+}
 
 // ── renderCards ─────────────────────────────────────────────────────────────────
 
@@ -87,78 +85,14 @@ test('renderCards - a per-model card says it draws from the weekly pool', () => 
     assert.match(fable, /share of the weekly all-models limit$/);
 });
 
-// ── readAccessToken ─────────────────────────────────────────────────────────────
-
-const tmpHome = contents => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-'));
-    if (contents !== undefined) {
-        fs.mkdirSync(path.join(dir, '.claude'));
-        fs.writeFileSync(path.join(dir, '.claude', '.credentials.json'), contents);
-    }
-    return dir;
-};
-
-test('readAccessToken - claudeAiOauth.accessToken', () => {
-    const home = tmpHome(JSON.stringify({claudeAiOauth: {accessToken: 'tok-1'}}));
-    assert.equal(readAccessToken({homedir: home, platform: 'linux'}), 'tok-1');
-});
-
-test('readAccessToken - top-level access_token fallback', () => {
-    const home = tmpHome(JSON.stringify({access_token: 'tok-2'}));
-    assert.equal(readAccessToken({homedir: home, platform: 'linux'}), 'tok-2');
-});
-
-test('readAccessToken - missing file → null (linux)', () => {
-    assert.equal(readAccessToken({homedir: tmpHome(), platform: 'linux'}), null);
-});
-
-test('readAccessToken - malformed JSON → null (linux)', () => {
-    const home = tmpHome('{nope');
-    assert.equal(readAccessToken({homedir: home, platform: 'linux'}), null);
-});
-
-// ── fetchUsage ──────────────────────────────────────────────────────────────────
-
-test('fetchUsage - success normalizes cards and keeps raw', async () => {
-    const r = await fetchUsage({fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't'});
-    assert.equal(r.ok, true);
-    assert.equal(r.cards.length, 2);
-    assert.equal(r.cards[1].key, 'weekly_scoped:Fable');
-    assert.deepEqual(r.raw, LIMITS_PAYLOAD);
-});
-
-test('fetchUsage - no token', async () => {
-    const r = await fetchUsage({fetchImpl: okFetch(LIMITS_PAYLOAD), token: null});
-    assert.deepEqual([r.ok, r.code], [false, 'no_token']);
-});
-
-test('fetchUsage - 401 → auth_expired', async () => {
-    const r = await fetchUsage({fetchImpl: okFetch({}, 401), token: 't'});
-    assert.deepEqual([r.ok, r.code], [false, 'auth_expired']);
-});
-
-test('fetchUsage - 500 → http_error', async () => {
-    const r = await fetchUsage({fetchImpl: okFetch({}, 500), token: 't'});
-    assert.deepEqual([r.ok, r.code, r.message], [false, 'http_error', 'HTTP 500']);
-});
-
-test('fetchUsage - network failure → network_error', async () => {
-    const boom = async () => {
-        throw new Error('ECONNREFUSED');
-    };
-    const r = await fetchUsage({fetchImpl: boom, token: 't'});
-    assert.deepEqual([r.ok, r.code], [false, 'network_error']);
-});
-
-test('fetchUsage - invalid JSON body → parse_error', async () => {
-    const badJson = async () => ({
-        ok: true, status: 200,
-        json: async () => {
-            throw new Error('bad json');
-        },
-    });
-    const r = await fetchUsage({fetchImpl: badJson, token: 't'});
-    assert.deepEqual([r.ok, r.code], [false, 'parse_error']);
+test('renderCards mentions an alarming pace', () => {
+    const line = renderCards([{
+        label: 'Weekly · all models', group: 'weekly', scoped: false, percent: 52,
+        severity: 'normal', resetsAt: '2026-08-04T06:00:00Z',
+        pace: {pctPerHour: 4, projectedFullAt: '2026-08-02T08:00:00.000Z',
+            exhaustsBeforeReset: true, marginHours: -8},
+    }], Date.parse('2026-08-01T12:00:00Z'));
+    assert.match(line, /↗ 4%\/h - ON PACE TO RUN OUT 8h before reset/);
 });
 
 // ── handleRequest ───────────────────────────────────────────────────────────────
@@ -187,37 +121,51 @@ test('tools/list - exposes get_usage (with schemas) and the account tools', asyn
     const r = await handleRequest({method: 'tools/list'});
     assert.deepEqual(r.tools.map(t => t.name), ['get_usage', 'list_accounts', 'save_account', 'switch_account']);
     const tool = r.tools[0];
-    assert.equal(tool.name, 'get_usage');
     assert.equal(tool.inputSchema.type, 'object');
     assert.deepEqual(tool.outputSchema.required, ['limits']);
     assert.equal(tool.annotations.readOnlyHint, true);
+    assert.equal(r.tools[1].annotations.readOnlyHint, true);
+    assert.equal(r.tools[3].annotations.readOnlyHint, false);
+    assert.equal(r.tools[3].annotations.destructiveHint, false);
 });
 
-// tools/call records pace samples - always point it at a throwaway history
-// file so tests never pollute the real shared tmp history.
-const rnd = () => Math.random().toString(36).slice(2);
-const paceTmp = () => ({historyPath: path.join(os.tmpdir(), `cu-mcp-hist-${rnd()}.json`)});
-
-// A store bound to an empty throwaway HOME, so get_usage never reads the real one.
-const noAccounts = () => ({homedir: fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-noacc-')), platform: 'linux', env: {}});
-
-test('tools/call get_usage - text + structuredContent', async () => {
-    const r = await handleRequest(
-        {method: 'tools/call', params: {name: 'get_usage'}},
-        {fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp(), accountsIo: noAccounts()});
+test('tools/call get_usage - text + structuredContent, from the live login', async (t) => {
+    const io = world(t);
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
     assert.equal(r.isError, undefined);
     assert.match(r.content[0].text, /Current session.*26%/);
     assert.equal(r.structuredContent.limits.length, 2);
+    assert.equal(r.structuredContent.limits[1].key, 'weekly_scoped:Fable');
     // One fresh sample can't support a projection - no pace fields yet.
     assert.equal(r.structuredContent.limits.some(l => l.pace), false);
+    // vsClock needs no history: the session card carries it from the first call.
+    assert.equal(typeof r.structuredContent.limits[0].vsClock, 'object');
+    // An unsaved login reports account: null
+    assert.equal(r.structuredContent.account, null);
+    assert.doesNotMatch(r.content[0].text, /^Account:/);
 });
 
-test('tools/call get_usage - failure is a tool error, not a crash', async () => {
-    const r = await handleRequest(
-        {method: 'tools/call', params: {name: 'get_usage'}},
-        {fetchImpl: okFetch({}, 401), token: 't'});
-    assert.equal(r.isError, true);
-    assert.match(r.content[0].text, /auth_expired/);
+test('tools/call get_usage - every fetch failure is a tool error, not a crash', async (t) => {
+    for (const [status, code] of [[401, 'auth_expired'], [500, 'http_error']]) {
+        const io = world(t, {fetchImpl: okFetch({}, status)});
+        const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+        assert.equal(r.isError, true);
+        assert.match(r.content[0].text, new RegExp(`^${code}:`));
+    }
+    const io = world(t, {live: null});
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.match(r.content[0].text, /^no_token: No Claude credentials found/);
+});
+
+test('get_usage follows CLAUDE_CONFIG_DIR like the account store', async (t) => {
+    const io = world(t, {live: null});
+    const cfg = path.join(io.home, 'alt');
+    fs.mkdirSync(cfg);
+    fs.writeFileSync(path.join(cfg, '.credentials.json'), JSON.stringify(creds('cfg')));
+    io.env = {CLAUDE_CONFIG_DIR: cfg};
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.equal(r.isError, undefined);
+    assert.equal(r.structuredContent.limits.length, 2);
 });
 
 test('tools/call - unknown tool → -32602', async () => {
@@ -263,12 +211,12 @@ test('stdio round-trip - initialize, initialized, tools/list', async () => {
     assert.equal(lines[1].result.tools[0].name, 'get_usage');
 });
 
-test('stdio - pending tools/call still answers after stdin EOF', async () => {
+test('stdio - pending tools/call still answers after stdin EOF', async (t) => {
     // HOME points at an empty dir so tools/call resolves quickly (no_token)
     // but still asynchronously - the server must drain it before exiting.
     const proc = spawn(process.execPath, [SERVER], {
         stdio: ['pipe', 'pipe', 'inherit'],
-        env: {...process.env, HOME: tmpHome()},
+        env: {...process.env, HOME: sandboxHome(t).home, CLAUDE_CONFIG_DIR: ''},
     });
     let out = '';
     proc.stdout.on('data', chunk => {
@@ -285,27 +233,30 @@ test('stdio - pending tools/call still answers after stdin EOF', async () => {
     assert.match(lines[0].result.content[0].text, /no_token/);
 });
 
-// ── Pace projection on tools/call ───────────────────────────────────────────────
-import {withPace, recordHistory, forecast} from '../mcp/server.js';
+// ── Pace projection ─────────────────────────────────────────────────────────────
+// tools/call records pace samples - always point it at a throwaway history
+// file so tests never pollute the real shared tmp history.
+const rnd = () => Math.random().toString(36).slice(2);
+const paceTmp = () => ({historyPath: path.join(os.tmpdir(), `cu-mcp-hist-${rnd()}.json`)});
 
 test('withPace attaches pace once history supports a projection', () => {
-    const NOW = 1800000000000;
+    const now = 1800000000000;
     const opts = paceTmp();
     const card = {
         key: 'weekly_all', label: 'Weekly · all models', group: 'weekly', scoped: false,
         percent: 52, severity: 'normal',
-        resetsAt: new Date(NOW + 20 * 3600_000).toISOString(), active: true,
+        resetsAt: new Date(now + 20 * 3600_000).toISOString(), active: true,
     };
     // Seed 6 earlier samples 30 min apart (the call itself appends the 7th).
     for (let i = 0; i < 6; i++) {
         recordHistory([{...card, percent: 40 + 2 * i}],
-            {nowMs: NOW - (6 - i) * 1800_000, historyPath: opts.historyPath});
+            {nowMs: now - (6 - i) * 1800_000, historyPath: opts.historyPath});
     }
-    const [out] = withPace([card], {nowMs: NOW, ...opts});
+    const [out] = withPace([card], {nowMs: now, ...opts});
     assert.equal(out.pace.pctPerHour, 4);
     assert.equal(out.pace.exhaustsBeforeReset, true);
     assert.equal(out.pace.marginHours, -8);
-    assert.equal(out.pace.projectedFullAt, new Date(NOW + 12 * 3600_000).toISOString());
+    assert.equal(out.pace.projectedFullAt, new Date(now + 12 * 3600_000).toISOString());
 });
 
 test('withPace stays silent without enough history', () => {
@@ -319,20 +270,24 @@ test('withPace stays silent without enough history', () => {
     assert.equal(forecast([], null, 0), null);
 });
 
-test('renderCards mentions an alarming pace', () => {
-    const line = renderCards([{
-        label: 'Weekly · all models', group: 'weekly', scoped: false, percent: 52,
-        severity: 'normal', resetsAt: '2026-08-04T06:00:00Z',
-        pace: {pctPerHour: 4, projectedFullAt: '2026-08-02T08:00:00.000Z',
-            exhaustsBeforeReset: true, marginHours: -8},
-    }], Date.parse('2026-08-01T12:00:00Z'));
-    assert.match(line, /↗ 4%\/h - ON PACE TO RUN OUT 8h before reset/);
+test('get_usage records its samples in the io tmpdir and projects from them', async (t) => {
+    const io = world(t);
+    const call = (nowMs) => handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, {...io, nowMs});
+    for (let i = 0; i < 6; i++) {
+        io.fetchImpl = okFetch({limits: [{kind: 'weekly_all', percent: 40 + 2 * i, severity: 'normal',
+            resets_at: new Date(NOW + 20 * 3600_000).toISOString(), is_active: true}]});
+        await call(NOW - (6 - i) * 1800_000);
+    }
+    io.fetchImpl = okFetch({limits: [{kind: 'weekly_all', percent: 52, severity: 'normal',
+        resets_at: new Date(NOW + 20 * 3600_000).toISOString(), is_active: true}]});
+    const r = await call(NOW);
+    assert.equal(r.structuredContent.limits[0].pace.pctPerHour, 4);
+    assert.ok(fs.existsSync(path.join(io.home, 'claude-usage-history.json')), 'history lives in the sandbox');
 });
 
 // ── Warehouse-backed trend ──────────────────────────────────────────────────────
 // The desktop panels write the 90-day history; the server only reads it, and
 // must degrade to "no trend" rather than an error when there is no file.
-import {withTrend, weekOverWeek as weekOverWeekMcp} from '../mcp/server.js';
 
 test('withTrend attaches a week-over-week peak from the warehouse', () => {
     const now = 1800000000000;
@@ -356,48 +311,33 @@ test('no warehouse file means no trend, not an error', () => {
     const cards = [{key: 'session', percent: 4}];
     assert.deepEqual(
         withTrend(cards, {nowMs: Date.now(), warehouse: '/nonexistent/history.jsonl'}), cards);
-    assert.equal(weekOverWeekMcp([], 'session', Date.now()), null);
+    assert.equal(weekOverWeek([], 'session', Date.now()), null);
+});
+
+test('get_usage reads the trend from the warehouse under the io state dir', async (t) => {
+    const io = world(t);
+    const day = 86_400_000;
+    const wh = path.join(io.home, '.local', 'state', 'claude-usage-panel', 'history.jsonl');
+    fs.mkdirSync(path.dirname(wh), {recursive: true});
+    fs.writeFileSync(wh, [
+        JSON.stringify({t: NOW - 9 * day, limits: {session: 84}}),
+        JSON.stringify({t: NOW - 1 * day, limits: {session: 26}}),
+    ].join('\n') + '\n');
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.deepEqual(r.structuredContent.limits[0].trend, {thisWeekPeak: 26, lastWeekPeak: 84, deltaPoints: -58});
 });
 
 // ── Named accounts ──────────────────────────────────────────────────────────────
-// The tools sit on claude-code/accounts.js's store, bound here to a throwaway
-// HOME through deps.accountsIo (the store's own behavior is covered in
-// accounts.test.js).
-import {openStore} from '../claude-code/accounts.js';
+// The tools sit on the store bound to the same io (the store's own behavior is
+// covered in accounts.test.js).
 
-const NOW = Date.parse('2026-09-13T12:00:00Z');
-const accountCreds = (tag) => ({claudeAiOauth: {
-    accessToken: `at-${tag}`, refreshToken: `rt-${tag}`,
-    expiresAt: NOW + 3_600_000, refreshTokenExpiresAt: NOW + 30 * 86_400_000, subscriptionType: 'max',
-}});
-function accountsWorld() {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-acc-'));
-    fs.mkdirSync(path.join(home, '.claude'));
-    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify(accountCreds('pro')));
-    fs.writeFileSync(path.join(home, '.claude.json'),
-        JSON.stringify({oauthAccount: {accountUuid: 'u-pro', emailAddress: 'pro@example.com'}}));
-    const io = {
-        homedir: home, platform: 'linux', env: {}, nowMs: NOW, exec: () => 'claude\n',
-        fetchImpl: async (url, init) => ({ok: true, status: 200, json: async () => ({limits: [
-            {kind: 'session', percent: init.headers.authorization.endsWith('perso') ? 20 : 95,
-                severity: 'normal', resets_at: '2026-09-13T16:00:00Z', is_active: true},
-        ]})}),
-    };
-    return {home, io};
-}
-
-test('tools/list - account tool annotations', async () => {
-    const r = await handleRequest({method: 'tools/list'});
-    assert.equal(r.tools[1].annotations.readOnlyHint, true);
-    assert.equal(r.tools[3].annotations.readOnlyHint, false);
-    assert.equal(r.tools[3].annotations.destructiveHint, false);
-});
-
-test('save_account / list_accounts / switch_account round-trip through the server', async () => {
-    const {io} = accountsWorld();
-    const deps = {accountsIo: io, token: 'at-pro', paceOpts: paceTmp()};
+test('save_account / list_accounts / switch_account round-trip through the server', async (t) => {
+    const io = world(t, {fetchImpl: async (url, init) => ({ok: true, status: 200, json: async () => ({limits: [
+        {kind: 'session', percent: init.headers.authorization.endsWith('perso') ? 20 : 95,
+            severity: 'normal', resets_at: '2026-09-13T16:00:00Z', is_active: true},
+    ]})})});
     const store = openStore(io);
-    const call = (name, args) => handleRequest({method: 'tools/call', params: {name, arguments: args}}, deps);
+    const call = (name, args) => handleRequest({method: 'tools/call', params: {name, arguments: args}}, io);
 
     let r = await call('list_accounts');
     assert.match(r.content[0].text, /No saved accounts yet/);
@@ -411,9 +351,7 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /invalid name/);
 
-    store.writeProfile({version: 1, name: 'PERSO',
-        account: {accountUuid: 'u-perso', emailAddress: 'perso@example.com'},
-        credentials: accountCreds('perso')});
+    store.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
 
     r = await call('list_accounts');
     assert.equal(r.structuredContent.active, 'PRO');
@@ -425,8 +363,7 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     assert.match(r.content[0].text, /○ \*\*PERSO\*\*.*Current session 20%/);
 
     // get_usage now says which saved account the numbers are for
-    r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
-        {...deps, fetchImpl: okFetch(LIMITS_PAYLOAD)});
+    r = await call('get_usage');
     assert.deepEqual(r.structuredContent.account, {name: 'PRO', email: 'pro@example.com', plan: 'max'});
     assert.match(r.content[0].text, /^Account: \*\*PRO\*\* \(pro@example.com, max\)/);
 
@@ -441,18 +378,4 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     r = await call('switch_account', {name: 'NOPE'});
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /no saved account named NOPE/);
-});
-
-test('get_usage reports account: null for an unsaved login', async () => {
-    const {io} = accountsWorld();
-    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}},
-        {accountsIo: io, fetchImpl: okFetch(LIMITS_PAYLOAD), token: 't', paceOpts: paceTmp()});
-    assert.equal(r.structuredContent.account, null);
-    assert.doesNotMatch(r.content[0].text, /^Account:/);
-});
-
-test('readAccessToken follows CLAUDE_CONFIG_DIR like the account store', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-cfg-'));
-    fs.writeFileSync(path.join(dir, '.credentials.json'), JSON.stringify({claudeAiOauth: {accessToken: 'tok-cfg'}}));
-    assert.equal(readAccessToken({homedir: '/nowhere', platform: 'linux', env: {CLAUDE_CONFIG_DIR: dir}}), 'tok-cfg');
 });

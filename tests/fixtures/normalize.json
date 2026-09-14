@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared normalization contract. Loaded by tests/parity.test.js (pure.js + mcp/server.js) AND macos/Tests/ClaudeUsageCoreTests (Swift). Each case: `input` is a raw usage payload; `expected` is the presentation-agnostic core every port must produce - same kinds, in KIND_ORDER, with identical group, scoped, percent (clamped/rounded), severity, resets_at, and active. Labels are intentionally per-port and NOT asserted here.",
+  "_comment": "Shared normalization contract. Loaded by tests/parity.test.js (lib/pure.js + claude-code/normalize.js) AND macos/Tests/ClaudeUsageCoreTests (Swift). Each case: `input` is a raw usage payload; `expected` is the presentation-agnostic core every port must produce - same kinds, in KIND_ORDER, with identical group, scoped, percent (clamped/rounded), severity, resets_at, and active. Labels are intentionally per-port and NOT asserted here.",
   "cases": [
     {
       "name": "modern limits[] - sorts to KIND_ORDER, clamps, defaults severity/active",

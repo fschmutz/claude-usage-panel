@@ -7,36 +7,20 @@
 // (e.g. Fable) weekly limits and API severity are API-only and shown only by the
 // GNOME extension and the macOS app, never here. Output is left-aligned (Claude
 // Code anchors the line to the left; use the settings `padding` field to indent).
+//
+// The contract pieces it renders - the burn-rate forecast and clock pace
+// (pace.js), the ping stamps (stamps.js), the account rule (accounts-contract.js)
+// - are the same modules the MCP server uses; this file is only the rendering.
 
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {autoSwitchTarget, openStore, worstFromCache, worstPercent} from './accounts.js';
-
-// Compact per-transcript token sums are cached here so a multi-MB JSONL isn't
-// re-read and re-parsed on every refresh (see transcriptTotals).
-const TOKENS_CACHE_PATH = path.join(os.tmpdir(), 'claude-usage-statusline-tokens.json');
-
-// Timestamped percent samples per limit, SHARED with the MCP server (both write
-// the same file, best-effort) so each invocation densifies the other's history.
-// Feeds the burn-rate forecast; like the token cache it is a local tmp file -
-// still no credentials and no network.
-const HISTORY_PATH = path.join(os.tmpdir(), 'claude-usage-history.json');
-
-// Where scripts/session-ping.sh records its last successful ping, and the
-// session index the MCP server / desktop panels maintain. The status line only
-// READS both: it must stay a sub-100ms command, so it never folds a transcript
-// of its own (the index is built by whichever client is running - see
-// mcp/server.js) and simply shows nothing when neither file exists.
-const STATE_DIR = process.env.XDG_STATE_HOME
-  ? path.join(process.env.XDG_STATE_HOME, 'claude-usage-panel')
-  : path.join(os.homedir(), '.local', 'state', 'claude-usage-panel');
-const LAST_PING_PATH = path.join(STATE_DIR, 'last-ping');
-const SESSION_INDEX_PATH = path.join(
-  process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), '.cache'),
-  'claude-usage-panel', 'sessions.json');
+import {openStore} from './accounts.js';
+import {autoSwitchTarget, usageSeverity, worstFromCache, worstPercent} from './accounts-contract.js';
+import {clampPercent} from './normalize.js';
+import {clockPace, forecastMap} from './pace.js';
+import {lastPingPath, sessionIndexPath, tokensCachePath} from './paths.js';
+import {formatLastPing, localDay, resetHint} from './stamps.js';
 
 // Short labels for the two rate-limit windows stdin exposes. Terse because the
 // status line has little horizontal room.
@@ -59,20 +43,6 @@ const FRACTIONS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 const EMPTY = '░';
 const GAUGE_WIDTH = 6;
 
-// "Resets in 3h06m" / "4d2h" - compact, only the two most significant units.
-export function resetHint(resetsAt) {
-  if (!resetsAt) return '';
-  const ms = new Date(resetsAt).getTime() - Date.now();
-  if (!Number.isFinite(ms) || ms <= 0) return '';
-  const mins = Math.round(ms / 60_000);
-  const d = Math.floor(mins / 1440);
-  const h = Math.floor((mins % 1440) / 60);
-  const m = mins % 60;
-  if (d > 0) return ` ${d}d${h}h`;
-  if (h > 0) return ` ${h}h${String(m).padStart(2, '0')}m`;
-  return ` ${m}m`;
-}
-
 // A compact fixed-width bar whose fill (colored by severity) tracks the
 // percentage down to 1/8 of a cell, with the remainder dimmed. The percent is
 // clamped to [0,100] here so no caller can overflow the width or (with a
@@ -87,10 +57,6 @@ export function gauge(percent, color) {
   return `${color}${bar}${DIM}${empty}${RESET}`;
 }
 
-// Severity for values that carry no API severity (context, stdin rate limits):
-// green under 70 %, yellow up to 90 %, red above.
-const thresholdSeverity = (p) => (p >= 90 ? 'critical' : p >= 70 ? 'warning' : 'normal');
-
 // A "Context" card for the context-window usage Claude Code passes on stdin,
 // rendered in the same gauge format as the plan limits. Returns '' when the
 // field is absent (older Claude Code) or stdin isn't valid JSON.
@@ -102,13 +68,14 @@ export function contextSegment(stdinText) {
     return '';
   }
   if (!Number.isFinite(Number(pct))) return '';
-  const p = Math.max(0, Math.min(100, Math.round(Number(pct))));
-  const color = SEV_COLOR[thresholdSeverity(p)];
+  const p = clampPercent(pct);
+  const color = SEV_COLOR[usageSeverity(p)];
   return `Context ${gauge(p, color)} ${color}${p}%${RESET}`;
 }
 
 // The Session (five_hour) and Week (seven_day) rate limits Claude Code passes on
-// stdin. No per-model card and no API severity, so colors use a local threshold;
+// stdin, as cards keyed like every other port's (`key` = kind: no per-model
+// card exists here). No API severity, so colors use the local thresholds;
 // resets_at is epoch seconds and converted to ISO.
 export function cardsFromStdin(stdinText) {
   let rl;
@@ -119,16 +86,17 @@ export function cardsFromStdin(stdinText) {
   }
   const cards = [];
   const add = (win, kind, label) => {
-    const pct = Math.round(Number(win?.used_percentage));
+    const pct = Number(win?.used_percentage);
     if (!Number.isFinite(pct)) return;
-    const p = Math.max(0, Math.min(100, pct));
+    const p = clampPercent(pct);
     const secs = Number(win.resets_at);
     cards.push({
+      key: kind,
       kind,
       label,
       group: kind === 'session' ? 'session' : 'weekly',
       percent: p,
-      severity: thresholdSeverity(p),
+      severity: usageSeverity(p),
       resetsAt: Number.isFinite(secs) ? new Date(secs * 1000).toISOString() : null,
       active: true,
     });
@@ -136,109 +104,6 @@ export function cardsFromStdin(stdinText) {
   add(rl?.five_hour, 'session', KIND_LABELS.session);
   add(rl?.seven_day, 'weekly_all', KIND_LABELS.weekly_all);
   return cards;
-}
-
-// ── Usage against the clock (mirrors lib/pure.js; tests/fixtures/pace.json) ────
-// The payload dates the reset but never the window's start, so the length comes
-// from the group: 5 h session, 7 d weekly. A card ahead of the clock is burning
-// faster than the window it lives in - which a flat burn rate cannot show.
-
-export const WINDOW_MS = {session: 5 * 3600_000, weekly: 7 * 86400_000};
-export const PACE_TOLERANCE = 5;
-
-export function elapsedPercent(card, nowMs = Date.now()) {
-  const span = WINDOW_MS[card?.group];
-  if (!span || !card?.resetsAt) return null;
-  const reset = Date.parse(card.resetsAt);
-  if (!Number.isFinite(reset)) return null;
-  const ratio = 1 - (reset - nowMs) / span;
-  return Math.max(0, Math.min(100, Math.round(ratio * 100)));
-}
-
-export function clockPace(card, nowMs = Date.now()) {
-  const elapsed = elapsedPercent(card, nowMs);
-  if (elapsed === null) return null;
-  const pct = Math.max(0, Math.min(100, Math.round(Number(card.percent) || 0)));
-  const delta = pct - elapsed;
-  const state = delta > PACE_TOLERANCE ? 'ahead' : delta < -PACE_TOLERANCE ? 'behind' : 'even';
-  return {elapsedPercent: elapsed, deltaPoints: delta, state};
-}
-
-// ── Burn-rate forecast (mirrors lib/pure.js; tests/fixtures/forecast.json) ──────
-
-const FORECAST_WINDOW_MS = 6 * 3600_000;
-const FORECAST_MIN_SAMPLES = 3;
-const FORECAST_MIN_SPAN_MS = 30 * 60_000;
-const FORECAST_MIN_PACE = 0.2;
-
-// Project when a limit hits 100% at the current pace - see pure.js for the
-// full contract; the three JS copies + Swift are pinned by one fixture.
-export function forecast(samples, resetsAt, nowMs) {
-  if (!Array.isArray(samples) || !samples.length) return null;
-  let start = 0;
-  for (let i = samples.length - 1; i > 0; i--) {
-    if (samples[i - 1][1] > samples[i][1] + 1) {
-      start = i;
-      break;
-    }
-  }
-  const win = samples
-    .slice(start)
-    .filter(([t]) => Number.isFinite(t) && t > nowMs - FORECAST_WINDOW_MS && t <= nowMs);
-  if (win.length < FORECAST_MIN_SAMPLES) return null;
-  const [t0] = win[0];
-  const [tLast, pLast] = win[win.length - 1];
-  if (tLast - t0 < FORECAST_MIN_SPAN_MS || pLast >= 100) return null;
-  let sw = 0, swt = 0, swp = 0, swtt = 0, swtp = 0;
-  win.forEach(([t, p], i) => {
-    const w = i + 1;
-    const th = (t - t0) / 3600_000;
-    sw += w;
-    swt += w * th;
-    swp += w * p;
-    swtt += w * th * th;
-    swtp += w * th * p;
-  });
-  const denom = sw * swtt - swt * swt;
-  if (denom === 0) return null;
-  const slope = (sw * swtp - swt * swp) / denom;
-  if (!Number.isFinite(slope) || slope < FORECAST_MIN_PACE) return null;
-  const fullMs = tLast + ((100 - pLast) / slope) * 3600_000;
-  const projected = Math.round(fullMs / 60_000) * 60_000;
-  const resetMs = resetsAt ? Date.parse(resetsAt) : NaN;
-  const margin = Number.isFinite(resetMs)
-    ? Math.round(((projected - resetMs) / 3600_000) * 10) / 10
-    : null;
-  return {
-    pctPerHour: Math.round(slope * 100) / 100,
-    projectedFullAt: new Date(projected).toISOString(),
-    exhaustsBeforeReset: margin !== null && margin < 0,
-    marginHours: margin,
-  };
-}
-
-// Append this invocation's samples to the shared history file and return the
-// updated {kind: [[t, p], …]} map. Best-effort on a tmp file: a concurrent MCP
-// write may win a race - worst case one sample is lost, never an error.
-export function recordHistory(cards, {nowMs = Date.now(), historyPath = HISTORY_PATH} = {}) {
-  let hist = {};
-  try {
-    const parsed = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
-    if (parsed && typeof parsed === 'object') hist = parsed;
-  } catch {
-    // no history yet
-  }
-  for (const c of cards) {
-    const list = Array.isArray(hist[c.kind]) ? hist[c.kind] : [];
-    list.push([nowMs, c.percent]);
-    hist[c.kind] = list.slice(-200);
-  }
-  try {
-    fs.writeFileSync(historyPath, JSON.stringify(hist), {mode: 0o600});
-  } catch {
-    // read-only tmp dir just means no forecast; not fatal
-  }
-  return hist;
 }
 
 // "⚠full Sun03:40" appended to the gauge of the worst limit projected to run
@@ -265,7 +130,7 @@ export function render(cards, {forecasts = new Map(), nowMs = Date.now()} = {}) 
 
   // A reset countdown is shown once, after the LAST limit that displays the same
   // value - so a weekly reset shared by several cards isn't repeated.
-  const hints = shown.map((c) => resetHint(c.resetsAt));
+  const hints = shown.map((c) => resetHint(c.resetsAt, nowMs));
   const lastWithHint = new Map();
   hints.forEach((h, i) => {
     if (h) lastWithHint.set(h, i);
@@ -274,8 +139,8 @@ export function render(cards, {forecasts = new Map(), nowMs = Date.now()} = {}) 
   return shown
     .map((c, i) => {
       const color = SEV_COLOR[c.severity] ?? SEV_COLOR.normal;
-      const reset = lastWithHint.get(hints[i]) === i ? `${DIM}${hints[i]}${RESET}` : '';
-      const marker = exhaustionMarker(forecasts.get(c.kind));
+      const reset = lastWithHint.get(hints[i]) === i ? ` ${DIM}${hints[i]}${RESET}` : '';
+      const marker = exhaustionMarker(forecasts.get(c.key));
       const clock = paceMarker(clockPace(c, nowMs));
       return `${c.label} ${gauge(c.percent, color)} ${color}${c.percent}%${RESET}${reset}${clock}${marker}`;
     })
@@ -293,13 +158,16 @@ export function formatTokens(n) {
   return String(n);
 }
 
-// Sum every token each assistant turn consumed - prompt, cache writes, cache
-// reads and completion - across all assistant messages in the session transcript
-// (a JSONL, one message per line). Deduped by message id so a replayed line
-// isn't counted twice. Cache reads dominate a long session, so this is the true
-// throughput; pass includeCacheRead=false for "fresh" tokens.
-export function sumTranscriptTokens(jsonlText, includeCacheRead = true) {
-  let total = 0;
+/**
+ * Every token each assistant turn consumed, in one pass over the session
+ * transcript (a JSONL, one message per line): `all` counts prompt, cache
+ * writes, cache reads and completion; `fresh` leaves the cache reads out.
+ * Deduped by message id so a replayed line isn't counted twice. Cache reads
+ * dominate a long session, so `all` is the true throughput.
+ */
+export function transcriptTokens(jsonlText) {
+  let all = 0;
+  let fresh = 0;
   const seen = new Set();
   for (const line of jsonlText.split('\n')) {
     if (!line) continue;
@@ -316,12 +184,19 @@ export function sumTranscriptTokens(jsonlText, includeCacheRead = true) {
       if (seen.has(id)) continue;
       seen.add(id);
     }
-    total += (Number(u.input_tokens) || 0) +
+    const turn = (Number(u.input_tokens) || 0) +
       (Number(u.output_tokens) || 0) +
-      (Number(u.cache_creation_input_tokens) || 0) +
-      (includeCacheRead ? (Number(u.cache_read_input_tokens) || 0) : 0);
+      (Number(u.cache_creation_input_tokens) || 0);
+    fresh += turn;
+    all += turn + (Number(u.cache_read_input_tokens) || 0);
   }
-  return total;
+  return {all, fresh};
+}
+
+/** The old two-call shape, for callers that want one figure. */
+export function sumTranscriptTokens(jsonlText, includeCacheRead = true) {
+  const t = transcriptTokens(jsonlText);
+  return includeCacheRead ? t.all : t.fresh;
 }
 
 // {all, fresh} token totals for a transcript, cached on disk keyed by the file's
@@ -332,7 +207,7 @@ export function sumTranscriptTokens(jsonlText, includeCacheRead = true) {
 export function transcriptTotals(p, {
   statFile = fs.statSync,
   readFile = (f) => fs.readFileSync(f, 'utf8'),
-  cachePath = TOKENS_CACHE_PATH,
+  cachePath = tokensCachePath(),
 } = {}) {
   let sig;
   try {
@@ -353,11 +228,7 @@ export function transcriptTotals(p, {
   } catch {
     return null;
   }
-  const totals = {
-    sig,
-    all: sumTranscriptTokens(text, true),
-    fresh: sumTranscriptTokens(text, false),
-  };
+  const totals = {sig, ...transcriptTokens(text)};
   try {
     fs.writeFileSync(cachePath, JSON.stringify(totals), {mode: 0o600});
   } catch {
@@ -389,63 +260,13 @@ export function tokensSegment(stdinText, {
   return `${DIM}∑ ${formatTokens(total)} tok${RESET}`;
 }
 
-// ── Session pings and today's sessions ────────────────────────────────────────
-// Twins of the GNOME lib/pure.js functions of the same names, pinned by
-// tests/fixtures/sessions.json. The ping stamp's offset has no colon (+0200),
-// which Date.parse only accepts through a legacy path, so parse it explicitly.
-
-const STAMP_RE =
-  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
-
-export function parseStamp(text) {
-  const m = STAMP_RE.exec(String(text ?? '').trim());
-  if (!m) return null;
-  const [, y, mo, d, h, mi, sec, zone] = m;
-  if (!zone) {
-    return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec))
-      .getTime();
-  }
-  let offsetMin = 0;
-  if (zone !== 'Z') {
-    const digits = zone.slice(1).replace(':', '');
-    offsetMin = (zone[0] === '-' ? -1 : 1) *
-      (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2)));
-  }
-  return Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec)) -
-    offsetMin * 60_000;
-}
-
-export function localDay(ms) {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
-    `${String(d.getDate()).padStart(2, '0')}`;
-}
-
-export function formatClock(ms) {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-export function formatLastPing(text, nowMs) {
-  const at = parseStamp(text);
-  if (at === null) return '';
-  const clock = formatClock(at);
-  const day = localDay(at);
-  if (day === localDay(nowMs)) return clock;
-  if (day === localDay(nowMs - 86_400_000)) return `yesterday ${clock}`;
-  if (nowMs - at < 6 * 86_400_000) return `${DAY_NAMES[(new Date(at).getDay() + 6) % 7]} ${clock}`;
-  return `${day} ${clock}`;
-}
-
 // "ping 05:30": the last time a scheduled ping opened a session window. Silent
 // for anyone who has not scheduled pings, which is why it can sit in the
 // default segment list.
 export function pingSegment({
   nowMs = Date.now(),
   readFile = (f) => fs.readFileSync(f, 'utf8'),
-  pingPath = LAST_PING_PATH,
+  pingPath = lastPingPath(),
 } = {}) {
   let raw;
   try {
@@ -458,12 +279,13 @@ export function pingSegment({
 }
 
 // "▸ BAM-SALES 412k": today's biggest token spender among the local sessions,
-// read from the shared index. Opt-in (--segments=…,sessions) because the status
-// line has little horizontal room.
+// read from the shared index (the MCP server / panels build it; the status
+// line must stay a sub-100ms command, so it never folds a transcript itself).
+// Opt-in (--segments=…,sessions) because the line has little horizontal room.
 export function sessionsSegment({
   nowMs = Date.now(),
   readFile = (f) => fs.readFileSync(f, 'utf8'),
-  indexPath = SESSION_INDEX_PATH,
+  indexPath = sessionIndexPath(),
 } = {}) {
   let index;
   try {
@@ -506,23 +328,21 @@ export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
   }
 }
 
+// The limits segment: record this refresh's samples and project each limit's
+// burn rate; the render appends a "⚠full …" marker only when one is on pace
+// to run out before its reset, so the line stays short in the good case.
+export function limitsSegment(stdinText, {nowMs = Date.now(), historyPath} = {}) {
+  const cards = cardsFromStdin(stdinText);
+  const forecasts = forecastMap(cards, {nowMs, ...(historyPath ? {historyPath} : {})});
+  return render(cards, {forecasts, nowMs});
+}
+
 // The segments the line can show, keyed by the name used in --segments. Each
 // takes the stdin text and the parsed config and returns its rendered string.
 const SEGMENTS = {
   account: (stdin) => accountSegment(stdin),
   context: (stdin) => contextSegment(stdin),
-  limits: (stdin) => {
-    const cards = cardsFromStdin(stdin);
-    // Record this refresh's samples and project each limit's burn rate; the
-    // render appends a "⚠full …" marker only when one is on pace to run out
-    // before its reset, so the line stays short in the good case.
-    const nowMs = Date.now();
-    const hist = recordHistory(cards, {nowMs});
-    const forecasts = new Map(
-      cards.map((c) => [c.kind, forecast(hist[c.kind] ?? [], c.resetsAt, nowMs)]),
-    );
-    return render(cards, {forecasts, nowMs});
-  },
+  limits: (stdin) => limitsSegment(stdin),
   tokens: (stdin, cfg) => tokensSegment(stdin, {includeCacheRead: cfg.includeCacheRead}),
   ping: () => pingSegment(),
   sessions: () => sessionsSegment(),

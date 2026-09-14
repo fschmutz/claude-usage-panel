@@ -1,6 +1,6 @@
-// Named accounts: the pure contract against the shared fixture, and the store
-// / switch / refresh I/O (openStore bound to a throwaway HOME). No network:
-// fetch is faked. The CLI is exercised through claude-account.js's main.
+// Named accounts: the store / switch / refresh I/O (openStore bound to a
+// throwaway HOME) and the CLI (claude-account.js's main). No network: fetch is
+// faked. The pure contract is pinned in parity.test.js against the fixture.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,74 +8,15 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {
-    AUTO_SWITCH,
-    REFRESH_LEAD_MS,
-    accountSummary,
-    accountsDir,
-    activeAccountName,
-    autoSwitchTarget,
-    claudeConfigPath,
-    credentialsPath,
-    isValidName,
-    openStore,
-    parseProfile,
-    tokenState,
-    worstFromCache,
-    worstPercent,
-} from '../claude-code/accounts.js';
+import {openStore} from '../claude-code/accounts.js';
+import {autoSwitchTarget, worstFromCache, worstPercent} from '../claude-code/accounts-contract.js';
 import {main} from '../claude-code/claude-account.js';
+import {accountsDir, claudeConfigPath, credentialsPath} from '../claude-code/paths.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const FIX = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'accounts.json'), 'utf8'));
-const NOW = FIX.now;
+const NOW = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'accounts.json'), 'utf8')).now;
 
-// ── Pure contract ───────────────────────────────────────────────────────────────
-
-test('fixture constants are the module constants', () => {
-    assert.equal(REFRESH_LEAD_MS, FIX.refreshLeadMs);
-    assert.equal(AUTO_SWITCH.threshold, FIX.threshold);
-    assert.equal(AUTO_SWITCH.margin, FIX.margin);
-    assert.equal(AUTO_SWITCH.cooldownMs, FIX.cooldownMs);
-});
-
-test('parseProfile accepts the fixture profiles and rejects the invalid ones', () => {
-    for (const raw of FIX.profiles) {
-        const p = parseProfile(raw);
-        assert.ok(p, raw.name);
-        assert.equal(p.name, raw.name);
-        assert.deepEqual(p.credentials, raw.credentials);
-    }
-    for (const raw of FIX.invalidProfiles) assert.equal(parseProfile(raw), null, JSON.stringify(raw));
-});
-
-test('name rules', () => {
-    for (const n of FIX.validNames) assert.ok(isValidName(n), n);
-    for (const n of FIX.invalidNames) assert.ok(!isValidName(n), n);
-});
-
-test('accountSummary + tokenState match the fixture', () => {
-    const profiles = FIX.profiles.map(parseProfile);
-    assert.deepEqual(profiles.map((p) => accountSummary(p, NOW)), FIX.summaries);
-    for (const s of FIX.summaries) {
-        assert.equal(tokenState(profiles.find((p) => p.name === s.name), NOW), s.tokenState, s.name);
-    }
-});
-
-test('activeAccountName matches the fixture', () => {
-    const profiles = FIX.profiles.map(parseProfile);
-    for (const c of FIX.active) assert.equal(activeAccountName(profiles, c.live), c.expected, c.name);
-});
-
-test('autoSwitchTarget matches the fixture', () => {
-    for (const c of FIX.autoSwitch) {
-        const got = autoSwitchTarget({
-            active: c.active, worst: c.worst, lastSwitchMs: c.lastSwitchMs, nowMs: NOW,
-            threshold: FIX.threshold, margin: FIX.margin, cooldownMs: FIX.cooldownMs,
-        });
-        assert.deepEqual(got, c.expected, c.name);
-    }
-});
+// ── Paths and helpers ───────────────────────────────────────────────────────────
 
 test('worstPercent takes the fullest card, clamped', () => {
     assert.equal(worstPercent([{percent: 12}, {percent: 34}]), 34);
@@ -181,6 +122,95 @@ test('switchTo installs the target login and patches only oauthAccount in ~/.cla
         {at: NOW, from: 'PRO', to: 'PERSO'});
     assert.equal(autoSwitchTarget({active: 'PERSO', worst: {PERSO: 95, PRO: 10}, nowMs: NOW + 1000,
         lastSwitchMs: s.readLastSwitchMs()}), null, 'cooldown from the file');
+});
+
+test('a switch that cannot write ~/.claude.json changes nothing and loses nothing', async () => {
+    const {home, io, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    // The config is validated before the first write: a file that is not a
+    // JSON object aborts the switch with the live login untouched.
+    fs.writeFileSync(path.join(home, '.claude.json'), '[1, 2, 3]');
+    await assert.rejects(s.switchTo('PERSO'), /is not a JSON object/);
+    assert.equal(s.readLiveCredentials().claudeAiOauth.accessToken, 'at-pro');
+    assert.equal(s.readLastSwitchMs(), null);
+    // And a write that fails mid-way: the account block is a directory, so
+    // the atomic rename over it throws after validation - creds still old.
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({oauthAccount: account('pro')}));
+    fs.rmSync(path.join(home, '.claude.json'));
+    fs.mkdirSync(path.join(home, '.claude.json'));
+    await assert.rejects(s.switchTo('PERSO'));
+    assert.equal(s.readLiveCredentials().claudeAiOauth.accessToken, 'at-pro');
+    const pro = s.listProfiles().find((p) => p.name === 'PRO').credentials.claudeAiOauth;
+    assert.equal(pro.refreshToken, 'rt-pro', "PRO's refresh token survives");
+    assert.equal(io.nowMs, NOW);
+});
+
+test('an interrupted switch is recognized by its token and finished, never snapshotted across', async () => {
+    const {home, io, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    // Simulate the torn state a crash between the two writes leaves: the
+    // account block already says PERSO, the credentials are still PRO's.
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({oauthAccount: account('perso')}));
+    assert.equal(s.liveAccountName(), 'PRO', 'the installed token decides');
+    // syncBack names the login but refuses to write a torn pair anywhere.
+    assert.equal(s.syncBack(), 'PRO');
+    assert.equal(s.listProfiles().find((p) => p.name === 'PERSO').credentials.claudeAiOauth.accessToken, 'at-perso');
+    assert.equal(s.listProfiles().find((p) => p.name === 'PRO').credentials.claudeAiOauth.accessToken, 'at-pro');
+    // Re-running the switch completes it.
+    const r = await s.switchTo('PERSO');
+    assert.equal(r.changed, true);
+    assert.equal(s.readLiveCredentials().claudeAiOauth.accessToken, 'at-perso');
+    assert.equal(s.readLiveAccount().emailAddress, 'perso@example.com');
+    assert.equal(io.nowMs, NOW);
+});
+
+test('the other torn state (credentials installed, account block behind) is repaired in place', async () => {
+    const {home, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify(creds('perso')));
+    assert.equal(s.liveAccountName(), 'PERSO');
+    const r = await s.switchTo('PERSO');
+    assert.equal(r.changed, false);
+    assert.equal(s.readLiveAccount().emailAddress, 'perso@example.com', 'account block caught up');
+    assert.equal(s.listProfiles().find((p) => p.name === 'PRO').credentials.claudeAiOauth.accessToken, 'at-pro');
+});
+
+test('the store reads the older flat credential shapes and lifts them into one', () => {
+    const {home, s} = world({live: null});
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify({access_token: 'tok-2'}));
+    assert.deepEqual(s.readLiveCredentials(), {claudeAiOauth: {accessToken: 'tok-2'}});
+    assert.equal(s.liveAccessToken(), 'tok-2');
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), '{nope');
+    assert.equal(s.readLiveCredentials(), null);
+    assert.equal(s.liveAccessToken(), null);
+});
+
+test('fetchUsageWith maps every outcome; fetchLiveUsage uses the live token', async () => {
+    const {io, s} = world();
+    const payload = {limits: [{kind: 'session', percent: 26, severity: 'normal', is_active: true}]};
+    const seen = [];
+    io.fetchImpl = async (url, init) => {
+        seen.push(init.headers.authorization);
+        return {ok: true, status: 200, json: async () => payload};
+    };
+    const live = await s.fetchLiveUsage();
+    assert.equal(live.ok, true);
+    assert.equal(live.cards[0].key, 'session');
+    assert.deepEqual(live.raw, payload);
+    assert.deepEqual(seen, ['Bearer at-pro']);
+    assert.deepEqual((await s.fetchUsageWith(null)).code, 'no_token');
+    io.fetchImpl = async () => ({ok: false, status: 401, json: async () => ({})});
+    assert.match((await s.fetchUsageWith('t')).message, /Claude session expired/);
+    assert.match((await s.fetchUsageWith('t', {label: 'PERSO'})).message, /^PERSO: usage endpoint refused/);
+    io.fetchImpl = async () => ({ok: false, status: 500, json: async () => ({})});
+    assert.deepEqual((await s.fetchUsageWith('t')).message, 'HTTP 500');
+    io.fetchImpl = async () => { throw new Error('ECONNREFUSED'); };
+    assert.equal((await s.fetchUsageWith('t')).code, 'network_error');
+    io.fetchImpl = async () => ({ok: true, status: 200, json: async () => { throw new Error('bad json'); }});
+    assert.equal((await s.fetchUsageWith('t')).code, 'parse_error');
 });
 
 test('a no-op switch does not stamp the last switch', async () => {

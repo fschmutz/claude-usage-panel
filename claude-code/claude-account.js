@@ -7,7 +7,9 @@
 import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
-import {accountsDir, openStore} from './accounts.js';
+import {openStore} from './accounts.js';
+import {tokenState} from './accounts-contract.js';
+import {accountsDir} from './paths.js';
 
 const HELP = `claude-account - named Claude Code accounts, switch without a browser
 
@@ -108,7 +110,9 @@ export async function main(argv, io = {}) {
           continue;
         }
         const fresh = await store.refreshProfile(p);
-        out(`${p.name}: refreshed, valid until ${new Date(fresh.credentials.claudeAiOauth.expiresAt).toISOString()}\n`);
+        const until = fresh.credentials.claudeAiOauth.expiresAt;
+        out(`${p.name}: refreshed, ${Number.isFinite(until)
+          ? `valid until ${new Date(until).toISOString()}` : tokenState(fresh)}\n`);
       }
       return 0;
     }

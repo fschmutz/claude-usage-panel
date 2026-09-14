@@ -12,25 +12,11 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {run} from './helpers.js';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'auto-update.sh');
-
-// Run a command, returning {status, stdout, stderr} without throwing on a
-// non-zero exit (the script uses exit codes as its API).
-function run(cmd, args, opts = {}) {
-    try {
-        // Explicit stdio: execFileSync otherwise leaks the child's stderr into
-        // the test runner's own output instead of capturing it.
-        const stdout = execFileSync(cmd, args, {
-            encoding: 'utf8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            ...opts,
-        });
-        return {status: 0, stdout, stderr: ''};
-    } catch (e) {
-        return {status: e.status ?? 1, stdout: e.stdout ?? '', stderr: e.stderr ?? ''};
-    }
-}
+const LIB = path.join(ROOT, 'scripts', 'lib.sh');
 
 const compare = (a, b) =>
     run('bash', [SCRIPT, '--version-compare', a, b]).stdout.trim();
@@ -83,7 +69,10 @@ function makeCheckout(t, {localVersion, tags}) {
             path.join(root, 'package.json'),
             JSON.stringify({name: 'claude-usage-panel', version}, null, 2) + '\n',
         );
+        // The worker sources lib.sh from its own directory, so the copy
+        // travels with it - exactly as install.sh gnome / pack-gnome.sh ship it.
         fs.copyFileSync(SCRIPT, path.join(root, 'scripts', 'auto-update.sh'));
+        fs.copyFileSync(LIB, path.join(root, 'scripts', 'lib.sh'));
         fs.chmodSync(path.join(root, 'scripts', 'auto-update.sh'), 0o755);
         // Stand-in for the real installer: records that it ran. The log lives
         // outside the checkout, so running it can't dirty the worktree.
@@ -161,6 +150,7 @@ test('an installed copy outside any checkout resolves the scheduled one', (t) =>
     const installed = path.join(c.dir, 'extension', 'scripts');
     fs.mkdirSync(installed, {recursive: true});
     fs.copyFileSync(SCRIPT, path.join(installed, 'auto-update.sh'));
+    fs.copyFileSync(LIB, path.join(installed, 'lib.sh'));
 
     const r = run('bash', [path.join(installed, 'auto-update.sh'), '--status', '--json'], {
         env: env(c.dir),
@@ -179,6 +169,7 @@ test('with no checkout anywhere, --status stays valid JSON and says why', (t) =>
     const installed = path.join(c.dir, 'extension', 'scripts');
     fs.mkdirSync(installed, {recursive: true});
     fs.copyFileSync(SCRIPT, path.join(installed, 'auto-update.sh'));
+    fs.copyFileSync(LIB, path.join(installed, 'lib.sh'));
 
     const r = run('bash', [path.join(installed, 'auto-update.sh'), '--status', '--json'], {
         env: env(c.dir),

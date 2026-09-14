@@ -1,71 +1,21 @@
-// Session pings and today's sessions for the MCP server (mirrors lib/pure.js).
-// scripts/session-ping.sh writes its last successful ping here; the panels and
-// the status line read the same file. The session index is likewise shared with
-// the desktop clients - one machine, one set of transcripts, one incremental
-// index - so whichever client runs keeps it warm for the others.
+// Today's sessions and the last session ping for the MCP server (mirrors
+// lib/pure.js; tests/fixtures/sessions.json). scripts/session-ping.sh writes
+// its last successful ping under the state dir; the panels and the status line
+// read the same file. The session index is likewise shared with the desktop
+// clients - one machine, one set of transcripts, one incremental index - so
+// whichever client runs keeps it warm for the others.
 
 import fs from 'node:fs';
-import os from 'node:os';
 import {Buffer} from 'node:buffer';
 import path from 'node:path';
 
-const STATE_DIR = process.env.XDG_STATE_HOME
-  ? path.join(process.env.XDG_STATE_HOME, 'claude-usage-panel')
-  : path.join(os.homedir(), '.local', 'state', 'claude-usage-panel');
-const LAST_PING_PATH = path.join(STATE_DIR, 'last-ping');
-const SESSION_INDEX_PATH = path.join(
-  process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), '.cache'),
-  'claude-usage-panel', 'sessions.json');
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+import {formatClock, formatLastPing, localDay, parseStamp} from '../claude-code/stamps.js';
+import {lastPingPath, projectsDir, sessionIndexPath} from '../claude-code/paths.js';
+
 const INDEX_VERSION = 1;
 const SESSION_BUDGET_BYTES = 16 << 20; // per call: a cold index warms over a few
 const SEEN_IDS_MAX = 32;
 const SESSION_LIMIT = 5;
-
-const STAMP_RE =
-  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
-
-export function parseStamp(text) {
-  const m = STAMP_RE.exec(String(text ?? '').trim());
-  if (!m) return null;
-  const [, y, mo, d, h, mi, sec, zone] = m;
-  if (!zone) {
-    return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec))
-      .getTime();
-  }
-  let offsetMin = 0;
-  if (zone !== 'Z') {
-    const digits = zone.slice(1).replace(':', '');
-    offsetMin = (zone[0] === '-' ? -1 : 1) *
-      (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2)));
-  }
-  return Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec)) -
-    offsetMin * 60_000;
-}
-
-export function localDay(ms) {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
-    `${String(d.getDate()).padStart(2, '0')}`;
-}
-
-export function formatClock(ms) {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-export function formatLastPing(text, nowMs) {
-  const at = parseStamp(text);
-  if (at === null) return '';
-  const clock = formatClock(at);
-  const day = localDay(at);
-  if (day === localDay(nowMs)) return clock;
-  if (day === localDay(nowMs - 86_400_000)) return `yesterday ${clock}`;
-  if (nowMs - at < 6 * 86_400_000) return `${DAY_NAMES[(new Date(at).getDay() + 6) % 7]} ${clock}`;
-  return `${day} ${clock}`;
-}
 
 /** Tokens billed for one assistant turn - cache READS excluded, they bill at a
  *  fraction and would rank every long session first. */
@@ -238,7 +188,6 @@ function foldTail(file, entry, budget, nowMs) {
     }
   }
   entry.offset = start + consumed;
-  entry.carry = '';
   entry.byDay = pruneByDay(entry.byDay, nowMs);
   return consumed;
 }
@@ -246,17 +195,16 @@ function foldTail(file, entry, budget, nowMs) {
 /**
  * Update the shared session index and return today's sessions, biggest token
  * spender first. Never throws: a missing ~/.claude/projects just yields [].
+ * `io` picks the home / env (see paths.js) and may override `projects`,
+ * `indexPath`, `limit`, `budgetBytes` directly.
  */
-export function refreshSessions({
-  nowMs = Date.now(),
-  limit = SESSION_LIMIT,
-  budgetBytes = SESSION_BUDGET_BYTES,
-  projectsDir = PROJECTS_DIR,
-  indexPath = SESSION_INDEX_PATH,
-} = {}) {
+export function refreshSessions(io = {}) {
+  const nowMs = io.nowMs ?? Date.now();
+  const limit = io.limit ?? SESSION_LIMIT;
+  const indexPath = io.indexPath ?? sessionIndexPath(io);
   const index = readIndex(indexPath);
-  const files = sessionCandidates(projectsDir, nowMs);
-  let budget = budgetBytes;
+  const files = sessionCandidates(io.projects ?? projectsDir(io), nowMs);
+  let budget = io.budgetBytes ?? SESSION_BUDGET_BYTES;
   let dirty = false;
 
   for (const file of files) {
@@ -264,7 +212,7 @@ export function refreshSessions({
     // Shrunk below what we already folded: the file was replaced, not appended
     // to. Start it over rather than folding from a stale offset.
     if (!entry || (entry.offset ?? 0) > file.size) {
-      entry = Object.assign(newSessionAcc(), {offset: 0, carry: ''});
+      entry = Object.assign(newSessionAcc(), {offset: 0});
     }
     index.files[file.path] = entry;
     if (entry.size === file.size && entry.mtimeMs === file.mtimeMs) continue;
@@ -296,10 +244,11 @@ export function refreshSessions({
 }
 
 /** The last scheduled ping, or null when pings were never set up. */
-export function readLastPing({pingPath = LAST_PING_PATH, nowMs = Date.now()} = {}) {
+export function readLastPing(io = {}) {
+  const nowMs = io.nowMs ?? Date.now();
   let raw;
   try {
-    raw = fs.readFileSync(pingPath, 'utf8').trim();
+    raw = fs.readFileSync(io.pingPath ?? lastPingPath(io), 'utf8').trim();
   } catch {
     return null;
   }

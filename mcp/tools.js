@@ -2,23 +2,9 @@
 // content, and the account tool calls. server.js owns the transport and the
 // get_usage assembly; everything that describes or renders a tool lives here.
 
+import {NAME_RE, accountSummary} from '../claude-code/accounts-contract.js';
 import {poolNote} from '../claude-code/normalize.js';
-import {accountSummary} from '../claude-code/accounts.js';
-
-// "resets in 3h06m" / "4d2h" - the two most significant units, like the
-// status line's resetHint.
-export function resetHint(resetsAt, now = Date.now()) {
-  if (!resetsAt) return '';
-  const ms = new Date(resetsAt).getTime() - now;
-  if (!Number.isFinite(ms) || ms <= 0) return '';
-  const mins = Math.round(ms / 60_000);
-  const d = Math.floor(mins / 1440);
-  const h = Math.floor((mins % 1440) / 60);
-  const m = mins % 60;
-  if (d > 0) return `${d}d${h}h`;
-  if (h > 0) return `${h}h${String(m).padStart(2, '0')}m`;
-  return `${m}m`;
-}
+import {resetHint} from '../claude-code/stamps.js';
 
 // One markdown line per limit: label, percent, severity, reset countdown, and -
 // when history supports a projection - the burn rate and whether it runs out
@@ -270,7 +256,7 @@ export const ACCOUNT_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        name: {type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$'},
+        name: {type: 'string', pattern: NAME_RE.source},
         force: {type: 'boolean', default: false},
       },
       required: ['name'],
@@ -290,7 +276,7 @@ export const ACCOUNT_TOOLS = [
       'result says how many are running, including this one.',
     inputSchema: {
       type: 'object',
-      properties: {name: {type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$'}},
+      properties: {name: {type: 'string', pattern: NAME_RE.source}},
       required: ['name'],
       additionalProperties: false,
     },

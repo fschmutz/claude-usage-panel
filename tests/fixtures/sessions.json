@@ -1,8 +1,8 @@
 {
   "_comment": [
     "Shared contract for session pings and today's sessions, asserted by",
-    "tests/sessions.test.js (lib/pure.js), tests/parity.test.js (statusline.js,",
-    "mcp/server.js) and macos SessionsParityTests (ClaudeUsageCore).",
+    "tests/sessions.test.js (lib/pure.js, claude-code/stamps.js,",
+    "mcp/sessions.js) and macos SessionsParityTests (ClaudeUsageCore).",
     "Everything is pinned in UTC: the JS suites set TZ=UTC, the Swift test passes",
     "the UTC time zone in, because localDay/formatClock are deliberately local."
   ],

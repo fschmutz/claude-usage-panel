@@ -4,10 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-    gauge, resetHint, render, contextSegment, cardsFromStdin,
-    formatTokens, sumTranscriptTokens, tokensSegment, transcriptTotals, parseConfig,
-    accountSegment,
+    gauge, render, contextSegment, cardsFromStdin, limitsSegment,
+    formatTokens, sumTranscriptTokens, transcriptTokens, tokensSegment, transcriptTotals,
+    parseConfig, accountSegment,
 } from '../claude-code/statusline.js';
+import {resetHint} from '../claude-code/stamps.js';
 import {openStore} from '../claude-code/accounts.js';
 
 // Strip ANSI so we can assert on the visible glyphs. Built via RegExp
@@ -36,10 +37,11 @@ test('gauge clamps out-of-range instead of overflowing or throwing', () => {
 });
 
 test('resetHint formats the two most significant units, blank when past', () => {
-    assert.equal(resetHint(null), '');
-    const future = Date.now() + 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000;
-    assert.equal(resetHint(new Date(future).toISOString()), ' 2d1h');
-    assert.equal(resetHint(new Date(Date.now() - 1000).toISOString()), '');
+    const now = Date.parse('2026-07-19T12:00:00Z');
+    assert.equal(resetHint(null, now), '');
+    assert.equal(resetHint('2026-07-21T13:00:00Z', now), '2d1h');
+    assert.equal(resetHint('2026-07-19T15:06:00Z', now), '3h06m');
+    assert.equal(resetHint('2026-07-19T11:59:59Z', now), '');
 });
 
 test('contextSegment renders a gauge card, clamps, blank when absent', () => {
@@ -78,7 +80,7 @@ test('render draws one gauge per shown limit and a shared reset only once', () =
     // Two cards whose resets render to the same value share one countdown.
     const base = Date.now() + 25 * 60 * 60 * 1000; // ~1d1h out
     const mk = (label, percent, ms) => ({
-        kind: label, label, percent, severity: 'normal',
+        key: label, kind: label, label, percent, severity: 'normal',
         resetsAt: new Date(base + ms).toISOString(), active: true,
     });
     const out = strip(render([mk('Week', 22, 1), mk('Session', 29, 400)]));
@@ -105,6 +107,8 @@ test('sumTranscriptTokens sums usage, cache reads optional, dedups by id only', 
     assert.equal(sumTranscriptTokens(jsonl), 100 + 10 + 5 + 1000 + 200 + 20 + 7 + 3); // all
     assert.equal(sumTranscriptTokens(jsonl, false), 100 + 10 + 5 + 200 + 20 + 7 + 3); // no cache read
     assert.equal(sumTranscriptTokens(''), 0);
+    // one pass yields both figures
+    assert.deepEqual(transcriptTokens(jsonl), {all: 1345, fresh: 345});
 });
 
 test('tokensSegment reads transcript_path and renders ∑ N tok, blank when empty', () => {
@@ -162,30 +166,47 @@ test('parseConfig picks segments/order and token mode, dropping unknowns', () =>
 
 // ── Burn-rate forecast + shared history ─────────────────────────────────────────
 import fs from 'node:fs';
-import {forecast, recordHistory, exhaustionMarker} from '../claude-code/statusline.js';
+import {forecast, recordHistory} from '../claude-code/pace.js';
+import {exhaustionMarker} from '../claude-code/statusline.js';
 
-test('recordHistory appends per-kind samples to the shared file and caps them', () => {
+test('recordHistory appends per-key samples to the shared file and caps them', () => {
     const p = noCache();
     const cards = [
-        {kind: 'session', percent: 20},
-        {kind: 'weekly_all', percent: 50},
+        {key: 'session', percent: 20},
+        {key: 'weekly_all', percent: 50},
     ];
     let hist = recordHistory(cards, {nowMs: 1000, historyPath: p});
     hist = recordHistory(cards, {nowMs: 2000, historyPath: p});
     assert.deepEqual(hist.session, [[1000, 20], [2000, 20]]);
     assert.deepEqual(hist.weekly_all, [[1000, 50], [2000, 50]]);
-    // Round-trips through the file, and caps at 200 samples per kind.
+    // Round-trips through the file, and caps at 200 samples per key.
     for (let i = 0; i < 250; i++)
-        hist = recordHistory([{kind: 'session', percent: 30}], {nowMs: 3000 + i, historyPath: p});
+        hist = recordHistory([{key: 'session', percent: 30}], {nowMs: 3000 + i, historyPath: p});
     assert.equal(JSON.parse(fs.readFileSync(p, 'utf8')).session.length, 200);
+    // No cards: nothing to add, the file is not rewritten.
+    const before = fs.statSync(p).mtimeMs;
+    recordHistory([], {nowMs: 9999, historyPath: p});
+    assert.equal(fs.statSync(p).mtimeMs, before);
     fs.rmSync(p, {force: true});
 });
 
 test('recordHistory survives a corrupt or unwritable history file', () => {
     const p = noCache();
     fs.writeFileSync(p, 'not json');
-    const hist = recordHistory([{kind: 'session', percent: 10}], {nowMs: 1, historyPath: p});
+    const hist = recordHistory([{key: 'session', percent: 10}], {nowMs: 1, historyPath: p});
     assert.deepEqual(hist.session, [[1, 10]]);
+});
+
+test('the limits segment keys its history like the MCP server (by card key)', () => {
+    const p = noCache();
+    const nowMs = 1800000000000;
+    const stdin = JSON.stringify({rate_limits: {
+        five_hour: {used_percentage: 12, resets_at: nowMs / 1000 + 3600},
+        seven_day: {used_percentage: 30, resets_at: nowMs / 1000 + 86400},
+    }});
+    assert.match(strip(limitsSegment(stdin, {nowMs, historyPath: p})), /^Session .*12% 1h00m  Week .*30% 1d0h$/);
+    assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(p, 'utf8'))), ['session', 'weekly_all']);
+    fs.rmSync(p, {force: true});
 });
 
 test('exhaustionMarker warns only for the alarming case', () => {
@@ -202,7 +223,7 @@ test('exhaustionMarker warns only for the alarming case', () => {
 test('render appends the marker to the matching limit', () => {
     const NOW = 1800000000000;
     const cards = [{
-        kind: 'weekly_all', label: 'Week', percent: 52,
+        key: 'weekly_all', kind: 'weekly_all', label: 'Week', percent: 52,
         severity: 'normal', resetsAt: new Date(NOW + 20 * 3600_000).toISOString(), active: true,
     }];
     const samples = Array.from({length: 7}, (_, i) => [NOW - (6 - i) * 1800_000, 40 + 2 * i]);

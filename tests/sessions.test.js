@@ -1,9 +1,10 @@
-// Session pings and today's sessions, across all four ports.
+// Session pings and today's sessions, across the ports.
 //
-// The three JS copies of the contract - lib/pure.js (GNOME), statusline.js
-// (terminal) and mcp/server.js - are asserted here against ONE fixture,
-// tests/fixtures/sessions.json; the Swift copy asserts the same file in
-// macos/Tests/ClaudeUsageCoreTests/SessionsParityTests.swift.
+// The two JS copies of the contract - lib/pure.js (GNOME) and the Node modules
+// (claude-code/stamps.js for the stamps, mcp/sessions.js for the folding and
+// ranking; the status line imports those) - are asserted here against ONE
+// fixture, tests/fixtures/sessions.json; the Swift copy asserts the same file
+// in macos/Tests/ClaudeUsageCoreTests/SessionsParityTests.swift.
 //
 // TZ is pinned to UTC before anything reads a date: localDay/formatClock are
 // deliberately LOCAL (the panel shows the user's wall clock), so a fixture with
@@ -19,16 +20,15 @@ import {fileURLToPath} from 'node:url';
 
 import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import * as statusline from '../claude-code/statusline.js';
-import * as mcp from '../mcp/server.js';
+import * as stamps from '../claude-code/stamps.js';
+import * as mcp from '../mcp/sessions.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fix = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'sessions.json'), 'utf8'));
 const NOW = fix.nowMs;
 
-// Which ports implement which slice of the contract. The status line only
-// READS the shared index (it must stay a sub-100ms command), so it carries the
-// ping/format half and not the folding half.
-const stampPorts = {pure, statusline, mcp};
+// Which ports implement which slice of the contract.
+const stampPorts = {pure, stamps};
 const foldPorts = {pure, mcp};
 
 for (const [portName, port] of Object.entries(stampPorts)) {
@@ -156,7 +156,7 @@ test('the index folds a transcript once and then only its appended tail', () => 
         '',
     ].join('\n'));
 
-    const first = mcp.refreshSessions({nowMs: NOW, projectsDir: projects, indexPath});
+    const first = mcp.refreshSessions({nowMs: NOW, projects, indexPath});
     assert.equal(first.length, 1);
     assert.equal(first[0].tokens, 100);
     assert.equal(first[0].label, 'P');
@@ -164,16 +164,16 @@ test('the index folds a transcript once and then only its appended tail', () => 
 
     // Appending must add, never re-count: a re-fold from offset 0 would double.
     fs.appendFileSync(transcript, `${line('m2', 50)}\n`);
-    const second = mcp.refreshSessions({nowMs: NOW, projectsDir: projects, indexPath});
+    const second = mcp.refreshSessions({nowMs: NOW, projects, indexPath});
     assert.equal(second[0].tokens, 150);
 
     // Unchanged file, unchanged numbers.
-    const third = mcp.refreshSessions({nowMs: NOW, projectsDir: projects, indexPath});
+    const third = mcp.refreshSessions({nowMs: NOW, projects, indexPath});
     assert.equal(third[0].tokens, 150);
 
     // A truncated/replaced transcript is folded from the start again.
     fs.writeFileSync(transcript, `${JSON.stringify({type: 'user', sessionId: 'S1', cwd: '/home/u/p'})}\n${line('m9', 7)}\n`);
-    const fourth = mcp.refreshSessions({nowMs: NOW, projectsDir: projects, indexPath});
+    const fourth = mcp.refreshSessions({nowMs: NOW, projects, indexPath});
     assert.equal(fourth[0].tokens, 7);
 
     fs.rmSync(root, {recursive: true, force: true});
@@ -193,12 +193,12 @@ test('a half-written last line is folded once the rest arrives, not twice', () =
 
     fs.writeFileSync(transcript, full.slice(0, 30)); // no trailing newline yet
     const partial = mcp.refreshSessions({
-        nowMs: NOW, projectsDir: path.join(root, 'projects'), indexPath});
+        nowMs: NOW, projects: path.join(root, 'projects'), indexPath});
     assert.equal(partial.length, 0);
 
     fs.writeFileSync(transcript, `${full}\n`);
     const complete = mcp.refreshSessions({
-        nowMs: NOW, projectsDir: path.join(root, 'projects'), indexPath});
+        nowMs: NOW, projects: path.join(root, 'projects'), indexPath});
     assert.equal(complete.length, 1);
     assert.equal(complete[0].tokens, 42);
 
@@ -224,8 +224,8 @@ test('the sessions segment names the biggest spender of the day', () => {
     const index = {
         version: 1,
         files: {
-            a: {sessionId: 'A', cwd: '/home/u/small', byDay: {[mcp.localDay(NOW)]: 1000}},
-            b: {sessionId: 'B', title: 'BIG', cwd: '/home/u/big', byDay: {[mcp.localDay(NOW)]: 900000}},
+            a: {sessionId: 'A', cwd: '/home/u/small', byDay: {[stamps.localDay(NOW)]: 1000}},
+            b: {sessionId: 'B', title: 'BIG', cwd: '/home/u/big', byDay: {[stamps.localDay(NOW)]: 900000}},
         },
     };
     const out = statusline.sessionsSegment({nowMs: NOW, readFile: () => JSON.stringify(index)});

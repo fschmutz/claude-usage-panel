@@ -1,12 +1,22 @@
-// Flat ESLint config for the GNOME Shell (GJS) JavaScript.
+// Flat ESLint config: the Node code (status line, MCP server, scripts, tests)
+// and the GNOME Shell (GJS) code share one rule set and differ only in globals.
 // GJS is ESM with a few global helpers; module resolution (gi://, resource://)
 // is provided by the Shell at runtime, so we don't resolve imports here.
 
+const rules = {
+    'no-unused-vars': ['error', {argsIgnorePattern: '^_', varsIgnorePattern: '^_'}],
+    'no-undef': 'error',
+    'prefer-const': 'error',
+    'no-var': 'error',
+    eqeqeq: ['error', 'smart'],
+    semi: ['error', 'always'],
+};
+
+const NODE_FILES = ['claude-code/**/*.js', 'mcp/**/*.js', 'tests/**/*.js', '**/*.mjs'];
+
 export default [
     {
-        // Node.js code (ESM, Node globals - not GJS): the Claude Code status
-        // line, the MCP server, and the test suite (which runs under node).
-        files: ['claude-code/**/*.js', 'mcp/**/*.js', 'tests/**/*.js'],
+        files: NODE_FILES,
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
@@ -20,18 +30,11 @@ export default [
                 clearTimeout: 'readonly',
             },
         },
-        rules: {
-            'no-unused-vars': ['error', {argsIgnorePattern: '^_'}],
-            'no-undef': 'error',
-            'prefer-const': 'error',
-            'no-var': 'error',
-            eqeqeq: ['error', 'smart'],
-            semi: ['error', 'always'],
-        },
+        rules,
     },
     {
         files: ['**/*.js'],
-        ignores: ['eslint.config.js', 'claude-code/**/*.js', 'mcp/**/*.js'],
+        ignores: ['eslint.config.js', ...NODE_FILES],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
@@ -48,13 +51,6 @@ export default [
                 Map: 'readonly',
             },
         },
-        rules: {
-            'no-unused-vars': ['error', {argsIgnorePattern: '^_'}],
-            'no-undef': 'error',
-            'prefer-const': 'error',
-            'no-var': 'error',
-            eqeqeq: ['error', 'smart'],
-            semi: ['error', 'always'],
-        },
+        rules,
     },
 ];

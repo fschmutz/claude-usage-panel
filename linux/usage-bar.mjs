@@ -8,16 +8,14 @@
 //   node linux/usage-bar.mjs --limit weekly  pick which limit to show
 //
 // GNOME gets an extension and macOS a menu-bar app; everyone else on Linux had
-// nothing. This reuses mcp/server.js wholesale - same endpoint, same
-// normalization, same official `limits[]` numbers - so there is no second copy
-// of the contract to keep in sync.
-import {fetchUsage, resetHint} from '../mcp/server.js';
+// nothing. This reads the live login through the same account store the MCP
+// server uses - same endpoint, same normalization, same official `limits[]`
+// numbers - so there is no second copy of the contract to keep in sync.
+import {openStore} from '../claude-code/accounts.js';
+import {resetHint} from '../claude-code/stamps.js';
+import {flag} from '../scripts/lib/argv.mjs';
 
 const argv = process.argv.slice(2);
-const flag = (name, fallback = null) => {
-    const i = argv.indexOf(name);
-    return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
-};
 
 if (argv.includes('-h') || argv.includes('--help')) {
     process.stdout.write(
@@ -28,8 +26,8 @@ if (argv.includes('-h') || argv.includes('--help')) {
     process.exit(0);
 }
 
-const format = flag('--format', 'text');
-const which = flag('--limit', 'session');
+const format = flag(argv, '--format', 'text');
+const which = flag(argv, '--limit', 'session');
 
 // Severity → colour, shared by both coloured formats.
 const COLOURS = {normal: 'colour245', warning: 'colour214', critical: 'colour203'};
@@ -59,7 +57,7 @@ const fail = (msg) => {
     process.exit(0);
 };
 
-// fetchUsage already normalizes: it returns {ok, cards, raw}.
+// fetchLiveUsage already normalizes: it returns {ok, cards, raw}.
 // CUP_TEST_USAGE_JSON is a unit-test hook, same idea as CUP_TEST_SCHEDULER in
 // install.sh: it replaces the network call so tests never hit the endpoint
 // (and never burn rate limit - a real HTTP 429 is what proved the fail-soft
@@ -68,7 +66,7 @@ let result;
 try {
     result = process.env.CUP_TEST_USAGE_JSON
         ? JSON.parse(process.env.CUP_TEST_USAGE_JSON)
-        : await fetchUsage();
+        : await openStore().fetchLiveUsage();
 } catch (e) {
     fail(e?.message ?? 'unknown error');
 }

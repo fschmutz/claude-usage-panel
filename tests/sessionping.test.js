@@ -6,11 +6,12 @@
 // records its argv, and HOME/XDG_* point at throwaway directories.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+
+import {run} from './helpers.js';
 
 import {
     DEFAULT_DAYS, daysArg, isValidPingTime, normalizePingTime,
@@ -20,21 +21,6 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'session-ping.sh');
 const INSTALL = path.join(ROOT, 'install.sh');
-
-// Run a command, returning {status, stdout, stderr} without throwing on a
-// non-zero exit (the script uses exit codes as its API).
-function run(cmd, args, opts = {}) {
-    try {
-        const stdout = execFileSync(cmd, args, {
-            encoding: 'utf8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            ...opts,
-        });
-        return {status: 0, stdout, stderr: ''};
-    } catch (e) {
-        return {status: e.status ?? 1, stdout: e.stdout ?? '', stderr: e.stderr ?? ''};
-    }
-}
 
 // A sandbox HOME with stub executables on its own bin dir: `claude` appends
 // its argv to $HOME/claude-calls.log, and `crontab` serves $HOME/crontab.txt
@@ -295,11 +281,11 @@ test('a checkout path with XML metacharacters is escaped into the launchd plists
     // install both targets from one such checkout and check both files.
     const home = makeSandbox(t);
     const checkout = path.join(home, 'Dev & Ops', '<beta>');
-    fs.mkdirSync(path.join(checkout, 'scripts'), {recursive: true});
+    // install.sh sources scripts/install/*.sh and the workers source
+    // scripts/lib.sh, so the whole scripts/ tree travels with it.
+    fs.mkdirSync(checkout, {recursive: true});
     fs.copyFileSync(INSTALL, path.join(checkout, 'install.sh'));
-    for (const w of ['session-ping.sh', 'auto-update.sh']) {
-        fs.copyFileSync(path.join(ROOT, 'scripts', w), path.join(checkout, 'scripts', w));
-    }
+    fs.cpSync(path.join(ROOT, 'scripts'), path.join(checkout, 'scripts'), {recursive: true});
     // autoupdate refuses to schedule anything outside a git checkout. Global
     // and system git config are switched off so a machine-wide init hook or
     // template cannot reach into the sandbox.
@@ -309,7 +295,7 @@ test('a checkout path with XML metacharacters is escaped into the launchd plists
 
     const r = run('bash', [path.join(checkout, 'install.sh'), 'autoupdate', 'sessionping',
         '06:00', '--days=mon'], {env: env(home, {extra: {CUP_TEST_SCHEDULER: 'launchd'}})});
-    assert.equal(r.status, 0);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
 
     const agents = path.join(home, 'Library', 'LaunchAgents');
     for (const [label, worker] of [
