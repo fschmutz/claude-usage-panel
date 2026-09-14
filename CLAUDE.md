@@ -143,30 +143,40 @@ languages, kept behaviorally identical by a shared test contract.** When you
 change normalization, severity, sparkline, reset-formatting, or Cursor
 summarization, you must change it in **every** port and keep them matching.
 
-- **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic. No
-  `gi`/GJS imports so it runs under plain `node` for tests. This is the reference
-  implementation.
-- **`macos/Sources/ClaudeUsageCore/Model.swift`** (+ `CursorModel.swift`) -
-  Foundation-only mirror of `pure.js`. No networking/SwiftUI, so it unit-tests on
-  Linux CI. Comment in the file explicitly says "Mirrors the GNOME extension's
-  lib/pure.js" - keep it that way.
-- **`claude-code/normalize.js`** - the Node port of the normalizer, imported
-  by the MCP server and the account store; asserted against the shared fixture
-  through `mcp/server.js`'s re-exports in `tests/parity.test.js`.
-- **`claude-code/statusline.js`** - zero-dependency Node; renders from Claude
-  Code's stdin and re-derives the forecast / clock contract for the one-liner.
-- **`mcp/server.js`** - zero-dependency Node MCP server (stdio JSON-RPC):
-  transport, `get_usage` assembly, and the forecast / clock / warehouse
-  contract copies. `mcp/tools.js` has the tool schemas, renderers and account
-  tool calls; `mcp/sessions.js` the session/ping index. Carries an exported
-  `VERSION` const kept in sync by `scripts/bump-version.sh` and guarded by
-  `scripts/check-versions.sh` (with `plugin/.claude-plugin/plugin.json` and
-  `.claude-plugin/marketplace.json`).
+- **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
+  a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
+  sessions,accounts}.js`. No `gi`/GJS imports anywhere under `pure/`, so it all
+  runs under plain `node` for tests. This is the reference implementation, and
+  every importer keeps importing `lib/pure.js`.
+- **`macos/Sources/ClaudeUsageCore/`** - Foundation-only mirror of `pure.js`
+  (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Warehouse.swift`,
+  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`).
+  No networking/SwiftUI, so it unit-tests on Linux CI. The files say "Mirrors
+  the GNOME extension's lib/pure.js" - keep it that way.
+- **`claude-code/`** - the Node port, one concern per file: `normalize.js`
+  (the normalizer), `pace.js` (clock pace + burn-rate forecast + the shared
+  sample history), `stamps.js` (timestamp parsing/formatting), `paths.js`
+  (every state/cache/config path derived from one `io`, nothing at module
+  load), `accounts-contract.js` (the pure account rules, mirroring
+  `lib/pure/accounts.js` 1:1), `accounts.js` (`openStore(io)`),
+  `claude-account.js` (the CLI), `statusline.js` (renders from Claude Code's
+  stdin).
+- **`mcp/`** - the MCP server: `server.js` is transport + `get_usage` only
+  (~175 lines), `tools.js` the tool schemas / renderers / account tool calls,
+  `sessions.js` the session + ping index, `warehouse.js` the 90-day history
+  reader. `server.js` carries the exported `VERSION` const, bumped by
+  `scripts/bump-version.sh` and guarded by `scripts/check-versions.sh` - both
+  read the site list from `scripts/version-sites.sh`, so a new version site is
+  one line there.
 - **Installed as one tree.** `install.sh` copies `mcp/` and `claude-code/`
   into `~/.claude/claude-usage-panel/` (plus a `{"type":"module"}`
   package.json) so the relative imports resolve exactly as in the checkout;
   the status line command, the MCP registration and the `claude-account` shim
   point into it. Pre-1.11 loose `.mjs` copies are removed on update.
+- **No file in the repo is over 700 lines.** The 1k flag is the ceiling, not
+  the target: when a file approaches it, split by concern (that is how
+  `install.sh` became `scripts/install/*.sh`, `pure.js` a barrel, and
+  `ClaudeUsagePanelApp.swift` four files).
 
 **Parity is CI-enforced.** `tests/fixtures/normalize.json` is one shared set of
 raw payloads + expected core output; `tests/parity.test.js` runs it through both

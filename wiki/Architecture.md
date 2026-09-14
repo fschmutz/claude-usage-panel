@@ -69,20 +69,33 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
 claude-code/            # the Node clients (installed together under ~/.claude/claude-usage-panel/)
 ├── statusline.js       # status line: renders from Claude Code's stdin - no network
 ├── normalize.js        # the Node port of the normalizer (shared by mcp + accounts)
-├── accounts.js         # named accounts: pure contract + openStore(io) - store, switch, refresh
-└── claude-account.js   # the claude-account CLI over accounts.js
+├── pace.js             # clock pace + burn-rate forecast + the shared sample history
+├── stamps.js           # timestamp parsing and the "3h06m" / "yesterday 05:30" formats
+├── paths.js            # every state/cache/config path, derived from one `io`
+├── accounts-contract.js# the pure account rules (mirrors lib/pure/accounts.js 1:1)
+├── accounts.js         # openStore(io): the account store - save, switch, refresh, usage
+└── claude-account.js   # the claude-account CLI over the store
 
 mcp/                    # MCP server (Claude Code, Cursor…)
 ├── server.js           # stdio JSON-RPC transport + get_usage; also the npx bin
 ├── tools.js            # tool schemas, renderers, the account tool calls
-└── sessions.js         # today's sessions + session-ping index
+├── sessions.js         # today's sessions + session-ping index
+└── warehouse.js        # the 90-day usage history reader
 
 plugin/                 # Claude Code plugin wrapping the MCP server
 docs/                   # GitHub Pages site + the /install bootstrap
 scripts/                # bump-version · check-versions · wiki-sync · auto-update · session-ping
 ├── auto-update.sh      # daily: newest released tag → ff-only → install.sh update
 └── session-ping.sh     # scheduled: 1-turn haiku ping so the 5h window opens on time
-install.sh              # unified installer (gnome · statusline · mcp · accounts · macos · autoupdate · sessionping)
+install.sh              # installer entrypoint: argument loop + dispatch (~170 lines)
+scripts/install/        # one file per target, sourced by install.sh
+├── ui.sh               # info/ok/skip/act and the --dry-run wrapper
+├── scheduler.sh        # the systemd-timer / launchd-agent / cron triple, once
+├── gnome.sh macos.sh node.sh autoupdate.sh sessionping.sh targets.sh
+scripts/lib.sh          # log/say/die/lock, shared by the two standalone workers
+scripts/pack-gnome.sh   # assemble the extension dir (install.sh gnome + the release zip)
+scripts/json-edit.mjs   # the one JSON reader/writer install.sh drives
+scripts/version-sites.sh# every place the version is written, read by bump + check
 ```
 
 ## Staying current

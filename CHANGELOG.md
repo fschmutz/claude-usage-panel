@@ -6,6 +6,64 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failed switch could destroy a saved login's refresh token.** Every port
+  wrote the credentials before the `oauthAccount` block of `~/.claude.json`;
+  a throw in between left the two disagreeing, and the next sync wrote the new
+  account's tokens into the *old* account's profile. The config is now read and
+  validated before anything is written, the account block goes first, and an
+  interrupted switch is detected and finished rather than half-applied.
+- **Two readers of the live login per client.** The usage fetch and the account
+  store each had their own credential reader with different Keychain service
+  names and token shapes, so on some Macs `get_usage` worked while
+  `save_account` reported no login. One reader per port now, service names and
+  legacy shapes listed once.
+- **The panels refreshed on every keystroke.** Typing a Cursor API key in the
+  macOS settings ran a Keychain write and a full refresh (usage API, `ccusage`,
+  Cursor API, every saved account) per character, and concurrent refreshes
+  could fire a limit-crossing hook twice. Settings changes are debounced and
+  scoped to what they affect, refreshes never overlap, and the key is committed
+  on Enter / Save. Same treatment in the GNOME preferences.
+- **The macOS dropdown ran a network call on every open.** The update check
+  (`git ls-remote`, up to 90 s) fired from two `onAppear` handlers; it now polls
+  hourly in the background like everything else.
+- **Closing the GNOME preferences mid-check no longer logs disposed-object
+  errors:** the keyring, schedule and update-check continuations are cancelled
+  with the window.
+- **Crash-safe writes.** The session index, the 90-day history and the
+  scheduler units were rewritten in place, so a crash mid-write truncated them.
+  Every write in every port is now tmp-file-then-rename.
+- **The status line's `account` segment never throws**, and an error anywhere
+  else in the line surfaces again instead of rendering an empty line forever.
+- `claude-account refresh` no longer throws when the token endpoint omits an
+  expiry; the token-attribution report survives an unreadable session directory.
+
+### Changed
+
+- **No file in the repo is over 700 lines** (four were over 1000). `install.sh`
+  1117 → 170 plus `scripts/install/<target>.sh`; `mcp/server.js` 1295 → 175 with
+  `tools.js` / `sessions.js` / `warehouse.js` beside it; the GNOME `lib/pure.js`
+  is a barrel over nine `lib/pure/*.js`; `extension.js` 1004 → 575 with the
+  cursor, sessions, accounts and card widgets in `lib/`;
+  `ClaudeUsagePanelApp.swift` 1152 → 49 plus `UsageModel` / `PopupView` /
+  `SettingsView`.
+- **The duplication inside each port is gone**, roughly 500 lines of it: one
+  forecast/clock implementation for the Node clients (the two copies had already
+  drifted on the history key), one timestamp module, one path module (nothing is
+  computed from `process.env` at import time any more), one file-I/O helper per
+  port, one HTTP and one subprocess wrapper on GNOME, one `Process` runner on
+  macOS (four of the nine hand-rolled ones could deadlock on an undrained
+  stderr), one scheduler implementation for the systemd/launchd/cron triple, one
+  JSON editor for the installer, one list of the places the version is written.
+- **Swift strict concurrency is on** (`StrictConcurrency` on every target) with
+  the value types marked `Sendable`, so the next tools-version bump cannot
+  regress it. Swift formatting is now checked in CI, not only locally, and
+  `.mjs` files are linted like the rest.
+- On macOS the Node session index moves to `~/Library/Caches/claude-usage-panel`,
+  the path the Swift app already used and the wiki already documented, so both
+  read one file.
+
 ## [1.11.0] - 2026-09-13
 
 ### Changed
