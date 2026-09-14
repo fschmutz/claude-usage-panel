@@ -94,7 +94,7 @@ install_sessionping() {
         line="$m $h * * * $runner --quiet --days=$days  $SP_CRON_TAG"
         cron="${cron:+$cron$'\n'}$line"
     done
-    SCHED_SERVICE="[Unit]
+    local sched_service="[Unit]
 Description=Claude Usage Panel - session-window ping
 Documentation=https://github.com/fschmutz/claude-usage-panel
 
@@ -103,7 +103,7 @@ Type=oneshot
 ExecStart=$runner --quiet --days=$days"
     # Exact times are the point: no RandomizedDelaySec, and no catch-up on
     # wake (Persistent) - a late ping would only shift the window.
-    SCHED_TIMER="[Unit]
+    local sched_timer="[Unit]
 Description=Claude Usage Panel - session-window ping
 
 [Timer]
@@ -111,7 +111,8 @@ ${entries}Persistent=false
 
 [Install]
 WantedBy=timers.target"
-    SCHED_PLIST="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    local sched_plist
+    sched_plist="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
 <plist version=\"1.0\">
 <dict>
@@ -131,9 +132,10 @@ ${intervals}  </array>
   <key>LowPriorityIO</key><true/>
 </dict>
 </plist>"
-    SCHED_CRON="$cron"
+    local sched_cron="$cron"
 
-    if ! _sched_install "$SP_UNIT" "$SP_LABEL" "$SP_CRON_TAG" "at ${times[*]}"; then
+    if ! _sched_install "$SP_UNIT" "$SP_LABEL" "$SP_CRON_TAG" "at ${times[*]}" \
+        "$sched_service" "$sched_timer" "$sched_plist" "$sched_cron"; then
         skip "sessionping: no systemd, launchd or cron found to schedule it"
         return 0
     fi

@@ -15,12 +15,23 @@ ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 # (command -v, gsettings get, uname) always run. `act` wraps a plain command;
 # anything more involved is guarded inline with `$DRY`.
 DRY=false
+# The option state: install.sh's argument loop writes these, the target files
+# sourced next to this one read them. shellcheck checks one file at a time and
+# cannot see who sources whom, so each cross-file read looks unused - hence a
+# named exemption per line rather than a blanket one for the file.
+# shellcheck disable=SC2034  # read by install.sh
 PULL=false
-BUILD_ONLY=false                         # macos: build the .app but don't install to /Applications (used by CI)
-SL_SEGMENTS="context,limits,tokens,ping" # statusline: which segments, left→right
-SL_TOKENS="all"                          # statusline: token-total mode (all|fresh)
-SP_TIMES=()                              # sessionping: HH:MM args from the command line
-SP_DAYS=""                               # sessionping: --days= value from the command line
+# shellcheck disable=SC2034  # read by macos.sh (CI builds with it)
+BUILD_ONLY=false
+# shellcheck disable=SC2034  # read by node.sh
+SL_SEGMENTS="context,limits,tokens,ping"
+# shellcheck disable=SC2034  # read by node.sh
+SL_TOKENS="all"
+# shellcheck disable=SC2034  # read by sessionping.sh
+SP_TIMES=()
+# shellcheck disable=SC2034  # read by sessionping.sh
+SP_DAYS=""
+
 act() {
     if $DRY; then printf '  would: %s\n' "$*"; else "$@"; fi
 }
@@ -48,4 +59,5 @@ _json() {
 
 # The status-line command is OURS when it points at either the installed tree
 # or the pre-1.11 loose copy - the one place this test is spelled out.
+# shellcheck disable=SC2034  # read by node.sh (both the install and the uninstall path)
 SL_OURS_RE='claude-usage-panel/claude-code/statusline\.js|claude-usage-statusline\.mjs'

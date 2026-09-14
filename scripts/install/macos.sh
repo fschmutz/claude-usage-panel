@@ -22,7 +22,7 @@ install_macos() {
         return 0
     fi
     (
-        cd "$ROOT/macos"
+        cd "$ROOT/macos" || exit 1
         swift build -c release
         local bin
         bin="$(swift build -c release --show-bin-path)/$app"

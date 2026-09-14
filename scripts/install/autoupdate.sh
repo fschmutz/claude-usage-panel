@@ -19,7 +19,7 @@ install_autoupdate() {
     local runner="$ROOT/scripts/auto-update.sh"
     act chmod +x "$runner"
 
-    SCHED_SERVICE="[Unit]
+    local sched_service="[Unit]
 Description=Claude Usage Panel - daily update check
 Documentation=https://github.com/fschmutz/claude-usage-panel
 
@@ -28,7 +28,7 @@ Type=oneshot
 ExecStart=$runner --quiet"
     # Persistent=true runs a missed check on the next login (laptop was off);
     # RandomizedDelaySec spreads the load off a round hour.
-    SCHED_TIMER="[Unit]
+    local sched_timer="[Unit]
 Description=Claude Usage Panel - daily update check
 
 [Timer]
@@ -38,7 +38,8 @@ Persistent=true
 
 [Install]
 WantedBy=timers.target"
-    SCHED_PLIST="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    local sched_plist
+    sched_plist="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
 <plist version=\"1.0\">
 <dict>
@@ -56,9 +57,10 @@ WantedBy=timers.target"
   <key>LowPriorityIO</key><true/>
 </dict>
 </plist>"
-    SCHED_CRON="17 11 * * * $runner --quiet  $AU_CRON_TAG"
+    local sched_cron="17 11 * * * $runner --quiet  $AU_CRON_TAG"
 
-    if ! _sched_install "$AU_UNIT" "$AU_LABEL" "$AU_CRON_TAG" "daily at 11:17"; then
+    if ! _sched_install "$AU_UNIT" "$AU_LABEL" "$AU_CRON_TAG" "daily at 11:17" \
+        "$sched_service" "$sched_timer" "$sched_plist" "$sched_cron"; then
         skip "autoupdate: no systemd, launchd or cron found to schedule it"
         return 0
     fi

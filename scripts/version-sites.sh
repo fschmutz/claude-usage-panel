@@ -9,6 +9,7 @@
 #   jsconst  export const KEY = 'x.y.z';
 #   cask       version "x.y.z"         (the Homebrew cask example, 2-space indent)
 
+# shellcheck disable=SC2034  # read by bump-version.sh and check-versions.sh, which source this
 VERSION_SITES=(
     "package.json|json|version"
     "claude-usage-panel@fschmutz.github.io/metadata.json|json|version-name"

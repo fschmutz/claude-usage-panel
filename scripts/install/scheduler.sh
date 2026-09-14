@@ -3,8 +3,9 @@
 # sessionping targets. Each target builds its own unit / plist / cron bodies
 # and hands them to _sched_install; the systemd-vs-launchd-vs-cron choice, the
 # writes, the activation, the dry-run narration and the uninstall live here
-# once. Bodies are passed in variables (SCHED_SERVICE, SCHED_TIMER,
-# SCHED_PLIST, SCHED_CRON) and written with exactly one trailing newline, so
+# once. Each job passes its four bodies (systemd service + timer, launchd
+# plist, cron lines) as arguments, and they are written with one trailing
+# newline exactly, so
 # what lands on disk is byte-identical to the heredocs that used to write it -
 # the Swift side pins the sessionping plist shape.
 
@@ -70,20 +71,21 @@ _sched_installed() { # UNIT LABEL TAG
 
 # Install the schedule on whatever this machine offers. Returns 1 when there is
 # no scheduler at all; the caller says what that means for its target.
-_sched_install() { # UNIT LABEL TAG WHEN   (bodies in SCHED_SERVICE SCHED_TIMER SCHED_PLIST SCHED_CRON)
-    local unit="$1" label="$2" tag="$3" when="$4" dir plist line
+_sched_install() { # UNIT LABEL TAG WHEN SERVICE TIMER PLIST CRON
+    local unit="$1" label="$2" tag="$3" when="$4"
+    local service="$5" timer="$6" plist_body="$7" cron_body="$8" dir plist line
     case "$(_sched_scheduler)" in
         systemd)
             dir="$(_sched_systemd_dir)"
-            _sched_write "$dir/$unit.service" "$SCHED_SERVICE"
-            _sched_write "$dir/$unit.timer" "$SCHED_TIMER"
+            _sched_write "$dir/$unit.service" "$service"
+            _sched_write "$dir/$unit.timer" "$timer"
             act systemctl --user daemon-reload
             act systemctl --user enable --now "$unit.timer"
             $DRY || ok "systemd user timer enabled (systemctl --user list-timers | grep $unit)"
             ;;
         launchd)
             plist="$(_sched_plist "$label")"
-            _sched_write "$plist" "$SCHED_PLIST"
+            _sched_write "$plist" "$plist_body"
             if $DRY; then
                 echo "  would: launchctl bootstrap gui/$(id -u) $plist"
             else
@@ -97,12 +99,12 @@ _sched_install() { # UNIT LABEL TAG WHEN   (bodies in SCHED_SERVICE SCHED_TIMER 
             if $DRY; then
                 while IFS= read -r line; do
                     if [ -n "$line" ]; then echo "  would: add crontab line: $line"; fi
-                done <<<"$SCHED_CRON"
+                done <<<"$cron_body"
             else
                 # Drop any previous lines of ours, then append - idempotent.
                 {
                     crontab -l 2>/dev/null | grep -vF "$tag" || true
-                    printf '%s\n' "$SCHED_CRON"
+                    printf '%s\n' "$cron_body"
                 } | crontab -
                 ok "cron entries added ($when)"
             fi
