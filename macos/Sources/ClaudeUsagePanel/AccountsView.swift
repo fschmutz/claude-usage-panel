@@ -58,8 +58,7 @@ struct AccountsSectionView: View {
             }
             Spacer()
             Text(row.usageText).font(.system(size: 11))
-                .foregroundColor(
-                    row.tokenState == .expired || row.error != nil ? .cuCritical : .secondary)
+                .foregroundColor(row.expired || row.error != nil ? .cuCritical : .secondary)
         }
     }
 }
@@ -107,7 +106,7 @@ struct AccountsSettingsSection: View {
                             .truncationMode(.middle)
                     }
                     if let plan = row.plan { Text(plan).foregroundColor(.secondary) }
-                    if row.tokenState == .expired {
+                    if row.expired {
                         Text("login expired").foregroundColor(.cuCritical)
                     }
                     Spacer()

@@ -10,15 +10,7 @@ import XCTest
 final class SessionsParityTests: XCTestCase {
     private let utc = TimeZone(identifier: "UTC")!
 
-    private func fixture() throws -> [String: Any] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()  // ClaudeUsageCoreTests
-            .deletingLastPathComponent()  // Tests
-            .deletingLastPathComponent()  // macos
-            .deletingLastPathComponent()  // repo root
-        let url = root.appendingPathComponent("tests/fixtures/sessions.json")
-        return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
-    }
+    private func fixture() throws -> [String: Any] { try Fixtures.load("sessions.json") }
 
     private func now(_ fix: [String: Any]) -> Date {
         Date(timeIntervalSince1970: (fix["nowMs"] as! NSNumber).doubleValue / 1000)

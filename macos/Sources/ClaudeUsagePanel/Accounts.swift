@@ -7,21 +7,23 @@ import Foundation
 // UsageModel itself (extensions cannot declare them); everything else is here.
 
 /// One saved account as the UI shows it.
-struct AccountRow: Identifiable, Equatable {
-    var id: String { name }
-    let name: String
-    let email: String?
-    let plan: String?
+struct AccountRow: Identifiable, Equatable, Sendable {
+    var id: String { summary.name }
+    let summary: AccountSummary
     let active: Bool
-    let tokenState: TokenState
     /// Usage cards - the live ones for the active account, fetched with the
     /// stored token for the others; nil while unknown.
     let cards: [LimitCard]?
     let error: String?
 
+    var name: String { summary.name }
+    var email: String? { summary.email }
+    var plan: String? { summary.plan }
+    var expired: Bool { summary.tokenState == .expired }
+
     var usageText: String {
         if let cards { return Accounts.formatUsage(cards) }
-        if tokenState == .expired { return "login expired" }
+        if expired { return "login expired" }
         return error ?? ""
     }
 }
@@ -33,6 +35,8 @@ extension UsageModel {
     func refreshAccounts() async {
         // Off by default: no rows, no menu-bar prefix, no fetch.
         let profiles = accountsEnabled ? AccountStore.list() : []
+        liveLoginEmail =
+            accountsEnabled ? AccountStore.readLiveAccount()?["emailAddress"] as? String : nil
         guard !profiles.isEmpty else {
             accounts = []
             activeAccount = nil
@@ -59,9 +63,7 @@ extension UsageModel {
             if let cards { usage[p.name] = cards }
             rows.append(
                 AccountRow(
-                    name: p.name, email: summary.email, plan: summary.plan,
-                    active: p.name == active, tokenState: summary.tokenState,
-                    cards: cards, error: fetchError))
+                    summary: summary, active: p.name == active, cards: cards, error: fetchError))
         }
         accounts = rows
         accountsError = nil
@@ -86,7 +88,9 @@ extension UsageModel {
                 + "\(decision.from) was at \(decision.activePercent)%"
             if r.running > 0 { body += Self.runningNote(r.running, decision.to) }
             notify("Claude usage", body)
-            Task { await refresh() }
+            // This runs inside a poll; the re-poll as the new account queues
+            // behind it instead of joining it.
+            refreshSoon(after: 1)
         } catch {
             accountsError = error.localizedDescription
         }
@@ -133,10 +137,5 @@ extension UsageModel {
         } catch {
             accountsError = error.localizedDescription
         }
-    }
-
-    /// The live login's email, for the Settings "save as" row.
-    var liveLoginEmail: String? {
-        AccountStore.readLiveAccount()?["emailAddress"] as? String
     }
 }

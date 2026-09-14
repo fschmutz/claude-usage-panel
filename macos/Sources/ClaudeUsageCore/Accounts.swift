@@ -9,7 +9,9 @@ import Foundation
 
 /// One saved Claude Code login: the credentials blob plus the `oauthAccount`
 /// block of ~/.claude.json. Both are kept raw so unknown fields round-trip.
-public struct AccountProfile {
+/// `@unchecked`: the two dictionaries are `let`, never mutated after init, and
+/// hold only JSON scalars, arrays and dictionaries (JSONSerialization output).
+public struct AccountProfile: @unchecked Sendable {
     public static let version = 1
     /// Refresh an access token this close to its expiry rather than use it.
     public static let refreshLeadMs = 300_000.0

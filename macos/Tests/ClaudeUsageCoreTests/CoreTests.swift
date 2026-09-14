@@ -80,15 +80,7 @@ final class UsageNormalizerTests: XCTestCase {
 /// implementations - if any drifts on the semantic core, a port's suite reddens.
 final class NormalizeParityTests: XCTestCase {
     func testMatchesSharedFixtures() throws {
-        // #filePath → …/macos/Tests/ClaudeUsageCoreTests/CoreTests.swift; climb to repo root.
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()  // ClaudeUsageCoreTests
-            .deletingLastPathComponent()  // Tests
-            .deletingLastPathComponent()  // macos
-            .deletingLastPathComponent()  // repo root
-        let url = root.appendingPathComponent("tests/fixtures/normalize.json")
-        let obj = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
-        let cases = (obj as! [String: Any])["cases"] as! [[String: Any]]
+        let cases = try Fixtures.load("normalize.json")["cases"] as! [[String: Any]]
 
         for c in cases {
             let name = c["name"] as? String ?? "?"
@@ -147,15 +139,7 @@ final class CursorMathTests: XCTestCase {
 /// Extra-usage + unknown-kind-label parity against the fixture the JS ports
 /// assert (tests/parity.test.js).
 final class ExtraUsageParityTests: XCTestCase {
-    private func fixture() throws -> [String: Any] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent("tests/fixtures/extra-usage.json")
-        return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
-    }
+    private func fixture() throws -> [String: Any] { try Fixtures.load("extra-usage.json") }
 
     func testMatchesSharedFixtures() throws {
         for c in try fixture()["cases"] as! [[String: Any]] {
@@ -195,25 +179,17 @@ final class ExtraUsageParityTests: XCTestCase {
 /// assert (tests/parity.test.js).
 final class ClockPaceParityTests: XCTestCase {
     func testMatchesSharedFixtures() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent("tests/fixtures/pace.json")
-        let obj = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
-        let fix = obj as! [String: Any]
+        let fix = try Fixtures.load("pace.json")
         let now = Date(timeIntervalSince1970: (fix["now"] as! NSNumber).doubleValue / 1000)
         XCTAssertEqual(UsageClock.tolerance, (fix["tolerance"] as! NSNumber).intValue)
 
         for c in fix["cases"] as! [[String: Any]] {
             let name = c["name"] as? String ?? "?"
             let raw = c["card"] as! [String: Any]
-            let card = LimitCard(
-                id: name, label: name,
-                percent: (raw["percent"] as! NSNumber).intValue, severity: .normal,
-                resetsAt: UsageNormalizer.parseDate(raw["resetsAt"] as? String), active: true,
-                group: raw["group"] as! String, scoped: false)
+            let card = LimitCard.stub(
+                id: name, percent: (raw["percent"] as! NSNumber).intValue,
+                group: raw["group"] as! String,
+                resetsAt: UsageNormalizer.parseDate(raw["resetsAt"] as? String))
             let got = UsageClock.pace(card, now: now)
 
             guard let e = c["expected"] as? [String: Any] else {
@@ -246,14 +222,7 @@ final class ClockPaceParityTests: XCTestCase {
 /// across languages.
 final class ForecastParityTests: XCTestCase {
     func testMatchesSharedFixtures() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent("tests/fixtures/forecast.json")
-        let obj = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
-        let fix = obj as! [String: Any]
+        let fix = try Fixtures.load("forecast.json")
         let now = (fix["now"] as! NSNumber).doubleValue
         let cases = fix["cases"] as! [[String: Any]]
 

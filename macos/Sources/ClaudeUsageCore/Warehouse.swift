@@ -57,49 +57,54 @@ public enum Warehouse {
         let entries = parse(text)
         let kept = prune(entries, nowMs: nowMs)
         if kept.count != entries.count {
-            let rewritten = kept.map { entry -> String in
-                let obj: [String: Any] = ["t": Int(entry.t.rounded()), "limits": entry.limits]
-                let data =
-                    (try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]))
-                return data.map { String(decoding: $0, as: UTF8.self) } ?? ""
-            }
-            try? (rewritten.joined(separator: "\n") + (kept.isEmpty ? "" : "\n"))
+            try? (kept.map(line).joined(separator: "\n") + (kept.isEmpty ? "" : "\n"))
                 .write(to: url, atomically: true, encoding: .utf8)
         }
         return kept
     }
 
-    /// Append one poll. Best-effort: a failed write costs a data point, never a
-    /// refresh.
+    /// One poll as a warehouse entry: the instant, then each limit's percent by key.
+    public static func entry(_ cards: [LimitCard], nowMs: Double) -> WarehouseEntry {
+        WarehouseEntry(
+            t: nowMs,
+            limits: Dictionary(cards.map { ($0.id, $0.percent) }, uniquingKeysWith: { a, _ in a }))
+    }
+
+    /// Append one poll and hand back the entry written, so the caller keeps its
+    /// in-memory copy identical to the file. Best-effort: a failed write costs
+    /// a data point, never a refresh.
     @discardableResult
-    public static func append(_ cards: [LimitCard], nowMs: Double, url: URL = defaultURL()) -> Bool
+    public static func append(_ cards: [LimitCard], nowMs: Double, url: URL = defaultURL())
+        -> WarehouseEntry
     {
-        let text = line(cards, nowMs: nowMs) + "\n"
-        guard let data = text.data(using: .utf8) else { return false }
+        let written = entry(cards, nowMs: nowMs)
+        guard let data = (line(written) + "\n").data(using: .utf8) else { return written }
         let fm = FileManager.default
         try? fm.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if !fm.fileExists(atPath: url.path) {
-            return (try? data.write(to: url)) != nil
+            try? data.write(to: url)
+            return written
         }
-        guard let handle = try? FileHandle(forWritingTo: url) else { return false }
-        defer { try? handle.close() }
-        do {
-            try handle.seekToEnd()
-            try handle.write(contentsOf: data)
-            return true
-        } catch {
-            return false
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
         }
+        return written
     }
 
-    /// One line per poll: the instant, then each limit's percent by key.
-    public static func line(_ cards: [LimitCard], nowMs: Double) -> String {
-        let limits = Dictionary(cards.map { ($0.id, $0.percent) }, uniquingKeysWith: { a, _ in a })
-        let obj: [String: Any] = ["t": Int(nowMs.rounded()), "limits": limits]
+    /// One JSONL line for an entry.
+    public static func line(_ entry: WarehouseEntry) -> String {
+        let obj: [String: Any] = ["t": Int(entry.t.rounded()), "limits": entry.limits]
         guard let data = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys])
         else { return "" }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// One line per poll - the same bytes `append` writes.
+    public static func line(_ cards: [LimitCard], nowMs: Double) -> String {
+        line(entry(cards, nowMs: nowMs))
     }
 
     /// Unreadable lines are skipped, never fatal: two processes append to this

@@ -10,7 +10,7 @@ import Foundation
 // offset it was folded to. A per-refresh byte budget caps one pass; `pending`
 // says the numbers are still a floor and the next pass continues.
 
-struct SessionIndexFile: Codable {
+struct SessionIndexFile: Codable, Sendable {
     var version: Int
     var files: [String: SessionAcc]
 }
@@ -126,7 +126,6 @@ enum SessionStore {
             SessionIndexer.fold(line: String(line), into: &acc, defaultDay: day)
         }
         acc.offset = start + consumed
-        acc.carry = ""
         acc.byDay = SessionIndexer.pruneByDay(acc.byDay, now: now)
         return consumed
     }
@@ -185,7 +184,7 @@ enum SessionStore {
 enum TerminalLauncher {
     /// Which terminal a resume click opens. "auto" prefers iTerm when it is
     /// installed, since someone who has it rarely wants Terminal.app.
-    enum Choice: String, CaseIterable {
+    enum Choice: String, CaseIterable, Sendable {
         case auto, terminal, iterm
 
         var label: String {
@@ -231,21 +230,11 @@ enum TerminalLauncher {
     @discardableResult
     static func open(session: RankedSession, choice: Choice) -> String? {
         let command = SessionResume.command(cwd: session.cwd, sessionId: session.sessionId)
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        proc.arguments = ["-e", script(for: choice, command: command)]
-        proc.standardOutput = Pipe()
-        let errors = Pipe()
-        proc.standardError = errors
-        do {
-            try proc.run()
-        } catch {
-            return "Could not open a terminal: \(error.localizedDescription)"
-        }
-        proc.waitUntilExit()
-        if proc.terminationStatus != 0 {
-            let text = String(
-                decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let r = Shell.run(
+            "/usr/bin/osascript", ["-e", script(for: choice, command: command)], mergeStderr: true)
+        if r.status == -1 { return "Could not open a terminal: osascript did not start." }
+        guard r.ok else {
+            let text = r.out.trimmingCharacters(in: .whitespacesAndNewlines)
             return text.isEmpty ? "The terminal refused to open." : text
         }
         return nil

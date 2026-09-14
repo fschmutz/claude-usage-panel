@@ -1,6 +1,5 @@
 import AppKit
 import ClaudeUsageCore
-import Network
 import SwiftUI
 
 // MARK: - Palette (matches the GNOME extension)

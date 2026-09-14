@@ -82,14 +82,7 @@ final class WindowPlannerTests: XCTestCase {
 /// Adaptive-poll parity against the fixture pure.js asserts (tests/pure.test.js).
 final class PollScheduleParityTests: XCTestCase {
     func testMatchesSharedFixtures() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent("tests/fixtures/poll.json")
-        let fix =
-            try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        let fix = try Fixtures.load("poll.json")
         let now = Date(timeIntervalSince1970: (fix["now"] as! NSNumber).doubleValue / 1000)
         XCTAssertEqual(PollSchedule.idleAfter, (fix["idleAfter"] as! NSNumber).intValue)
 
@@ -108,12 +101,8 @@ final class PollScheduleParityTests: XCTestCase {
     }
 
     func testIdleStreakCountsUnmovedLimits() {
-        let a = LimitCard(
-            id: "session", label: "s", percent: 10, severity: .normal, resetsAt: nil,
-            active: true, group: "session", scoped: false)
-        let moved = LimitCard(
-            id: "session", label: "s", percent: 11, severity: .normal, resetsAt: nil,
-            active: true, group: "session", scoped: false)
+        let a = LimitCard.stub(id: "session", percent: 10)
+        let moved = LimitCard.stub(id: "session", percent: 11)
         XCTAssertTrue(PollSchedule.sameUsage([a], [a]))
         XCTAssertFalse(PollSchedule.sameUsage([a], [moved]))
         XCTAssertFalse(PollSchedule.sameUsage([a], []))
@@ -123,21 +112,12 @@ final class PollScheduleParityTests: XCTestCase {
 /// Event-hook parity against the fixture pure.js asserts (tests/pure.test.js).
 final class EventHooksParityTests: XCTestCase {
     private func card(_ o: [String: Any]) -> LimitCard {
-        LimitCard(
-            id: o["key"] as! String, label: o["label"] as! String,
-            percent: (o["percent"] as! NSNumber).intValue, severity: .normal, resetsAt: nil,
-            active: true, group: "session", scoped: false)
+        .stub(
+            id: o["key"] as! String, percent: (o["percent"] as! NSNumber).intValue,
+            label: o["label"] as? String)
     }
 
-    private func fixture() throws -> [String: Any] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent("tests/fixtures/events.json")
-        return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
-    }
+    private func fixture() throws -> [String: Any] { try Fixtures.load("events.json") }
 
     func testDetectMatchesSharedFixtures() throws {
         for c in try fixture()["cases"] as! [[String: Any]] {

@@ -1,10 +1,6 @@
 import ClaudeUsageCore
 import Foundation
 
-#if canImport(FoundationNetworking)
-    import FoundationNetworking
-#endif
-
 // Optional Cursor layer: query the Cursor Admin API for team spend.
 // Auth is HTTP Basic with the admin API key as the username (empty password).
 // Pure spend math lives in ClaudeUsageCore (CursorMath, unit-tested).

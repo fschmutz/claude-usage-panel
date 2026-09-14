@@ -24,38 +24,14 @@ enum Cost {
     }
 
     private static func run(_ argv: [String]) -> ActiveCost? {
-        let proc = Process()
-        // Use a login-ish PATH so Homebrew / Volta / npm global bins resolve.
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        proc.arguments = argv
-        var env = ProcessInfo.processInfo.environment
-        let extra = [
-            "/opt/homebrew/bin", "/usr/local/bin",
-            NSHomeDirectory() + "/.volta/bin",
-            NSHomeDirectory() + "/.npm-global/bin",
-        ]
-        env["PATH"] = (extra + [env["PATH"] ?? "/usr/bin:/bin"]).joined(separator: ":")
-        proc.environment = env
-
-        let out = Pipe()
-        proc.standardOutput = out
-        proc.standardError = Pipe()
-
-        do {
-            try proc.run()
-        } catch {
-            return nil
-        }
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        proc.waitUntilExit()
-        guard proc.terminationStatus == 0,
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let r = Shell.run("/usr/bin/env", argv, env: Shell.toolEnvironment)
+        guard r.ok,
+            let json = try? JSONSerialization.jsonObject(with: Data(r.out.utf8)) as? [String: Any],
             let blocks = json["blocks"] as? [[String: Any]],
             let first = blocks.first
         else { return nil }
-
-        let cost = (first["costUSD"] as? NSNumber)?.doubleValue ?? 0
-        let tokens = (first["totalTokens"] as? NSNumber)?.intValue ?? 0
-        return ActiveCost(costUSD: cost, tokens: tokens)
+        return ActiveCost(
+            costUSD: (first["costUSD"] as? NSNumber)?.doubleValue ?? 0,
+            tokens: (first["totalTokens"] as? NSNumber)?.intValue ?? 0)
     }
 }

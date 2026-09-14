@@ -25,7 +25,8 @@ public struct UsageEvent: Equatable, Sendable {
 }
 
 public enum EventHooks {
-    static func alertThreshold(_ percent: Int) -> Int {
+    /// The alert bucket a percentage falls in: 100, 90, or 0 (none).
+    public static func alertThreshold(_ percent: Int) -> Int {
         percent >= 100 ? 100 : (percent >= 90 ? 90 : 0)
     }
 
@@ -57,12 +58,6 @@ public enum EventHooks {
         return events
     }
 
-    /// POSIX single-quoting - the label comes from the API, and a command built
-    /// by pasting it in raw is a command the API gets to write.
-    public static func shellQuote(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
-
     /// %e event  %k key  %l label  %p percent  %t threshold  %% literal %
     public static func expand(_ template: String, _ event: UsageEvent) -> String {
         guard !template.isEmpty else { return "" }
@@ -83,12 +78,44 @@ public enum EventHooks {
             if next == "%" {
                 out.append("%")
             } else if let value = values[next] {
-                out += shellQuote(value)
+                out += ShellQuote.quote(value)
             } else {
                 out.append("%")
                 out.append(next)
             }
             i += 2
+        }
+        return out
+    }
+}
+
+// MARK: - Notification latch
+
+/// Which limit crossings deserve a notification. `EventHooks.detect` reports
+/// every upward crossing between two polls; a notification must fire ONCE per
+/// window, so this latch remembers the highest bucket already announced for
+/// each limit and re-arms only once usage has clearly dropped back (a fresh
+/// window), not on a one-point wobble around the threshold.
+public struct AlertLatch: Equatable, Sendable {
+    /// Below this, a limit that had crossed 90 is considered back in a new window.
+    public static let rearmBelow = 85
+
+    private var fired: [String: Int] = [:]
+
+    public init() {}
+
+    /// The crossings to announce for this poll, in card order.
+    public mutating func crossings(_ cards: [LimitCard]) -> [(card: LimitCard, threshold: Int)] {
+        var out: [(card: LimitCard, threshold: Int)] = []
+        for card in cards {
+            let prev = fired[card.id] ?? 0
+            let threshold = EventHooks.alertThreshold(card.percent)
+            if threshold > prev {
+                fired[card.id] = threshold
+                out.append((card, threshold))
+            } else if threshold < prev && card.percent < Self.rearmBelow {
+                fired[card.id] = threshold
+            }
         }
         return out
     }

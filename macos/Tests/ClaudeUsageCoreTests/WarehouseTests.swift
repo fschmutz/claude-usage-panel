@@ -5,15 +5,7 @@ import XCTest
 
 /// Warehouse parity against the fixture pure.js asserts (tests/pure.test.js).
 final class WarehouseParityTests: XCTestCase {
-    private func fixture() throws -> [String: Any] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent("tests/fixtures/warehouse.json")
-        return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
-    }
+    private func fixture() throws -> [String: Any] { try Fixtures.load("warehouse.json") }
 
     private func entries(_ fix: [String: Any]) -> [WarehouseEntry] {
         (fix["entries"] as! [[String: Any]]).map {
@@ -56,10 +48,11 @@ final class WarehouseParityTests: XCTestCase {
 
     func testRoundTripAndPrune() {
         let now = 1_800_000_000_000.0
-        let card = LimitCard(
-            id: "session", label: "s", percent: 42, severity: .normal, resetsAt: nil,
-            active: true, group: "session", scoped: false)
+        let card = LimitCard.stub(id: "session", percent: 42)
         let text = Warehouse.line([card], nowMs: now)
+        XCTAssertEqual(
+            Warehouse.entry([card], nowMs: now), WarehouseEntry(t: now, limits: ["session": 42]))
+        XCTAssertEqual(Warehouse.line(Warehouse.entry([card], nowMs: now)), text)
         let parsed = Warehouse.parse(text + "\n{ not json\n")
         XCTAssertEqual(parsed, [WarehouseEntry(t: now, limits: ["session": 42])])
         // Older than the retention window, so it does not survive a prune.

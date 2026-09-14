@@ -1,6 +1,5 @@
 import AppKit
 import ClaudeUsageCore
-import Network
 import SwiftUI
 
 // MARK: - Reset-time helper
@@ -121,7 +120,7 @@ struct PopupView: View {
                 ForEach(model.cards) {
                     CardView(
                         card: $0, spark: model.spark(for: $0.id),
-                        forecast: model.forecasts[$0.id], trend: model.trend(for: $0.id))
+                        forecast: model.forecasts[$0.id], trend: model.trends[$0.id])
                 }
             }
 
@@ -156,11 +155,11 @@ struct PopupView: View {
             Text("Updated \(model.updated) · limits \(Provenances.limits.badge)")
                 .font(.system(size: 11)).foregroundColor(.secondary)
                 .help(Provenances.limits.explanation)
-            if model.sessionPingEnabled || !model.lastPing.isEmpty {
-                Text("Session pings: \(model.pingStatusLine)")
+            if model.sessionPing.enabled || !model.sessionPing.lastPing.isEmpty {
+                Text("Session pings: \(model.sessionPing.statusLine)")
                     .font(.system(size: 11)).foregroundColor(.secondary)
             }
-            if let u = model.updateStatus, u.needsAttention {
+            if let u = model.updates.status, u.needsAttention {
                 Text(u.summary).font(.system(size: 11)).foregroundColor(.cuCritical)
             }
 
@@ -226,10 +225,7 @@ struct PopupView: View {
         }
         .padding(14)
         .frame(width: 340)
-        .onAppear {
-            model.reloadSessionPing()
-            model.reloadUpdateStatus()
-        }
+        .onAppear { model.sessionPing.reload() }
     }
 }
 

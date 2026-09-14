@@ -9,7 +9,7 @@ import Foundation
 // dirty, diverged or detached checkout and only writes the reason to its log.
 // Before this, that looked identical to "you are up to date" from the outside.
 
-public struct UpdateStatus: Equatable {
+public struct UpdateStatus: Equatable, Sendable {
     public var checkout: String
     public var installed: String
     public var latest: String

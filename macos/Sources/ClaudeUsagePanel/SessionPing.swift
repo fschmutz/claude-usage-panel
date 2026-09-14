@@ -6,12 +6,9 @@ import Foundation
 // frontends over one schedule. The plist on disk is the source of truth
 // (like LoginItem's SMAppService state) - nothing is kept in UserDefaults.
 enum SessionPing {
-    static var plistURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/\(SessionPingAgent.label).plist")
-    }
+    static var plistURL: URL { LaunchAgent.plistURL(label: SessionPingAgent.label) }
 
-    struct State {
+    struct State: Sendable {
         var enabled: Bool
         var schedule: SessionPingSchedule
         var runner: String?
@@ -49,7 +46,7 @@ enum SessionPing {
     @discardableResult
     static func apply(enabled: Bool, schedule: SessionPingSchedule) -> String? {
         if !enabled {
-            bootout()
+            LaunchAgent.bootout(label: SessionPingAgent.label)
             try? FileManager.default.removeItem(at: plistURL)
             return nil
         }
@@ -67,32 +64,8 @@ enum SessionPing {
         } catch {
             return "Could not write \(plistURL.path): \(error.localizedDescription)"
         }
-        // Reload: bootout then bootstrap, `load -w` fallback for older macOS -
-        // the same idiom as install.sh's launchd branch.
-        bootout()
-        if !launchctl(["bootstrap", "gui/\(getuid())", plistURL.path]) {
-            if !launchctl(["load", "-w", plistURL.path]) {
-                return "launchctl could not load the agent - see Console.app."
-            }
-        }
-        return nil
-    }
-
-    private static func bootout() {
-        _ = launchctl(["bootout", "gui/\(getuid())/\(SessionPingAgent.label)"])
-    }
-
-    /// `nullDevice` rather than unread `Pipe()`s: nothing here reads launchctl's
-    /// output, and an undrained pipe deadlocks waitUntilExit() if the child ever
-    /// fills the buffer. Same reason as Updates.run().
-    private static func launchctl(_ args: [String]) -> Bool {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        proc.arguments = args
-        proc.standardOutput = FileHandle.nullDevice
-        proc.standardError = FileHandle.nullDevice
-        guard (try? proc.run()) != nil else { return false }
-        proc.waitUntilExit()
-        return proc.terminationStatus == 0
+        LaunchAgent.bootout(label: SessionPingAgent.label)
+        return LaunchAgent.bootstrap(plistURL)
+            ? nil : "launchctl could not load the agent - see Console.app."
     }
 }

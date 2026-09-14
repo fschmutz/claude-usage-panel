@@ -7,7 +7,7 @@ import Foundation
 // rewrite what the other configured (install.sh's `_sp_current_times` parses
 // this exact one-interval-per-line shape).
 
-public struct SessionPingSchedule: Equatable {
+public struct SessionPingSchedule: Equatable, Sendable {
     /// Ping times as zero-padded "HH:MM", in user order (not sorted).
     public var times: [String]
     /// Days the ping fires, `date +%u` numbering: 1 = Monday ... 7 = Sunday.
@@ -91,6 +91,13 @@ public enum SessionPingAgent {
             """
     }
 
+    /// The script a launchd agent runs: `[/bin/bash, <runner>, --flags…]`, so
+    /// the first argument after the shell that is not a flag. Shared with the
+    /// auto-update agent, which has the same shape.
+    public static func runner(in programArguments: [String]) -> String? {
+        programArguments.dropFirst().first { !$0.hasPrefix("-") }
+    }
+
     /// Parse an existing agent plist (any formatting - a plist library on this
     /// side, unlike the shell's line parser) back into a schedule plus the
     /// runner script path baked into ProgramArguments.
@@ -117,9 +124,7 @@ public enum SessionPingAgent {
         guard !times.isEmpty else { return nil }
 
         let args = obj["ProgramArguments"] as? [String] ?? []
-        // [/bin/bash, <runner>, --quiet, --days=...]: the runner is the first
-        // argument that is not the shell and not a flag.
-        let runner = args.dropFirst().first { !$0.hasPrefix("-") }
+        let runner = runner(in: args)
         var days: Set<Int> = [1, 2, 3, 4, 5]
         if let daysArg = args.first(where: { $0.hasPrefix("--days=") }) {
             let parsed = daysArg.dropFirst("--days=".count)

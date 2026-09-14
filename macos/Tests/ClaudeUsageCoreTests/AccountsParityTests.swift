@@ -6,15 +6,7 @@ import XCTest
 /// Named-account parity against the fixture claude-code/accounts.js and
 /// lib/pure.js assert (tests/accounts.test.js, tests/parity.test.js).
 final class AccountsParityTests: XCTestCase {
-    private func fixture() throws -> [String: Any] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent("tests/fixtures/accounts.json")
-        return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
-    }
+    private func fixture() throws -> [String: Any] { try Fixtures.load("accounts.json") }
 
     private func profiles(_ fix: [String: Any]) -> [AccountProfile] {
         (fix["profiles"] as! [Any]).compactMap(AccountProfile.parse)
@@ -80,11 +72,7 @@ final class AccountsParityTests: XCTestCase {
     }
 
     private func cards(_ raw: [[String: Any]]) -> [LimitCard] {
-        raw.map {
-            LimitCard(
-                id: $0["key"] as! String, label: "", percent: ($0["percent"] as! NSNumber).intValue,
-                severity: .normal, resetsAt: nil, active: true)
-        }
+        raw.map { .stub(id: $0["key"] as! String, percent: ($0["percent"] as! NSNumber).intValue) }
     }
 
     func testAutoSwitchTarget() throws {

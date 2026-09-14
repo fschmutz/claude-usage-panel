@@ -1,12 +1,9 @@
 import ClaudeUsageCore
 import Foundation
 
-#if canImport(FoundationNetworking)
-    import FoundationNetworking  // URLSession lives here on Linux
-#endif
-
-// Networking + credential I/O. The pure model + normalization live in
-// ClaudeUsageCore (unit-tested). Read-only - we never write the credentials.
+// The usage fetch. The pure model + normalization live in ClaudeUsageCore
+// (unit-tested); the live login is read through AccountStore, the one reader
+// of Claude Code's credentials in this app.
 
 struct UsageResult {
     let cards: [LimitCard]
@@ -36,56 +33,13 @@ enum ClaudeUsage {
     private static let endpoint = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let betaHeader = "oauth-2025-04-20"
 
-    /// Read the OAuth access token. On Linux it lives in
-    /// .credentials.json under the Claude config dir (AccountStore.credentialsURL,
-    /// which honors CLAUDE_CONFIG_DIR); on macOS, Claude Code stores it in the
-    /// login Keychain, so we fall back to that.
+    /// The live login's access token - the credentials file under the Claude
+    /// config dir, else the login Keychain item, exactly as the account store
+    /// reads them.
     static func readAccessToken() -> String? {
-        if let data = try? Data(contentsOf: AccountStore.credentialsURL),
-            let token = tokenFromJSON(data)
-        {
-            return token
-        }
-        #if os(macOS)
-            return tokenFromKeychain()
-        #else
-            return nil
-        #endif
+        let oauth = AccountStore.readLiveCredentials()?["claudeAiOauth"] as? [String: Any]
+        return oauth?["accessToken"] as? String
     }
-
-    /// Parse an access token out of the credentials JSON blob (file or Keychain).
-    private static func tokenFromJSON(_ data: Data) -> String? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        // Token may sit under `claudeAiOauth` or at the top level.
-        let oauth = (json["claudeAiOauth"] as? [String: Any]) ?? json
-        return (oauth["accessToken"] as? String)
-            ?? (oauth["access_token"] as? String)
-            ?? (oauth["token"] as? String)
-    }
-
-    #if os(macOS)
-        /// Claude Code stores its credentials JSON as a generic-password Keychain
-        /// item on macOS. `security find-generic-password -w` prints the secret.
-        private static func tokenFromKeychain() -> String? {
-            for service in ["Claude Code-credentials", "Claude Code", "claude"] {
-                let proc = Process()
-                proc.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-                proc.arguments = ["find-generic-password", "-s", service, "-w"]
-                let out = Pipe()
-                proc.standardOutput = out
-                proc.standardError = Pipe()
-                guard (try? proc.run()) != nil else { continue }
-                let data = out.fileHandleForReading.readDataToEndOfFile()
-                proc.waitUntilExit()
-                guard proc.terminationStatus == 0 else { continue }
-                let raw = String(decoding: data, as: UTF8.self)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if let token = tokenFromJSON(Data(raw.utf8)) { return token }
-            }
-            return nil
-        }
-    #endif
 
     /// Fetch usage from the endpoint - for the live login by default, or for
     /// any saved account when its token is passed (AccountStore.accessTokenFor).

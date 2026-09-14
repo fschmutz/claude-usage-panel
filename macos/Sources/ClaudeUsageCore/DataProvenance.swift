@@ -36,29 +36,10 @@ public enum Provenance: String, Sendable, CaseIterable {
     }
 }
 
-/// A value plus where it came from.
-public struct Sourced<Value>: Sendable where Value: Sendable {
-    public let value: Value
-    public let provenance: Provenance
-
-    public init(_ value: Value, _ provenance: Provenance) {
-        self.value = value
-        self.provenance = provenance
-    }
-
-    public var isOfficial: Bool { provenance == .official }
-}
-
-extension Sourced: Equatable where Value: Equatable {}
-
+/// The two values the panels label.
 public enum Provenances {
     /// Plan limits, percentages, reset times: straight from the endpoint.
     public static let limits: Provenance = .official
     /// Session cost via ccusage: local logs times a price table.
     public static let cost: Provenance = .estimated
-    /// Burn-rate projection: computed from observed history.
-    public static let forecast: Provenance = .estimated
-    /// Cursor team spend: read from Cursor's admin API, but it is spend, not a
-    /// plan limit, and the panel does not control how Cursor aggregates it.
-    public static let cursorSpend: Provenance = .official
 }

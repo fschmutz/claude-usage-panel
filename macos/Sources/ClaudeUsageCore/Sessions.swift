@@ -53,7 +53,8 @@ public enum SessionPingStatus {
         return calendar.date(from: comps)
     }
 
-    static let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    /// Monday first, `date +%u` order - the one copy every UI reads.
+    public static let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     /// "05:30" today, "yesterday 05:30", "Fri 09:00" inside the week, else
     /// "2026-08-12 05:30". Empty when the stamp is missing or unreadable.
@@ -132,7 +133,7 @@ public enum SessionFormat {
 
 /// One transcript's running totals. Rehydrated from the on-disk index, which is
 /// shared with the other clients, so the field names match lib/pure.js exactly.
-public struct SessionAcc: Codable, Equatable {
+public struct SessionAcc: Codable, Equatable, Sendable {
     public var sessionId: String?
     public var cwd: String?
     public var title: String?
@@ -141,7 +142,8 @@ public struct SessionAcc: Codable, Equatable {
     public var ids: [String]
     /// Bytes of the transcript already folded (files are append-only).
     public var offset: Int
-    /// A trailing partial line kept for the next incremental read.
+    /// Node-port compatibility only: the shared index file carries it, this
+    /// port never reads or writes anything but the empty string.
     public var carry: String
     public var size: Int?
     public var mtimeMs: Double?
@@ -164,7 +166,7 @@ public struct SessionAcc: Codable, Equatable {
     }
 }
 
-public struct RankedSession: Identifiable, Equatable {
+public struct RankedSession: Identifiable, Equatable, Sendable {
     public let sessionId: String
     public let cwd: String
     public let title: String?
@@ -278,18 +280,12 @@ public enum SessionIndexer {
 // MARK: - Resuming one of them
 
 public enum SessionResume {
-    /// POSIX single-quoting. Session ids and project paths come out of a log
-    /// file, so they are quoted, never interpolated bare, in every port.
-    public static func shellQuote(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
-
     /// The command that resumes one session where it was left.
     public static func command(cwd: String, sessionId: String, claudeBin: String = "claude")
         -> String
     {
-        let cd = cwd.isEmpty ? "" : "cd \(shellQuote(cwd)) && "
-        return "\(cd)\(claudeBin) --resume \(shellQuote(sessionId))"
+        let cd = cwd.isEmpty ? "" : "cd \(ShellQuote.quote(cwd)) && "
+        return "\(cd)\(claudeBin) --resume \(ShellQuote.quote(sessionId))"
     }
 
     /// What a resume CLICK runs: the same thing, then an interactive shell, so
