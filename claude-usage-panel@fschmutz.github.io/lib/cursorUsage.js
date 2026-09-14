@@ -3,8 +3,8 @@
 // Cursor is usage-based (no fixed % limit), so we surface spend, not a gauge.
 
 import GLib from 'gi://GLib';
-import Soup from 'gi://Soup';
 
+import {jsonMessage, parseBody, send} from './http.js';
 import {summarizeCursorSpend, summarizeCursorToday} from './pure.js';
 
 const BASE = 'https://api.cursor.com';
@@ -14,31 +14,15 @@ function basicAuth(key) {
     return `Basic ${GLib.base64_encode(bytes)}`;
 }
 
-function postJSON(session, key, path, body) {
-    return new Promise((resolve, reject) => {
-        const message = Soup.Message.new('POST', BASE + path);
-        message.request_headers.append('authorization', basicAuth(key));
-        const payload = new TextEncoder().encode(JSON.stringify(body));
-        message.set_request_body_from_bytes('application/json', new GLib.Bytes(payload));
-
-        session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (self, result) => {
-            try {
-                const buf = self.send_and_read_finish(result);
-                const status = message.get_status();
-                if (status === 401 || status === 403) {
-                    reject(new Error('Cursor API key rejected'));
-                    return;
-                }
-                if (status < 200 || status >= 300) {
-                    reject(new Error(`Cursor HTTP ${status}`));
-                    return;
-                }
-                resolve(JSON.parse(new TextDecoder('utf-8').decode(buf.get_data())));
-            } catch (e) {
-                reject(e);
-            }
-        });
-    });
+async function postJSON(session, key, path, body) {
+    const message = jsonMessage('POST', BASE + path, body);
+    message.request_headers.append('authorization', basicAuth(key));
+    const {status, bytes} = await send(session, message);
+    if (status === 401 || status === 403)
+        throw new Error('Cursor API key rejected');
+    if (status < 200 || status >= 300)
+        throw new Error(`Cursor HTTP ${status}`);
+    return parseBody(bytes);
 }
 
 function startOfTodayMs() {

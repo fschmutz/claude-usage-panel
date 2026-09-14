@@ -19,6 +19,7 @@ import {
     accountSummary, autoSwitchTarget, formatAccountUsage, severityClass, usageSeverity,
     worstPercent,
 } from './pure.js';
+import {vbox, vboxProps} from './widgets.js';
 
 /**
  * The rows for the section, and the worst limit per account for the
@@ -27,7 +28,7 @@ import {
  * (refreshed if stale); an expired login is not fetched at all. The results
  * are also dropped into the usage cache the status line reads.
  */
-export async function collectAccountRows(session, profiles, active, activeCards) {
+async function collectAccountRows(session, profiles, active, activeCards) {
     const results = {};
     const rows = await Promise.all(profiles.map(async profile => {
         const summary = accountSummary(profile);
@@ -47,17 +48,17 @@ export async function collectAccountRows(session, profiles, active, activeCards)
     return {rows, worst};
 }
 
-export const AccountsSection = GObject.registerClass(
+const AccountsSection = GObject.registerClass(
 class AccountsSection extends St.BoxLayout {
     /**
      * @param {(name: string) => void} onSwitch called with the name of the
      *   row the user clicked (never the active one)
      */
     _init(onSwitch) {
-        super._init({vertical: true, x_expand: true, style_class: 'cu-accounts'});
+        super._init(vboxProps({x_expand: true, style_class: 'cu-accounts'}));
         this._onSwitch = onSwitch;
         this._title = new St.Label({text: _('Accounts'), style_class: 'cu-section-title'});
-        this._rows = new St.BoxLayout({vertical: true, x_expand: true});
+        this._rows = vbox({x_expand: true});
         this.add_child(this._title);
         this.add_child(this._rows);
         this.visible = false;

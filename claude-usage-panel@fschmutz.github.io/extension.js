@@ -1,6 +1,10 @@
 // Claude Usage Panel - GNOME Shell 45-50
 // Shows Claude Code plan limits (session / weekly / per-model) in the top bar
 // with a designed dropdown, plus optional session cost via ccusage.
+//
+// This file is the poll loop and the top-level dropdown; each optional
+// section (today's sessions, Cursor spend, saved accounts) is a controller in
+// lib/ that owns its own menu item, and the limit card is lib/usageCard.js.
 
 import GObject from 'gi://GObject';
 import St from 'gi://St';
@@ -17,132 +21,27 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 import {fetchUsage} from './lib/claudeUsage.js';
 import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
-import {fetchCursor} from './lib/cursorUsage.js';
 import {readLastPing, readSchedule} from './lib/sessionPing.js';
-import {storeSecret, lookupSecret} from './lib/secretStore.js';
 import {AccountsController} from './lib/accountsSection.js';
+import {CursorController} from './lib/cursorSection.js';
 import {SessionsController} from './lib/sessionsSection.js';
+import {UsageCard} from './lib/usageCard.js';
+import {vbox} from './lib/widgets.js';
 import {
-    severityClass, sparkline, formatResets, alertThreshold, poolNote,
-    forecast, formatForecast, normalizeHistory, historyPercents,
-    clockPace, formatClockPace,
+    severityClass, formatResets, alertThreshold,
+    forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
-    weekOverWeek, formatWeekOverWeek,
-    formatLastPing, nextPing,
+    warehouseEntry, weekOverWeek,
+    formatLastPing, nextPing, compactTokens, formatClock,
 } from './lib/pure.js';
 
-const TRACK_WIDTH = 300; // px, must match .cu-track min-width in stylesheet.css
-// Half the caret glyph, so the mark's point - not its left edge - lands on the
-// elapsed fraction of the track above it.
-const CLOCK_MARK_HALF = 4;
 // How long to let a resume or a network change settle before polling: DNS and
 // the token file are not necessarily ready the instant logind says "resumed".
 const WAKE_SETTLE_SECONDS = 5;
 // Timestamped samples kept per limit - enough for the forecast's 6 h regression
-// window even at the 1-minute minimum refresh interval isn't needed; at the
-// 10-minute default this holds ~15 h of context. The sparkline shows the last 12.
+// window at the 10-minute default (~15 h of context). The sparkline shows the
+// last 12.
 const HISTORY_MAX = 90;
-
-// One limit row: label, percentage, colored progress bar, reset time.
-const UsageCard = GObject.registerClass(
-class UsageCard extends St.BoxLayout {
-    _init() {
-        super._init({vertical: true, style_class: 'cu-card', x_expand: true});
-
-        const head = new St.BoxLayout({style_class: 'cu-card-head', x_expand: true});
-        this._label = new St.Label({style_class: 'cu-card-label', x_expand: true});
-        this._pct = new St.Label({style_class: 'cu-card-pct'});
-        head.add_child(this._label);
-        head.add_child(this._pct);
-
-        // The track is a BoxLayout, not a Bin, on purpose: St.Bin centers its
-        // child and offers no way to say otherwise (its only own property is
-        // `child`; the x_align it inherits from ClutterActor places the Bin in
-        // its parent, not the child in the Bin). A horizontal BoxLayout packs
-        // from the start edge, so a non-expanding fill sits flush left at its
-        // CSS width, which is what makes the bar read as a percentage.
-        const track = new St.BoxLayout({
-            style_class: 'cu-track',
-            x_align: Clutter.ActorAlign.START,
-            y_align: Clutter.ActorAlign.CENTER,
-            x_expand: false,
-        });
-        this._fill = new St.Widget({style_class: 'cu-fill', x_expand: false});
-        track.add_child(this._fill);
-
-        // Where the clock is, under the bar. A caret at the elapsed fraction
-        // of the window, pushed into place by a spacer: two children in a row
-        // always allocate in order, unlike an overlay, which St cannot place
-        // proportionally without a fixed layout.
-        this._clockRow = new St.BoxLayout({
-            style_class: 'cu-clock-row',
-            x_align: Clutter.ActorAlign.START,
-            x_expand: false,
-        });
-        this._clockSpacer = new St.Widget({x_expand: false});
-        this._clockMark = new St.Label({style_class: 'cu-clock-mark', text: '▲'});
-        this._clockRow.add_child(this._clockSpacer);
-        this._clockRow.add_child(this._clockMark);
-
-        this._reset = new St.Label({style_class: 'cu-card-reset'});
-        this._forecast = new St.Label({style_class: 'cu-forecast'});
-        this._spark = new St.Label({style_class: 'cu-spark'});
-        // Week-over-week peak from the durable history - the one thing the
-        // 6-hour forecast window cannot say.
-        this._trend = new St.Label({style_class: 'cu-forecast'});
-
-        this.add_child(head);
-        this.add_child(track);
-        this.add_child(this._clockRow);
-        this.add_child(this._reset);
-        this.add_child(this._forecast);
-        this.add_child(this._spark);
-        this.add_child(this._trend);
-    }
-
-    update(card, history, fc, trend) {
-        const sev = severityClass(card.severity);
-        this._label.text = card.label + (card.active ? '  ●' : '');
-        this._pct.text = `${card.percent}%`;
-        this._pct.style_class = `cu-card-pct ${sev}`;
-        const px = Math.round((card.percent / 100) * TRACK_WIDTH);
-        this._fill.style_class = `cu-fill ${sev}`;
-        this._fill.style = `width: ${px}px;`;
-        // A per-model card (Fable) caps a share of the weekly pool rather than
-        // adding one, so its reset line carries that note - same reset as the
-        // all-models card it draws from.
-        // How far into the window we are, as a caret under the bar: quota to
-        // the left of it is spent on schedule, quota to the right of the fill
-        // is what the clock has not yet earned. Hidden when the window length
-        // is unknown (no reset, or a group we have no span for).
-        const pace = clockPace(card);
-        this._clockRow.visible = pace !== null;
-        if (pace) {
-            const markPx = Math.round((pace.elapsedPercent / 100) * TRACK_WIDTH);
-            this._clockSpacer.style = `width: ${Math.max(0, markPx - CLOCK_MARK_HALF)}px;`;
-            this._clockMark.style_class =
-                `cu-clock-mark${pace.state === 'ahead' ? ' cu-warning' : ''}`;
-        }
-        const reset = formatResets(card.resetsAt);
-        const note = poolNote(card);
-        const paceText = formatClockPace(pace);
-        this._reset.text = [reset, note, paceText].filter(s => s).join(' · ');
-        // Burn-rate projection: amber when the limit runs out before its reset,
-        // quiet grey when the pace outlasts it, hidden when there is no honest
-        // pace to project (idle, too few samples).
-        const fcText = formatForecast(fc);
-        this._forecast.text = fcText;
-        this._forecast.visible = fcText.length > 0;
-        this._forecast.style_class =
-            `cu-forecast${fc?.exhaustsBeforeReset ? ' cu-warning' : ''}`;
-        const spark = sparkline(historyPercents(history).slice(-12));
-        this._spark.text = spark;
-        this._spark.visible = spark.length > 0;
-        const trendText = formatWeekOverWeek(trend);
-        this._trend.text = trendText;
-        this._trend.visible = trendText.length > 0;
-    }
-});
 
 const ClaudeUsageButton = GObject.registerClass(
 class ClaudeUsageButton extends PanelMenu.Button {
@@ -162,7 +61,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // 90 days of poll samples, for the week-over-week line. Loaded once;
         // every later poll that moved appends to both the file and this list.
         this._warehouse = loadWarehouse();
-        this._lastCost = null;
         this._refreshing = false;
         this._destroyed = false;
         this._history = this._loadHistory();  // limit id -> [[epochMs, percent], …]
@@ -211,99 +109,62 @@ class ClaudeUsageButton extends PanelMenu.Button {
     }
 
     _buildMenu() {
-        // Header
+        const deps = {
+            settings: this._settings,
+            session: this._httpSession,
+            menu: this.menu,
+            notify: (t, b) => Main.notify(t, b),
+            isDestroyed: () => this._destroyed,
+        };
+
+        // Header: title left, plan label right.
         const header = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const hbox = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'cu-header'});
-        const titleRow = new St.BoxLayout({x_expand: true});
-        const title = new St.Label({text: 'Claude usage', style_class: 'cu-title', x_expand: true});
+        const titleRow = new St.BoxLayout({x_expand: true, style_class: 'cu-header'});
+        titleRow.add_child(new St.Label({text: 'Claude usage', style_class: 'cu-title', x_expand: true}));
         this._planLabel = new St.Label({text: '', style_class: 'cu-plan'});
-        titleRow.add_child(title);
         titleRow.add_child(this._planLabel);
-        hbox.add_child(titleRow);
-        header.add_child(hbox);
+        header.add_child(titleRow);
         this.menu.addMenuItem(header);
 
-        // Cards container
-        this._cardsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        this._cardsBox = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'cu-cards'});
-        this._cardsItem.add_child(this._cardsBox);
-        this.menu.addMenuItem(this._cardsItem);
+        // One card per limit.
+        const cardsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this._cardsBox = vbox({x_expand: true, style_class: 'cu-cards'});
+        cardsItem.add_child(this._cardsBox);
+        this.menu.addMenuItem(cardsItem);
 
         // Prepaid credits, when the account has extra usage switched on. Money
         // rather than a window: no reset, no clock caret, so it gets its own
         // compact row instead of a card.
         this._extraItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const extraBox = new St.BoxLayout({
-            vertical: true, x_expand: true, style_class: 'cu-extra'});
-        this._extraTitle = new St.Label({
-            text: _('Extra usage'), style_class: 'cu-section-title'});
+        const extraBox = vbox({x_expand: true, style_class: 'cu-extra'});
+        extraBox.add_child(new St.Label({text: _('Extra usage'), style_class: 'cu-section-title'}));
         this._extraLine = new St.Label({text: '', style_class: 'cu-cost'});
-        extraBox.add_child(this._extraTitle);
         extraBox.add_child(this._extraLine);
         this._extraItem.add_child(extraBox);
         this.menu.addMenuItem(this._extraItem);
         this._extraItem.visible = false;
 
-        // Status / cost line
-        this._statusItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        this._statusBox = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'cu-status'});
+        // Status: cost line, "Updated", and the session-ping line (hidden
+        // unless pings are scheduled or have ever run).
+        const statusItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        const statusBox = vbox({x_expand: true, style_class: 'cu-status'});
         this._costLabel = new St.Label({text: '', style_class: 'cu-cost'});
         this._updatedLabel = new St.Label({text: '', style_class: 'cu-updated'});
-        // Scheduled session pings: when they last opened a window, and when the
-        // next one is due. Hidden unless pings are scheduled or have ever run.
         this._pingLabel = new St.Label({text: '', style_class: 'cu-updated'});
         this._pingLabel.visible = false;
-        this._statusBox.add_child(this._costLabel);
-        this._statusBox.add_child(this._updatedLabel);
-        this._statusBox.add_child(this._pingLabel);
-        this._statusItem.add_child(this._statusBox);
-        this.menu.addMenuItem(this._statusItem);
+        statusBox.add_child(this._costLabel);
+        statusBox.add_child(this._updatedLabel);
+        statusBox.add_child(this._pingLabel);
+        statusItem.add_child(statusBox);
+        this.menu.addMenuItem(statusItem);
 
-        // Today's sessions: the work the plan was actually spent on, biggest
-        // spender first, each row a click away from being resumed in a terminal.
-        this._sessions = new SessionsController({
-            settings: this._settings,
-            menu: this.menu,
-            notify: (t, b) => Main.notify(t, b),
-            isDestroyed: () => this._destroyed,
-        });
-
-        // Optional Cursor section (hidden unless enabled + key set)
-        this._cursorItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const cursorBox = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'cu-cursor'});
-        this._cursorTitle = new St.Label({text: 'Cursor', style_class: 'cu-section-title'});
-        this._cursorCycle = new St.Label({text: '', style_class: 'cu-cost'});
-        // Gauge bar, shown only when the team has a monthly spend limit set.
-        this._cursorTrack = new St.BoxLayout({
-            style_class: 'cu-track',
-            x_align: Clutter.ActorAlign.START,
-            y_align: Clutter.ActorAlign.CENTER,
-            x_expand: false,
-        });
-        this._cursorFill = new St.Widget({style_class: 'cu-fill', x_expand: false});
-        this._cursorTrack.add_child(this._cursorFill);
-        this._cursorTrack.visible = false;
-        this._cursorToday = new St.Label({text: '', style_class: 'cu-updated'});
-        this._cursorTop = new St.Label({text: '', style_class: 'cu-updated'});
-        cursorBox.add_child(this._cursorTitle);
-        cursorBox.add_child(this._cursorCycle);
-        cursorBox.add_child(this._cursorTrack);
-        cursorBox.add_child(this._cursorToday);
-        cursorBox.add_child(this._cursorTop);
-        this._cursorItem.add_child(cursorBox);
-        this.menu.addMenuItem(this._cursorItem);
-        this._cursorItem.visible = false;
-
-        // Saved accounts: one row per login, click to make it the live one,
-        // and the auto-switch toggle right under them (hidden until enabled).
+        // The optional sections, each owning its menu item, in menu order.
+        this._sessions = new SessionsController(deps);
+        this._cursor = new CursorController(deps);
         this._accounts = new AccountsController({
-            settings: this._settings,
-            session: this._httpSession,
-            menu: this.menu,
-            notify: (t, b) => Main.notify(t, b),
+            ...deps,
             refreshSoon: () => this._refreshSoon(),
             onActiveChanged: () => this._renderPanel(),
-            isDestroyed: () => this._destroyed,
         });
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -430,50 +291,30 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._renderError(result.message);
                 return;
             }
+            const now = Date.now();
             const moved = !sameUsage(this._latest, result.cards);
             this._idleStreak = moved ? 0 : this._idleStreak + 1;
             // Only record what moved: a flat afternoon would otherwise write
             // one identical line every poll for 90 days.
             if (moved) {
-                const now = Date.now();
-                this._warehouse.push({
-                    t: now,
-                    limits: Object.fromEntries(result.cards.map(c => [c.key, c.percent])),
-                });
-                appendWarehouse(result.cards, now);
+                const entry = warehouseEntry(result.cards, now);
+                this._warehouse.push(entry);
+                appendWarehouse(entry);
             }
             this._runEventCommand(detectEvents(this._latest, result.cards));
             this._latest = result.cards;
-            this._renderCards(result.cards);
+            this._recordSamples(result.cards, now);
+            this._renderCards(result.cards, now);
             this._renderExtraUsage(result.extraUsage);
             this._renderPanel();
-            this._updatedLabel.text = _('Updated %s').format(this._nowString());
+            this._updatedLabel.text = _('Updated %s').format(formatClock(now));
             this._renderPing();
-
             // Plan label from the raw spend/extra hints, best-effort.
             this._planLabel.text = result.raw?.plan_label ?? '';
 
-            if (this._settings.get_boolean('show-cost')) {
-                this._costLabel.visible = true;
-                this._costLabel.text = _('Session cost: computing…');
-                const cost = await fetchActiveCost();
-                if (this._destroyed)
-                    return;
-                if (cost) {
-                    this._lastCost = cost;
-                    // 'est.': cost is reconstructed from local logs and a price table, while
-                    // the limit percentages come from the usage endpoint.
-                    this._costLabel.text = _('Session cost: $%s · %s tokens (est.)')
-                        .format(cost.costUSD.toFixed(2), this._compact(cost.tokens));
-                } else {
-                    this._costLabel.text = _('Session cost: unavailable (install ccusage)');
-                }
-            } else {
-                this._costLabel.visible = false;
-            }
-
+            await this._refreshCost();
             await this._sessions.refresh();
-            await this._refreshCursor();
+            await this._cursor.refresh();
             await this._accounts.refresh(result.cards);
         } finally {
             this._refreshing = false;
@@ -484,61 +325,22 @@ class ClaudeUsageButton extends PanelMenu.Button {
         }
     }
 
-    // The key lives in the system keyring; the dconf slot is only the legacy
-    // location and the fallback for systems without a Secret Service. A value
-    // found in dconf while the keyring works is migrated in and scrubbed.
-    async _cursorKey() {
-        const stored = await lookupSecret('cursor-admin-api-key');
-        if (stored)
-            return stored;
-        const legacy = this._settings.get_string('cursor-api-key');
-        if (legacy && await storeSecret('cursor-admin-api-key', legacy))
-            this._settings.set_string('cursor-api-key', '');
-        return legacy;
-    }
-
-    async _refreshCursor() {
-        const key = await this._cursorKey();
+    // 'est.': cost is reconstructed from local logs and a price table, while
+    // the limit percentages come from the usage endpoint.
+    async _refreshCost() {
+        if (!this._settings.get_boolean('show-cost')) {
+            this._costLabel.visible = false;
+            return;
+        }
+        this._costLabel.visible = true;
+        this._costLabel.text = _('Session cost: computing…');
+        const cost = await fetchActiveCost();
         if (this._destroyed)
             return;
-        if (!this._settings.get_boolean('cursor-enabled') || !key) {
-            this._cursorItem.visible = false;
-            return;
-        }
-        this._cursorItem.visible = true;
-        this._cursorCycle.text = _('Loading…');
-        this._cursorToday.text = '';
-        this._cursorTop.text = '';
-        try {
-            const c = await fetchCursor(this._httpSession, key);
-            if (this._destroyed)
-                return;
-            if (c.percent !== null) {
-                // Team has a monthly limit → show a % gauge.
-                this._cursorCycle.text = _('This cycle: $%s / $%s (%d%%) · %d members')
-                    .format(c.cycleUSD.toFixed(2), c.limitUSD.toFixed(0), c.percent, c.members);
-                const sev = c.percent >= 100 ? 'cu-critical'
-                    : (c.percent >= 90 ? 'cu-warning' : 'cu-normal');
-                this._cursorFill.style_class = `cu-fill ${sev}`;
-                this._cursorFill.style = `width: ${Math.round((c.percent / 100) * TRACK_WIDTH)}px;`;
-                this._cursorTrack.visible = true;
-            } else {
-                this._cursorCycle.text = _('This cycle: $%s · %d members')
-                    .format(c.cycleUSD.toFixed(2), c.members);
-                this._cursorTrack.visible = false;
-            }
-            this._cursorToday.text = c.todayUSD === null
-                ? '' : _('Today: $%s').format(c.todayUSD.toFixed(2));
-            this._cursorTop.text = c.topSpender
-                ? _('Top: %s $%s').format(c.topSpender.email, c.topSpender.usd.toFixed(2)) : '';
-        } catch (e) {
-            if (this._destroyed)
-                return;
-            this._cursorCycle.text = _('Cursor: %s').format(e.message);
-            this._cursorTrack.visible = false;
-            this._cursorToday.text = '';
-            this._cursorTop.text = '';
-        }
+        this._costLabel.text = cost
+            ? _('Session cost: $%s · %s tokens (est.)')
+                .format(cost.costUSD.toFixed(2), compactTokens(cost.tokens))
+            : _('Session cost: unavailable (install ccusage)');
     }
 
     // The user's own command for the two moments worth acting on: a limit
@@ -660,12 +462,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
         }
     }
 
-    _renderCards(cards) {
-        const now = Date.now();
-        const seen = new Set();
+    // The bookkeeping a poll does before anything is drawn: one timestamped
+    // sample per limit (sparkline + burn-rate forecast), the forecasts, and
+    // the alerts they may fire. Rendering below only reads what this wrote.
+    _recordSamples(cards, now) {
         for (const card of cards) {
-            seen.add(card.key);
-            // append a timestamped sample (sparkline + burn-rate forecast)
             const hist = this._history.get(card.key) ?? [];
             hist.push([now, card.percent]);
             if (hist.length > HISTORY_MAX)
@@ -675,16 +476,19 @@ class ClaudeUsageButton extends PanelMenu.Button {
         }
         this._saveHistory();
         this._checkAlerts(cards);
-        for (const card of cards) {
-            const hist = this._history.get(card.key) ?? [];
+    }
 
+    _renderCards(cards, now) {
+        const seen = new Set();
+        for (const card of cards) {
+            seen.add(card.key);
             let widget = this._cards.get(card.key);
             if (!widget) {
                 widget = new UsageCard();
                 this._cards.set(card.key, widget);
                 this._cardsBox.add_child(widget);
             }
-            widget.update(card, hist, this._forecasts.get(card.key),
+            widget.update(card, this._history.get(card.key) ?? [], this._forecasts.get(card.key),
                 weekOverWeek(this._warehouse, card.key, now));
         }
         // Drop cards that disappeared.
@@ -731,19 +535,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
             widget.destroy();
         this._cards.clear();
         this._updatedLabel.text = message;
-    }
-
-    _compact(n) {
-        if (n >= 1_000_000)
-            return `${(n / 1_000_000).toFixed(1)}M`;
-        if (n >= 1_000)
-            return `${Math.round(n / 1_000)}k`;
-        return String(n);
-    }
-
-    _nowString() {
-        const now = GLib.DateTime.new_now_local();
-        return now.format('%H:%M');
     }
 
     destroy() {

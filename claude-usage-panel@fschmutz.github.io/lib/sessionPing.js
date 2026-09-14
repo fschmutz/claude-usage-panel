@@ -7,7 +7,9 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+import {readText, writeText} from './fs.js';
 import {stateDir} from './paths.js';
+import {run} from './proc.js';
 
 import {
     SP_UNIT, DEFAULT_DAYS, DEFAULT_TIMES,
@@ -25,15 +27,6 @@ function unitPath(ext) {
 /** Where scripts/session-ping.sh records its last successful ping. */
 export function lastPingPath() {
     return GLib.build_filenamev([stateDir(), 'last-ping']);
-}
-
-function readText(path) {
-    try {
-        const [ok, bytes] = GLib.file_get_contents(path);
-        return ok ? new TextDecoder().decode(bytes) : null;
-    } catch {
-        return null;
-    }
 }
 
 /** The raw stamp written by the last successful ping, or null. */
@@ -72,7 +65,8 @@ export function resolveRunner(existing, extensionPath) {
     if (GLib.file_test(bundled, GLib.FileTest.EXISTS)) {
         // The exec bit can be lost in a copy; restore it best-effort.
         try {
-            GLib.spawn_command_line_sync(`chmod +x ${GLib.shell_quote(bundled)}`);
+            Gio.File.new_for_path(bundled).set_attribute_uint32(
+                'unix::mode', 0o755, Gio.FileQueryInfoFlags.NONE, null);
         } catch {
             // bash <runner> still works without it.
         }
@@ -81,26 +75,10 @@ export function resolveRunner(existing, extensionPath) {
     return null;
 }
 
-function systemctl(args) {
-    return new Promise(resolve => {
-        let proc;
-        try {
-            proc = Gio.Subprocess.new(
-                ['systemctl', '--user', ...args],
-                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_PIPE);
-        } catch (e) {
-            resolve(e.message);
-            return;
-        }
-        proc.communicate_utf8_async(null, null, (self, res) => {
-            try {
-                const [, , stderr] = self.communicate_utf8_finish(res);
-                resolve(self.get_successful() ? null : (stderr || '').trim() || 'systemctl failed');
-            } catch (e) {
-                resolve(e.message);
-            }
-        });
-    });
+// Resolves to an error line, or null on success.
+async function systemctl(args) {
+    const {ok, stderr} = await run(['systemctl', '--user', ...args]);
+    return ok ? null : stderr.trim() || 'systemctl failed';
 }
 
 export function hasSystemd() {
@@ -130,9 +108,8 @@ export async function applySchedule({enabled, times, days, extensionPath}) {
     if (!runner)
         return 'session-ping.sh not found - reinstall with ./install.sh gnome.';
     try {
-        GLib.mkdir_with_parents(unitDir(), 0o755);
-        GLib.file_set_contents(unitPath('service'), serviceText(runner, days));
-        GLib.file_set_contents(unitPath('timer'), timerText(times));
+        writeText(unitPath('service'), serviceText(runner, days));
+        writeText(unitPath('timer'), timerText(times));
     } catch (e) {
         return `Could not write the systemd units: ${e.message}`;
     }

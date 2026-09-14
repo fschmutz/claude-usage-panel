@@ -13,6 +13,7 @@ import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js'
 
 import {refreshSessions} from './sessionIndex.js';
 import {TERMINALS, compactTokens, interactiveResume, terminalArgv} from './pure.js';
+import {vbox} from './widgets.js';
 
 // How many of today's sessions the dropdown offers to resume.
 const SESSION_ROWS = 5;
@@ -40,10 +41,10 @@ export class SessionsController {
         // Built as buttons inside ONE non-reactive item (like Refresh) so the
         // rows can be rebuilt on every refresh without reshuffling the menu.
         this._item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const box = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'cu-sessions'});
+        const box = vbox({x_expand: true, style_class: 'cu-sessions'});
         this._title = new St.Label({
             text: _('Today\u2019s sessions'), style_class: 'cu-section-title'});
-        this._rows = new St.BoxLayout({vertical: true, x_expand: true});
+        this._rows = vbox({x_expand: true});
         box.add_child(this._title);
         box.add_child(this._rows);
         this._item.add_child(box);

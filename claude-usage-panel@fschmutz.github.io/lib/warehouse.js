@@ -6,32 +6,24 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+import {readText, writeText} from './fs.js';
 import {stateDir} from './paths.js';
-import {warehouseLine, parseWarehouse, pruneWarehouse} from './pure.js';
+import {parseWarehouse, pruneWarehouse} from './pure.js';
 
 /** Same path the MCP server and the macOS app use, so all three write one file. */
 export function warehousePath() {
     return GLib.build_filenamev([stateDir(), 'history.jsonl']);
 }
 
-function readText(path) {
-    try {
-        const [ok, bytes] = GLib.file_get_contents(path);
-        return ok ? new TextDecoder().decode(bytes) : '';
-    } catch {
-        return '';
-    }
-}
-
 /** Load the file, dropping anything past the retention window. The pruned file
- *  is written back only when it actually shrank, so a normal start does no I/O. */
+ *  is written back (atomically) only when it actually shrank, so a normal start
+ *  does no I/O. */
 export function loadWarehouse(nowMs = Date.now(), path = warehousePath()) {
-    const entries = parseWarehouse(readText(path));
+    const entries = parseWarehouse(readText(path) ?? '');
     const kept = pruneWarehouse(entries, nowMs);
     if (kept.length !== entries.length) {
         try {
-            GLib.file_set_contents(
-                path, kept.map(e => JSON.stringify(e)).join('\n') + (kept.length ? '\n' : ''));
+            writeText(path, kept.map(e => JSON.stringify(e)).join('\n') + (kept.length ? '\n' : ''));
         } catch (e) {
             logError(e, 'claude-usage-panel: could not prune the usage history');
         }
@@ -39,19 +31,14 @@ export function loadWarehouse(nowMs = Date.now(), path = warehousePath()) {
     return kept;
 }
 
-/** Append one poll. Best-effort: a failed write costs a data point, never a
- *  refresh. Creates the state directory on first use. */
-export function appendWarehouse(cards, nowMs = Date.now(), path = warehousePath()) {
-    const line = `${warehouseLine(cards, nowMs)}\n`;
+/** Append one poll - the same entry object the caller keeps in memory (from
+ *  pure's warehouseEntry). Best-effort: a failed write costs a data point,
+ *  never a refresh. Creates the state directory on first use. */
+export function appendWarehouse(entry, path = warehousePath()) {
+    const line = `${JSON.stringify(entry)}\n`;
     try {
-        const file = Gio.File.new_for_path(path);
-        file.get_parent()?.make_directory_with_parents(null);
-    } catch {
-        // already there
-    }
-    try {
-        const file = Gio.File.new_for_path(path);
-        const stream = file.append_to(Gio.FileCreateFlags.NONE, null);
+        GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+        const stream = Gio.File.new_for_path(path).append_to(Gio.FileCreateFlags.NONE, null);
         stream.write_all(new TextEncoder().encode(line), null);
         stream.close(null);
         return true;

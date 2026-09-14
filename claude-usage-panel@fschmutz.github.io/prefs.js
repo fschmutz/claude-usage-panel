@@ -11,18 +11,43 @@ import {
 import {
     listProfiles, liveAccountName, readLiveAccount, removeProfile, saveCurrent,
 } from './lib/accounts.js';
+import {run} from './lib/proc.js';
 import {isValidPingTime, normalizePingTime} from './lib/sessionPingUnit.js';
 import {applySchedule, hasSystemd, readLastPing, readSchedule} from './lib/sessionPing.js';
 
+// One group per concern, each a method below. Every async continuation that
+// touches a widget checks `this._cancellable` first: the window can be closed
+// while a keyring lookup, a systemctl call or a git fetch is still running,
+// and writing to a disposed widget is a GJS error per callback.
 export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        this._cancellable = new Gio.Cancellable();
+        window.connect('close-request', () => {
+            this._cancellable.cancel();
+            return false;
+        });
 
         const page = new Adw.PreferencesPage({
             title: _('General'),
             icon_name: 'utilities-system-monitor-symbolic',
         });
+        page.add(this._buildBehavior(settings));
+        page.add(this._buildCost(settings));
+        page.add(this._buildCursor(settings));
+        this._buildAccountsGroups(settings, page);
+        page.add(this._buildSessions(settings));
+        this._buildPings(settings, page);
+        page.add(this._buildUpdates());
+        window.add(page);
+    }
 
+    // True once the window is gone: the continuation must not touch widgets.
+    _closed() {
+        return this._cancellable.is_cancelled();
+    }
+
+    _buildBehavior(settings) {
         const behavior = new Adw.PreferencesGroup({
             title: _('Behavior'),
             description: _('How often to poll the Claude usage endpoint.'),
@@ -81,9 +106,10 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         });
         commandHelp.add_css_class('dim-label');
         behavior.add(commandHelp);
+        return behavior;
+    }
 
-        page.add(behavior);
-
+    _buildCost(settings) {
         const cost = new Adw.PreferencesGroup({
             title: _('Cost'),
             description: _('The official API does not expose dollar cost on subscription plans. Enable this to compute it locally with ccusage (requires Node/npx).'),
@@ -94,8 +120,10 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         });
         settings.bind('show-cost', costRow, 'active', 0);
         cost.add(costRow);
-        page.add(cost);
+        return cost;
+    }
 
+    _buildCursor(settings) {
         const cursor = new Adw.PreferencesGroup({
             title: _('Cursor (optional)'),
             description: _('Show Cursor team spend using the Cursor Admin API. Create a key at cursor.com → team → Settings → Admin API. Stored in the system keyring.'),
@@ -109,17 +137,16 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
 
         // The key lives in the system keyring (libsecret). The dconf slot is
         // only a legacy source (migrated by the extension) and a fallback for
-        // systems without a Secret Service. `loaded` gates the changed handler
-        // so prefilling the row can't echo the value back into a store cycle.
+        // systems without a Secret Service. Stored on Apply (or Enter), not per
+        // keystroke: each store is a keyring write plus an extension poll.
         const keyRow = new Adw.PasswordEntryRow({title: _('Cursor Admin API key')});
-        let loaded = false;
+        keyRow.set_show_apply_button(true);
         lookupSecret('cursor-admin-api-key').then(stored => {
-            keyRow.text = stored ?? settings.get_string('cursor-api-key');
-            loaded = true;
-        });
-        keyRow.connect('changed', row => {
-            if (!loaded)
+            if (this._closed())
                 return;
+            keyRow.text = stored ?? settings.get_string('cursor-api-key');
+        });
+        keyRow.connect('apply', row => {
             storeSecret('cursor-admin-api-key', row.text).then(ok => {
                 if (ok) {
                     // Scrub any legacy cleartext copy and nudge the running
@@ -135,25 +162,25 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
             });
         });
         cursor.add(keyRow);
-        page.add(cursor);
+        return cursor;
+    }
 
-        this._buildAccountsGroups(settings, page);
-
-        // ── Today's sessions ────────────────────────────────────────────────
+    _buildSessions(settings) {
         const sessions = new Adw.PreferencesGroup({
-            title: _('Today\u2019s sessions'),
+            title: _('Today’s sessions'),
             description: _('List the sessions that spent the most tokens today, biggest first, and resume one in a terminal with a click. Read from the local transcripts in ~/.claude/projects.'),
         });
         const sessionsRow = new Adw.SwitchRow({
-            title: _('Show today\u2019s sessions'),
+            title: _('Show today’s sessions'),
             subtitle: _('Adds up to 5 resume links to the dropdown'),
         });
         settings.bind('show-sessions', sessionsRow, 'active', 0);
         sessions.add(sessionsRow);
 
         const terminalRow = new Adw.EntryRow({title: _('Terminal')});
+        terminalRow.set_show_apply_button(true);
         terminalRow.text = settings.get_string('terminal-command');
-        terminalRow.connect('changed', row =>
+        terminalRow.connect('apply', row =>
             settings.set_string('terminal-command', row.text.trim()));
         sessions.add(terminalRow);
         const terminalHint = new Adw.ActionRow({
@@ -161,16 +188,21 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
             sensitive: false,
         });
         sessions.add(terminalHint);
-        page.add(sessions);
+        return sessions;
+    }
 
-        // ── Session pings ───────────────────────────────────────────────────
-        // The systemd units on disk are the source of truth, shared with
-        // ./install.sh sessionping - nothing here is mirrored into GSettings.
+    // ── Session pings ───────────────────────────────────────────────────────
+    // The systemd units on disk are the source of truth, shared with
+    // ./install.sh sessionping - nothing here is mirrored into GSettings.
+    // Three groups (switches + status, the ping times, the buttons), because
+    // the times are rebuilt whenever the list changes and an Adw group has no
+    // reorderable slot model.
+    _buildPings(settings, page) {
         const pings = new Adw.PreferencesGroup({
             title: _('Session pings'),
-            description: _('A 5-hour window is anchored to its first message, so pinging claude (haiku, one turn) at a fixed time lines the day\u2019s windows up with the hours you actually work. Same schedule as ./install.sh sessionping.'),
+            description: _('A 5-hour window is anchored to its first message, so pinging claude (haiku, one turn) at a fixed time lines the day’s windows up with the hours you actually work. Same schedule as ./install.sh sessionping.'),
         });
-        let schedule = readSchedule();
+        const schedule = readSchedule();
         let times = schedule.times.slice();
         const days = new Set(schedule.days);
 
@@ -192,20 +224,13 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
 
         // The working day, which is the input the suggestion is computed from.
         const dayRow = new Adw.ActionRow({title: _('Working day')});
-        const startEntry = new Gtk.Entry({
-            text: settings.get_string('work-start'),
-            max_width_chars: 5,
-            width_chars: 5,
-            valign: Gtk.Align.CENTER,
+        const timeEntry = text => new Gtk.Entry({
+            text, max_width_chars: 5, width_chars: 5, valign: Gtk.Align.CENTER,
         });
-        const endEntry = new Gtk.Entry({
-            text: settings.get_string('work-end'),
-            max_width_chars: 5,
-            width_chars: 5,
-            valign: Gtk.Align.CENTER,
-        });
+        const startEntry = timeEntry(settings.get_string('work-start'));
+        const endEntry = timeEntry(settings.get_string('work-end'));
         dayRow.add_suffix(startEntry);
-        dayRow.add_suffix(new Gtk.Label({label: '\u2192', valign: Gtk.Align.CENTER}));
+        dayRow.add_suffix(new Gtk.Label({label: '→', valign: Gtk.Align.CENTER}));
         dayRow.add_suffix(endEntry);
         pings.add(dayRow);
 
@@ -221,13 +246,12 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         daysRow.add_suffix(daysBox);
         pings.add(daysRow);
 
+        // An ActionRow doubling as the error line: its title is the message.
         const errorRow = new Adw.ActionRow({title: '', subtitle: ''});
         errorRow.visible = false;
         pings.add(errorRow);
         page.add(pings);
 
-        // Ping times: their own group, rebuilt whenever the list changes (an
-        // Adw group has no reorderable slot model, and 1-5 rows is cheap).
         const timesGroup = new Adw.PreferencesGroup();
         page.add(timesGroup);
         const timeRows = [];
@@ -265,9 +289,10 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
                 days: [...days],
                 extensionPath: this.path,
             }).then(err => {
+                if (this._closed())
+                    return;
                 errorRow.visible = Boolean(err);
                 errorRow.title = err ?? '';
-                schedule = readSchedule();
                 renderStatus();
             });
         };
@@ -276,6 +301,7 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
             timeRows.splice(0).forEach(row => timesGroup.remove(row));
             times.forEach((time, i) => {
                 const row = new Adw.EntryRow({title: _('Ping %d').format(i + 1)});
+                row.set_show_apply_button(true);
                 row.text = time;
                 const remove = new Gtk.Button({
                     icon_name: 'list-remove-symbolic',
@@ -289,11 +315,14 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
                     apply();
                 });
                 row.add_suffix(remove);
-                row.connect('changed', entry => {
+                // On Apply (or Enter), not per keystroke: every change rewrites
+                // two systemd units and reloads the daemon.
+                row.connect('apply', entry => {
                     const normalized = normalizePingTime(entry.text);
                     if (!normalized)
-                        return; // mid-typing: leave the schedule alone
+                        return;
                     times[i] = normalized;
+                    entry.text = normalized;
                     renderStatus();
                     apply();
                 });
@@ -337,12 +366,13 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         }));
         enableRow.connect('notify::active', () => apply());
         renderTimes();
+    }
 
-
-        // Updates: the same `scripts/auto-update.sh --status --json` the daily
-        // timer runs. Surfacing `blocked` is the point - auto-update refuses a
-        // dirty, diverged or detached checkout and only logs why, so a paused
-        // install used to look exactly like a current one.
+    // Updates: the same `scripts/auto-update.sh --status --json` the daily
+    // timer runs. Surfacing `blocked` is the point - auto-update refuses a
+    // dirty, diverged or detached checkout and only logs why, so a paused
+    // install used to look exactly like a current one.
+    _buildUpdates() {
         const updates = new Adw.PreferencesGroup({
             title: _('Updates'),
             description: _('Daily check, and whether it is actually running.'),
@@ -357,30 +387,15 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         });
         updateRow.add_suffix(updateBtn);
         updates.add(updateRow);
-        page.add(updates);
 
         const scriptPath = GLib.build_filenamev([this.path, 'scripts', 'auto-update.sh']);
 
-        const runUpdateScript = (args, onDone) => {
-            // Async: a git fetch must never freeze the prefs window.
-            let proc;
-            try {
-                proc = Gio.Subprocess.new(
-                    ['bash', scriptPath, ...args],
-                    Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
-                );
-            } catch {
-                onDone(null);
-                return;
-            }
-            proc.communicate_utf8_async(null, null, (p, res) => {
-                try {
-                    const [, stdout] = p.communicate_utf8_finish(res);
-                    onDone(stdout);
-                } catch {
-                    onDone(null);
-                }
-            });
+        // Async, cancelled with the window: a git fetch must never freeze the
+        // prefs window, nor write into it after it is gone.
+        const runUpdateScript = async args => {
+            const {ok, stdout} = await run(['bash', scriptPath, ...args],
+                {cancellable: this._cancellable});
+            return ok ? stdout : null;
         };
 
         const renderUpdate = (stdout) => {
@@ -426,34 +441,36 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
             }
         };
 
-        const refreshUpdate = () => {
+        const refreshUpdate = async () => {
             updateBtn.sensitive = false;
-            runUpdateScript(['--status', '--json'], renderUpdate);
+            const out = await runUpdateScript(['--status', '--json']);
+            if (!this._closed())
+                renderUpdate(out);
         };
 
-        updateBtn.connect('clicked', () => {
+        updateBtn.connect('clicked', async () => {
             updateBtn.sensitive = false;
             const applying = updateBtn.label === _('Update now');
             updateRow.subtitle = applying ? _('Updating…') : _('Checking…');
-            runUpdateScript(applying ? [] : ['--status', '--json'], (out) => {
-                if (applying) refreshUpdate();
-                else renderUpdate(out);
-            });
+            const out = await runUpdateScript(applying ? [] : ['--status', '--json']);
+            if (this._closed())
+                return;
+            if (applying)
+                refreshUpdate();
+            else
+                renderUpdate(out);
         });
         refreshUpdate();
-
-        window.add(page);
+        return updates;
     }
 
     // ── Saved accounts ──────────────────────────────────────────────────────
     // Two groups: the switches (master switch first, everything else hidden
     // until it is on) and the list of saved logins, rebuilt after every save
-    // or remove.
+    // or remove. A saved login is the credentials Claude Code holds right now
+    // plus the account block of ~/.claude.json, kept under a name. Switching
+    // swaps exactly those two; nothing else in ~/.claude changes.
     _buildAccountsGroups(settings, page) {
-        // ── Saved accounts ──────────────────────────────────────────────────
-        // A saved login is the credentials Claude Code holds right now plus the
-        // account block of ~/.claude.json, kept under a name. Switching swaps
-        // exactly those two; nothing else in ~/.claude changes.
         const accounts = new Adw.PreferencesGroup({
             title: _('Accounts'),
             description: _('Save the login Claude Code holds now under a name (PRO, PERSO) and switch between saved logins from the dropdown, no browser needed. Only the credentials and the account block of ~/.claude.json change; settings, hooks, plugins and history stay. Claude Code sessions already running keep the old login until they restart.'),

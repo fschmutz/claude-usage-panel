@@ -15,6 +15,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+import {readJSON, writeText} from './fs.js';
 import {foldSessionLine, localDay, newSessionAcc, pruneByDay, rankSessions} from './pure.js';
 
 const CHUNK_BYTES = 1 << 20; // 1 MiB reads: small enough to stay responsive
@@ -34,24 +35,17 @@ function projectsDir() {
 }
 
 export function loadIndex() {
-    try {
-        const [ok, bytes] = GLib.file_get_contents(indexPath());
-        if (!ok)
-            return {version: INDEX_VERSION, files: {}};
-        const parsed = JSON.parse(new TextDecoder().decode(bytes));
-        if (parsed?.version !== INDEX_VERSION || typeof parsed.files !== 'object')
-            return {version: INDEX_VERSION, files: {}};
-        return parsed;
-    } catch {
+    const parsed = readJSON(indexPath());
+    if (parsed?.version !== INDEX_VERSION || typeof parsed.files !== 'object')
         return {version: INDEX_VERSION, files: {}};
-    }
+    return parsed;
 }
 
+// Atomic: a crash mid-write must not leave a truncated index that every
+// client on this machine would then re-fold from scratch.
 export function saveIndex(index) {
     try {
-        const path = indexPath();
-        GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o700);
-        GLib.file_set_contents(path, JSON.stringify(index));
+        writeText(indexPath(), JSON.stringify(index));
     } catch {
         // A read-only cache dir just means no cache, not a broken panel.
     }
@@ -182,7 +176,6 @@ async function foldTail(file, entry, budget, nowMs, cancellable) {
         // closing a stream we already read is best-effort
     }
     entry.offset = start + Math.max(0, read - carry.length);
-    entry.carry = '';
     entry.byDay = pruneByDay(entry.byDay, nowMs);
     return read;
 }
@@ -210,7 +203,7 @@ export async function refreshSessions({
         // Shrunk below what we already folded: the file was replaced, not
         // appended to. Start it over rather than folding from a stale offset.
         if (!entry || (entry.offset ?? 0) > file.size)
-            entry = Object.assign(newSessionAcc(), {offset: 0, carry: ''});
+            entry = Object.assign(newSessionAcc(), {offset: 0});
         if (entry.size === file.size && entry.mtimeMs === file.mtimeMs) {
             index.files[file.path] = entry;
             continue;

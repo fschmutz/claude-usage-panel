@@ -13,13 +13,18 @@
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
-import Soup from 'gi://Soup';
 
+import {readLiveAccount, readLiveCredentials} from './claudeFiles.js';
 import {fetchUsage} from './claudeUsage.js';
+import {readJSON, writeText} from './fs.js';
+import {jsonMessage, parseBody, send} from './http.js';
 import {claudeConfigPath, credentialsPath, stateDir} from './paths.js';
+import {run} from './proc.js';
 import {
     PROFILE_VERSION, activeAccountName, isValidName, parseProfile, tokenState, worstPercent,
 } from './pure.js';
+
+export {readLiveAccount, readLiveCredentials};
 
 export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
 // Claude Code's public OAuth client - the same id the CLI itself refreshes with.
@@ -50,27 +55,8 @@ export function lastSwitchPath() {
     return GLib.build_filenamev([accountsDir(), LAST_SWITCH_FILE]);
 }
 
-// ── Files ───────────────────────────────────────────────────────────────────────
-
-function readJSON(path) {
-    try {
-        const [ok, bytes] = GLib.file_get_contents(path);
-        return ok ? JSON.parse(new TextDecoder().decode(bytes)) : null;
-    } catch {
-        return null;
-    }
-}
-
-// Atomic, private write: tmp file in the same dir, CREATED 0600 (never a
-// world-readable instant), then renamed over the target.
-function writePrivate(path, text) {
-    GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o700);
-    const tmp = `${path}.${GLib.get_real_time()}.tmp`;
-    GLib.file_set_contents_full(
-        tmp, new TextEncoder().encode(text), GLib.FileSetContentsFlags.CONSISTENT, 0o600);
-    Gio.File.new_for_path(tmp).move(
-        Gio.File.new_for_path(path), Gio.FileCopyFlags.OVERWRITE, null, null);
-}
+// Everything in the store is a secret: created 0600, never world-readable.
+const writePrivate = (path, text) => writeText(path, text, {mode: 0o600});
 
 // ── Store ───────────────────────────────────────────────────────────────────────
 
@@ -124,37 +110,17 @@ export function removeProfile(name) {
 
 // ── The live login ──────────────────────────────────────────────────────────────
 
-/** The credentials Claude Code holds now, or null. */
-export function readLiveCredentials() {
-    const json = readJSON(credentialsPath());
-    const oauth = json?.claudeAiOauth;
-    return oauth && typeof oauth === 'object' && typeof oauth.accessToken === 'string'
-        ? json : null;
-}
-
-function writeLiveCredentials(credentials) {
-    writePrivate(credentialsPath(), JSON.stringify(credentials));
-}
-
-/** The `oauthAccount` block of ~/.claude.json, or null. */
-export function readLiveAccount() {
-    const acct = readJSON(claudeConfigPath())?.oauthAccount;
-    return acct && typeof acct === 'object' ? acct : null;
-}
-
-// Patch ONLY oauthAccount; every other key of ~/.claude.json survives.
-function writeLiveAccount(account) {
-    const path = claudeConfigPath();
-    const cfg = readJSON(path) ?? {};
-    if (typeof cfg !== 'object' || Array.isArray(cfg))
-        throw new Error(`${path} is not a JSON object`);
-    cfg.oauthAccount = account;
-    writePrivate(path, `${JSON.stringify(cfg, null, 2)}\n`);
-}
-
 /** The saved name of the live login, or null when it was never saved. */
 export function liveAccountName() {
     return activeAccountName(listProfiles(), readLiveAccount());
+}
+
+// A profile from what Claude Code holds right now.
+function snapshotLive(name) {
+    return writeProfile({
+        version: PROFILE_VERSION, name, savedAt: new Date().toISOString(),
+        account: readLiveAccount() ?? {}, credentials: readLiveCredentials(),
+    });
 }
 
 /**
@@ -173,12 +139,8 @@ export function syncBack() {
     const stored = readProfile(name);
     const same = stored && JSON.stringify(stored.credentials) === JSON.stringify(creds) &&
         JSON.stringify(stored.account) === JSON.stringify(account);
-    if (!same) {
-        writeProfile({
-            version: PROFILE_VERSION, name, savedAt: new Date().toISOString(),
-            account, credentials: creds,
-        });
-    }
+    if (!same)
+        snapshotLive(name);
     return name;
 }
 
@@ -189,8 +151,7 @@ export function saveCurrent(name, {force = false} = {}) {
         throw new Error(
             `invalid name "${name}": letters, digits, . _ - only, up to 32 characters`);
     }
-    const creds = readLiveCredentials();
-    if (!creds)
+    if (!readLiveCredentials())
         throw new Error('no Claude Code login to save - run `claude auth login` first');
     const account = readLiveAccount() ?? {};
     const profiles = listProfiles();
@@ -204,18 +165,14 @@ export function saveCurrent(name, {force = false} = {}) {
     const twin = activeAccountName(profiles.filter(p => p.name !== name), account);
     if (twin && !force)
         throw new Error(`this login is already saved as ${twin} - remove it first or --force`);
-    return writeProfile({
-        version: PROFILE_VERSION, name, savedAt: new Date().toISOString(),
-        account, credentials: creds,
-    });
+    return snapshotLive(name);
 }
 
 // A live login that was never saved must not be lost by a switch: park it
 // under a name derived from its email ("admin", then "admin-2" ...).
 function parkUnsavedLogin() {
-    const creds = readLiveCredentials();
     const account = readLiveAccount();
-    if (!creds || !account)
+    if (!readLiveCredentials() || !account)
         return null;
     const taken = new Set(listProfiles().map(p => p.name));
     const base = String(account.emailAddress ?? 'account').split('@')[0]
@@ -223,58 +180,18 @@ function parkUnsavedLogin() {
     let name = base;
     for (let n = 2; taken.has(name); n++)
         name = `${base}-${n}`;
-    return writeProfile({
-        version: PROFILE_VERSION, name, savedAt: new Date().toISOString(),
-        account, credentials: creds,
-    }).name;
+    return snapshotLive(name).name;
 }
 
 /** Claude Code processes alive right now - they keep the old token. */
-export function runningClaudeCount() {
-    return new Promise(resolve => {
-        let proc;
-        try {
-            proc = Gio.Subprocess.new(
-                ['ps', '-eo', 'args='],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
-        } catch {
-            resolve(0);
-            return;
-        }
-        proc.communicate_utf8_async(null, null, (self, res) => {
-            try {
-                const [, stdout] = self.communicate_utf8_finish(res);
-                resolve((stdout ?? '').split('\n')
-                    .filter(l => /(^|\/)claude(\s|$)/.test(l.trim())).length);
-            } catch {
-                resolve(0);
-            }
-        });
-    });
+export async function runningClaudeCount() {
+    const {ok, stdout} = await run(['ps', '-eo', 'args=']);
+    if (!ok)
+        return 0;
+    return stdout.split('\n').filter(l => /(^|\/)claude(\s|$)/.test(l.trim())).length;
 }
 
 // ── Token refresh (our store only) ──────────────────────────────────────────────
-
-function postJSON(session, url, body) {
-    return new Promise((resolve, reject) => {
-        const message = Soup.Message.new('POST', url);
-        const payload = new TextEncoder().encode(JSON.stringify(body));
-        message.set_request_body_from_bytes('application/json', new GLib.Bytes(payload));
-        session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (self, result) => {
-            try {
-                const buf = self.send_and_read_finish(result);
-                const status = message.get_status();
-                if (status < 200 || status >= 300) {
-                    reject(Object.assign(new Error(`HTTP ${status}`), {status}));
-                    return;
-                }
-                resolve(JSON.parse(new TextDecoder('utf-8').decode(buf.get_data())));
-            } catch (e) {
-                reject(e);
-            }
-        });
-    });
-}
 
 /**
  * Exchange the profile's refresh token for a new access token and store the
@@ -286,14 +203,19 @@ export async function refreshProfile(session, profile) {
         throw new Error(`${profile.name}: no refresh token - log in again and save it`);
     let body;
     try {
-        body = await postJSON(session, OAUTH_TOKEN_ENDPOINT, {
+        const {status, bytes} = await send(session, jsonMessage('POST', OAUTH_TOKEN_ENDPOINT, {
             grant_type: 'refresh_token',
             refresh_token: oauth.refreshToken,
             client_id: OAUTH_CLIENT_ID,
-        });
+        }));
+        if (status < 200 || status >= 300) {
+            const again = status === 400 || status === 401 ? ' - log in again and save it' : '';
+            throw new Error(`${profile.name}: token refresh rejected (HTTP ${status})${again}`);
+        }
+        body = parseBody(bytes);
     } catch (e) {
-        const again = e.status === 400 || e.status === 401 ? ' - log in again and save it' : '';
-        throw new Error(`${profile.name}: token refresh rejected (${e.message})${again}`);
+        throw new Error(e.message.startsWith(profile.name)
+            ? e.message : `${profile.name}: token refresh failed - ${e.message}`);
     }
     if (typeof body?.access_token !== 'string' || !body.access_token)
         throw new Error(`${profile.name}: token refresh returned no access token`);
@@ -340,6 +262,22 @@ export async function accessTokenFor(session, name) {
 
 // ── Switch ──────────────────────────────────────────────────────────────────────
 
+// Install a profile as the live login. ~/.claude.json is read and validated
+// BEFORE anything is written, and the account block goes first: if the
+// credentials write then fails, the account block names the target while the
+// credentials are still the old login's - a state syncBack() refuses to
+// snapshot (the live credentials are unchanged), so no profile is overwritten
+// with the wrong tokens. The reverse order would do exactly that.
+function installLogin(profile) {
+    const configPath = claudeConfigPath();
+    const cfg = readJSON(configPath) ?? {};
+    if (typeof cfg !== 'object' || Array.isArray(cfg))
+        throw new Error(`${configPath} is not a JSON object`);
+    cfg.oauthAccount = profile.account;
+    writePrivate(configPath, `${JSON.stringify(cfg, null, 2)}\n`);
+    writePrivate(credentialsPath(), JSON.stringify(profile.credentials));
+}
+
 /**
  * Make `name` the live login. Order matters: the live login is synced back
  * (or parked under a new name if it was never saved) BEFORE anything is
@@ -361,8 +299,7 @@ export async function switchTo(session, name) {
     }
     if (state === 'stale')
         target = await refreshProfile(session, target);
-    writeLiveCredentials(target.credentials);
-    writeLiveAccount(target.account);
+    installLogin(target);
     writeLastSwitch({from, to: name});
     return {from, to: name, changed: true, running: await runningClaudeCount(), email};
 }
@@ -404,10 +341,7 @@ export function writeUsageCache(results, nowMs = Date.now()) {
     for (const [name, r] of Object.entries(results)) {
         if (!r?.ok)
             continue;
-        const pct = key => {
-            const c = r.cards.find(x => x.key === key);
-            return c ? c.percent : null;
-        };
+        const pct = key => r.cards.find(x => x.key === key)?.percent ?? null;
         accounts[name] = {worst: worstPercent(r.cards), session: pct('session'), weekly: pct('weekly_all')};
     }
     try {
