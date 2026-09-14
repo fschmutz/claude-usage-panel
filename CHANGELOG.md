@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-09-14
+
 ### Fixed
 
 - **A failed switch could destroy a saved login's refresh token.** Every port
