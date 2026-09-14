@@ -1,0 +1,5 @@
+# Follow `source`d files so variables set in one file and used in another
+# (install.sh + scripts/install/*.sh, the workers + scripts/lib.sh) are seen
+# as one program; paths in `# shellcheck source=` are relative to the script.
+external-sources=true
+source-path=SCRIPTDIR

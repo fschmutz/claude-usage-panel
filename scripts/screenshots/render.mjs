@@ -18,7 +18,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {
-  normalizeUsage, poolNote, sparkline, formatResets, forecast, formatForecast,
+  normalizeUsage, poolNote, sparkline, formatResets, forecast,
   clockPace,
   severityClass, compactTokens, formatAccountUsage,
 } from '../../claude-usage-panel@fschmutz.github.io/lib/pure.js';
@@ -74,11 +74,10 @@ const forecastFor = (raw, card) => {
   return forecast(samples, card.resetsAt, NOW);
 };
 
-// formatForecast prints in the LOCAL zone of the render host; the generated
-// file must not depend on where it was rendered, so this fixed-zone variant
-// applies identical logic on the UTC clock. (formatResets is duration-only -
-// zone-free - and is used directly.)
-void formatForecast; // pure.js export kept imported so drift there breaks CI here
+// pure.js's formatForecast prints in the LOCAL zone of the render host; the
+// generated file must not depend on where it was rendered, so this fixed-zone
+// variant applies identical logic on the UTC clock. (formatResets is
+// duration-only - zone-free - and is used directly.)
 const fmtForecastUTC = (fc) => {
   if (!fc) return '';
   const pace = `↗ ${fc.pctPerHour}%/h`;

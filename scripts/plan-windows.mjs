@@ -16,12 +16,10 @@ import {
     parseHHMM,
     formatHHMM,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+import {flag as argvFlag} from './lib/argv.mjs';
 
 const argv = process.argv.slice(2);
-const flag = (name, fallback = null) => {
-    const i = argv.indexOf(name);
-    return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
-};
+const flag = (name, fallback = null) => argvFlag(argv, name, fallback);
 
 if (argv.includes('-h') || argv.includes('--help')) {
     process.stdout.write(

@@ -48,8 +48,8 @@ jobs:
           node-version: "22"
       - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
         env:
-          # swift-format needs the Swift toolchain, which isn't on the runner;
-          # it is still enforced locally. All other hooks run in CI.
+          # swift-format needs the Swift toolchain, which isn't on this runner;
+          # the swift-core job runs it. All other hooks run here.
           SKIP: swift-format
 
   js:
@@ -111,6 +111,10 @@ jobs:
         with:
           swift-version: "6.1"
       - run: swift test
+        working-directory: macos
+      # The toolchain is here, so the Swift formatter gate runs here too (the
+      # pre-commit job skips it: no Swift on that runner).
+      - run: swift format lint --strict --recursive Sources Tests
         working-directory: macos
 
   # macOS: compile the real SwiftUI menu-bar app (macOS-only target) so type

@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Guard against version drift: every place that carries the version must match
-# package.json (the single source of truth), and no build path may hardcode a
-# version literal. Runs in pre-commit and CI. This is what makes the
-# build-app.sh "1.4.0 vs 1.3.0" class of bug impossible to commit.
+# Guard against version drift: every site listed in scripts/version-sites.sh
+# must carry the version package.json does (the single source of truth), and
+# no build path may hardcode a version literal. Runs in pre-commit and CI. A
+# site bump-version.sh writes is a site this script checks - same list.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=version-sites.sh
+. "$ROOT/scripts/version-sites.sh"
 
 fail=0
 note() {
@@ -14,35 +16,46 @@ note() {
     fail=1
 }
 
-want="$(sed -nE 's/.*"version": *"([^"]+)".*/\1/p' package.json | head -1)"
+want="$(version_site_read package.json json version)"
 if [ -z "$want" ]; then
     echo "check-versions: could not read version from package.json" >&2
     exit 2
 fi
 
-# metadata.json version-name must match.
-meta="$(sed -nE 's/.*"version-name": *"([^"]+)".*/\1/p' \
-    "claude-usage-panel@fschmutz.github.io/metadata.json" | head -1)"
-[ "$meta" = "$want" ] || note "metadata.json version-name is '$meta', expected '$want'"
+for site in "${VERSION_SITES[@]}"; do
+    IFS='|' read -r file kind key <<<"$site"
+    have="$(version_site_read "$file" "$kind" "$key")"
+    [ "$have" = "$want" ] || note "$file $key is '$have', expected '$want'"
+done
 
-# PUBLISHING.md Homebrew cask example must match.
-cask="$(sed -nE 's/^  version "([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' PUBLISHING.md | head -1)"
-[ "$cask" = "$want" ] || note "PUBLISHING.md cask version is '$cask', expected '$want'"
+# The marketplace entry repeats plugin.json's metadata (the fallback when a
+# field is omitted is not documented, so both carry it). Repeated means it can
+# drift, so it is checked rather than trusted.
+if command -v node >/dev/null; then
+    node - <<'JS' || fail=1
+const fs = require('fs');
+const plugin = JSON.parse(fs.readFileSync('plugin/.claude-plugin/plugin.json', 'utf8'));
+const entry = JSON.parse(fs.readFileSync('.claude-plugin/marketplace.json', 'utf8'))
+    .plugins.find((p) => p.name === plugin.name);
+if (!entry) {
+    console.error(`  \u2717 .claude-plugin/marketplace.json has no entry named ${plugin.name}`);
+    process.exit(1);
+}
+let bad = 0;
+for (const key of ['description', 'version', 'author', 'homepage', 'repository', 'license', 'keywords']) {
+    if (JSON.stringify(entry[key]) !== JSON.stringify(plugin[key])) {
+        console.error(`  \u2717 marketplace entry ${key} differs from plugin.json`);
+        bad = 1;
+    }
+}
+process.exit(bad);
+JS
+fi
 
-# MCP server exported VERSION const must match.
-mcp="$(sed -nE "s/^export const VERSION = '([^']+)';.*/\1/p" mcp/server.js | head -1)"
-[ "$mcp" = "$want" ] || note "mcp/server.js VERSION is '$mcp', expected '$want'"
-
-# Claude Code plugin manifest + marketplace entry must match.
-plug="$(sed -nE 's/.*"version": *"([^"]+)".*/\1/p' plugin/.claude-plugin/plugin.json | head -1)"
-[ "$plug" = "$want" ] || note "plugin/.claude-plugin/plugin.json version is '$plug', expected '$want'"
-mkt="$(sed -nE 's/.*"version": *"([^"]+)".*/\1/p' .claude-plugin/marketplace.json | head -1)"
-[ "$mkt" = "$want" ] || note ".claude-plugin/marketplace.json plugin version is '$mkt', expected '$want'"
-
-# install.sh must read the macOS bundle version from package.json, never hardcode
-# it - the plist lines must interpolate \$ver, not a literal semver.
-if grep -nE 'CFBundle(Short)?Version(String)?</key><string>[0-9]+\.[0-9]+\.[0-9]+<' install.sh; then
-    note "install.sh hardcodes a bundle version - it must use \$ver from package.json"
+# The macOS bundle version must come from package.json, never a literal - the
+# plist lines must interpolate $ver, not a semver.
+if grep -nE 'CFBundle(Short)?Version(String)?</key><string>[0-9]+\.[0-9]+\.[0-9]+<' scripts/install/macos.sh; then
+    note "scripts/install/macos.sh hardcodes a bundle version - it must use \$ver from package.json"
 fi
 
 if [ "$fail" -ne 0 ]; then

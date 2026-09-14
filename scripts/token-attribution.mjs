@@ -24,6 +24,11 @@ import os from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
+import {turnTokens} from '../mcp/sessions.js';
+import {flag as argvFlag} from './lib/argv.mjs';
+
+export {turnTokens};
+
 const EXPLORE = new Set(['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch', 'NotebookRead']);
 const IMPLEMENT = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
 const VERIFY = new Set(['Bash', 'BashOutput', 'KillShell']);
@@ -37,17 +42,9 @@ export const BUCKETS = [
     'conversation',
 ];
 
-/** Tokens billed for one assistant turn. Cache reads are excluded: they are
- *  charged at a fraction and counting them at face value inflates long sessions
- *  into meaninglessness. Cache CREATION is real write cost, so it stays. */
-export function turnTokens(usage) {
-    if (!usage) return 0;
-    return (
-        (usage.input_tokens ?? 0) +
-        (usage.output_tokens ?? 0) +
-        (usage.cache_creation_input_tokens ?? 0)
-    );
-}
+// turnTokens (cache reads excluded - charged at a fraction, they would inflate
+// long sessions into meaninglessness) is the MCP server's, so both reports
+// count a turn the same way.
 
 /** Classify one assistant turn. `state` carries what earlier turns did, which
  *  is what makes rework and correction detectable at all. */
@@ -128,10 +125,7 @@ export function attributeSession(lines, totals) {
 // Guarded so importing this module (tests) does not run the report and exit.
 function main() {
     const argv = process.argv.slice(2);
-    const flag = (n, f = null) => {
-        const i = argv.indexOf(n);
-        return i >= 0 && argv[i + 1] ? argv[i + 1] : f;
-    };
+    const flag = (n, f = null) => argvFlag(argv, n, f);
     if (argv.includes('-h') || argv.includes('--help')) {
         process.stdout.write(
             'token-attribution: where your Claude Code tokens went\n\n' +
@@ -159,16 +153,25 @@ function main() {
         ? null
         : slug(flag('--project', process.cwd()));
 
+    // A dangling symlink or a vanishing file under ~/.claude/projects must not
+    // sink the report - the same rule as the per-session read below.
+    const statOrNull = (p) => {
+        try {
+            return fs.statSync(p);
+        } catch {
+            return null;
+        }
+    };
     const cutoff = Date.now() - days * 86400_000;
     const files = [];
     for (const dir of fs.readdirSync(root)) {
         if (wanted && dir !== wanted) continue;
         const full = path.join(root, dir);
-        if (!fs.statSync(full).isDirectory()) continue;
+        if (!statOrNull(full)?.isDirectory()) continue;
         for (const f of fs.readdirSync(full)) {
             if (!f.endsWith('.jsonl')) continue;
             const fp = path.join(full, f);
-            if (fs.statSync(fp).mtimeMs >= cutoff) files.push(fp);
+            if ((statOrNull(fp)?.mtimeMs ?? 0) >= cutoff) files.push(fp);
         }
     }
 

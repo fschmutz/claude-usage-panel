@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Bump the project version in every place that carries it, from a single source
-# of truth, so they can never drift:
-#
-#   • package.json               "version"          (macOS bundle reads this)
-#   • metadata.json              "version-name"     (GNOME extension manifest)
-#   • PUBLISHING.md              Homebrew cask       version "…"
-#   • CHANGELOG.md               opens a dated section, leaves a fresh [Unreleased]
+# of truth, so they can never drift. The places are listed once, in
+# scripts/version-sites.sh (package.json, the GNOME metadata, the plugin and
+# marketplace manifests, the MCP server's VERSION const, the Homebrew cask
+# example); CHANGELOG.md gets a dated section above a fresh [Unreleased].
 #
 # Usage:  scripts/bump-version.sh 1.4.0
 # It only edits files - review the diff, then commit. Nothing is pushed.
@@ -13,6 +11,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=version-sites.sh
+. "$ROOT/scripts/version-sites.sh"
 
 V="${1:-}"
 if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -21,24 +21,11 @@ if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 DATE="$(date +%F)"
 
-# JSON files - replace only the version value, in place, so the rest of the
-# file's formatting (array layout, spacing) is untouched.
-bump_json() { # <file> <key>
-    V="$V" perl -pi -e 's/("'"$2"'"\s*:\s*")\d+\.\d+\.\d+(")/${1}$ENV{V}${2}/' "$1"
-    echo "  $1 → $V"
-}
-bump_json package.json version
-bump_json claude-usage-panel@fschmutz.github.io/metadata.json version-name
-bump_json plugin/.claude-plugin/plugin.json version
-bump_json .claude-plugin/marketplace.json version
-
-# MCP server: standalone file, so the version is an exported const.
-V="$V" perl -pi -e "s/(^export const VERSION = ')\\d+\\.\\d+\\.\\d+(';)/\${1}\$ENV{V}\${2}/" mcp/server.js
-echo "  mcp/server.js → $V"
-
-# Homebrew cask example in PUBLISHING.md: `  version "x.y.z"`.
-V="$V" perl -pi -e 's/^(  version ")\d+\.\d+\.\d+(")/${1}$ENV{V}${2}/' PUBLISHING.md
-echo "  PUBLISHING.md cask → $V"
+for site in "${VERSION_SITES[@]}"; do
+    IFS='|' read -r file kind key <<<"$site"
+    version_site_write "$file" "$kind" "$key" "$V"
+    echo "  $file → $V"
+done
 
 # CHANGELOG: turn the top [Unreleased] into a dated release, above a fresh one.
 V="$V" DATE="$DATE" perl -pi -e '

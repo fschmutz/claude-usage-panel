@@ -46,24 +46,16 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # Build the installable GNOME zip: metadata.json at the root, the compiled
-      # GSettings schema, and compiled translations - same layout install.sh makes.
+      # GSettings schema, compiled translations, the worker scripts - the exact
+      # layout install.sh gnome installs, from the same script.
       - name: Build GNOME extension zip
         id: pack
         run: |
           sudo apt-get update
           sudo apt-get install -y libglib2.0-bin gettext zip
           uuid="claude-usage-panel@fschmutz.github.io"
-          (
-            cd "$uuid"
-            glib-compile-schemas schemas/
-            for po in po/*.po; do
-              [ -e "$po" ] || continue
-              lang="$(basename "$po" .po)"
-              mkdir -p "locale/$lang/LC_MESSAGES"
-              msgfmt "$po" -o "locale/$lang/LC_MESSAGES/claude-usage-panel.mo"
-            done
-            zip -rq "../$uuid.shell-extension.zip" . -x 'po/*'
-          )
+          scripts/pack-gnome.sh "$RUNNER_TEMP/$uuid"
+          (cd "$RUNNER_TEMP/$uuid" && zip -rq "$GITHUB_WORKSPACE/$uuid.shell-extension.zip" .)
           echo "zip=$uuid.shell-extension.zip" >> "$GITHUB_OUTPUT"
 
       # Pull just this version's section out of CHANGELOG.md for the release body.

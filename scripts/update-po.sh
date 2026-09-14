@@ -23,7 +23,12 @@ command -v xgettext >/dev/null || {
 
 cd "$ROOT/$UUID"
 # Sorted, repo-relative inputs so the template is byte-stable across machines.
-mapfile -t sources < <(find . -name '*.js' -not -path './node_modules/*' | sed 's|^\./||' | sort)
+# A while-read, not mapfile: every shell script in this repo runs on the stock
+# macOS bash 3.2, where mapfile does not exist.
+sources=()
+while IFS= read -r f; do
+    sources+=("$f")
+done < <(find . -name '*.js' -not -path './node_modules/*' | sed 's|^\./||' | sort)
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

@@ -30,7 +30,7 @@ repos:
     rev: v9.15.0
     hooks:
       - id: eslint
-        files: \.js$
+        files: \.m?js$
         args: [--max-warnings=0]
         additional_dependencies:
           - eslint@9.15.0
@@ -85,10 +85,12 @@ repos:
         language: system
         entry: swift format lint --strict
         files: \.swift$
-      # Version single-source: metadata.json / cask / install.sh must match package.json
+      # Version single-source: every site in scripts/version-sites.sh must match
+      # package.json. Runs on every commit (~50 ms) - a `files:` filter listing
+      # the sites is a second copy of that list, and it drifted.
       - id: check-versions
         name: version consistency
         language: system
         entry: scripts/check-versions.sh
         pass_filenames: false
-        files: ^(package\.json|claude-usage-panel@fschmutz\.github\.io/metadata\.json|PUBLISHING\.md|install\.sh)$
+        always_run: true

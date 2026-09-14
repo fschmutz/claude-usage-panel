@@ -7,6 +7,9 @@
 #   scripts/session-ping.sh --force      ping now whatever the day is
 #   scripts/session-ping.sh --days=1,2,5 only ping when today is listed (1 = Mon ... 7 = Sun)
 #   scripts/session-ping.sh --status     configured schedule, last ping, log path
+#   scripts/session-ping.sh --schedule   the installed schedule, machine-readable:
+#                                        line 1 the HH:MM times, line 2 the --days= list
+#                                        (what install.sh reads back on a bare reinstall)
 #   scripts/session-ping.sh --quiet      log only, no stdout (this is what the timer runs)
 #
 # Scheduled at fixed times by `./install.sh sessionping [HH:MM ...] [--days=...]`
@@ -24,9 +27,9 @@
 # Exit codes: 0 = pinged or skipped, 1 = error, 2 = usage.
 set -euo pipefail
 
+SCRIPT_NAME=session-ping
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"
 LOG="$STATE_DIR/session-ping.log"
-LOG_MAX_LINES=500
 LOCK="$STATE_DIR/session-ping.lock"
 PING_TIMEOUT=120
 
@@ -38,37 +41,17 @@ SP_CRON_TAG="# claude-usage-panel session-ping"
 
 QUIET=false
 FORCE=false
-MODE=run # run | status
+MODE=run # run | status | schedule
 DAYS="1,2,3,4,5"
 
-log() {
-    mkdir -p "$STATE_DIR" 2>/dev/null || return 0
-    printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >>"$LOG" 2>/dev/null || true
-}
-
-# Everything user-facing goes through say(): stdout unless --quiet, always the log.
-say() {
-    $QUIET || printf '%s\n' "$*"
-    log "$*"
-}
-
-die() {
-    printf 'session-ping: %s\n' "$*" >&2
-    log "ERROR $*"
+# log / say / die / usage / trim_log / take_lock - shared with auto-update.sh.
+# Every copy of this script travels with lib.sh (install.sh gnome and macos,
+# the GNOME zip); a lone copy is a broken install, so say so instead of failing
+# on the first `say`.
+# shellcheck source=lib.sh
+. "$(dirname "$0")/lib.sh" 2>/dev/null || {
+    echo "session-ping: lib.sh missing next to $0 - reinstall (./install.sh update)" >&2
     exit 1
-}
-
-usage() {
-    awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"
-}
-
-trim_log() {
-    [ -f "$LOG" ] || return 0
-    local lines
-    lines="$(wc -l <"$LOG" 2>/dev/null || echo 0)"
-    if [ "$lines" -gt "$LOG_MAX_LINES" ]; then
-        tail -n "$LOG_MAX_LINES" "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"
-    fi
 }
 
 # `sort -V` is not POSIX and BSD sort only grew it recently; fall back to a
@@ -168,6 +151,7 @@ while [ $# -gt 0 ]; do
             ;;
         --force) FORCE=true ;;
         --status) MODE=status ;;
+        --schedule) MODE=schedule ;;
         --quiet | -q) QUIET=true ;;
         --days=*)
             DAYS="${1#*=}"
@@ -184,6 +168,15 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+# The installed schedule, for install.sh: it must read back what a previous
+# install (or the panels' preferences) wrote, and this script is the one
+# reader of the three scheduler formats. Two lines, either may be empty.
+if [ "$MODE" = schedule ]; then
+    printf '%s\n' "$(current_times | paste -sd' ' -)"
+    printf '%s\n' "$(current_days)"
+    exit 0
+fi
 
 mkdir -p "$STATE_DIR"
 
@@ -203,25 +196,17 @@ if [ "$MODE" = status ]; then
 fi
 
 # ── One run at a time ───────────────────────────────────────────────────────────
-# mkdir is the portable atomic lock (flock is not on macOS). A ping is short,
-# so a lock older than 15 minutes is stale - a previous run was killed mid-flight.
-if ! mkdir "$LOCK" 2>/dev/null; then
-    if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +15 2>/dev/null)" ]; then
-        rm -rf "$LOCK"
-        mkdir "$LOCK" 2>/dev/null || die "could not take the lock at $LOCK"
-    else
-        say "another ping is in progress - skipping"
-        exit 0
-    fi
+# A ping is short, so a lock older than 15 minutes is stale.
+if ! take_lock 15; then
+    say "another ping is in progress - skipping"
+    exit 0
 fi
-trap 'rm -rf "$LOCK"' EXIT
 
 # ── Day guard ───────────────────────────────────────────────────────────────────
 # SP_TEST_WEEKDAY is a unit-test hook, same idea as auto-update's --version-compare.
 today="${SP_TEST_WEEKDAY:-$(date +%u)}"
 if ! $FORCE && [[ ",$DAYS," != *",$today,"* ]]; then
     say "skip: not a configured day (today=$today, days=$DAYS)"
-    trim_log
     exit 0
 fi
 
@@ -229,7 +214,6 @@ fi
 CLAUDE="$(resolve_claude)"
 if [ -z "$CLAUDE" ]; then
     say "skip: claude CLI not found on PATH - install it or adjust PATH"
-    trim_log
     exit 0
 fi
 
@@ -259,8 +243,5 @@ if wait "$ping_pid"; then
 else
     kill "$watchdog_pid" 2>/dev/null || true
     say "error: the claude ping failed or timed out after ${PING_TIMEOUT}s - see $LOG"
-    trim_log
     exit 1
 fi
-
-trim_log

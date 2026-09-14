@@ -87,9 +87,9 @@ resolve_root() {
 }
 
 ROOT="$(resolve_root)"
+SCRIPT_NAME=auto-update
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"
 LOG="$STATE_DIR/auto-update.log"
-LOG_MAX_LINES=500
 LOCK="$STATE_DIR/update.lock"
 
 QUIET=false
@@ -97,25 +97,14 @@ FORCE=false
 MODE=run # run | check | status
 JSON=false
 
-log() {
-    mkdir -p "$STATE_DIR" 2>/dev/null || return 0
-    printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >>"$LOG" 2>/dev/null || true
-}
-
-# Everything user-facing goes through say(): stdout unless --quiet, always the log.
-say() {
-    $QUIET || printf '%s\n' "$*"
-    log "$*"
-}
-
-die() {
-    printf 'auto-update: %s\n' "$*" >&2
-    log "ERROR $*"
+# log / say / die / usage / trim_log / take_lock - shared with session-ping.sh.
+# Every copy of this script travels with lib.sh (install.sh gnome, the GNOME
+# zip); a lone copy is a broken install, so say so instead of failing on the
+# first `say`.
+# shellcheck source=lib.sh
+. "$(dirname "$0")/lib.sh" 2>/dev/null || {
+    echo "auto-update: lib.sh missing next to $0 - reinstall (./install.sh update)" >&2
     exit 1
-}
-
-usage() {
-    awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"
 }
 
 # Compare two dotted versions; print 1 if $1 > $2, -1 if $1 < $2, else 0. A
@@ -164,11 +153,8 @@ deployed_version() {
     # the one client that records its version on disk.
     local meta="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions"
     meta="$meta/claude-usage-panel@fschmutz.github.io/metadata.json"
-    if [ -f "$meta" ]; then
-        sed -nE 's/.*"version-name": *"([^"]+)".*/\1/p' "$meta" | head -1
-        return 0
-    fi
-    return 0
+    [ -f "$meta" ] || return 0
+    sed -nE 's/.*"version-name": *"([^"]+)".*/\1/p' "$meta" | head -1
 }
 
 stamp_deployed_version() {
@@ -228,15 +214,6 @@ repo_is_updatable() {
     return 0
 }
 
-trim_log() {
-    [ -f "$LOG" ] || return 0
-    local lines
-    lines="$(wc -l <"$LOG" 2>/dev/null || echo 0)"
-    if [ "$lines" -gt "$LOG_MAX_LINES" ]; then
-        tail -n "$LOG_MAX_LINES" "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"
-    fi
-}
-
 # ── Args ────────────────────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -282,12 +259,9 @@ if [ "$MODE" = status ]; then
     # Why a scheduled run would decline to act - the part that was invisible
     # before: auto-update logs its reason and waits, so a user with a dirty or
     # diverged checkout saw "up to date" forever with no hint why.
-    blocked_reason=""
-    if ! blocked_reason="$(repo_is_updatable)"; then
-        :
-    else
-        blocked_reason=""
-    fi
+    # repo_is_updatable prints nothing when the checkout is fine, so the
+    # capture is the reason or empty.
+    blocked_reason="$(repo_is_updatable)" || true
 
     # Compare against what is DEPLOYED, not what the checkout says. Those drift
     # apart the moment someone runs `git pull` by hand, and comparing the
@@ -334,23 +308,15 @@ if [ "$MODE" = status ]; then
 fi
 
 # ── One run at a time ───────────────────────────────────────────────────────────
-# mkdir is the portable atomic lock (flock is not on macOS). A lock older than
-# 6h is stale - a previous run was killed mid-flight.
-if ! mkdir "$LOCK" 2>/dev/null; then
-    if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +360 2>/dev/null)" ]; then
-        rm -rf "$LOCK"
-        mkdir "$LOCK" 2>/dev/null || die "could not take the lock at $LOCK"
-    else
-        say "another update run is in progress - skipping"
-        exit 0
-    fi
+# A lock older than 6h is stale - a previous run was killed mid-flight.
+if ! take_lock 360; then
+    say "another update run is in progress - skipping"
+    exit 0
 fi
-trap 'rm -rf "$LOCK"' EXIT
 
 # ── Check ───────────────────────────────────────────────────────────────────────
 if ! reason="$(repo_is_updatable)"; then
     say "skip: $reason"
-    trim_log
     exit 0
 fi
 
@@ -361,19 +327,16 @@ latest="$(latest_remote_version)"
 date '+%Y-%m-%dT%H:%M:%S%z' >"$STATE_DIR/last-check"
 if [ -z "$latest" ]; then
     say "skip: could not reach the remote (offline?) - will retry tomorrow"
-    trim_log
     exit 0
 fi
 
 if [ "$(version_compare "$latest" "$have")" != "1" ] && ! $FORCE; then
     say "up to date (v$have, latest v$latest)"
-    trim_log
     exit 0
 fi
 
 if [ "$MODE" = check ]; then
     say "update available: v$have → v$latest"
-    trim_log
     exit 10
 fi
 
@@ -385,7 +348,6 @@ git -C "$ROOT" fetch --quiet --tags origin || die "git fetch failed"
 # rewriting anything, and the run ends here with the checkout untouched.
 if ! git -C "$ROOT" merge --ff-only --quiet "$upstream" 2>>"$LOG"; then
     say "skip: $upstream is not a fast-forward from here - update by hand"
-    trim_log
     exit 0
 fi
 
@@ -401,8 +363,5 @@ if "$ROOT/install.sh" update >>"$LOG" 2>&1; then
 else
     say "install.sh update failed after fast-forwarding to v$now - see $LOG"
     notify "Claude Usage Panel update failed" "Fetched v$now but the reinstall failed. See $LOG"
-    trim_log
     exit 1
 fi
-
-trim_log
