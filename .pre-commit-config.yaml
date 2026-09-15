@@ -94,3 +94,13 @@ repos:
         entry: scripts/check-versions.sh
         pass_filenames: false
         always_run: true
+      # Translations: a touched _() string must reach the template and every
+      # catalog. CI ran this and pre-commit did not, so the break was only
+      # visible after a push - the two gates now check the same thing. Skipped
+      # (not silently passed) when gettext is missing; CI always has it.
+      - id: i18n-catalogs
+        name: i18n catalogs up to date
+        language: system
+        entry: bash -c 'command -v xgettext >/dev/null || { echo "xgettext not installed - catalogs unchecked (apt install gettext)"; exit 0; }; exec scripts/update-po.sh --check'
+        files: ^claude-usage-panel@fschmutz\.github\.io/.*\.(js|po|pot)$
+        pass_filenames: false

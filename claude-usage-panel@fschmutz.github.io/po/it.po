@@ -74,8 +74,8 @@ msgstr "prossimo %s"
 msgid "Session pings: %s"
 msgstr "Ping di sessione: %s"
 
-#: extension.js:411 extension.js:425 lib/accountsSection.js:253
-#: lib/accountsSection.js:259 lib/sessionsSection.js:145
+#: extension.js:411 extension.js:425 lib/accountsSection.js:257
+#: lib/accountsSection.js:263 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Utilizzo di Claude"
@@ -90,7 +90,7 @@ msgstr "%s ha raggiunto il %d%%"
 msgid "%s is on pace to run out before it resets"
 msgstr "%s si esaurirà prima del reset al ritmo attuale"
 
-#: extension.js:532
+#: extension.js:536
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -102,28 +102,28 @@ msgstr "Account"
 msgid "(login expired)"
 msgstr "(accesso scaduto)"
 
-#: lib/accountsSection.js:173
+#: lib/accountsSection.js:175
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr "Cambio automatico al %d%%"
 
-#: lib/accountsSection.js:246
+#: lib/accountsSection.js:250
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "Passato da %s → %s: %s era al %d%%"
 
-#: lib/accountsSection.js:248
+#: lib/accountsSection.js:252
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "Passato da %s → %s"
 
-#: lib/accountsSection.js:250
+#: lib/accountsSection.js:254
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr ""
 " - %d sessione/i in corso mantengono il vecchio accesso fino al riavvio"
 
-#: lib/accountsSection.js:260
+#: lib/accountsSection.js:264
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "Impossibile passare a %s: %s"
@@ -554,31 +554,36 @@ msgid "Show the account name in the top bar"
 msgstr "Mostra il nome dell’account nella barra superiore"
 
 #: prefs.js:519
-msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
-msgstr "«PRO · Sessione 42%» invece di «Sessione 42%»"
+msgid ""
+"\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
+"fits the bar"
+msgstr "«PRO · Sessione 42%» - mostrato quando ci sono due account salvati, e solo finché entra nella barra"
 
-#: prefs.js:536
+#: prefs.js:537
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s, salvato come %s"
 
-#: prefs.js:537
+#: prefs.js:538
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s (non ancora salvato)"
 
-#: prefs.js:538
+#: prefs.js:539
 msgid "No Claude Code login found"
 msgstr "Nessun accesso Claude Code trovato"
 
-#: prefs.js:544
+#: prefs.js:545
 msgid "login expired - sign in and save it again"
 msgstr "accesso scaduto - accedi di nuovo e salvalo"
 
-#: prefs.js:551
+#: prefs.js:552
 msgid "Forget this saved login"
 msgstr "Dimentica questo accesso salvato"
 
-#: prefs.js:571
+#: prefs.js:572
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "I nomi usano solo lettere, cifre, . _ - (fino a 32 caratteri)"
+
+#~ msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
+#~ msgstr "«PRO · Sessione 42%» invece di «Sessione 42%»"

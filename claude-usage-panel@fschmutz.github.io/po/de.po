@@ -74,8 +74,8 @@ msgstr "nächste %s"
 msgid "Session pings: %s"
 msgstr "Sitzungs-Pings: %s"
 
-#: extension.js:411 extension.js:425 lib/accountsSection.js:253
-#: lib/accountsSection.js:259 lib/sessionsSection.js:145
+#: extension.js:411 extension.js:425 lib/accountsSection.js:257
+#: lib/accountsSection.js:263 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Claude-Nutzung"
@@ -90,7 +90,7 @@ msgstr "%s hat %d%% erreicht"
 msgid "%s is on pace to run out before it resets"
 msgstr "%s wird im aktuellen Tempo vor dem Zurücksetzen aufgebraucht"
 
-#: extension.js:532
+#: extension.js:536
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -102,28 +102,28 @@ msgstr "Konten"
 msgid "(login expired)"
 msgstr "(Anmeldung abgelaufen)"
 
-#: lib/accountsSection.js:173
+#: lib/accountsSection.js:175
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr "Automatisch wechseln bei %d%%"
 
-#: lib/accountsSection.js:246
+#: lib/accountsSection.js:250
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "Gewechselt %s → %s: %s stand bei %d%%"
 
-#: lib/accountsSection.js:248
+#: lib/accountsSection.js:252
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "Gewechselt %s → %s"
 
-#: lib/accountsSection.js:250
+#: lib/accountsSection.js:254
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr ""
 " - %d laufende Sitzung(en) behalten die alte Anmeldung bis zum Neustart"
 
-#: lib/accountsSection.js:260
+#: lib/accountsSection.js:264
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "Wechsel zu %s nicht möglich: %s"
@@ -555,31 +555,36 @@ msgid "Show the account name in the top bar"
 msgstr "Kontonamen in der oberen Leiste anzeigen"
 
 #: prefs.js:519
-msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
-msgstr "„PRO · Sitzung 42%“ statt „Sitzung 42%“"
+msgid ""
+"\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
+"fits the bar"
+msgstr "„PRO · Sitzung 42%“ - erscheint, sobald zwei Anmeldungen gespeichert sind, und nur solange es in die Leiste passt"
 
-#: prefs.js:536
+#: prefs.js:537
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s, gespeichert als %s"
 
-#: prefs.js:537
+#: prefs.js:538
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s (noch nicht gespeichert)"
 
-#: prefs.js:538
+#: prefs.js:539
 msgid "No Claude Code login found"
 msgstr "Keine Claude-Code-Anmeldung gefunden"
 
-#: prefs.js:544
+#: prefs.js:545
 msgid "login expired - sign in and save it again"
 msgstr "Anmeldung abgelaufen - neu anmelden und erneut speichern"
 
-#: prefs.js:551
+#: prefs.js:552
 msgid "Forget this saved login"
 msgstr "Diese gespeicherte Anmeldung vergessen"
 
-#: prefs.js:571
+#: prefs.js:572
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "Namen bestehen nur aus Buchstaben, Ziffern, . _ - (bis zu 32 Zeichen)"
+
+#~ msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
+#~ msgstr "„PRO · Sitzung 42%“ statt „Sitzung 42%“"

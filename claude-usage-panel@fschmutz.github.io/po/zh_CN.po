@@ -74,8 +74,8 @@ msgstr "下次 %s"
 msgid "Session pings: %s"
 msgstr "会话 ping：%s"
 
-#: extension.js:411 extension.js:425 lib/accountsSection.js:253
-#: lib/accountsSection.js:259 lib/sessionsSection.js:145
+#: extension.js:411 extension.js:425 lib/accountsSection.js:257
+#: lib/accountsSection.js:263 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Claude 用量"
@@ -90,7 +90,7 @@ msgstr "%s 已达到 %d%%"
 msgid "%s is on pace to run out before it resets"
 msgstr "按当前速度，%s 将在重置前用尽"
 
-#: extension.js:532
+#: extension.js:536
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -102,27 +102,27 @@ msgstr "账户"
 msgid "(login expired)"
 msgstr "(登录已过期)"
 
-#: lib/accountsSection.js:173
+#: lib/accountsSection.js:175
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr "达到 %d%% 时自动切换"
 
-#: lib/accountsSection.js:246
+#: lib/accountsSection.js:250
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "已从 %s → %s 切换:%s 已达 %d%%"
 
-#: lib/accountsSection.js:248
+#: lib/accountsSection.js:252
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "已从 %s → %s 切换"
 
-#: lib/accountsSection.js:250
+#: lib/accountsSection.js:254
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr " - %d 个运行中的会话在重启前仍使用旧登录"
 
-#: lib/accountsSection.js:260
+#: lib/accountsSection.js:264
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "无法切换到 %s:%s"
@@ -538,31 +538,36 @@ msgid "Show the account name in the top bar"
 msgstr "在顶栏显示账户名"
 
 #: prefs.js:519
-msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
-msgstr "显示“PRO · Session 42%”而不是“Session 42%”"
+msgid ""
+"\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
+"fits the bar"
+msgstr "显示“PRO · Session 42%”- 保存两个账号后出现，且仅在顶栏放得下时显示"
 
-#: prefs.js:536
+#: prefs.js:537
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s，已保存为 %s"
 
-#: prefs.js:537
+#: prefs.js:538
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（尚未保存）"
 
-#: prefs.js:538
+#: prefs.js:539
 msgid "No Claude Code login found"
 msgstr "未找到 Claude Code 登录"
 
-#: prefs.js:544
+#: prefs.js:545
 msgid "login expired - sign in and save it again"
 msgstr "登录已过期 - 请重新登录并再次保存"
 
-#: prefs.js:551
+#: prefs.js:552
 msgid "Forget this saved login"
 msgstr "忘记此已保存的登录"
 
-#: prefs.js:571
+#: prefs.js:572
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名称只能使用字母、数字、. _ -(最多 32 个字符)"
+
+#~ msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
+#~ msgstr "显示“PRO · Session 42%”而不是“Session 42%”"

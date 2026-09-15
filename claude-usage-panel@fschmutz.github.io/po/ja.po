@@ -74,8 +74,8 @@ msgstr "次回 %s"
 msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
-#: extension.js:411 extension.js:425 lib/accountsSection.js:253
-#: lib/accountsSection.js:259 lib/sessionsSection.js:145
+#: extension.js:411 extension.js:425 lib/accountsSection.js:257
+#: lib/accountsSection.js:263 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Claude の使用状況"
@@ -90,7 +90,7 @@ msgstr "%s が %d%% に達しました"
 msgid "%s is on pace to run out before it resets"
 msgstr "%s は現在のペースだとリセット前に上限に達します"
 
-#: extension.js:532
+#: extension.js:536
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -102,27 +102,27 @@ msgstr "アカウント"
 msgid "(login expired)"
 msgstr "(ログイン期限切れ)"
 
-#: lib/accountsSection.js:173
+#: lib/accountsSection.js:175
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr "%d%% で自動切替"
 
-#: lib/accountsSection.js:246
+#: lib/accountsSection.js:250
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "%s → %s に切り替えました: %s は %d%% でした"
 
-#: lib/accountsSection.js:248
+#: lib/accountsSection.js:252
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "%s → %s に切り替えました"
 
-#: lib/accountsSection.js:250
+#: lib/accountsSection.js:254
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr " - 実行中の %d セッションは再起動まで以前のログインのままです"
 
-#: lib/accountsSection.js:260
+#: lib/accountsSection.js:264
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "%s に切り替えられませんでした: %s"
@@ -547,31 +547,36 @@ msgid "Show the account name in the top bar"
 msgstr "トップバーにアカウント名を表示"
 
 #: prefs.js:519
-msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
-msgstr "「Session 42%」の代わりに「PRO · Session 42%」"
+msgid ""
+"\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
+"fits the bar"
+msgstr "「PRO · Session 42%」- ログインを2つ保存すると表示され、バーに収まる場合のみ"
 
-#: prefs.js:536
+#: prefs.js:537
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s（%s として保存済み）"
 
-#: prefs.js:537
+#: prefs.js:538
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（未保存）"
 
-#: prefs.js:538
+#: prefs.js:539
 msgid "No Claude Code login found"
 msgstr "Claude Code のログインが見つかりません"
 
-#: prefs.js:544
+#: prefs.js:545
 msgid "login expired - sign in and save it again"
 msgstr "ログイン期限切れ - 再度サインインして保存し直してください"
 
-#: prefs.js:551
+#: prefs.js:552
 msgid "Forget this saved login"
 msgstr "この保存済みログインを削除"
 
-#: prefs.js:571
+#: prefs.js:572
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名前に使えるのは英数字と . _ - のみ(最大 32 文字)"
+
+#~ msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
+#~ msgstr "「Session 42%」の代わりに「PRO · Session 42%」"

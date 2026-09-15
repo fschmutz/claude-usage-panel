@@ -75,8 +75,8 @@ msgstr ""
 msgid "Session pings: %s"
 msgstr ""
 
-#: extension.js:411 extension.js:425 lib/accountsSection.js:253
-#: lib/accountsSection.js:259 lib/sessionsSection.js:145
+#: extension.js:411 extension.js:425 lib/accountsSection.js:257
+#: lib/accountsSection.js:263 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr ""
@@ -91,7 +91,7 @@ msgstr ""
 msgid "%s is on pace to run out before it resets"
 msgstr ""
 
-#: extension.js:532
+#: extension.js:536
 msgid "Claude ?"
 msgstr ""
 
@@ -103,27 +103,27 @@ msgstr ""
 msgid "(login expired)"
 msgstr ""
 
-#: lib/accountsSection.js:173
+#: lib/accountsSection.js:175
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr ""
 
-#: lib/accountsSection.js:246
+#: lib/accountsSection.js:250
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr ""
 
-#: lib/accountsSection.js:248
+#: lib/accountsSection.js:252
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr ""
 
-#: lib/accountsSection.js:250
+#: lib/accountsSection.js:254
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr ""
 
-#: lib/accountsSection.js:260
+#: lib/accountsSection.js:264
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr ""
@@ -521,31 +521,33 @@ msgid "Show the account name in the top bar"
 msgstr ""
 
 #: prefs.js:519
-msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
-msgstr ""
-
-#: prefs.js:536
-#, javascript-format
-msgid "%s, saved as %s"
+msgid ""
+"\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
+"fits the bar"
 msgstr ""
 
 #: prefs.js:537
 #, javascript-format
-msgid "%s (not saved yet)"
+msgid "%s, saved as %s"
 msgstr ""
 
 #: prefs.js:538
+#, javascript-format
+msgid "%s (not saved yet)"
+msgstr ""
+
+#: prefs.js:539
 msgid "No Claude Code login found"
 msgstr ""
 
-#: prefs.js:544
+#: prefs.js:545
 msgid "login expired - sign in and save it again"
 msgstr ""
 
-#: prefs.js:551
+#: prefs.js:552
 msgid "Forget this saved login"
 msgstr ""
 
-#: prefs.js:571
+#: prefs.js:572
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr ""
