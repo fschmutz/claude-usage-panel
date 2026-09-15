@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-09-15
+
 ### Fixed
 
 - **The top-bar readout could grow without limit.** The account prefix added in

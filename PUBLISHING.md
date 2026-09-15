@@ -97,7 +97,7 @@ fill in the release URL + sha256:
 
 ```ruby
 cask "claude-usage-panel" do
-  version "1.12.0"
+  version "1.12.1"
   sha256 "REPLACE_WITH_SHA256"
 
   url "https://github.com/fschmutz/claude-usage-panel/releases/download/v#{version}/ClaudeUsagePanel.zip"
