@@ -6,6 +6,17 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The top-bar readout could grow without limit.** The account prefix added in
+  1.10 pushed the button to whatever `NAME · Label 100%` happened to measure,
+  taking the width from every other indicator on the bar. The readout now has a
+  hard character budget shared by both panels (`panelText()` /
+  `PanelReadout.text()`, pinned by `tests/fixtures/panel.json`): the percentage
+  is never cut, the limit label is cut second, and the account name is
+  all-or-nothing - it is dropped rather than shown as `PR…`. The prefix is also
+  limited to the case it was for: more than one saved login.
+
 ## [1.12.0] - 2026-09-14
 
 ### Fixed

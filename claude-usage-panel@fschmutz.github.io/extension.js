@@ -32,7 +32,7 @@ import {
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     warehouseEntry, weekOverWeek,
-    formatLastPing, nextPing, compactTokens, formatClock,
+    formatLastPing, nextPing, compactTokens, formatClock, panelText,
 } from './lib/pure.js';
 
 // How long to let a resume or a network change settle before polling: DNS and
@@ -512,13 +512,17 @@ class ClaudeUsageButton extends PanelMenu.Button {
         else
             card = [...this._latest].sort((a, b) => b.percent - a.percent)[0];
 
-        const shortLabel = card.label.split('·').pop().trim();
         // The saved name of the live login leads the readout, so a glance at
-        // the bar says which account is being spent.
-        const active = this._accounts.activeName;
-        const prefix = active && this._settings.get_boolean('panel-show-account')
-            ? `${active} · ` : '';
-        this._panelLabel.text = `${prefix}${shortLabel} ${card.percent}%`;
+        // the bar says which account is being spent - but only once there is
+        // more than one saved account, and only while it fits the top bar's
+        // character budget (panelText decides; the dropdown always names it).
+        const showAccount = this._settings.get_boolean('panel-show-account')
+            && this._accounts.savedCount > 1;
+        this._panelLabel.text = panelText({
+            account: showAccount ? this._accounts.activeName ?? '' : '',
+            label: card.label,
+            percent: card.percent,
+        });
         // Predictive tint: a limit reading normal but on pace to run out before
         // its reset shows amber in the top bar - trouble at 50%, not at 90%.
         let sev = severityClass(card.severity);

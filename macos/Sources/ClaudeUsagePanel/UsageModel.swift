@@ -421,16 +421,16 @@ final class UsageModel: ObservableObject {
         guard let worst = cards.max(by: { $0.percent < $1.percent }) else {
             return errorText == nil ? "⚪️ …" : "⚪️ ?"
         }
-        let short =
-            worst.label.components(separatedBy: "·").last?.trimmingCharacters(in: .whitespaces)
-            ?? worst.label
         var sev = worst.severity
         if sev == .normal, forecasts[worst.id]?.exhaustsBeforeReset == true {
             sev = .warning
         }
-        // "PRO · Session 42%" once the login is a saved, named account.
-        let prefix = showAccountInMenuBar ? activeAccount.map { "\($0) · " } ?? "" : ""
-        return "\(dot(sev)) \(prefix)\(short) \(worst.percent)%"
+        // "PRO · Session 42%" once there is more than one saved account to tell
+        // apart - and only while the name fits the bar's character budget.
+        let showAccount = showAccountInMenuBar && accounts.count > 1
+        let name = showAccount ? activeAccount ?? "" : ""
+        let text = PanelReadout.text(account: name, label: worst.label, percent: worst.percent)
+        return "\(dot(sev)) \(text)"
     }
 
     static let timeFormatter: DateFormatter = {

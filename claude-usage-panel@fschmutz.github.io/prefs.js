@@ -516,7 +516,8 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         accounts.add(thresholdRow);
         const showRow = new Adw.SwitchRow({
             title: _('Show the account name in the top bar'),
-            subtitle: _('"PRO · Session 42%" instead of "Session 42%"'),
+            subtitle: _('"PRO · Session 42%" - shown once two logins are saved, '
+                + 'and only while it fits the bar'),
         });
         settings.bind('panel-show-account', showRow, 'active', 0);
         accounts.add(showRow);

@@ -369,3 +369,39 @@ public enum UsageForecast {
         return "\(pace) - full ~\(f.string(from: fc.projectedFullAt)), \(span) before reset"
     }
 }
+
+// MARK: - Top-bar readout
+
+/// The menu-bar / top-bar text. Mirrors pure.js `panelText()`;
+/// tests/fixtures/panel.json pins both ports (PanelTextParityTests).
+public enum PanelReadout {
+    /// The bar is shared real estate, so the readout has a hard character
+    /// budget. What gives when it does not fit: the percentage never (it is the
+    /// reading), the limit label second, the account name first - and the name
+    /// is all-or-nothing, because half an identity ("PR…") reads as noise and
+    /// the menu names the account in full anyway.
+    public static let maxChars = 20
+
+    /// Cut to `max` INCLUDING the ellipsis, "" when there is no room.
+    public static func ellipsize(_ text: String, _ max: Int) -> String {
+        let s = text.trimmingCharacters(in: .whitespaces)
+        if s.count <= max { return s }
+        guard max >= 3 else { return "" }
+        return String(s.prefix(max - 1)) + "…"
+    }
+
+    /// "PRO · Fable 100%" - "" account means no prefix.
+    public static func text(
+        account: String = "", label: String, percent: Int, max: Int = maxChars
+    ) -> String {
+        let short =
+            label.components(separatedBy: "·").last?.trimmingCharacters(in: .whitespaces) ?? label
+        let pct = "\(UsageNormalizer.clampPercent(Double(percent)))%"
+        let name = account.trimmingCharacters(in: .whitespaces)
+        // The limit reading is built at the full budget first; the name is
+        // added only if it fits beside it, never by squeezing the label.
+        let tail = "\(ellipsize(short, Swift.max(1, max - pct.count - 1))) \(pct)"
+            .trimmingCharacters(in: .whitespaces)
+        return !name.isEmpty && name.count + 3 + tail.count <= max ? "\(name) · \(tail)" : tail
+    }
+}

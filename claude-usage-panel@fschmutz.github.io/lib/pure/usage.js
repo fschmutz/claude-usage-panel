@@ -226,3 +226,32 @@ export function thresholdClass(percent) {
     const t = alertThreshold(percent);
     return severityClass(t === 100 ? 'critical' : (t === 90 ? 'warning' : 'normal'));
 }
+
+// ── Top-bar readout ─────────────────────────────────────────────────────────────
+// The top bar is shared real estate: every other indicator loses the width ours
+// takes, so the readout has a hard character budget rather than "whatever the
+// strings happen to be". What gives when it does not fit: the percentage never
+// (it is the reading), the limit label second, the account name first - and the
+// name is all-or-nothing, because half an identity ("PR…") reads as noise and
+// the dropdown names the account in full anyway.
+export const PANEL_MAX_CHARS = 20;
+
+// "all mod…" - cut to `max` INCLUDING the ellipsis, '' when there is no room.
+export function ellipsize(text, max) {
+    const s = String(text ?? '').trim();
+    if (s.length <= max)
+        return s;
+    return max < 3 ? '' : `${s.slice(0, max - 1)}…`;
+}
+
+// "PRO · Fable 100%" - the panel button's text, from the card the panel picked
+// plus the active account name ('' when there is none to show).
+export function panelText({account = '', label = '', percent = 0, max = PANEL_MAX_CHARS} = {}) {
+    const short = String(label ?? '').split('·').pop().trim();
+    const pct = `${clampPercent(percent)}%`;
+    const name = String(account ?? '').trim();
+    // The limit reading is built at the full budget first; the name is added
+    // only if it fits beside it, never by squeezing the label.
+    const tail = `${ellipsize(short, Math.max(1, max - pct.length - 1))} ${pct}`.trim();
+    return name && name.length + 3 + tail.length <= max ? `${name} · ${tail}` : tail;
+}

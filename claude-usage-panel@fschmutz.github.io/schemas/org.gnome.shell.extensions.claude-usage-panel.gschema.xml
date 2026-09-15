@@ -91,7 +91,7 @@
     <key name="panel-show-account" type="b">
       <default>true</default>
       <summary>Show the account name in the top bar</summary>
-      <description>Prefix the panel readout with the name of the active saved account, e.g. "PRO · Session 42%".</description>
+      <description>Prefix the panel readout with the name of the active saved account, e.g. "PRO · Session 42%". Shown only once more than one login is saved, and only while the name fits the top bar's character budget.</description>
     </key>
     <key name="history" type="s">
       <default>'{}'</default>

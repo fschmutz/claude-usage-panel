@@ -148,3 +148,18 @@ for (const [portName, port] of [['pure.js', pure], ['accounts-contract.js', acco
         });
     }
 }
+
+// ── Top-bar readout ─────────────────────────────────────────────────────────────
+// The bar's character budget. Only pure.js renders it today (the status line
+// has a terminal's width); the Swift twin is PanelTextParityTests.
+const panelFix = fixture('panel.json');
+test('pure.js panelText - budget is the fixture\'s', () => {
+    assert.equal(pure.PANEL_MAX_CHARS, panelFix.maxChars);
+});
+for (const c of panelFix.cases) {
+    test(`pure.js panelText - ${c.name}`, () => {
+        assert.equal(pure.panelText({
+            account: c.account, label: c.label, percent: c.percent, max: panelFix.maxChars,
+        }), c.expected);
+    });
+}

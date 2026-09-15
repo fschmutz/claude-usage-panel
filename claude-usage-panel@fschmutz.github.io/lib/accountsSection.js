@@ -149,6 +149,8 @@ export class AccountsController {
         this._switching = false;
         /** The saved name of the live login, for the top-bar prefix. */
         this.activeName = null;
+        /** How many logins are saved - the prefix is noise below two. */
+        this.savedCount = 0;
 
         this._item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         this._section = new AccountsSection(name => this.switchTo(name));
@@ -176,10 +178,12 @@ export class AccountsController {
             this._autoSwitchItem.setToggleState(on);
     }
 
-    _setActive(name) {
-        if (this.activeName === name)
+    // Both feed the top-bar readout, so both re-render it when they move.
+    _setActive(name, savedCount = this.savedCount) {
+        if (this.activeName === name && this.savedCount === savedCount)
             return;
         this.activeName = name;
+        this.savedCount = savedCount;
         this._onActiveChanged();
     }
 
@@ -191,7 +195,7 @@ export class AccountsController {
     async refresh(activeCards) {
         // Off by default: no rows, no toggle, no panel prefix, no fetch.
         if (!this._settings.get_boolean('accounts-enabled')) {
-            this._setActive(null);
+            this._setActive(null, 0);
             this._item.visible = false;
             this._autoSwitchItem.visible = false;
             return;
@@ -204,7 +208,7 @@ export class AccountsController {
             profiles = [];
         }
         const active = liveAccountName();
-        this._setActive(active);
+        this._setActive(active, profiles.length);
         this._item.visible = profiles.length > 0;
         this._autoSwitchItem.visible = profiles.length > 1;
         if (!profiles.length) {
