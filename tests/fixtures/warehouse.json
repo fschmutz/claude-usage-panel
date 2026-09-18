@@ -33,6 +33,44 @@
         "weekly_all": 71,
         "session": 12
       }
+    },
+    {
+      "t": 1799654400000,
+      "a": "u-admin",
+      "limits": {
+        "weekly_all": 100,
+        "weekly_scoped:Fable": 100
+      }
+    },
+    {
+      "t": 1799740800000,
+      "a": "u-admin",
+      "limits": {
+        "weekly_all": 68,
+        "weekly_scoped:Fable": 100
+      }
+    },
+    {
+      "t": 1799222400000,
+      "a": "u-fsc",
+      "limits": {
+        "weekly_all": 57
+      }
+    },
+    {
+      "t": 1799827200000,
+      "a": "u-fsc",
+      "limits": {
+        "weekly_all": 6,
+        "weekly_scoped:Fable": 0
+      }
+    },
+    {
+      "t": 1799913600000,
+      "a": "u-fsc",
+      "limits": {
+        "weekly_all": 10
+      }
     }
   ],
   "cases": [
@@ -58,6 +96,52 @@
       "name": "an unknown key has nothing to report",
       "key": "weekly_oauth_apps",
       "expected": null
+    },
+    {
+      "name": "an account sees only its own rows - the other login's 100% week is not its peak",
+      "key": "weekly_all",
+      "account": "u-fsc",
+      "expected": {
+        "thisWeekPeak": 10,
+        "lastWeekPeak": 57,
+        "deltaPoints": -47
+      }
+    },
+    {
+      "name": "a scoped limit the account never used peaks at what it recorded, not at the other login's",
+      "key": "weekly_scoped:Fable",
+      "account": "u-fsc",
+      "expected": {
+        "thisWeekPeak": 0,
+        "lastWeekPeak": null,
+        "deltaPoints": null
+      }
+    },
+    {
+      "name": "the other account reads its own peak from the same file",
+      "key": "weekly_all",
+      "account": "u-admin",
+      "expected": {
+        "thisWeekPeak": 100,
+        "lastWeekPeak": null,
+        "deltaPoints": null
+      }
+    },
+    {
+      "name": "with no account known, only untagged rows count - tagged ones belong to someone",
+      "key": "weekly_all",
+      "account": null,
+      "expected": {
+        "thisWeekPeak": 71,
+        "lastWeekPeak": 84,
+        "deltaPoints": -13
+      }
+    },
+    {
+      "name": "an account with no rows of its own has nothing to report",
+      "key": "weekly_all",
+      "account": "u-nobody",
+      "expected": null
     }
   ],
   "formats": [
@@ -68,7 +152,7 @@
         "lastWeekPeak": 84,
         "deltaPoints": -13
       },
-      "expected": "peak 71% this week · 84% last"
+      "expected": "peak 71% this week \u00b7 84% last"
     },
     {
       "name": "first week only",
@@ -78,6 +162,36 @@
         "deltaPoints": null
       },
       "expected": "peak 40% this week"
+    }
+  ],
+  "accounts": [
+    {
+      "name": "the uuid identifies a login",
+      "live": {
+        "accountUuid": "u-1",
+        "emailAddress": "a@x"
+      },
+      "expected": "u-1"
+    },
+    {
+      "name": "the email stands in when there is no uuid",
+      "live": {
+        "emailAddress": "a@x"
+      },
+      "expected": "a@x"
+    },
+    {
+      "name": "an empty block is no identity",
+      "live": {
+        "accountUuid": "",
+        "emailAddress": ""
+      },
+      "expected": null
+    },
+    {
+      "name": "no block is no identity",
+      "live": null,
+      "expected": null
     }
   ]
 }

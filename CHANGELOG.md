@@ -6,6 +6,19 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The week-over-week peak mixed accounts.** The 90-day history is one file
+  per machine and carried no account identity, so after a login switch the
+  week one account spent at 100% showed as the peak of the account that
+  replaced it (seen live: Fable at 0% under "peak 100% this week"). Every
+  entry is now filed under the login it was polled as (`a` on the line, the
+  `oauthAccount` uuid), and `weekOverWeek()` / `Warehouse.weekOverWeek` read
+  only that login's rows. Rows written before this version carry no owner and
+  no longer count once a login is known, so the first week after updating
+  starts honest rather than borrowed. Same contract in GNOME, macOS and the
+  MCP server, pinned by `tests/fixtures/warehouse.json`.
+
 ## [1.12.1] - 2026-09-15
 
 ### Fixed

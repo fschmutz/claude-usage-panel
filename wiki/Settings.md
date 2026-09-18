@@ -53,7 +53,10 @@ Every poll in which a limit actually moved appends one line to
 `~/.local/state/claude-usage-panel/history.jsonl`
 (`~/Library/Application Support/…` on macOS), pruned to 90 days on start. That
 is what lets each card say *peak 71% this week · 84% last* long after Claude's
-own 30-day cleanup, and what the MCP tool's `trend` field reads. Delete the
-file to forget it; both panels write it and the MCP server only reads it.
+own 30-day cleanup, and what the MCP tool's `trend` field reads. Each line is
+filed under the login it was polled as (`"a"`, the `oauthAccount` uuid), so
+with several saved accounts a card only ever compares a login against its own
+weeks. Delete the file to forget it; both panels write it and the MCP server
+only reads it.
 
 Preferences persist in dconf (GNOME) / `UserDefaults` (macOS); the Cursor Admin API key is the exception and lives in the system keyring (libsecret) / the login Keychain.

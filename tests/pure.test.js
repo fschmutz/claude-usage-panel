@@ -259,7 +259,7 @@ for (const c of eventFix.expansions) {
 // Same fixture the Swift WarehouseParityTests asserts.
 import {
     warehouseLine, parseWarehouse, pruneWarehouse, weekOverWeek, formatWeekOverWeek,
-    WAREHOUSE_KEEP_DAYS,
+    warehouseAccount, WAREHOUSE_KEEP_DAYS,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 const houseFix = JSON.parse(
@@ -273,7 +273,14 @@ test('the retention window is part of the pinned contract', () => {
 
 for (const c of houseFix.cases) {
     test(`weekOverWeek - ${c.name}`, () => {
-        assert.deepEqual(weekOverWeek(houseFix.entries, c.key, houseFix.now), c.expected);
+        assert.deepEqual(
+            weekOverWeek(houseFix.entries, c.key, houseFix.now, c.account ?? null), c.expected);
+    });
+}
+
+for (const c of houseFix.accounts) {
+    test(`warehouseAccount - ${c.name}`, () => {
+        assert.equal(warehouseAccount(c.live), c.expected);
     });
 }
 
@@ -287,6 +294,10 @@ test('a torn or garbage line is skipped, never fatal', () => {
     const line = warehouseLine([{key: 'session', percent: 42}], houseFix.now);
     const parsed = parseWarehouse(`${line}\n{ not json\n\n`);
     assert.deepEqual(parsed, [{t: houseFix.now, limits: {session: 42}}]);
+    // The account tag survives the round trip; an empty one is dropped.
+    const tagged = warehouseLine([{key: 'session', percent: 1}], houseFix.now, 'u-1');
+    assert.deepEqual(parseWarehouse(`${tagged}\n{"t":1,"a":"","limits":{}}`),
+        [{t: houseFix.now, a: 'u-1', limits: {session: 1}}, {t: 1, limits: {}}]);
     // Older than the retention window, so it does not survive a prune.
     const old = {t: houseFix.now - 91 * 86_400_000, limits: {session: 1}};
     assert.deepEqual(pruneWarehouse([...parsed, old], houseFix.now), parsed);
@@ -328,4 +339,7 @@ test('warehouseEntry is the object warehouseLine serializes', () => {
     const cards = [{key: 'session', percent: 42.4}, {key: 'weekly_all', percent: 140}];
     assert.deepEqual(warehouseEntry(cards, 1000.6), {t: 1001, limits: {session: 42, weekly_all: 100}});
     assert.equal(warehouseLine(cards, 1000.6), JSON.stringify(warehouseEntry(cards, 1000.6)));
+    // Filed under the login when one is known - `a` sits before the limits on the line.
+    assert.equal(warehouseLine(cards, 1000.6, 'u-1'),
+        '{"t":1001,"a":"u-1","limits":{"session":42,"weekly_all":100}}');
 });

@@ -22,7 +22,7 @@ import {
   ACCOUNT_TOOL_NAMES, ACCOUNT_TOOLS, GET_USAGE_TOOL, callAccountTool, currentAccount,
   renderAccount, renderCards, renderExtraUsage,
 } from './tools.js';
-import {withTrend} from './warehouse.js';
+import {warehouseAccount, withTrend} from './warehouse.js';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
 export const VERSION = '1.12.1';
@@ -40,7 +40,7 @@ export async function getUsage(io = {}) {
   const nowMs = io.nowMs ?? Date.now();
   const cards = withTrend(
     withPace(result.cards, {nowMs, historyPath: historyPath(io)}),
-    {nowMs, warehouse: warehousePath(io)});
+    {nowMs, warehouse: warehousePath(io), account: warehouseAccount(store.readLiveAccount())});
   const lastPing = readLastPing(io);
   const sessions = refreshSessions(io);
   const extraUsage = result.extraUsage ?? null;

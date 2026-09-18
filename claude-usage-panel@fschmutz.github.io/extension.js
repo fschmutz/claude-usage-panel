@@ -19,6 +19,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {fetchUsage} from './lib/claudeUsage.js';
+import {readLiveAccount} from './lib/claudeFiles.js';
 import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
 import {readLastPing, readSchedule} from './lib/sessionPing.js';
@@ -31,7 +32,7 @@ import {
     severityClass, formatResets, alertThreshold,
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
-    warehouseEntry, weekOverWeek,
+    warehouseAccount, warehouseEntry, weekOverWeek,
     formatLastPing, nextPing, compactTokens, formatClock, panelText,
 } from './lib/pure.js';
 
@@ -61,6 +62,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // 90 days of poll samples, for the week-over-week line. Loaded once;
         // every later poll that moved appends to both the file and this list.
         this._warehouse = loadWarehouse();
+        /** Identity of the login the last poll ran as - what its entries are filed under. */
+        this._warehouseAccount = null;
         this._refreshing = false;
         this._destroyed = false;
         this._history = this._loadHistory();  // limit id -> [[epochMs, percent], …]
@@ -296,8 +299,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._idleStreak = moved ? 0 : this._idleStreak + 1;
             // Only record what moved: a flat afternoon would otherwise write
             // one identical line every poll for 90 days.
+            // Filed under the live login: the file is shared by every account
+            // on the machine and a peak must never come from another one.
+            this._warehouseAccount = warehouseAccount(readLiveAccount());
             if (moved) {
-                const entry = warehouseEntry(result.cards, now);
+                const entry = warehouseEntry(result.cards, now, this._warehouseAccount);
                 this._warehouse.push(entry);
                 appendWarehouse(entry);
             }
@@ -489,7 +495,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._cardsBox.add_child(widget);
             }
             widget.update(card, this._history.get(card.key) ?? [], this._forecasts.get(card.key),
-                weekOverWeek(this._warehouse, card.key, now));
+                weekOverWeek(this._warehouse, card.key, now, this._warehouseAccount));
         }
         // Drop cards that disappeared.
         for (const [key, widget] of this._cards) {

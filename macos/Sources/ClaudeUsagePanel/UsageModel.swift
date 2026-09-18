@@ -261,12 +261,17 @@ final class UsageModel: ObservableObject {
             idleStreak = moved ? 0 : idleStreak + 1
             // Only record what moved: a flat afternoon would otherwise write an
             // identical line every poll for 90 days.
-            if moved { warehouse.append(Warehouse.append(result.cards, nowMs: nowMs)) }
+            // Filed under the live login: the file is shared by every account
+            // on this Mac and a peak must never come from another one.
+            let account = Warehouse.account(AccountStore.readLiveAccount())
+            if moved {
+                warehouse.append(Warehouse.append(result.cards, nowMs: nowMs, account: account))
+            }
             trends = Dictionary(
                 result.cards.compactMap { card in
-                    Warehouse.weekOverWeek(warehouse, key: card.id, nowMs: nowMs).map {
-                        (card.id, $0)
-                    }
+                    Warehouse.weekOverWeek(
+                        warehouse, key: card.id, nowMs: nowMs, account: account
+                    ).map { (card.id, $0) }
                 }, uniquingKeysWith: { a, _ in a })
             runEventCommand(EventHooks.detect(previous: cards, current: result.cards))
             cards = result.cards

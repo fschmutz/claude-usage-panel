@@ -13,18 +13,40 @@ import {clampPercent} from './usage.js';
 
 export const WAREHOUSE_KEEP_DAYS = 90;
 
-/** One poll as the warehouse keeps it: the instant, then each limit's percent
- *  by key. The in-memory list and the file line are the same object. */
-export function warehouseEntry(cards, nowMs = Date.now()) {
+/**
+ * The identity a warehouse entry is filed under: the `oauthAccount` block's
+ * uuid, else its email, else null. The file is shared by every login on the
+ * machine, so a week-over-week peak read without it mixes accounts - the week
+ * one login spent at 100% would show on the card of the login that replaced
+ * it (seen live 2026-09-18: Fable at 0% under "peak 100% this week").
+ */
+export function warehouseAccount(live) {
+    if (!live || typeof live !== 'object')
+        return null;
+    if (typeof live.accountUuid === 'string' && live.accountUuid)
+        return live.accountUuid;
+    if (typeof live.emailAddress === 'string' && live.emailAddress)
+        return live.emailAddress;
+    return null;
+}
+
+/** One poll as the warehouse keeps it: the instant, the account it belongs
+ *  to (`a`, absent when unknown), then each limit's percent by key. The
+ *  in-memory list and the file line are the same object. */
+export function warehouseEntry(cards, nowMs = Date.now(), account = null) {
     const limits = {};
     for (const card of cards ?? [])
         limits[card.key] = clampPercent(card.percent);
-    return {t: Math.round(nowMs), limits};
+    const entry = {t: Math.round(nowMs)};
+    if (account)
+        entry.a = String(account);
+    entry.limits = limits;
+    return entry;
 }
 
 /** One line per poll. */
-export function warehouseLine(cards, nowMs = Date.now()) {
-    return JSON.stringify(warehouseEntry(cards, nowMs));
+export function warehouseLine(cards, nowMs = Date.now(), account = null) {
+    return JSON.stringify(warehouseEntry(cards, nowMs, account));
 }
 
 /** Parse a warehouse file. Unreadable lines are skipped, never fatal - the file
@@ -36,8 +58,13 @@ export function parseWarehouse(text) {
             continue;
         try {
             const o = JSON.parse(line);
-            if (Number.isFinite(o?.t) && o.limits && typeof o.limits === 'object')
-                out.push({t: o.t, limits: o.limits});
+            if (Number.isFinite(o?.t) && o.limits && typeof o.limits === 'object') {
+                const e = {t: o.t};
+                if (typeof o.a === 'string' && o.a)
+                    e.a = o.a;
+                e.limits = o.limits;
+                out.push(e);
+            }
         } catch {
             continue;
         }
@@ -53,17 +80,23 @@ export function pruneWarehouse(entries, nowMs = Date.now()) {
 }
 
 /**
- * Peak of one limit over the last 7 days against the 7 before that.
+ * Peak of one limit over the last 7 days against the 7 before that, for one
+ * account: only entries filed under `account` count, and with no account
+ * known only the entries that carry none (a pre-1.13 file, or a machine with
+ * no `oauthAccount` block). Rows from another login are never a peak here.
  * @returns {?{thisWeekPeak: number, lastWeekPeak: ?number, deltaPoints: ?number}}
  *   null when this week has no samples at all. lastWeekPeak is null on a fresh
  *   install - one week of data is still worth showing, without inventing a
  *   comparison for it.
  */
-export function weekOverWeek(entries, key, nowMs = Date.now()) {
+export function weekOverWeek(entries, key, nowMs = Date.now(), account = null) {
     const week = 7 * 86_400_000;
+    const owner = account ? String(account) : null;
     let thisWeek = null;
     let lastWeek = null;
     for (const e of entries ?? []) {
+        if ((e?.a ?? null) !== owner)
+            continue;
         const p = e?.limits?.[key];
         if (!Number.isFinite(p))
             continue;

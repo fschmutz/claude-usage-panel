@@ -15,7 +15,7 @@ import {fileURLToPath} from 'node:url';
 import {handleRequest, VERSION} from '../mcp/server.js';
 import {renderCards} from '../mcp/tools.js';
 import {withPace, recordHistory, forecast} from '../claude-code/pace.js';
-import {withTrend, weekOverWeek} from '../mcp/warehouse.js';
+import {warehouseAccount, withTrend, weekOverWeek} from '../mcp/warehouse.js';
 import {openStore} from '../claude-code/accounts.js';
 import {sandboxHome, writeLiveLogin} from './helpers.js';
 
@@ -299,11 +299,21 @@ test('withTrend attaches a week-over-week peak from the warehouse', () => {
         [
             JSON.stringify({t: now - 9 * day, limits: {weekly_all: 84}}),
             JSON.stringify({t: now - 1 * day, limits: {weekly_all: 71}}),
+            JSON.stringify({t: now - 2 * day, a: 'u-other', limits: {weekly_all: 100}}),
+            JSON.stringify({t: now - 2 * day, a: 'u-mine', limits: {weekly_all: 12}}),
             'torn line, still writing',
         ].join('\n') + '\n');
 
+    // No account known: the untagged rows, never a login's own.
     const [card] = withTrend([{key: 'weekly_all', percent: 71}], {nowMs: now, warehouse: file});
     assert.deepEqual(card.trend, {thisWeekPeak: 71, lastWeekPeak: 84, deltaPoints: -13});
+    // One login's rows: the other login's 100% is not its peak.
+    const [mine] = withTrend([{key: 'weekly_all', percent: 12}],
+        {nowMs: now, warehouse: file, account: 'u-mine'});
+    assert.deepEqual(mine.trend, {thisWeekPeak: 12, lastWeekPeak: null, deltaPoints: null});
+    assert.equal(warehouseAccount({accountUuid: 'u-1', emailAddress: 'a@x'}), 'u-1');
+    assert.equal(warehouseAccount({emailAddress: 'a@x'}), 'a@x');
+    assert.equal(warehouseAccount(null), null);
     fs.rmSync(dir, {recursive: true, force: true});
 });
 
@@ -319,9 +329,13 @@ test('get_usage reads the trend from the warehouse under the io state dir', asyn
     const day = 86_400_000;
     const wh = path.join(io.home, '.local', 'state', 'claude-usage-panel', 'history.jsonl');
     fs.mkdirSync(path.dirname(wh), {recursive: true});
+    // Filed under the live login (u-pro); another login's rows and pre-1.13
+    // untagged rows are not this account's peak.
     fs.writeFileSync(wh, [
-        JSON.stringify({t: NOW - 9 * day, limits: {session: 84}}),
-        JSON.stringify({t: NOW - 1 * day, limits: {session: 26}}),
+        JSON.stringify({t: NOW - 9 * day, a: 'u-pro', limits: {session: 84}}),
+        JSON.stringify({t: NOW - 1 * day, a: 'u-pro', limits: {session: 26}}),
+        JSON.stringify({t: NOW - 1 * day, a: 'u-perso', limits: {session: 100}}),
+        JSON.stringify({t: NOW - 1 * day, limits: {session: 99}}),
     ].join('\n') + '\n');
     const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
     assert.deepEqual(r.structuredContent.limits[0].trend, {thisWeekPeak: 26, lastWeekPeak: 84, deltaPoints: -58});

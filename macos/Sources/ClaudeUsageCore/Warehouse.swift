@@ -8,10 +8,14 @@ import Foundation
 
 public struct WarehouseEntry: Equatable, Sendable {
     public let t: Double  // epoch ms
+    /// The login this poll ran as (`a` on the line); nil on a pre-1.13 line or
+    /// a machine with no `oauthAccount` block.
+    public let account: String?
     public let limits: [String: Int]
 
-    public init(t: Double, limits: [String: Int]) {
+    public init(t: Double, account: String? = nil, limits: [String: Int]) {
         self.t = t
+        self.account = account
         self.limits = limits
     }
 }
@@ -63,10 +67,24 @@ public enum Warehouse {
         return kept
     }
 
-    /// One poll as a warehouse entry: the instant, then each limit's percent by key.
-    public static func entry(_ cards: [LimitCard], nowMs: Double) -> WarehouseEntry {
+    /// The identity an entry is filed under: the `oauthAccount` block's uuid,
+    /// else its email, else nil. The file is shared by every login on the
+    /// machine; a peak read without it would show one login's 100% week on
+    /// the card of the login that replaced it.
+    public static func account(_ live: [String: Any]?) -> String? {
+        guard let live else { return nil }
+        if let uuid = live["accountUuid"] as? String, !uuid.isEmpty { return uuid }
+        if let email = live["emailAddress"] as? String, !email.isEmpty { return email }
+        return nil
+    }
+
+    /// One poll as a warehouse entry: the instant, the account, then each
+    /// limit's percent by key.
+    public static func entry(_ cards: [LimitCard], nowMs: Double, account: String? = nil)
+        -> WarehouseEntry
+    {
         WarehouseEntry(
-            t: nowMs,
+            t: nowMs, account: account,
             limits: Dictionary(cards.map { ($0.id, $0.percent) }, uniquingKeysWith: { a, _ in a }))
     }
 
@@ -74,10 +92,12 @@ public enum Warehouse {
     /// in-memory copy identical to the file. Best-effort: a failed write costs
     /// a data point, never a refresh.
     @discardableResult
-    public static func append(_ cards: [LimitCard], nowMs: Double, url: URL = defaultURL())
+    public static func append(
+        _ cards: [LimitCard], nowMs: Double, account: String? = nil, url: URL = defaultURL()
+    )
         -> WarehouseEntry
     {
-        let written = entry(cards, nowMs: nowMs)
+        let written = entry(cards, nowMs: nowMs, account: account)
         guard let data = (line(written) + "\n").data(using: .utf8) else { return written }
         let fm = FileManager.default
         try? fm.createDirectory(
@@ -96,15 +116,18 @@ public enum Warehouse {
 
     /// One JSONL line for an entry.
     public static func line(_ entry: WarehouseEntry) -> String {
-        let obj: [String: Any] = ["t": Int(entry.t.rounded()), "limits": entry.limits]
+        var obj: [String: Any] = ["t": Int(entry.t.rounded()), "limits": entry.limits]
+        if let a = entry.account { obj["a"] = a }
         guard let data = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys])
         else { return "" }
         return String(decoding: data, as: UTF8.self)
     }
 
     /// One line per poll - the same bytes `append` writes.
-    public static func line(_ cards: [LimitCard], nowMs: Double) -> String {
-        line(entry(cards, nowMs: nowMs))
+    public static func line(_ cards: [LimitCard], nowMs: Double, account: String? = nil)
+        -> String
+    {
+        line(entry(cards, nowMs: nowMs, account: account))
     }
 
     /// Unreadable lines are skipped, never fatal: two processes append to this
@@ -120,7 +143,8 @@ public enum Warehouse {
             for (k, v) in limits {
                 if let n = (v as? NSNumber)?.intValue { parsed[k] = n }
             }
-            return WarehouseEntry(t: t, limits: parsed)
+            let a = (o["a"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            return WarehouseEntry(t: t, account: a, limits: parsed)
         }
     }
 
@@ -131,15 +155,17 @@ public enum Warehouse {
         return entries.filter { $0.t >= cutoff }
     }
 
-    /// Peak of one limit over the last 7 days against the 7 before that.
+    /// Peak of one limit over the last 7 days against the 7 before that, for
+    /// one account: only entries filed under `account` count, and with no
+    /// account known only the entries that carry none.
     public static func weekOverWeek(
-        _ entries: [WarehouseEntry], key: String, nowMs: Double
+        _ entries: [WarehouseEntry], key: String, nowMs: Double, account: String? = nil
     ) -> WeekOverWeek? {
         let week = 7.0 * 86_400_000
         var thisWeek: Int?
         var lastWeek: Int?
         for e in entries {
-            guard let p = e.limits[key] else { continue }
+            guard e.account == account, let p = e.limits[key] else { continue }
             let age = nowMs - e.t
             guard age >= 0, age < 2 * week else { continue }
             if age < week {
