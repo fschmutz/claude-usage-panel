@@ -19,8 +19,10 @@ source of truth the macOS bundle reads - never hardcode a version anywhere.
 the GNOME `.shell-extension.zip`, extracts that version's `CHANGELOG.md` section
 as the release notes, and creates the GitHub Release with the zip attached. No
 manual `gh release create` needed. To (re)release an existing tag, run the
-**release** workflow from the Actions tab with the tag as input. The macOS `.app`
-is not auto-attached yet (needs Developer ID signing / notarization - see below).
+**release** workflow from the Actions tab with the tag as input. The macOS
+`.app` is built and attached too (`ClaudeUsagePanel-macos.zip`), signed with a
+Developer ID and notarized if the secrets below are configured, ad-hoc signed
+otherwise - see below.
 
 **The tag is also what ships the release to existing users.** Every checkout with
 the `autoupdate` target installed (`scripts/auto-update.sh`, on by default) polls
@@ -66,14 +68,30 @@ The bundle is a menu-bar agent (`LSUIElement`), no Dock icon.
 
 ### Signing & notarization (for distribution)
 
-Local/personal use needs only an ad-hoc signature:
+Local/personal use needs only an ad-hoc signature, which `install.sh macos`
+already applies:
 
 ```bash
 codesign --deep --force --sign - ClaudeUsagePanel.app
 ```
 
 To distribute to others without Gatekeeper warnings you need an Apple Developer
-account:
+account. `scripts/notarize-macos.sh` does the three steps below for you (and is
+what `.github/workflows/release.yml`'s `macos-asset` job calls on every
+release) - set these six repo secrets (Settings ▸ Secrets and variables ▸
+Actions) and it takes over automatically; leave any of them unset and the
+release stays ad-hoc signed as before:
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERTIFICATE_P12_BASE64` | `base64 -i YourCert.p12 \| pbcopy` - the exported Developer ID Application cert |
+| `MACOS_CERTIFICATE_PASSWORD` | that `.p12`'s export password |
+| `MACOS_SIGNING_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` |
+| `APPLE_ID` | the Apple ID email used for notarization |
+| `APPLE_TEAM_ID` | the `TEAMID` from the signing identity |
+| `APPLE_APP_SPECIFIC_PASSWORD` | an [app-specific password](https://support.apple.com/en-us/102654) for that Apple ID |
+
+To run the same three steps locally instead:
 
 ```bash
 # 1. Sign with your Developer ID
@@ -93,14 +111,15 @@ xcrun stapler staple ClaudeUsagePanel.app
 
 Once a signed `.app` (or zip) is attached to a GitHub release, a cask can install
 it. Template - put it in a tap (`homebrew-tap/Casks/claude-usage-panel.rb`) and
-fill in the release URL + sha256:
+fill in the sha256 (the URL and version below already match what
+`macos-asset` uploads and what `bump-version.sh` keeps current):
 
 ```ruby
 cask "claude-usage-panel" do
   version "1.12.1"
   sha256 "REPLACE_WITH_SHA256"
 
-  url "https://github.com/fschmutz/claude-usage-panel/releases/download/v#{version}/ClaudeUsagePanel.zip"
+  url "https://github.com/fschmutz/claude-usage-panel/releases/download/v#{version}/ClaudeUsagePanel-macos.zip"
   name "Claude Usage Panel"
   desc "Menu-bar panel for Claude Code plan usage"
   homepage "https://github.com/fschmutz/claude-usage-panel"
@@ -113,4 +132,7 @@ cask "claude-usage-panel" do
 end
 ```
 
-Install: `brew install --cask <yourtap>/claude-usage-panel`.
+Install: `brew install --cask <yourtap>/claude-usage-panel`. Without the
+Developer ID secrets above, the app is only ad-hoc signed and Gatekeeper will
+still warn on first launch (a cask cannot remove that on its own) - notarizing
+first is what makes the cask install cleanly.
