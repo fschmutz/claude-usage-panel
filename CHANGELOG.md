@@ -6,7 +6,19 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-09-18
+
 ### Fixed
+
+- **The notarize script could die silently on a release runner.**
+  `security list-keychains -d user` can come back empty, and expanding
+  `"${arr[@]}"` on an empty array aborts under `set -u` in bash 3.2 - the
+  version macOS ships as `/bin/bash`. In 3.2 that abort runs the `EXIT` trap
+  and then exits **0**, so the step would have gone green having signed
+  nothing and the release would have shipped an ad-hoc bundle billed as
+  notarized. Guarded, and `scripts/bash32-smoke.sh` now runs the script under
+  stubs for the macOS tools - empty and populated keychain list - asserting on
+  the line it prints only when it reaches the end, never on the exit code.
 
 - **`--force` let one account occupy two names.** `claude auth login` re-uses
   the browser session, so it can land back on the account already signed in
@@ -48,10 +60,28 @@ semantic versioning.
 
 ### Added
 
+- **Releases notarize themselves once the secrets exist.**
+  `scripts/notarize-macos.sh` signs the built `.app` with a Developer ID,
+  notarizes it with `notarytool` and staples the ticket, from a throwaway
+  keychain; the `macos-asset` job calls it between build and upload. With none
+  of the six `MACOS_*` / `APPLE_*` secrets set it is a no-op that says so, so a
+  checkout with no Apple account releases exactly as before. `PUBLISHING.md`
+  carries the secret table. Contributed by @LoubnaGhachyP (#25), addressing the
+  notarization half of #2.
+
 - **Preference: show the auto-switch toggle in the dropdown.** The
   "Auto-switch at N%" switch under the account rows can be hidden from the
   menu (`accounts-menu-toggle` in GSettings, "Show the auto-switch toggle in
   the menu" on macOS); the option itself stays in the preferences.
+
+### Changed
+
+- **Swift warnings fail the build.** Both Swift jobs run with
+  `-Xswiftc -warnings-as-errors`, after every green run had been printing the
+  same two compiler warnings unread for weeks; those two are fixed. The
+  `macos-asset` job also carries a `timeout-minutes`, and the notarization wait
+  a `--timeout`, so a stuck Apple submission fails instead of holding a Mac
+  runner.
 
 ## [1.12.1] - 2026-09-15
 
