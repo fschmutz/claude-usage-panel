@@ -66,7 +66,7 @@ public enum EventHooks {
             "p": String(event.percent), "t": String(event.threshold),
         ]
         var out = ""
-        var chars = Array(template)
+        let chars = Array(template)
         var i = 0
         while i < chars.count {
             guard chars[i] == "%", i + 1 < chars.count else {

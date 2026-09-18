@@ -110,7 +110,9 @@ jobs:
       - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
         with:
           swift-version: "6.1"
-      - run: swift test
+      # Warnings are errors: a green build whose log carried two unread
+      # warnings for weeks is how this flag got here.
+      - run: swift test -Xswiftc -warnings-as-errors
         working-directory: macos
       # The toolchain is here, so the Swift formatter gate runs here too (the
       # pre-commit job skips it: no Swift on that runner).
@@ -126,9 +128,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: swift build # includes the macOS-only ClaudeUsagePanel executable
+      - run: swift build -Xswiftc -warnings-as-errors # includes the macOS-only ClaudeUsagePanel executable
         working-directory: macos
-      - run: swift test # core + parity suites on Apple's toolchain too
+      - run: swift test -Xswiftc -warnings-as-errors # core + parity suites on Apple's toolchain too
         working-directory: macos
 
   # macOS still ships bash 3.2 as /bin/bash, and the launchd agents invoke it
