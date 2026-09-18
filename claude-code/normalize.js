@@ -140,3 +140,38 @@ export function normalizeUsage(payload) {
 export function poolNote(card) {
   return card?.scoped && card.group === 'weekly' ? 'share of the weekly all-models limit' : '';
 }
+
+// ── HTTP failures from the usage endpoint ───────────────────────────────────────
+// A bare "HTTP 424" on the card told nobody what the server said; the body
+// carries `{error: {type, message}}` and that goes on screen. Statuses that
+// mean "not now" (424 Failed Dependency - an upstream of the endpoint failed -
+// 408, 425, 429, 5xx) are `transient`: the last good cards stay up instead of
+// the whole dropdown blanking on one bad poll.
+
+const TRANSIENT_STATUSES = new Set([408, 424, 425, 429]);
+
+/** True when the status is worth retrying as-is, with the last data kept. */
+export function isTransientStatus(status) {
+  const s = Number(status);
+  return TRANSIENT_STATUSES.has(s) || (s >= 500 && s <= 599);
+}
+
+/**
+ * The failure record for a non-2xx answer.
+ * @param {number} status
+ * @param {?object} body the parsed JSON body when there was one
+ * @returns {{ok: false, code: 'transient'|'http_error', message: string}}
+ *   message: "HTTP 424 failed_dependency: <server message>" - the server's
+ *   words when it gave any, the code alone otherwise.
+ */
+export function httpFailure(status, body = null) {
+  const err = body && typeof body === 'object' ? body.error : null;
+  const type = typeof err?.type === 'string' && err.type ? err.type : null;
+  const text = typeof err?.message === 'string' && err.message.trim() ? err.message.trim() : null;
+  const detail = [type, text].filter(x => x).join(': ');
+  return {
+    ok: false,
+    code: isTransientStatus(status) ? 'transient' : 'http_error',
+    message: detail ? `HTTP ${status} ${detail}` : `HTTP ${status}`,
+  };
+}

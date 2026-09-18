@@ -189,7 +189,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
-    nextPollSeconds, nextResetMs, sameUsage, POLL_IDLE_AFTER,
+    nextPollSeconds, nextResetMs, sameUsage, POLL_IDLE_AFTER, POLL_RETRY_SECONDS,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 const pollFix = JSON.parse(
@@ -199,6 +199,7 @@ const pollFix = JSON.parse(
 
 test('the idle threshold is part of the pinned contract', () => {
     assert.equal(POLL_IDLE_AFTER, pollFix.idleAfter);
+    assert.equal(POLL_RETRY_SECONDS, pollFix.retrySeconds);
 });
 
 for (const c of pollFix.cases) {
@@ -206,7 +207,7 @@ for (const c of pollFix.cases) {
         assert.equal(
             nextPollSeconds({
                 baseSeconds: c.baseSeconds, idleStreak: c.idleStreak,
-                nextResetMs: c.nextResetMs, nowMs: pollFix.now,
+                nextResetMs: c.nextResetMs, nowMs: pollFix.now, retry: c.retry ?? false,
             }),
             c.expected);
     });

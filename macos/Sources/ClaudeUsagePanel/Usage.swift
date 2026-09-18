@@ -16,16 +16,23 @@ struct UsageResult {
 enum UsageError: LocalizedError {
     case noToken
     case authExpired
-    case http(Int)
+    case http(HttpFailure)
     case parse(String)
 
     var errorDescription: String? {
         switch self {
         case .noToken: return "No Claude credentials found. Sign in with Claude Code."
         case .authExpired: return "Claude session expired. Run any Claude Code command to refresh."
-        case .http(let s): return "HTTP \(s)"
+        case .http(let f): return f.message
         case .parse(let m): return m
         }
+    }
+
+    /// A "not now" answer from the endpoint (424, 429, 5xx): the last good
+    /// reading stays up while the next poll retries.
+    var isTransient: Bool {
+        if case .http(let f) = self { return f.transient }
+        return false
     }
 }
 
@@ -55,7 +62,9 @@ enum ClaudeUsage {
         let (data, response) = try await URLSession.shared.data(for: req)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 || status == 403 { throw UsageError.authExpired }
-        guard (200..<300).contains(status) else { throw UsageError.http(status) }
+        guard (200..<300).contains(status) else {
+            throw UsageError.http(HttpFailure(status: status, body: data))
+        }
 
         guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw UsageError.parse("Usage endpoint returned invalid JSON")

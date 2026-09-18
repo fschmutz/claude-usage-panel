@@ -130,6 +130,8 @@ final class UsageModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     /// Consecutive polls in which no limit moved - drives the backoff.
     private var idleStreak = 0
+    /// The last poll failed with a "not now" status - retry soon, not next interval.
+    private var retry = false
 
     /// 90 days of poll samples for the week-over-week line. Loaded once; every
     /// later poll that moved appends to both the file and this list.
@@ -212,7 +214,7 @@ final class UsageModel: ObservableObject {
                 // and lands late on the one tick that matters - the reset.
                 let delay = PollSchedule.nextPollSeconds(
                     baseSeconds: base, idleStreak: self.idleStreak,
-                    nextReset: PollSchedule.nextReset(self.cards))
+                    nextReset: PollSchedule.nextReset(self.cards), retry: self.retry)
                 try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
             }
         }
@@ -285,11 +287,19 @@ final class UsageModel: ObservableObject {
             extraUsage = result.extraUsage
             planLabel = result.planLabel
             errorText = nil
+            retry = false
             updated = Self.timeFormatter.string(from: Date())
             recordHistory(result.cards, nowMs: nowMs)
             checkAlerts(result.cards)
         } catch {
-            errorText = error.localizedDescription
+            // A transient answer keeps the cards and says so under them; the
+            // popup only blanks on a failure that is not going to clear itself.
+            retry = (error as? UsageError)?.isTransient ?? false
+            if retry, !cards.isEmpty {
+                errorText = "\(error.localizedDescription) - retrying, showing the last reading"
+            } else {
+                errorText = error.localizedDescription
+            }
         }
         await refreshCost()
         sessionPing.refreshLastPing()

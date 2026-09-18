@@ -34,7 +34,7 @@ import {
   PROFILE_VERSION, accountSummary, activeAccountName, isValidName, parseProfile, tokenState,
   worstPercent,
 } from './accounts-contract.js';
-import {normalizeExtraUsage, normalizeUsage} from './normalize.js';
+import {httpFailure, normalizeExtraUsage, normalizeUsage} from './normalize.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from './paths.js';
 
 export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
@@ -411,7 +411,16 @@ export function openStore(io = {}) {
           : 'Claude session expired. Run any Claude Code command to refresh it.',
       };
     }
-    if (!response.ok) return {ok: false, code: 'http_error', message: `HTTP ${response.status}`};
+    if (!response.ok) {
+      let body = null;
+      try {
+        body = await response.json();
+      } catch {
+        // no JSON body - the status alone is the message
+      }
+      const failure = httpFailure(response.status, body);
+      return label ? {...failure, message: `${label}: ${failure.message}`} : failure;
+    }
     try {
       const raw = await response.json();
       return {ok: true, raw, cards: normalizeUsage(raw), extraUsage: normalizeExtraUsage(raw)};

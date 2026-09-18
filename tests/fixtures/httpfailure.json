@@ -1,0 +1,98 @@
+{
+  "cases": [
+    {
+      "name": "424 with the server's words is transient and quotes them",
+      "status": 424,
+      "body": {
+        "type": "error",
+        "error": {
+          "type": "failed_dependency",
+          "message": "Upstream usage service unavailable"
+        }
+      },
+      "expected": {
+        "code": "transient",
+        "message": "HTTP 424 failed_dependency: Upstream usage service unavailable"
+      }
+    },
+    {
+      "name": "429 without a body is transient, status alone",
+      "status": 429,
+      "body": null,
+      "expected": {
+        "code": "transient",
+        "message": "HTTP 429"
+      }
+    },
+    {
+      "name": "a 5xx is transient",
+      "status": 503,
+      "body": {
+        "error": {
+          "type": "overloaded_error"
+        }
+      },
+      "expected": {
+        "code": "transient",
+        "message": "HTTP 503 overloaded_error"
+      }
+    },
+    {
+      "name": "a 404 is a real failure",
+      "status": 404,
+      "body": {
+        "error": {
+          "message": "not found"
+        }
+      },
+      "expected": {
+        "code": "http_error",
+        "message": "HTTP 404 not found"
+      }
+    },
+    {
+      "name": "a body that is not the error shape adds nothing",
+      "status": 400,
+      "body": {
+        "detail": "x"
+      },
+      "expected": {
+        "code": "http_error",
+        "message": "HTTP 400"
+      }
+    },
+    {
+      "name": "a blank message is not quoted",
+      "status": 424,
+      "body": {
+        "error": {
+          "type": "",
+          "message": "   "
+        }
+      },
+      "expected": {
+        "code": "transient",
+        "message": "HTTP 424"
+      }
+    }
+  ],
+  "transient": [
+    408,
+    424,
+    425,
+    429,
+    500,
+    502,
+    503,
+    599
+  ],
+  "notTransient": [
+    200,
+    400,
+    401,
+    403,
+    404,
+    409,
+    600
+  ]
+}

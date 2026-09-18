@@ -169,12 +169,20 @@ public enum PollSchedule {
     public static let idleMaxSeconds = 15 * 60
     /// Land just PAST a reset, never on it.
     public static let resetLagSeconds = 5
+    /// After a transient failure (424, 429, 5xx) - that poll produced nothing.
+    public static let retrySeconds = 60
 
-    /// - Parameter idleStreak: consecutive polls in which no limit moved.
+    /// - Parameters:
+    ///   - idleStreak: consecutive polls in which no limit moved.
+    ///   - retry: the last poll failed with a transient status; one request
+    ///     at `retrySeconds` instead of a blank or stale panel for the whole
+    ///     base interval.
     public static func nextPollSeconds(
-        baseSeconds: Int, idleStreak: Int = 0, nextReset: Date? = nil, now: Date = Date()
+        baseSeconds: Int, idleStreak: Int = 0, nextReset: Date? = nil, now: Date = Date(),
+        retry: Bool = false
     ) -> Int {
         let base = max(60, baseSeconds)
+        if retry { return min(base, retrySeconds) }
         var delay = base
         if idleStreak >= idleAfter { delay = min(idleMaxSeconds, base * idleFactor) }
         if let nextReset {

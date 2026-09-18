@@ -122,6 +122,11 @@ struct PopupView: View {
                         card: $0, spark: model.spark(for: $0.id),
                         forecast: model.forecasts[$0.id], trend: model.trends[$0.id])
                 }
+                // The cards are the last good reading; this is why they are.
+                if let err = model.errorText {
+                    Text(err).font(.system(size: 11)).foregroundColor(.cuWarning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             // Prepaid credit already charged this cycle. Absent entirely when

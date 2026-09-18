@@ -18,6 +18,14 @@ semantic versioning.
   no longer count once a login is known, so the first week after updating
   starts honest rather than borrowed. Same contract in GNOME, macOS and the
   MCP server, pinned by `tests/fixtures/warehouse.json`.
+- **A "not now" answer blanked the panel.** A 424 / 429 / 5xx from the usage
+  endpoint replaced every card with `HTTP 424` until the next interval, up to
+  15 minutes later, and said nothing about what the server had answered. Such
+  a status is now `transient`: the last good cards stay up with the reason
+  under them, the server's `error.type` / `error.message` are quoted (`HTTP
+  424 failed_dependency: …`), and the next poll comes after one minute
+  (`POLL_RETRY_SECONDS`, in the shared poll contract). An account row shows
+  the message without repeating its own name.
 
 ### Added
 

@@ -50,6 +50,23 @@
       "idleStreak": 0,
       "nextResetMs": null,
       "expected": 60
+    },
+    {
+      "name": "a transient failure retries after a minute, whatever the idle streak",
+      "baseSeconds": 600,
+      "idleStreak": 7,
+      "nextResetMs": null,
+      "retry": true,
+      "expected": 60
+    },
+    {
+      "name": "the retry never beats a base at the floor",
+      "baseSeconds": 60,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": true,
+      "expected": 60
     }
-  ]
+  ],
+  "retrySeconds": 60
 }

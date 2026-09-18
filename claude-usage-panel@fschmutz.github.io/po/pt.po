@@ -16,113 +16,118 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:140
+#: extension.js:146
 msgid "Extra usage"
 msgstr "Uso extra"
 
-#: extension.js:181
+#: extension.js:187
 msgid "Refresh now"
 msgstr "Atualizar agora"
 
-#: extension.js:194
+#: extension.js:200
 msgid "Settings"
 msgstr "Definições"
 
-#: extension.js:198
+#: extension.js:204
 msgid "Quit"
 msgstr "Sair"
 
-#: extension.js:310
+#: extension.js:302
+#, javascript-format
+msgid "%s - retrying, showing the last reading"
+msgstr "%s - a tentar de novo, a mostrar a última leitura"
+
+#: extension.js:326
 #, javascript-format
 msgid "Updated %s"
 msgstr "Atualizado %s"
 
-#: extension.js:336
+#: extension.js:352
 msgid "Session cost: computing…"
 msgstr "Custo da sessão: a calcular…"
 
-#: extension.js:341
+#: extension.js:357
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "Custo da sessão: $%s · %s tokens (est.)"
 
-#: extension.js:343
+#: extension.js:359
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "Custo da sessão: indisponível (instale o ccusage)"
 
-#: extension.js:373
+#: extension.js:389
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (%d%% do limite)"
 
-#: extension.js:390
+#: extension.js:406
 #, javascript-format
 msgid "last %s"
 msgstr "último %s"
 
-#: extension.js:390 prefs.js:277
+#: extension.js:406 prefs.js:277
 msgid "never"
 msgstr "nunca"
 
-#: extension.js:394
+#: extension.js:410
 #, javascript-format
 msgid "next %s"
 msgstr "próximo %s"
 
-#: extension.js:396
+#: extension.js:412
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "Pings de sessão: %s"
 
-#: extension.js:411 extension.js:425 lib/accountsSection.js:257
-#: lib/accountsSection.js:263 lib/sessionsSection.js:145
+#: extension.js:427 extension.js:441 lib/accountsSection.js:268
+#: lib/accountsSection.js:274 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Utilização do Claude"
 
-#: extension.js:412
+#: extension.js:428
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s atingiu %d%%"
 
-#: extension.js:426
+#: extension.js:442
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s vai esgotar-se antes de reiniciar ao ritmo atual"
 
-#: extension.js:536
+#: extension.js:552
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:60 prefs.js:475
+#: lib/accountsSection.js:63 prefs.js:475
 msgid "Accounts"
 msgstr "Contas"
 
-#: lib/accountsSection.js:119
+#: lib/accountsSection.js:122
 msgid "(login expired)"
 msgstr "(login expirado)"
 
-#: lib/accountsSection.js:175
+#: lib/accountsSection.js:178
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr "Troca automática aos %d%%"
 
-#: lib/accountsSection.js:250
+#: lib/accountsSection.js:261
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "Trocado de %s → %s: %s estava em %d%%"
 
-#: lib/accountsSection.js:252
+#: lib/accountsSection.js:263
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "Trocado de %s → %s"
 
-#: lib/accountsSection.js:254
+#: lib/accountsSection.js:265
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr " - %d sessão(ões) em execução mantêm o login antigo até reiniciar"
 
-#: lib/accountsSection.js:264
+#: lib/accountsSection.js:275
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "Não foi possível trocar para %s: %s"

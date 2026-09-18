@@ -16,113 +16,118 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:140
+#: extension.js:146
 msgid "Extra usage"
 msgstr "追加利用"
 
-#: extension.js:181
+#: extension.js:187
 msgid "Refresh now"
 msgstr "今すぐ更新"
 
-#: extension.js:194
+#: extension.js:200
 msgid "Settings"
 msgstr "設定"
 
-#: extension.js:198
+#: extension.js:204
 msgid "Quit"
 msgstr "終了"
 
-#: extension.js:310
+#: extension.js:302
+#, javascript-format
+msgid "%s - retrying, showing the last reading"
+msgstr "%s - 再試行中、前回の値を表示しています"
+
+#: extension.js:326
 #, javascript-format
 msgid "Updated %s"
 msgstr "更新 %s"
 
-#: extension.js:336
+#: extension.js:352
 msgid "Session cost: computing…"
 msgstr "セッション費用: 計算中…"
 
-#: extension.js:341
+#: extension.js:357
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "セッション費用: $%s · %s トークン (推定)"
 
-#: extension.js:343
+#: extension.js:359
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "セッション費用: 利用不可 (ccusage をインストール)"
 
-#: extension.js:373
+#: extension.js:389
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (上限の %d%%)"
 
-#: extension.js:390
+#: extension.js:406
 #, javascript-format
 msgid "last %s"
 msgstr "前回 %s"
 
-#: extension.js:390 prefs.js:277
+#: extension.js:406 prefs.js:277
 msgid "never"
 msgstr "なし"
 
-#: extension.js:394
+#: extension.js:410
 #, javascript-format
 msgid "next %s"
 msgstr "次回 %s"
 
-#: extension.js:396
+#: extension.js:412
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
-#: extension.js:411 extension.js:425 lib/accountsSection.js:257
-#: lib/accountsSection.js:263 lib/sessionsSection.js:145
+#: extension.js:427 extension.js:441 lib/accountsSection.js:268
+#: lib/accountsSection.js:274 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Claude の使用状況"
 
-#: extension.js:412
+#: extension.js:428
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s が %d%% に達しました"
 
-#: extension.js:426
+#: extension.js:442
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s は現在のペースだとリセット前に上限に達します"
 
-#: extension.js:536
+#: extension.js:552
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:60 prefs.js:475
+#: lib/accountsSection.js:63 prefs.js:475
 msgid "Accounts"
 msgstr "アカウント"
 
-#: lib/accountsSection.js:119
+#: lib/accountsSection.js:122
 msgid "(login expired)"
 msgstr "(ログイン期限切れ)"
 
-#: lib/accountsSection.js:175
+#: lib/accountsSection.js:178
 #, javascript-format
 msgid "Auto-switch at %d%%"
 msgstr "%d%% で自動切替"
 
-#: lib/accountsSection.js:250
+#: lib/accountsSection.js:261
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "%s → %s に切り替えました: %s は %d%% でした"
 
-#: lib/accountsSection.js:252
+#: lib/accountsSection.js:263
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "%s → %s に切り替えました"
 
-#: lib/accountsSection.js:254
+#: lib/accountsSection.js:265
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr " - 実行中の %d セッションは再起動まで以前のログインのままです"
 
-#: lib/accountsSection.js:264
+#: lib/accountsSection.js:275
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "%s に切り替えられませんでした: %s"

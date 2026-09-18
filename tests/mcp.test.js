@@ -146,7 +146,7 @@ test('tools/call get_usage - text + structuredContent, from the live login', asy
 });
 
 test('tools/call get_usage - every fetch failure is a tool error, not a crash', async (t) => {
-    for (const [status, code] of [[401, 'auth_expired'], [500, 'http_error']]) {
+    for (const [status, code] of [[401, 'auth_expired'], [500, 'transient'], [404, 'http_error']]) {
         const io = world(t, {fetchImpl: okFetch({}, status)});
         const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
         assert.equal(r.isError, true);

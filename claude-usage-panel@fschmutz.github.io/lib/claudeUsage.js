@@ -6,7 +6,7 @@ import Soup from 'gi://Soup';
 
 import {readAccessToken} from './claudeFiles.js';
 import {parseBody, send} from './http.js';
-import {normalizeUsage, normalizeExtraUsage} from './pure.js';
+import {httpFailure, normalizeUsage, normalizeExtraUsage} from './pure.js';
 
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
@@ -42,8 +42,15 @@ export async function fetchUsage(session, token = readAccessToken()) {
             message: 'Claude session expired. Run any Claude Code command to refresh.',
         };
     }
-    if (status < 200 || status >= 300)
-        return {ok: false, code: 'http_error', message: `HTTP ${status}`};
+    if (status < 200 || status >= 300) {
+        let body = null;
+        try {
+            body = parseBody(bytes);
+        } catch {
+            // no JSON body - the status alone is the message
+        }
+        return httpFailure(status, body);
+    }
     try {
         const raw = parseBody(bytes);
         return {ok: true, cards: normalizeUsage(raw), extraUsage: normalizeExtraUsage(raw), raw};

@@ -206,7 +206,13 @@ test('fetchUsageWith maps every outcome; fetchLiveUsage uses the live token', as
     assert.match((await s.fetchUsageWith('t')).message, /Claude session expired/);
     assert.match((await s.fetchUsageWith('t', {label: 'PERSO'})).message, /^PERSO: usage endpoint refused/);
     io.fetchImpl = async () => ({ok: false, status: 500, json: async () => ({})});
-    assert.deepEqual((await s.fetchUsageWith('t')).message, 'HTTP 500');
+    assert.deepEqual(await s.fetchUsageWith('t'), {ok: false, code: 'transient', message: 'HTTP 500'});
+    // The server's words reach the row, behind the account's name when there is one.
+    io.fetchImpl = async () => ({ok: false, status: 424, json: async () => ({error: {type: 'failed_dependency', message: 'upstream down'}})});
+    assert.equal((await s.fetchUsageWith('t', {label: 'PERSO'})).message,
+        'PERSO: HTTP 424 failed_dependency: upstream down');
+    io.fetchImpl = async () => ({ok: false, status: 404, json: async () => { throw new Error('no body'); }});
+    assert.deepEqual(await s.fetchUsageWith('t'), {ok: false, code: 'http_error', message: 'HTTP 404'});
     io.fetchImpl = async () => { throw new Error('ECONNREFUSED'); };
     assert.equal((await s.fetchUsageWith('t')).code, 'network_error');
     io.fetchImpl = async () => ({ok: true, status: 200, json: async () => { throw new Error('bad json'); }});

@@ -64,6 +64,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._warehouse = loadWarehouse();
         /** Identity of the login the last poll ran as - what its entries are filed under. */
         this._warehouseAccount = null;
+        /** The last poll failed with a "not now" status - retry soon, not next interval. */
+        this._retry = false;
         this._refreshing = false;
         this._destroyed = false;
         this._history = this._loadHistory();  // limit id -> [[epochMs, percent], …]
@@ -232,6 +234,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             idleStreak: this._idleStreak,
             nextResetMs: nextResetMs(this._latest),
             nowMs: Date.now(),
+            retry: this._retry,
         });
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delay, () => {
             this._timerId = 0;
@@ -291,8 +294,14 @@ class ClaudeUsageButton extends PanelMenu.Button {
             const result = await fetchUsage(this._httpSession);
             if (this._destroyed)
                 return;
+            this._retry = !result.ok && result.code === 'transient';
             if (!result.ok) {
-                this._renderError(result.message);
+                // A "not now" answer (424, 429, 5xx) keeps the last good cards
+                // up and says so under them; only a real failure blanks them.
+                if (this._retry && this._latest.length)
+                    this._updatedLabel.text = _('%s - retrying, showing the last reading').format(result.message);
+                else
+                    this._renderError(result.message);
                 return;
             }
             const now = Date.now();

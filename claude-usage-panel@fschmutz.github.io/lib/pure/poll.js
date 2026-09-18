@@ -7,22 +7,29 @@
 //   1. Nothing moved for a few polls → back off, up to POLL_IDLE_MAX.
 //   2. A reset inside the next delay → land just after it instead, so the fresh
 //      window shows up as a number and not as a stale card.
-//   3. Never poll faster than the configured base, whatever else is true.
+//   3. Never poll faster than the configured base, whatever else is true -
+//      except after a transient failure (424, 429, 5xx): that poll produced
+//      nothing, so the retry comes at POLL_RETRY_SECONDS, one request, instead
+//      of leaving a blank or stale panel up for the whole base interval.
 
 export const POLL_IDLE_AFTER = 3;              // unchanged polls before backing off
 export const POLL_IDLE_FACTOR = 4;
 export const POLL_IDLE_MAX_SECONDS = 15 * 60;
 export const POLL_RESET_LAG_SECONDS = 5;       // land just PAST the reset, never on it
+export const POLL_RETRY_SECONDS = 60;          // after a transient failure
 
 /**
  * Seconds to wait before the next poll.
  * @param {{baseSeconds: number, idleStreak: number, nextResetMs: ?number,
- *          nowMs: number}} o
- *   idleStreak counts consecutive polls where no limit moved.
+ *          nowMs: number, retry: boolean}} o
+ *   idleStreak counts consecutive polls where no limit moved; retry is true
+ *   when the last poll failed with a transient status.
  */
 export function nextPollSeconds({baseSeconds, idleStreak = 0, nextResetMs = null,
-    nowMs = Date.now()}) {
+    nowMs = Date.now(), retry = false}) {
     const base = Math.max(60, Math.round(Number(baseSeconds) || 60));
+    if (retry)
+        return Math.min(base, POLL_RETRY_SECONDS);
     let delay = base;
     if (idleStreak >= POLL_IDLE_AFTER)
         delay = Math.min(POLL_IDLE_MAX_SECONDS, base * POLL_IDLE_FACTOR);

@@ -101,6 +101,25 @@ for (const [portName, extra, label] of [
     });
 }
 
+// ── HTTP failures ───────────────────────────────────────────────────────────────
+// What a non-2xx answer from the usage endpoint becomes: which statuses keep
+// the last reading up and retry, and how the server's own words reach the UI.
+const httpFix = fixture('httpfailure.json');
+
+for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
+    for (const c of httpFix.cases) {
+        test(`${portName} httpFailure - ${c.name}`, () => {
+            assert.deepEqual(port.httpFailure(c.status, c.body), {ok: false, ...c.expected});
+        });
+    }
+    test(`${portName} isTransientStatus`, () => {
+        for (const s of httpFix.transient)
+            assert.equal(port.isTransientStatus(s), true, String(s));
+        for (const s of httpFix.notTransient)
+            assert.equal(port.isTransientStatus(s), false, String(s));
+    });
+}
+
 // ── Named accounts ──────────────────────────────────────────────────────────────
 // What a valid profile is, which saved login is the live one, whether a stored
 // token is still usable, and when to move to another account.
