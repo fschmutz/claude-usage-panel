@@ -552,38 +552,50 @@ msgid "Worst limit percentage that counts as full"
 msgstr "Porcentaje del peor límite que cuenta como lleno"
 
 #: prefs.js:518
-msgid "Show the account name in the top bar"
-msgstr "Mostrar el nombre de la cuenta en la barra superior"
+msgid "Show the auto-switch toggle in the dropdown"
+msgstr "Mostrar el interruptor de cambio automático en el menú"
 
 #: prefs.js:519
 msgid ""
+"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
+"here"
+msgstr "Desactivado oculta el interruptor «Cambio automático al N%» del menú; la opción sigue aquí"
+
+#: prefs.js:524
+msgid "Show the account name in the top bar"
+msgstr "Mostrar el nombre de la cuenta en la barra superior"
+
+#: prefs.js:525
+msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
-msgstr "«PRO · Sesión 42%» - se muestra cuando hay dos cuentas guardadas, y solo mientras quepa en la barra"
+msgstr ""
+"«PRO · Sesión 42%» - se muestra cuando hay dos cuentas guardadas, y solo "
+"mientras quepa en la barra"
 
-#: prefs.js:537
+#: prefs.js:543
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s, guardada como %s"
 
-#: prefs.js:538
+#: prefs.js:544
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s (aún no guardada)"
 
-#: prefs.js:539
+#: prefs.js:545
 msgid "No Claude Code login found"
 msgstr "No se encontró ningún inicio de sesión de Claude Code"
 
-#: prefs.js:545
+#: prefs.js:551
 msgid "login expired - sign in and save it again"
 msgstr "sesión caducada - inicia sesión y guárdala de nuevo"
 
-#: prefs.js:552
+#: prefs.js:558
 msgid "Forget this saved login"
 msgstr "Olvidar este inicio de sesión guardado"
 
-#: prefs.js:572
+#: prefs.js:578
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "Los nombres solo usan letras, dígitos, . _ - (hasta 32 caracteres)"
 

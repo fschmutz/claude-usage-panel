@@ -517,37 +517,47 @@ msgid "Worst limit percentage that counts as full"
 msgstr ""
 
 #: prefs.js:518
-msgid "Show the account name in the top bar"
+msgid "Show the auto-switch toggle in the dropdown"
 msgstr ""
 
 #: prefs.js:519
+msgid ""
+"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
+"here"
+msgstr ""
+
+#: prefs.js:524
+msgid "Show the account name in the top bar"
+msgstr ""
+
+#: prefs.js:525
 msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
 msgstr ""
 
-#: prefs.js:537
+#: prefs.js:543
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr ""
 
-#: prefs.js:538
+#: prefs.js:544
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr ""
 
-#: prefs.js:539
+#: prefs.js:545
 msgid "No Claude Code login found"
 msgstr ""
 
-#: prefs.js:545
+#: prefs.js:551
 msgid "login expired - sign in and save it again"
 msgstr ""
 
-#: prefs.js:552
+#: prefs.js:558
 msgid "Forget this saved login"
 msgstr ""
 
-#: prefs.js:572
+#: prefs.js:578
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr ""

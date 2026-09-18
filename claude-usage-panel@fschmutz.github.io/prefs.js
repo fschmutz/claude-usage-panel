@@ -514,6 +514,12 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         });
         settings.bind('accounts-switch-threshold', thresholdRow, 'value', 0);
         accounts.add(thresholdRow);
+        const menuToggleRow = new Adw.SwitchRow({
+            title: _('Show the auto-switch toggle in the dropdown'),
+            subtitle: _('Off hides the "Auto-switch at N%" switch from the menu; the option stays here'),
+        });
+        settings.bind('accounts-menu-toggle', menuToggleRow, 'active', 0);
+        accounts.add(menuToggleRow);
         const showRow = new Adw.SwitchRow({
             title: _('Show the account name in the top bar'),
             subtitle: _('"PRO · Session 42%" - shown once two logins are saved, '
@@ -525,7 +531,7 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         // One row per saved login, rebuilt after every save or remove.
         const listGroup = new Adw.PreferencesGroup();
         page.add(listGroup);
-        for (const w of [loginRow, saveRow, autoRow, thresholdRow, showRow, listGroup])
+        for (const w of [loginRow, saveRow, autoRow, thresholdRow, menuToggleRow, showRow, listGroup])
             settings.bind('accounts-enabled', w, 'visible', 0);
         const accountRows = [];
         const renderAccounts = () => {

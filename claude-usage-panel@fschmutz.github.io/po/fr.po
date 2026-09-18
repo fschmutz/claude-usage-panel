@@ -553,38 +553,50 @@ msgid "Worst limit percentage that counts as full"
 msgstr "Pourcentage de la pire limite considéré comme plein"
 
 #: prefs.js:518
-msgid "Show the account name in the top bar"
-msgstr "Afficher le nom du compte dans la barre"
+msgid "Show the auto-switch toggle in the dropdown"
+msgstr "Afficher l’interrupteur de bascule automatique dans le menu"
 
 #: prefs.js:519
 msgid ""
+"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
+"here"
+msgstr "Désactivé : l’interrupteur « Bascule auto à N% » disparaît du menu ; l’option reste ici"
+
+#: prefs.js:524
+msgid "Show the account name in the top bar"
+msgstr "Afficher le nom du compte dans la barre"
+
+#: prefs.js:525
+msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
-msgstr "« PRO · Session 42% » - affiché dès que deux comptes sont enregistrés, et seulement s'il tient dans la barre"
+msgstr ""
+"« PRO · Session 42% » - affiché dès que deux comptes sont enregistrés, et "
+"seulement s'il tient dans la barre"
 
-#: prefs.js:537
+#: prefs.js:543
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s, enregistrée sous %s"
 
-#: prefs.js:538
+#: prefs.js:544
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s (pas encore enregistrée)"
 
-#: prefs.js:539
+#: prefs.js:545
 msgid "No Claude Code login found"
 msgstr "Aucune connexion Claude Code trouvée"
 
-#: prefs.js:545
+#: prefs.js:551
 msgid "login expired - sign in and save it again"
 msgstr "connexion expirée - reconnectez-vous et enregistrez-la à nouveau"
 
-#: prefs.js:552
+#: prefs.js:558
 msgid "Forget this saved login"
 msgstr "Oublier cette connexion enregistrée"
 
-#: prefs.js:572
+#: prefs.js:578
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "Les noms n’utilisent que lettres, chiffres, . _ - (32 caractères max)"
 

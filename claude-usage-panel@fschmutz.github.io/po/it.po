@@ -550,38 +550,50 @@ msgid "Worst limit percentage that counts as full"
 msgstr "Percentuale del limite peggiore considerata piena"
 
 #: prefs.js:518
-msgid "Show the account name in the top bar"
-msgstr "Mostra il nome dell’account nella barra superiore"
+msgid "Show the auto-switch toggle in the dropdown"
+msgstr "Mostra l’interruttore di cambio automatico nel menu"
 
 #: prefs.js:519
 msgid ""
+"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
+"here"
+msgstr "Disattivato nasconde l’interruttore «Cambio automatico al N%» dal menu; l’opzione resta qui"
+
+#: prefs.js:524
+msgid "Show the account name in the top bar"
+msgstr "Mostra il nome dell’account nella barra superiore"
+
+#: prefs.js:525
+msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
-msgstr "«PRO · Sessione 42%» - mostrato quando ci sono due account salvati, e solo finché entra nella barra"
+msgstr ""
+"«PRO · Sessione 42%» - mostrato quando ci sono due account salvati, e solo "
+"finché entra nella barra"
 
-#: prefs.js:537
+#: prefs.js:543
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s, salvato come %s"
 
-#: prefs.js:538
+#: prefs.js:544
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s (non ancora salvato)"
 
-#: prefs.js:539
+#: prefs.js:545
 msgid "No Claude Code login found"
 msgstr "Nessun accesso Claude Code trovato"
 
-#: prefs.js:545
+#: prefs.js:551
 msgid "login expired - sign in and save it again"
 msgstr "accesso scaduto - accedi di nuovo e salvalo"
 
-#: prefs.js:552
+#: prefs.js:558
 msgid "Forget this saved login"
 msgstr "Dimentica questo accesso salvato"
 
-#: prefs.js:572
+#: prefs.js:578
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "I nomi usano solo lettere, cifre, . _ - (fino a 32 caratteri)"
 

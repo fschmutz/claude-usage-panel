@@ -102,6 +102,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'changed::accounts-enabled', () => this.refresh(),
             'changed::accounts-auto-switch', () => this._accounts.syncToggle(),
             'changed::accounts-switch-threshold', () => this._accounts.syncToggle(),
+            'changed::accounts-menu-toggle', () => this._accounts.syncToggle(),
             'changed::panel-show-account', () => this._renderPanel(),
             this
         );

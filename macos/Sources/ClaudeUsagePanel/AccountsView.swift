@@ -27,7 +27,7 @@ struct AccountsSectionView: View {
                     .help("Switch to \(row.name)" + (row.email.map { " (\($0))" } ?? ""))
                 }
             }
-            if model.accounts.count >= 2 {
+            if model.accounts.count >= 2 && model.showAutoSwitchInMenu {
                 Toggle(
                     "Auto-switch at \(model.accountsSwitchThreshold)%",
                     isOn: $model.accountsAutoSwitch
@@ -121,6 +121,7 @@ struct AccountsSettingsSection: View {
             )
             .disabled(!model.accountsAutoSwitch)
             Toggle("Show the account name in the menu bar", isOn: $model.showAccountInMenuBar)
+            Toggle("Show the auto-switch toggle in the menu", isOn: $model.showAutoSwitchInMenu)
             if let err = model.accountsError {
                 Text(err).font(.footnote).foregroundColor(.cuCritical)
             }

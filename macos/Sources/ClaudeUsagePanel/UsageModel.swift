@@ -84,6 +84,11 @@ final class UsageModel: ObservableObject {
     @Published var showAccountInMenuBar: Bool {
         didSet { UserDefaults.standard.set(showAccountInMenuBar, forKey: "showAccountInMenuBar") }
     }
+    /// Keep the "Auto-switch at N%" toggle under the account rows in the
+    /// popup; off hides it there, the option itself stays in Settings.
+    @Published var showAutoSwitchInMenu: Bool {
+        didSet { UserDefaults.standard.set(showAutoSwitchInMenu, forKey: "showAutoSwitchInMenu") }
+    }
 
     // Today's sessions: the work the plan was actually spent on, ranked by the
     // tokens each one burned, each resumable in a terminal with one click.
@@ -145,6 +150,8 @@ final class UsageModel: ObservableObject {
             ?? AutoSwitch.threshold
         showAccountInMenuBar =
             UserDefaults.standard.object(forKey: "showAccountInMenuBar") as? Bool ?? true
+        showAutoSwitchInMenu =
+            UserDefaults.standard.object(forKey: "showAutoSwitchInMenu") as? Bool ?? true
         // Key lives in the Keychain. Migrate a value stored in UserDefaults by
         // pre-Keychain versions once, then scrub it from the plist.
         if let legacy = UserDefaults.standard.string(forKey: "cursorApiKey"), !legacy.isEmpty {

@@ -534,38 +534,48 @@ msgid "Worst limit percentage that counts as full"
 msgstr "视为已满的最差限额百分比"
 
 #: prefs.js:518
+msgid "Show the auto-switch toggle in the dropdown"
+msgstr "在菜单中显示自动切换开关"
+
+#: prefs.js:519
+msgid ""
+"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
+"here"
+msgstr "关闭后菜单中不再显示“N% 时自动切换”开关；该选项保留在此处"
+
+#: prefs.js:524
 msgid "Show the account name in the top bar"
 msgstr "在顶栏显示账户名"
 
-#: prefs.js:519
+#: prefs.js:525
 msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
 msgstr "显示“PRO · Session 42%”- 保存两个账号后出现，且仅在顶栏放得下时显示"
 
-#: prefs.js:537
+#: prefs.js:543
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s，已保存为 %s"
 
-#: prefs.js:538
+#: prefs.js:544
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（尚未保存）"
 
-#: prefs.js:539
+#: prefs.js:545
 msgid "No Claude Code login found"
 msgstr "未找到 Claude Code 登录"
 
-#: prefs.js:545
+#: prefs.js:551
 msgid "login expired - sign in and save it again"
 msgstr "登录已过期 - 请重新登录并再次保存"
 
-#: prefs.js:552
+#: prefs.js:558
 msgid "Forget this saved login"
 msgstr "忘记此已保存的登录"
 
-#: prefs.js:572
+#: prefs.js:578
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名称只能使用字母、数字、. _ -(最多 32 个字符)"
 

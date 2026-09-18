@@ -179,6 +179,14 @@ export class AccountsController {
         const on = this._settings.get_boolean('accounts-auto-switch');
         if (this._autoSwitchItem.state !== on)
             this._autoSwitchItem.setToggleState(on);
+        this._autoSwitchItem.visible = this._showToggle();
+    }
+
+    // The toggle is for choosing between logins: below two it has nothing to
+    // do, and the user can keep it out of the menu (it stays in the prefs).
+    _showToggle() {
+        return this._settings.get_boolean('accounts-enabled') && this.savedCount > 1 &&
+            this._settings.get_boolean('accounts-menu-toggle');
     }
 
     // Both feed the top-bar readout, so both re-render it when they move.
@@ -213,7 +221,7 @@ export class AccountsController {
         const active = liveAccountName();
         this._setActive(active, profiles.length);
         this._item.visible = profiles.length > 0;
-        this._autoSwitchItem.visible = profiles.length > 1;
+        this._autoSwitchItem.visible = this._showToggle();
         if (!profiles.length) {
             this._section.update([], active);
             return;

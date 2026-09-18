@@ -88,6 +88,11 @@
       <description>Worst-limit percentage at which the active account is considered full.</description>
       <range min="50" max="100"/>
     </key>
+    <key name="accounts-menu-toggle" type="b">
+      <default>true</default>
+      <summary>Show the auto-switch toggle in the dropdown</summary>
+      <description>Keep the "Auto-switch at N%" switch under the account rows. Off hides it from the menu; the option itself stays in the preferences.</description>
+    </key>
     <key name="panel-show-account" type="b">
       <default>true</default>
       <summary>Show the account name in the top bar</summary>

@@ -19,6 +19,13 @@ semantic versioning.
   starts honest rather than borrowed. Same contract in GNOME, macOS and the
   MCP server, pinned by `tests/fixtures/warehouse.json`.
 
+### Added
+
+- **Preference: show the auto-switch toggle in the dropdown.** The
+  "Auto-switch at N%" switch under the account rows can be hidden from the
+  menu (`accounts-menu-toggle` in GSettings, "Show the auto-switch toggle in
+  the menu" on macOS); the option itself stays in the preferences.
+
 ## [1.12.1] - 2026-09-15
 
 ### Fixed

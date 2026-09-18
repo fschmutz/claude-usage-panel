@@ -543,38 +543,49 @@ msgid "Worst limit percentage that counts as full"
 msgstr "満杯とみなす最悪の上限の割合"
 
 #: prefs.js:518
-msgid "Show the account name in the top bar"
-msgstr "トップバーにアカウント名を表示"
+msgid "Show the auto-switch toggle in the dropdown"
+msgstr "自動切替のスイッチをメニューに表示"
 
 #: prefs.js:519
 msgid ""
+"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
+"here"
+msgstr "オフにするとメニューから「N% で自動切替」スイッチが消えます。設定はここに残ります"
+
+#: prefs.js:524
+msgid "Show the account name in the top bar"
+msgstr "トップバーにアカウント名を表示"
+
+#: prefs.js:525
+msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
-msgstr "「PRO · Session 42%」- ログインを2つ保存すると表示され、バーに収まる場合のみ"
+msgstr ""
+"「PRO · Session 42%」- ログインを2つ保存すると表示され、バーに収まる場合のみ"
 
-#: prefs.js:537
+#: prefs.js:543
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s（%s として保存済み）"
 
-#: prefs.js:538
+#: prefs.js:544
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（未保存）"
 
-#: prefs.js:539
+#: prefs.js:545
 msgid "No Claude Code login found"
 msgstr "Claude Code のログインが見つかりません"
 
-#: prefs.js:545
+#: prefs.js:551
 msgid "login expired - sign in and save it again"
 msgstr "ログイン期限切れ - 再度サインインして保存し直してください"
 
-#: prefs.js:552
+#: prefs.js:558
 msgid "Forget this saved login"
 msgstr "この保存済みログインを削除"
 
-#: prefs.js:572
+#: prefs.js:578
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名前に使えるのは英数字と . _ - のみ(最大 32 文字)"
 
