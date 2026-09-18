@@ -8,6 +8,15 @@ semantic versioning.
 
 ### Fixed
 
+- **`--force` let one account occupy two names.** `claude auth login` re-uses
+  the browser session, so it can land back on the account already signed in
+  there; saving that under the other name with `--force` left two profiles
+  carrying one identity. `activeAccountName()` then picks whichever comes
+  first, and an auto-switch between the two moves nothing. The twin check is
+  no longer force-able in any port - `force` overrules a name that holds a
+  *different* account, which is what it was for - and the message names the
+  email it refused and the profile to remove for a rename.
+
 - **A saved login's refresh token rotted while it was the live one.** The
   profile was written back only on a switch, so an account that stayed live
   for days kept the tokens from the day it was saved while Claude Code

@@ -260,8 +260,11 @@ enum AccountStore {
         return name
     }
 
-    /// Save the live login as `name`. Refuses to shadow another account's
-    /// name or to save one account twice, unless `force`.
+    /// Save the live login as `name`. `force` overrules a name that already
+    /// holds a different account. Saving one account under a second name is
+    /// refused outright: the store would then hold two profiles with one
+    /// identity, `activeName` would pick whichever came first, and an
+    /// auto-switch between them would move nothing.
     @discardableResult
     static func saveCurrent(_ name: String, force: Bool = false) throws -> AccountProfile {
         guard Accounts.isValidName(name) else {
@@ -282,10 +285,13 @@ enum AccountStore {
                 "\(name) is already \(existing.email ?? "another account") - pick another name or force"
             )
         }
+        // Not force-able: see above.
         let others = profiles.filter { $0.name != name }
-        if let twin = Accounts.activeName(profiles: others, live: account), !force {
+        if let twin = Accounts.activeName(profiles: others, live: account) {
+            let who = account["emailAddress"] as? String ?? "no email"
             throw AccountError.message(
-                "this login is already saved as \(twin) - remove it first or force")
+                "this login (\(who)) is already saved as \(twin) - "
+                    + "remove \(twin) first if you meant to rename it")
         }
         return try write(
             AccountProfile(name: name, savedAt: stamp(), account: account, credentials: creds))

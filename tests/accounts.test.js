@@ -94,6 +94,13 @@ test('saveCurrent refuses a taken name, a twin, and a bad name; --force override
     assert.throws(() => s.saveCurrent('PRO'), /PRO is already pro@example.com/);
     s.saveCurrent('PRO', {force: true});
     assert.equal(s.listProfiles()[0].account.emailAddress, 'perso@example.com');
+    // ... but --force never lets ONE account occupy TWO names: two profiles
+    // with one identity make activeAccountName a coin toss and an auto-switch
+    // between them a no-op. Seen live: a `claude auth login` that landed back
+    // on the signed-in browser account, then saved under the other name.
+    assert.throws(() => s.saveCurrent('PERSO', {force: true}),
+        /this login \(perso@example.com\) is already saved as PRO/);
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PRO']);
 });
 
 test('saveCurrent without a live login says so', () => {

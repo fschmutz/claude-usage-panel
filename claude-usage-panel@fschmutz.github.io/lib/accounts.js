@@ -144,8 +144,11 @@ export function syncBack() {
     return name;
 }
 
-/** Save the live login as `name`. Refuses to shadow another account's name
- *  or to save one account twice, unless `force`. */
+/** Save the live login as `name`. `force` overrules a name that already holds
+ *  a different account. Saving one account under a second name is refused
+ *  outright: the store would then hold two profiles with one identity,
+ *  activeAccountName() would pick whichever came first, and an auto-switch
+ *  between them would move nothing. */
 export function saveCurrent(name, {force = false} = {}) {
     if (!isValidName(name)) {
         throw new Error(
@@ -162,9 +165,13 @@ export function saveCurrent(name, {force = false} = {}) {
             `${name} is already ${existing.account.emailAddress ?? 'another account'} - ` +
             'pick another name or --force');
     }
+    // Not force-able: see above.
     const twin = activeAccountName(profiles.filter(p => p.name !== name), account);
-    if (twin && !force)
-        throw new Error(`this login is already saved as ${twin} - remove it first or --force`);
+    if (twin) {
+        throw new Error(
+            `this login (${account.emailAddress ?? 'no email'}) is already saved as ${twin} - ` +
+            `remove ${twin} first if you meant to rename it`);
+    }
     return snapshotLive(name);
 }
 
