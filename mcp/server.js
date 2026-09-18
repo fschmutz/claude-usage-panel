@@ -34,6 +34,10 @@ const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 /** Everything get_usage returns, for one login, from one `io`. */
 export async function getUsage(io = {}) {
   const store = openStore(io);
+  // Keep the live login's profile current: Claude Code rotates its tokens as
+  // it runs and revokes the ones it replaces, so a profile written only at
+  // save time rots while its account is live. Cheap - writes only on a change.
+  store.syncBack();
   const name = store.liveAccountName();
   const result = name ? await store.usageFor(name) : await store.fetchLiveUsage();
   if (!result.ok) return result;

@@ -34,6 +34,12 @@ extension UsageModel {
     /// poll; the active account's cards are the ones just fetched.
     func refreshAccounts() async {
         // Off by default: no rows, no menu-bar prefix, no fetch.
+        // Claude Code rotates the live login's tokens as it runs, and the
+        // refresh token it replaces is revoked. A profile only written at save
+        // time therefore rots while its account is the live one, and the switch
+        // back fails with HTTP 400. Sync first, every poll: it compares and
+        // writes only when the blob actually moved.
+        if accountsEnabled { try? AccountStore.syncBack() }
         let profiles = accountsEnabled ? AccountStore.list() : []
         liveLoginEmail =
             accountsEnabled ? AccountStore.readLiveAccount()?["emailAddress"] as? String : nil

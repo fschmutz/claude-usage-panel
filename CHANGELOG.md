@@ -8,6 +8,16 @@ semantic versioning.
 
 ### Fixed
 
+- **A saved login's refresh token rotted while it was the live one.** The
+  profile was written back only on a switch, so an account that stayed live
+  for days kept the tokens from the day it was saved while Claude Code
+  rotated - and revoked - them underneath. Switching back then failed with
+  `token refresh rejected (HTTP 400)`, which is exactly what both saved
+  accounts here did, three days apart. Every port now syncs the live login
+  into its own profile on each poll (`syncBack()`, a compare that writes only
+  when the blob moved), so the stored copy is never older than the tokens in
+  use.
+
 - **The week-over-week peak mixed accounts.** The 90-day history is one file
   per machine and carried no account identity, so after a login switch the
   week one account spent at 100% showed as the peak of the account that

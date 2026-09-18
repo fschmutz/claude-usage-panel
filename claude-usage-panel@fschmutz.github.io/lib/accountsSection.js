@@ -13,7 +13,8 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {
-    listProfiles, liveAccountName, readLastSwitchMs, switchTo, usageFor, writeUsageCache,
+    listProfiles, liveAccountName, readLastSwitchMs, switchTo, syncBack, usageFor,
+    writeUsageCache,
 } from './accounts.js';
 import {
     accountSummary, autoSwitchTarget, formatAccountUsage, rowError, severityClass,
@@ -213,6 +214,12 @@ export class AccountsController {
         }
         let profiles;
         try {
+            // Claude Code rotates the live login's tokens as it runs, and the
+            // refresh token it replaces is revoked. A profile only written at
+            // save time therefore rots while its account is the live one, and
+            // the switch back fails with HTTP 400. Sync first, every poll: it
+            // compares and writes only when the blob actually moved.
+            syncBack();
             profiles = listProfiles();
         } catch (e) {
             logError(e, 'claude-usage-panel: could not read the saved accounts');

@@ -324,6 +324,20 @@ test('no warehouse file means no trend, not an error', () => {
     assert.equal(weekOverWeek([], 'session', Date.now()), null);
 });
 
+test('get_usage syncs the live login back, so a parked profile never rots', async (t) => {
+    // Claude Code rotates the live tokens as it runs and revokes the ones it
+    // replaces. Without this, the saved copy keeps the refresh token from the
+    // day it was saved and the switch back fails with HTTP 400.
+    const io = world(t);
+    const store = openStore(io);
+    store.saveCurrent('PRO');
+    writeLiveLogin(io.home,
+        {claudeAiOauth: {...creds('pro').claudeAiOauth, accessToken: 'at-rotated', refreshToken: 'rt-rotated'}},
+        account('pro'));
+    await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.equal(store.readProfile('PRO').credentials.claudeAiOauth.refreshToken, 'rt-rotated');
+});
+
 test('get_usage reads the trend from the warehouse under the io state dir', async (t) => {
     const io = world(t);
     const day = 86_400_000;
