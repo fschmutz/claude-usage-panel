@@ -85,9 +85,12 @@ jobs:
             gh release create "$TAG" --title "$TAG" --notes-file notes.md "$ZIP"
           fi
 
-  # Build the macOS .app on a Mac runner and attach it to the release. The zip
-  # is ad-hoc signed (not notarized), so first launch needs a right-click ▸ Open
-  # - or just build locally with `./install.sh macos`. Notarization: PUBLISHING.md.
+  # Build the macOS .app on a Mac runner and attach it to the release. With
+  # the six MACOS_*/APPLE_* secrets below configured (repo Settings ▸ Secrets),
+  # scripts/notarize-macos.sh signs it with a Developer ID and notarizes it;
+  # with none of them set it stays ad-hoc signed, so first launch needs a
+  # right-click ▸ Open - or just build locally with `./install.sh macos`.
+  # Details either way: PUBLISHING.md.
   macos-asset:
     needs: release
     runs-on: macos-latest
@@ -99,6 +102,15 @@ jobs:
           persist-credentials: false
       - name: Build the .app (no /Applications install)
         run: ./install.sh macos --build-only
+      - name: Sign with Developer ID and notarize (no-op without the secrets)
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: ./scripts/notarize-macos.sh "macos/ClaudeUsagePanel.app"
       - name: Zip and upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
