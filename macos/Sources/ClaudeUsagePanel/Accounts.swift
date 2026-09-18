@@ -39,7 +39,7 @@ extension UsageModel {
         // time therefore rots while its account is the live one, and the switch
         // back fails with HTTP 400. Sync first, every poll: it compares and
         // writes only when the blob actually moved.
-        if accountsEnabled { try? AccountStore.syncBack() }
+        if accountsEnabled { _ = try? AccountStore.syncBack() }
         let profiles = accountsEnabled ? AccountStore.list() : []
         liveLoginEmail =
             accountsEnabled ? AccountStore.readLiveAccount()?["emailAddress"] as? String : nil
