@@ -94,6 +94,9 @@ jobs:
   macos-asset:
     needs: release
     runs-on: macos-latest
+    # Signing and notarization wait on Apple; bound the job rather than let a
+    # stuck submission hold a Mac runner for the account-wide default.
+    timeout-minutes: 60
     permissions:
       contents: write
     steps:
