@@ -35,6 +35,9 @@ TMP="${TMPDIR:-/tmp}"
 KEYCHAIN="$TMP/claude-usage-panel-notarize-$$.keychain-db"
 KEYCHAIN_PW="$(openssl rand -base64 32)"
 CERT_PATH="$TMP/claude-usage-panel-notarize-$$.p12"
+# The .p12 and the notarization zip are written before anything reads them;
+# keep them owner-only rather than trusting the runner's umask.
+umask 077
 
 # Bash-3.2-safe: read the existing search list into an array without mapfile
 # (the stock macOS bash lacks it - see scripts/install/ui.sh's own note).
@@ -71,8 +74,15 @@ security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
     -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
 
 # Prepend so codesign finds the imported identity without dropping the
-# runner's existing keychains from the search list.
-security list-keychains -d user -s "$KEYCHAIN" "${ORIGINAL_KEYCHAINS[@]}"
+# runner's existing keychains from the search list. The count guard is not
+# decoration: expanding "${arr[@]}" on an EMPTY array aborts under `set -u`
+# in bash 3.2, which is what macOS runs as /bin/bash - the same guard
+# cleanup() already carries.
+if [ "${#ORIGINAL_KEYCHAINS[@]}" -gt 0 ]; then
+    security list-keychains -d user -s "$KEYCHAIN" "${ORIGINAL_KEYCHAINS[@]}"
+else
+    security list-keychains -d user -s "$KEYCHAIN"
+fi
 
 echo "==> Signing with Developer ID"
 codesign --deep --force --options runtime --keychain "$KEYCHAIN" \
@@ -82,9 +92,12 @@ codesign --verify --deep --strict "$BUNDLE"
 echo "==> Notarizing"
 NOTARIZE_ZIP="$TMP/claude-usage-panel-notarize-$$.zip"
 ditto -c -k --keepParent "$BUNDLE" "$NOTARIZE_ZIP"
+# --wait blocks until Apple answers; --timeout bounds it, so a stuck
+# submission fails the release job in 30 min instead of burning the runner's
+# whole budget.
 xcrun notarytool submit "$NOTARIZE_ZIP" \
     --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-    --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait
+    --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait --timeout 30m
 rm -f "$NOTARIZE_ZIP"
 
 echo "==> Stapling"

@@ -94,7 +94,83 @@ for bare in "--dry-run" "--dry-run update"; do
     fi
 done
 
-# 4. The always-safe read-only entrypoints.
+# 4. scripts/notarize-macos.sh, actually RUN - its macOS-only tools stubbed.
+#    `bash -n` above only parses it; running it is what catches the trap this
+#    gate exists for, and the real thing can never run here (no codesign, no
+#    Apple account). The stubs stand in for the commands it shells out to, and
+#    `security list-keychains` answers with an EMPTY list in one pass and a
+#    populated one in the other: the empty pass is where "${arr[@]}" under
+#    `set -u` aborts on a stock Mac and nothing on ubuntu notices.
+echo
+echo "== notarize-macos.sh under stubbed macOS tools =="
+STUBS="${TMPDIR:-/tmp}/cup-notarize-stubs.$$"
+mkdir -p "$STUBS/Stub.app"
+cat >"$STUBS/security" <<'STUB'
+#!/usr/bin/env bash
+# list-keychains -d user  ->  the smoke's chosen list; everything else is a no-op
+if [ "$1" = "list-keychains" ] && [ "$#" -eq 3 ]; then
+    printf '%s' "${SMOKE_KEYCHAINS:-}"
+fi
+exit 0
+STUB
+for c in codesign xcrun ditto openssl base64; do
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$STUBS/$c"
+done
+chmod +x "$STUBS"/security "$STUBS"/codesign "$STUBS"/xcrun "$STUBS"/ditto \
+    "$STUBS"/openssl "$STUBS"/base64
+
+# The exit code is NOT the assertion here, on purpose. A `set -u` abort in
+# bash 3.2 runs the EXIT trap and then exits 0 - no form of the trap can
+# recover the real status (verified against bash 3.2: `$?` inside the handler
+# reads 0) - so a script that dies half way through reports success. What
+# proves it ran to the end is the line it prints when it does.
+notarize_smoke() {
+    # $1 label, $2 the list `security list-keychains` hands back,
+    # $3 the marker the run must print to count as having finished
+    rc=0
+    out="$(env PATH="$STUBS:$PATH" SMOKE_KEYCHAINS="$2" \
+        MACOS_CERTIFICATE_P12_BASE64=x MACOS_CERTIFICATE_PASSWORD=x \
+        MACOS_SIGNING_IDENTITY=x APPLE_ID=x APPLE_TEAM_ID=x \
+        APPLE_APP_SPECIFIC_PASSWORD=x \
+        bash "$ROOT/scripts/notarize-macos.sh" "$STUBS/Stub.app" 2>&1)" || rc=$?
+    case "$out" in
+        *"$3"*) marker=1 ;;
+        *) marker=0 ;;
+    esac
+    if [ "$rc" -eq 0 ] && [ "$marker" -eq 1 ]; then
+        printf '  ok    notarize-macos.sh (%s)\n' "$1"
+    else
+        printf '  FAIL  notarize-macos.sh (%s): exit %s, expected output %s\n' "$1" "$rc" "$3"
+        printf '%s\n' "$out" | tail -5
+        fail=1
+    fi
+}
+
+notarize_smoke "empty keychain list" "" "notarized, and stapled"
+notarize_smoke "populated keychain list" '    "/Users/runner/Library/Keychains/login.keychain-db"
+    "/Library/Keychains/System.keychain"' "notarized, and stapled"
+
+# No secrets: the path every release takes today. A no-op that SAYS so, not a
+# failure and not a silent pass.
+rc=0
+out="$(env PATH="$STUBS:$PATH" bash "$ROOT/scripts/notarize-macos.sh" \
+    "$STUBS/Stub.app" 2>&1)" || rc=$?
+case "$out" in
+    *"leaving the ad-hoc-signed bundle as-is"*) marker=1 ;;
+    *) marker=0 ;;
+esac
+if [ "$rc" -eq 0 ] && [ "$marker" -eq 1 ]; then
+    printf '  ok    notarize-macos.sh (no secrets - no-op)\n'
+else
+    printf '  FAIL  notarize-macos.sh (no secrets): exit %s\n' "$rc"
+    printf '%s\n' "$out" | tail -5
+    fail=1
+fi
+rm -f "$STUBS"/security "$STUBS"/codesign "$STUBS"/xcrun "$STUBS"/ditto \
+    "$STUBS"/openssl "$STUBS"/base64
+rmdir "$STUBS/Stub.app" "$STUBS" 2>/dev/null || true
+
+# 5. The always-safe read-only entrypoints.
 echo
 echo "== read-only entrypoints =="
 for cmd in "--list" "-h"; do
