@@ -308,8 +308,16 @@ test('a torn or garbage line is skipped, never fatal', () => {
 // asserted for BOTH JS ports in parity.test.js against tests/fixtures/accounts.json;
 // here only what has no twin: the row colouring and the row usage text.
 import {
-    formatAccountUsage, thresholdClass, usageSeverity, warehouseEntry,
+    formatAccountUsage, rowError, thresholdClass, usageSeverity, warehouseEntry,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+
+test('accounts: rowError drops the profile-name prefix the row already shows', () => {
+    assert.equal(rowError('PRO', 'PRO: token refresh rejected (HTTP 400) - log in again and save it'),
+        'token refresh rejected (HTTP 400) - log in again and save it');
+    assert.equal(rowError('PRO', 'HTTP 424'), 'HTTP 424');
+    assert.equal(rowError('PRO', 'PROD: nope'), 'PROD: nope');
+    assert.equal(rowError('PRO', null), '');
+});
 
 test('accounts: usageSeverity colours by the 70 / 90 thresholds', () => {
     assert.equal(usageSeverity(null), 'normal');

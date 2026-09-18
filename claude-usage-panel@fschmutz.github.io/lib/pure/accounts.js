@@ -164,3 +164,16 @@ export function formatAccountUsage(cards) {
     const w = pick('weekly_all');
     return [s && `S ${s}`, w && `W ${w}`].filter(x => x).join(' · ');
 }
+
+/**
+ * The fetch/refresh error as an account ROW shows it: the store prefixes its
+ * errors with the profile name for the CLI and the notifications, and a row
+ * already carries that name, so the prefix is dropped there.
+ * "PRO: token refresh rejected (HTTP 400) - log in again" → "token refresh
+ * rejected (HTTP 400) - log in again".
+ */
+export function rowError(name, message) {
+    const text = String(message ?? '').trim();
+    const prefix = `${name}: `;
+    return text.startsWith(prefix) ? text.slice(prefix.length) : text;
+}

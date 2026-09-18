@@ -214,4 +214,13 @@ public enum Accounts {
         let w = cards.first { $0.id == "weekly_all" }.map { "W \($0.percent)%" } ?? "W -"
         return "\(s) · \(w)"
     }
+
+    /// A fetch/refresh error as an account ROW shows it: the store prefixes
+    /// its errors with the profile name for the CLI and the notifications,
+    /// and a row already carries that name, so the prefix is dropped there.
+    public static func rowError(name: String, message: String) -> String {
+        let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefix = "\(name): "
+        return text.hasPrefix(prefix) ? String(text.dropFirst(prefix.count)) : text
+    }
 }

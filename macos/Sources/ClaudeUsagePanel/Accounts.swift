@@ -57,7 +57,8 @@ extension UsageModel {
                 do {
                     cards = try await AccountStore.usageFor(p.name)
                 } catch {
-                    fetchError = error.localizedDescription
+                    fetchError = Accounts.rowError(
+                        name: p.name, message: error.localizedDescription)
                 }
             }
             if let cards { usage[p.name] = cards }

@@ -16,8 +16,8 @@ import {
     listProfiles, liveAccountName, readLastSwitchMs, switchTo, usageFor, writeUsageCache,
 } from './accounts.js';
 import {
-    accountSummary, autoSwitchTarget, formatAccountUsage, severityClass, usageSeverity,
-    worstPercent,
+    accountSummary, autoSwitchTarget, formatAccountUsage, rowError, severityClass,
+    usageSeverity, worstPercent,
 } from './pure.js';
 import {vbox, vboxProps} from './widgets.js';
 
@@ -40,7 +40,10 @@ async function collectAccountRows(session, profiles, active, activeCards) {
             return {...summary, cards: null, error: null};
         const r = await usageFor(session, profile.name);
         results[profile.name] = r;
-        return {...summary, cards: r.ok ? r.cards : null, error: r.ok ? null : r.message};
+        return {
+            ...summary, cards: r.ok ? r.cards : null,
+            error: r.ok ? null : rowError(profile.name, r.message),
+        };
     }));
     writeUsageCache(results);
     const worst = Object.fromEntries(

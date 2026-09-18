@@ -114,5 +114,11 @@ final class AccountsParityTests: XCTestCase {
                 cards([["key": "session", "percent": 42], ["key": "weekly_all", "percent": 12]])),
             "S 42% · W 12%")
         XCTAssertEqual(Accounts.formatUsage([]), "S - · W -")
+        // The row already names the account, so the store's prefix goes.
+        XCTAssertEqual(
+            Accounts.rowError(name: "PRO", message: "PRO: token refresh rejected (HTTP 400)"),
+            "token refresh rejected (HTTP 400)")
+        XCTAssertEqual(Accounts.rowError(name: "PRO", message: "HTTP 424"), "HTTP 424")
+        XCTAssertEqual(Accounts.rowError(name: "PRO", message: "PROD: nope"), "PROD: nope")
     }
 }
