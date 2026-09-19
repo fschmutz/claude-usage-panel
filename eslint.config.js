@@ -43,6 +43,8 @@ export default [
                 TextEncoder: 'readonly',
                 TextDecoder: 'readonly',
                 globalThis: 'readonly',
+                // GNOME Shell's own global (stage, display); extensions only.
+                global: 'readonly',
                 imports: 'readonly',
                 log: 'readonly',
                 logError: 'readonly',
