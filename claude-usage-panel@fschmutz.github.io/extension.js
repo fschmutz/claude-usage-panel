@@ -27,6 +27,8 @@ import {AccountsController} from './lib/accountsSection.js';
 import {CursorController} from './lib/cursorSection.js';
 import {SessionsController} from './lib/sessionsSection.js';
 import {UsageCard} from './lib/usageCard.js';
+import {HeaderBar} from './lib/headerBar.js';
+import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
 import {vbox} from './lib/widgets.js';
 import {
     severityClass, formatResets, alertThreshold,
@@ -101,6 +103,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this.menu.connectObject('open-state-changed', (_menu, open) => {
             if (open)
                 this._applyWidth();
+            else
+                hideTooltip();
         }, this);
         Main.layoutManager.connectObject(
             'monitors-changed', () => this._applyWidth(), this);
@@ -138,13 +142,19 @@ class ClaudeUsageButton extends PanelMenu.Button {
             isDestroyed: () => this._destroyed,
         };
 
-        // Header: title left, plan label right.
+        // Header: title left, plan label, then the controls as icon buttons.
         const header = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const titleRow = new St.BoxLayout({x_expand: true, style_class: 'cu-header'});
-        titleRow.add_child(new St.Label({text: 'Claude usage', style_class: 'cu-title', x_expand: true}));
-        this._planLabel = new St.Label({text: '', style_class: 'cu-plan'});
-        titleRow.add_child(this._planLabel);
-        header.add_child(titleRow);
+        this._header = new HeaderBar({
+            // Refresh is a plain button, not a menu item, so the poll happens
+            // in place WITHOUT closing the popup.
+            onRefresh: () => this.refresh(),
+            onSettings: () => {
+                this.menu.close();
+                this._extension.openPreferences();
+            },
+            onAutoSwitch: () => this._accounts.toggleAutoSwitch(),
+        });
+        header.add_child(this._header);
         this.menu.addMenuItem(header);
 
         // One card per limit.
@@ -186,35 +196,10 @@ class ClaudeUsageButton extends PanelMenu.Button {
             ...deps,
             refreshSoon: () => this._refreshSoon(),
             onActiveChanged: () => this._renderPanel(),
+            syncAutoSwitch: state => this._header.syncAutoSwitch(state),
         });
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
-        // Refresh as a St.Button (not a menu item) so clicking it refreshes
-        // in place WITHOUT closing the popup.
-        const refreshRow = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const refreshBox = new St.BoxLayout({style_class: 'cu-refresh-box'});
-        refreshBox.add_child(new St.Icon({
-            icon_name: 'view-refresh-symbolic',
-            style_class: 'popup-menu-icon',
-        }));
-        refreshBox.add_child(new St.Label({
-            text: _('Refresh now'),
-            y_align: Clutter.ActorAlign.CENTER,
-        }));
-        const refreshBtn = new St.Button({
-            style_class: 'cu-refresh-btn',
-            x_expand: true,
-            can_focus: true,
-            child: refreshBox,
-        });
-        refreshBtn.connect('clicked', () => this.refresh());
-        refreshRow.add_child(refreshBtn);
-        this.menu.addMenuItem(refreshRow);
-
-        const prefsItem = new PopupMenu.PopupImageMenuItem(_('Settings'), 'emblem-system-symbolic');
-        prefsItem.connect('activate', () => this._extension.openPreferences());
-        this.menu.addMenuItem(prefsItem);
 
         const quitItem = new PopupMenu.PopupImageMenuItem(_('Quit'), 'application-exit-symbolic');
         quitItem.connect('activate', () => this._quit());
@@ -341,7 +326,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._updatedLabel.text = _('Updated %s').format(formatClock(now));
             this._renderPing();
             // Plan label from the raw spend/extra hints, best-effort.
-            this._planLabel.text = result.raw?.plan_label ?? '';
+            this._header.setPlan(result.raw?.plan_label ?? '');
 
             await this._refreshCost();
             await this._sessions.refresh();
@@ -611,6 +596,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this.menu?.disconnectObject(this);
         Main.layoutManager.disconnectObject(this);
         St.ThemeContext.get_for_stage(global.stage).disconnectObject(this);
+        destroyTooltip();
         this._httpSession?.abort();
         this._httpSession = null;
         super.destroy();

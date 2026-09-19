@@ -84,8 +84,9 @@ than that reads *login expired* everywhere; sign in to it once with
 
 ## Auto-switch
 
-Off by default. When it is on (the toggle sits in the dropdown / menu, next to
-the accounts, and in the preferences), each poll checks whether the active
+Off by default. When it is on (a button in the GNOME dropdown's header, a
+toggle next to the accounts on macOS, a switch in the preferences on both),
+each poll checks whether the active
 account has crossed the threshold (90%, adjustable 50-100) on any limit. If
 another saved account has usage at least 15 points under the threshold, the
 panel switches to the one with the most headroom, notifies you (`Switched PRO →

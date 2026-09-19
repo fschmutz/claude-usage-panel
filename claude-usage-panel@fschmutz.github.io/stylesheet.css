@@ -199,16 +199,34 @@
 .cu-account-meta.cu-warning  { color: #e0a458; }
 .cu-account-meta.cu-critical { color: #e5484d; }
 
-/* refresh button (stays-open) */
-.cu-refresh-btn {
+/* header controls: auto-switch, refresh, settings. Small enough to sit on the
+   title row, lit when the toggle they stand for is on. */
+.cu-icon-btn {
     border-radius: 8px;
-    padding: 6px 8px;
+    padding: 4px;
+    margin-left: 2px;
+    color: #9a948a;
 }
-.cu-refresh-btn:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+.cu-icon-btn:hover,
+.cu-icon-btn:focus {
+    background-color: rgba(255, 255, 255, 0.10);
+    color: #e6e1d7;
 }
-.cu-refresh-box {
-    spacing: 8px;
+.cu-icon-btn.cu-icon-on {
+    color: #d97757;
+}
+.cu-icon {
+    icon-size: 16px;
+}
+
+/* hover title for those buttons - St has no tooltip of its own */
+.cu-tooltip {
+    background-color: rgba(20, 20, 19, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 8px;
+    padding: 4px 8px;
+    color: #e6e1d7;
+    font-size: 11px;
 }
 
 /* ---- light theme overrides (applied when desktop is not prefer-dark) ---- */
@@ -232,6 +250,13 @@
 .cu-light .cu-session-label { color: #333; }
 .cu-light .cu-session-meta { color: #6b6b60; }
 .cu-light .cu-session-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
+.cu-light .cu-icon-btn { color: #6b6b60; }
+.cu-light .cu-icon-btn:hover,
+.cu-light .cu-icon-btn:focus {
+    background-color: rgba(0, 0, 0, 0.08);
+    color: #1a1a1a;
+}
+.cu-light .cu-icon-btn.cu-icon-on { color: #b35a3c; }
 .cu-light .cu-account-name { color: #333; }
 .cu-light .cu-account-active .cu-account-name { color: #1a1a1a; }
 .cu-light .cu-account-meta { color: #6b6b60; }

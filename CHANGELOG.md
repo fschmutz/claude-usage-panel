@@ -6,6 +6,17 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **GNOME: the dropdown's controls moved into its header, as icon buttons.**
+  Auto-switch, refresh and settings were three full-width rows at the foot of
+  the panel - the part you had to scroll past the data to reach. They are now
+  small buttons on the title row: auto-switch (shown only when there is more
+  than one saved login, lit when it is armed), refresh, settings. Each carries
+  a hover title, which is also its accessible name, since the auto-switch
+  button has no other way to say which state it is in and at what threshold.
+  **Quit** stays at the bottom.
+
 ### Fixed
 
 - **The GNOME dropdown sized itself from its longest line, so the bars lied.**

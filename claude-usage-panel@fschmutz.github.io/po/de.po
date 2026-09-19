@@ -16,17 +16,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:146
+#: extension.js:171
 msgid "Extra usage"
 msgstr "Zusätzliche Nutzung"
-
-#: extension.js:187
-msgid "Refresh now"
-msgstr "Jetzt aktualisieren"
-
-#: extension.js:200
-msgid "Settings"
-msgstr "Einstellungen"
 
 #: extension.js:204
 msgid "Quit"
@@ -79,8 +71,8 @@ msgstr "nächste %s"
 msgid "Session pings: %s"
 msgstr "Sitzungs-Pings: %s"
 
-#: extension.js:427 extension.js:441 lib/accountsSection.js:268
-#: lib/accountsSection.js:274 lib/sessionsSection.js:145
+#: extension.js:427 extension.js:441 lib/accountsSection.js:287
+#: lib/accountsSection.js:293 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Claude-Nutzung"
@@ -95,72 +87,85 @@ msgstr "%s hat %d%% erreicht"
 msgid "%s is on pace to run out before it resets"
 msgstr "%s wird im aktuellen Tempo vor dem Zurücksetzen aufgebraucht"
 
-#: extension.js:552
+#: extension.js:569
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:63 prefs.js:475
+#: lib/accountsSection.js:65 prefs.js:475
 msgid "Accounts"
 msgstr "Konten"
 
-#: lib/accountsSection.js:122
+#: lib/accountsSection.js:126
 msgid "(login expired)"
 msgstr "(Anmeldung abgelaufen)"
 
-#: lib/accountsSection.js:178
+#: lib/accountsSection.js:187
 #, javascript-format
-msgid "Auto-switch at %d%%"
-msgstr "Automatisch wechseln bei %d%%"
+msgid "Auto-switch at %d%% · on"
+msgstr "Automatisch wechseln bei %d%% · an"
 
-#: lib/accountsSection.js:261
+#: lib/accountsSection.js:188
+#, javascript-format
+msgid "Auto-switch at %d%% · off"
+msgstr "Automatisch wechseln bei %d%% · aus"
+
+#: lib/accountsSection.js:280
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "Gewechselt %s → %s: %s stand bei %d%%"
 
-#: lib/accountsSection.js:263
+#: lib/accountsSection.js:282
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "Gewechselt %s → %s"
 
-#: lib/accountsSection.js:265
+#: lib/accountsSection.js:284
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr ""
 " - %d laufende Sitzung(en) behalten die alte Anmeldung bis zum Neustart"
 
-#: lib/accountsSection.js:275
+#: lib/accountsSection.js:294
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "Wechsel zu %s nicht möglich: %s"
 
-#: lib/cursorSection.js:80
+#: lib/cursorSection.js:72
 msgid "Loading…"
 msgstr "Wird geladen…"
 
-#: lib/cursorSection.js:89
+#: lib/cursorSection.js:81
 #, javascript-format
 msgid "This cycle: $%s / $%s (%d%%) · %d members"
 msgstr "Dieser Zyklus: $%s / $%s (%d%%) · %d Mitglieder"
 
-#: lib/cursorSection.js:95
+#: lib/cursorSection.js:86
 #, javascript-format
 msgid "This cycle: $%s · %d members"
 msgstr "Dieser Zyklus: $%s · %d Mitglieder"
 
-#: lib/cursorSection.js:100
+#: lib/cursorSection.js:91
 #, javascript-format
 msgid "Today: $%s"
 msgstr "Heute: $%s"
 
-#: lib/cursorSection.js:102
+#: lib/cursorSection.js:93
 #, javascript-format
 msgid "Top: %s $%s"
 msgstr "Spitze: %s $%s"
 
-#: lib/cursorSection.js:106
+#: lib/cursorSection.js:97
 #, javascript-format
 msgid "Cursor: %s"
 msgstr "Cursor: %s"
+
+#: lib/headerBar.js:59
+msgid "Refresh now"
+msgstr "Jetzt aktualisieren"
+
+#: lib/headerBar.js:61
+msgid "Settings"
+msgstr "Einstellungen"
 
 #: lib/sessionsSection.js:46 prefs.js:170
 msgid "Today’s sessions"
@@ -556,14 +561,14 @@ msgid "Worst limit percentage that counts as full"
 msgstr "Prozentsatz des schlechtesten Limits, der als voll gilt"
 
 #: prefs.js:518
-msgid "Show the auto-switch toggle in the dropdown"
-msgstr "Auto-Wechsel-Schalter im Menü anzeigen"
+msgid "Show the auto-switch button in the dropdown"
+msgstr "Auto-Wechsel-Schaltfläche im Menü anzeigen"
 
 #: prefs.js:519
 msgid ""
-"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
-"here"
-msgstr "Aus blendet den Schalter „Auto-Wechsel bei N%“ im Menü aus; die Option bleibt hier"
+"Off hides the auto-switch button from the panel header; the option stays here"
+msgstr ""
+"Aus blendet die Schaltfläche in der Kopfzeile aus; die Option bleibt hier"
 
 #: prefs.js:524
 msgid "Show the account name in the top bar"

@@ -515,8 +515,8 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         settings.bind('accounts-switch-threshold', thresholdRow, 'value', 0);
         accounts.add(thresholdRow);
         const menuToggleRow = new Adw.SwitchRow({
-            title: _('Show the auto-switch toggle in the dropdown'),
-            subtitle: _('Off hides the "Auto-switch at N%" switch from the menu; the option stays here'),
+            title: _('Show the auto-switch button in the dropdown'),
+            subtitle: _('Off hides the auto-switch button from the panel header; the option stays here'),
         });
         settings.bind('accounts-menu-toggle', menuToggleRow, 'active', 0);
         accounts.add(menuToggleRow);

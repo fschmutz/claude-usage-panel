@@ -103,7 +103,19 @@ const text = (x, yy, s, size, fill, extra = '') =>
 
 y = 34;
 text(PAD, y, 'Claude usage', 16, C.text, 'font-weight="700"');
-parts.push(`<text x="${W - PAD}" y="${y}" font-size="12" fill="${C.dim}" ${FONT} font-weight="600" text-anchor="end">${esc(DATA.plan)}</text>`);
+// The header's controls, right to left: settings, refresh, and - lit, because
+// this account has more than one saved login - auto-switch.
+const ICONS = [
+  ['\u2699', C.dim],
+  ['\u21bb', C.dim],
+  ['\u21c4', DATA.autoSwitchOn ? C.accent : C.dim],
+];
+let iconX = W - PAD;
+for (const [glyph, fill] of ICONS) {
+  parts.push(`<text x="${iconX}" y="${y}" font-size="14" fill="${fill}" ${FONT} text-anchor="end">${esc(glyph)}</text>`);
+  iconX -= 24;
+}
+parts.push(`<text x="${iconX}" y="${y}" font-size="12" fill="${C.dim}" ${FONT} font-weight="600" text-anchor="end">${esc(DATA.plan)}</text>`);
 y += 12;
 
 for (const [i, card] of cards.entries()) {
@@ -164,7 +176,8 @@ y += 16;
 text(PAD, y, DATA.cursor.top, 11, C.dim);
 y += 26;
 // Saved accounts: the active one marked, the other a click away, usage from the
-// same formatAccountUsage the extension's rows use, then the auto-switch toggle.
+// same formatAccountUsage the extension's rows use. The auto-switch control is
+// the lit glyph in the header.
 text(PAD, y, 'Accounts', 13, C.text, 'font-weight="700"');
 for (const a of DATA.accounts) {
   y += 19;
@@ -175,14 +188,6 @@ for (const a of DATA.accounts) {
     {key: 'session', percent: a.session}, {key: 'weekly_all', percent: a.weekly}]);
   parts.push(`<text x="${W - PAD}" y="${y}" font-size="11" fill="${C.dim}" ${FONT} text-anchor="end">${esc(usage)}</text>`);
 }
-y += 20;
-text(PAD, y, `Auto-switch at ${DATA.autoSwitchThreshold}%`, 12, C.text);
-parts.push(`<rect x="${W - PAD - 30}" y="${y - 11}" width="30" height="16" rx="8" fill="${C.track}"/>`);
-parts.push(`<circle cx="${W - PAD - 22}" cy="${y - 3}" r="6" fill="${C.dim}"/>`);
-y += 24;
-parts.push(`<line x1="${PAD}" y1="${y}" x2="${W - PAD}" y2="${y}" stroke="${C.cardBorder}"/>`);
-y += 24;
-text(PAD, y, '↻  Refresh now', 12, C.text);
 y += 20;
 
 const H = y + 8;

@@ -40,7 +40,7 @@
     {"name": "PRO", "email": "falco@premaccess.com", "session": 42, "weekly": 72, "active": true},
     {"name": "PERSO", "email": "falco@example.com", "session": 8, "weekly": 15, "active": false}
   ],
-  "autoSwitchThreshold": 90,
+  "autoSwitchOn": true,
   "cursor": {
     "cycle": "This cycle: $842.10 · 3 members",
     "today": "Today: $28.40",

@@ -16,17 +16,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:146
+#: extension.js:171
 msgid "Extra usage"
 msgstr "额外用量"
-
-#: extension.js:187
-msgid "Refresh now"
-msgstr "立即刷新"
-
-#: extension.js:200
-msgid "Settings"
-msgstr "设置"
 
 #: extension.js:204
 msgid "Quit"
@@ -79,8 +71,8 @@ msgstr "下次 %s"
 msgid "Session pings: %s"
 msgstr "会话 ping：%s"
 
-#: extension.js:427 extension.js:441 lib/accountsSection.js:268
-#: lib/accountsSection.js:274 lib/sessionsSection.js:145
+#: extension.js:427 extension.js:441 lib/accountsSection.js:287
+#: lib/accountsSection.js:293 lib/sessionsSection.js:145
 #: lib/sessionsSection.js:155
 msgid "Claude usage"
 msgstr "Claude 用量"
@@ -95,71 +87,84 @@ msgstr "%s 已达到 %d%%"
 msgid "%s is on pace to run out before it resets"
 msgstr "按当前速度，%s 将在重置前用尽"
 
-#: extension.js:552
+#: extension.js:569
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:63 prefs.js:475
+#: lib/accountsSection.js:65 prefs.js:475
 msgid "Accounts"
 msgstr "账户"
 
-#: lib/accountsSection.js:122
+#: lib/accountsSection.js:126
 msgid "(login expired)"
 msgstr "(登录已过期)"
 
-#: lib/accountsSection.js:178
+#: lib/accountsSection.js:187
 #, javascript-format
-msgid "Auto-switch at %d%%"
-msgstr "达到 %d%% 时自动切换"
+msgid "Auto-switch at %d%% · on"
+msgstr "达到 %d%% 时自动切换 · 开"
 
-#: lib/accountsSection.js:261
+#: lib/accountsSection.js:188
+#, javascript-format
+msgid "Auto-switch at %d%% · off"
+msgstr "达到 %d%% 时自动切换 · 关"
+
+#: lib/accountsSection.js:280
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "已从 %s → %s 切换:%s 已达 %d%%"
 
-#: lib/accountsSection.js:263
+#: lib/accountsSection.js:282
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "已从 %s → %s 切换"
 
-#: lib/accountsSection.js:265
+#: lib/accountsSection.js:284
 #, javascript-format
 msgid " - %d running session(s) keep the old login until restarted"
 msgstr " - %d 个运行中的会话在重启前仍使用旧登录"
 
-#: lib/accountsSection.js:275
+#: lib/accountsSection.js:294
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "无法切换到 %s:%s"
 
-#: lib/cursorSection.js:80
+#: lib/cursorSection.js:72
 msgid "Loading…"
 msgstr "加载中…"
 
-#: lib/cursorSection.js:89
+#: lib/cursorSection.js:81
 #, javascript-format
 msgid "This cycle: $%s / $%s (%d%%) · %d members"
 msgstr "本周期：$%s / $%s (%d%%) · %d 名成员"
 
-#: lib/cursorSection.js:95
+#: lib/cursorSection.js:86
 #, javascript-format
 msgid "This cycle: $%s · %d members"
 msgstr "本周期：$%s · %d 名成员"
 
-#: lib/cursorSection.js:100
+#: lib/cursorSection.js:91
 #, javascript-format
 msgid "Today: $%s"
 msgstr "今天：$%s"
 
-#: lib/cursorSection.js:102
+#: lib/cursorSection.js:93
 #, javascript-format
 msgid "Top: %s $%s"
 msgstr "最高：%s $%s"
 
-#: lib/cursorSection.js:106
+#: lib/cursorSection.js:97
 #, javascript-format
 msgid "Cursor: %s"
 msgstr "Cursor：%s"
+
+#: lib/headerBar.js:59
+msgid "Refresh now"
+msgstr "立即刷新"
+
+#: lib/headerBar.js:61
+msgid "Settings"
+msgstr "设置"
 
 #: lib/sessionsSection.js:46 prefs.js:170
 msgid "Today’s sessions"
@@ -539,14 +544,13 @@ msgid "Worst limit percentage that counts as full"
 msgstr "视为已满的最差限额百分比"
 
 #: prefs.js:518
-msgid "Show the auto-switch toggle in the dropdown"
-msgstr "在菜单中显示自动切换开关"
+msgid "Show the auto-switch button in the dropdown"
+msgstr "在菜单中显示自动切换按钮"
 
 #: prefs.js:519
 msgid ""
-"Off hides the \"Auto-switch at N%\" switch from the menu; the option stays "
-"here"
-msgstr "关闭后菜单中不再显示“N% 时自动切换”开关；该选项保留在此处"
+"Off hides the auto-switch button from the panel header; the option stays here"
+msgstr "关闭后从面板标题栏隐藏该按钮；选项仍保留在此"
 
 #: prefs.js:524
 msgid "Show the account name in the top bar"

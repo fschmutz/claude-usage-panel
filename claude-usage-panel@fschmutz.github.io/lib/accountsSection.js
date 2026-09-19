@@ -1,6 +1,7 @@
 // The "Accounts" section of the dropdown: one row per saved Claude Code login,
-// the active one marked, every other one a click away from becoming the live
-// login, and the auto-switch toggle under them. Rows are rebuilt on every
+// the active one marked and every other one a click away from becoming the
+// live login. The auto-switch control is the header's button, painted from
+// here through deps.syncAutoSwitch. Rows are rebuilt on every
 // refresh inside ONE widget (like the sessions rows) so the menu never
 // reshuffles. AccountsController at the bottom owns the whole flow -
 // extension.js only calls refresh() and reads activeName for the panel prefix.
@@ -138,19 +139,25 @@ export class AccountsController {
      * @param {object} deps
      * @param {Gio.Settings} deps.settings the extension settings
      * @param {Soup.Session} deps.session for the usage + refresh calls
-     * @param {PopupMenu.PopupMenu} deps.menu the dropdown; both items are
+     * @param {PopupMenu.PopupMenu} deps.menu the dropdown; the item is
      *   appended at construction, so build in menu order
      * @param {(title: string, body: string) => void} deps.notify
      * @param {() => void} deps.refreshSoon re-poll shortly (as the new account)
      * @param {() => void} deps.onActiveChanged the panel prefix may have moved
+     * @param {(state: {visible: boolean, on: boolean, title: string}) => void}
+     *   deps.syncAutoSwitch paint the header's auto-switch button
      * @param {() => boolean} deps.isDestroyed true once the button is gone
      */
-    constructor({settings, session, menu, notify, refreshSoon, onActiveChanged, isDestroyed}) {
+    constructor({
+        settings, session, menu, notify, refreshSoon, onActiveChanged,
+        syncAutoSwitch, isDestroyed,
+    }) {
         this._settings = settings;
         this._session = session;
         this._notify = notify;
         this._refreshSoon = refreshSoon;
         this._onActiveChanged = onActiveChanged;
+        this._syncAutoSwitch = syncAutoSwitch;
         this._isDestroyed = isDestroyed;
         this._switching = false;
         /** The saved name of the live login, for the top-bar prefix. */
@@ -164,25 +171,28 @@ export class AccountsController {
         menu.addMenuItem(this._item);
         this._item.visible = false;
 
-        // Label and state of the toggle follow the settings, not the other way
-        // round, so the preferences window and the menu never disagree.
-        this._autoSwitchItem = new PopupMenu.PopupSwitchMenuItem('', false);
-        this._autoSwitchItem.connect('toggled', (_item, state) => {
-            if (this._settings.get_boolean('accounts-auto-switch') !== state)
-                this._settings.set_boolean('accounts-auto-switch', state);
-        });
-        menu.addMenuItem(this._autoSwitchItem);
-        this._autoSwitchItem.visible = false;
         this.syncToggle();
     }
 
+    /** The header's button is a view of the setting, never its own state. */
     syncToggle() {
         const threshold = this._settings.get_int('accounts-switch-threshold');
-        this._autoSwitchItem.label.text = _('Auto-switch at %d%%').format(threshold);
         const on = this._settings.get_boolean('accounts-auto-switch');
-        if (this._autoSwitchItem.state !== on)
-            this._autoSwitchItem.setToggleState(on);
-        this._autoSwitchItem.visible = this._showToggle();
+        this._syncAutoSwitch({
+            visible: this._showToggle(),
+            on,
+            // The button has no text of its own, so the title is the only
+            // thing that can say which way it is set.
+            title: on
+                ? _('Auto-switch at %d%% · on').format(threshold)
+                : _('Auto-switch at %d%% · off').format(threshold),
+        });
+    }
+
+    /** Clicked in the header: the setting moves, syncToggle() repaints. */
+    toggleAutoSwitch() {
+        this._settings.set_boolean(
+            'accounts-auto-switch', !this._settings.get_boolean('accounts-auto-switch'));
     }
 
     // The toggle is for choosing between logins: below two it has nothing to
@@ -211,7 +221,7 @@ export class AccountsController {
         if (!this._settings.get_boolean('accounts-enabled')) {
             this._setActive(null, 0);
             this._item.visible = false;
-            this._autoSwitchItem.visible = false;
+            this.syncToggle();
             return;
         }
         let profiles;
@@ -230,7 +240,7 @@ export class AccountsController {
         const active = liveAccountName();
         this._setActive(active, profiles.length);
         this._item.visible = profiles.length > 0;
-        this._autoSwitchItem.visible = this._showToggle();
+        this.syncToggle();
         if (!profiles.length) {
             this._section.update([], active);
             return;
