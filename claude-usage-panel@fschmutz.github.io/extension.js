@@ -33,7 +33,7 @@ import {
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek,
-    formatLastPing, nextPing, compactTokens, formatClock, panelText,
+    formatLastPing, nextPing, compactTokens, formatClock, panelText, popupWidth,
 } from './lib/pure.js';
 
 // How long to let a resume or a network change settle before polling: DNS and
@@ -92,6 +92,21 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._ifaceSettings.connectObject(
             'changed::color-scheme', () => this._applyTheme(), this);
         this._applyTheme();
+
+        // Fit the screen the panel is actually on: re-measured when the menu
+        // opens, when monitors change and when the scale factor moves (moving
+        // the laptop between a HiDPI panel and an external 1080p one does all
+        // three).
+        this._menuWidth = 0;
+        this.menu.connectObject('open-state-changed', (_menu, open) => {
+            if (open)
+                this._applyWidth();
+        }, this);
+        Main.layoutManager.connectObject(
+            'monitors-changed', () => this._applyWidth(), this);
+        St.ThemeContext.get_for_stage(global.stage).connectObject(
+            'notify::scale-factor', () => this._applyWidth(), this);
+        this._applyWidth();
 
         this._settings.connectObject(
             'changed::refresh-interval', () => this._restartTimer(),
@@ -448,6 +463,23 @@ class ClaudeUsageButton extends PanelMenu.Button {
         }
     }
 
+    // The dropdown takes a share of the monitor rather than a fixed width, so
+    // a long reset line wraps instead of stretching the popup past its own
+    // progress bars - which is what made a percentage read against a different
+    // track length on every card.
+    _applyWidth() {
+        const monitor = Main.layoutManager.findMonitorForActor(this)
+            ?? Main.layoutManager.primaryMonitor;
+        if (!monitor)
+            return;
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
+        const width = popupWidth(monitor.width, scale);
+        if (width === this._menuWidth)
+            return;
+        this._menuWidth = width;
+        this.menu.box.style = `width: ${width}px;`;
+    }
+
     _applyTheme() {
         const dark = this._ifaceSettings.get_string('color-scheme') === 'prefer-dark';
         if (dark)
@@ -576,6 +608,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._sessions.destroy();
         this._settings?.disconnectObject(this);
         this._ifaceSettings?.disconnectObject(this);
+        this.menu?.disconnectObject(this);
+        Main.layoutManager.disconnectObject(this);
+        St.ThemeContext.get_for_stage(global.stage).disconnectObject(this);
         this._httpSession?.abort();
         this._httpSession = null;
         super.destroy();

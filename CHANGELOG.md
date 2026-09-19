@@ -6,6 +6,20 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The GNOME dropdown sized itself from its longest line, so the bars lied.**
+  The track was a fixed 300 px while the popup grew to fit whatever the
+  widest reset line happened to be, so on a laptop a card could be far wider
+  than the bar it was supposed to read against, and a percentage no longer
+  matched its own card. The popup is now sized from the monitor it is on
+  (`popupWidth()`: 22% of the logical width, floored at 300 and capped at
+  420 CSS px, re-measured on open, on `monitors-changed` and on a scale-factor
+  change), every prose line wraps instead of stretching it, names and emails
+  clip, and the bar plus the clock caret fill from the width they were
+  actually allocated (`lib/bar.js`) - so the fill is a true percentage at any
+  size. `tests/layout.test.js` pins the geometry.
+
 ## [1.13.0] - 2026-09-18
 
 ### Fixed

@@ -5,7 +5,6 @@
 // refresh().
 
 import St from 'gi://St';
-import Clutter from 'gi://Clutter';
 
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -13,8 +12,8 @@ import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js'
 import {fetchCursor} from './cursorUsage.js';
 import {storeSecret, lookupSecret} from './secretStore.js';
 import {thresholdClass} from './pure.js';
-import {TRACK_WIDTH} from './usageCard.js';
-import {vbox} from './widgets.js';
+import {ProgressBar} from './bar.js';
+import {vbox, wrapLabel} from './widgets.js';
 
 export class CursorController {
     /**
@@ -32,19 +31,12 @@ export class CursorController {
 
         this._item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         const box = vbox({x_expand: true, style_class: 'cu-cursor'});
-        this._cycle = new St.Label({text: '', style_class: 'cu-cost'});
+        this._cycle = wrapLabel(new St.Label({text: '', style_class: 'cu-cost'}));
         // Gauge bar, shown only when the team has a monthly spend limit set.
-        this._track = new St.BoxLayout({
-            style_class: 'cu-track',
-            x_align: Clutter.ActorAlign.START,
-            y_align: Clutter.ActorAlign.CENTER,
-            x_expand: false,
-        });
-        this._fill = new St.Widget({style_class: 'cu-fill', x_expand: false});
-        this._track.add_child(this._fill);
+        this._track = new ProgressBar();
         this._track.visible = false;
-        this._today = new St.Label({text: '', style_class: 'cu-updated'});
-        this._top = new St.Label({text: '', style_class: 'cu-updated'});
+        this._today = wrapLabel(new St.Label({text: '', style_class: 'cu-updated'}));
+        this._top = wrapLabel(new St.Label({text: '', style_class: 'cu-updated'}));
         box.add_child(new St.Label({text: 'Cursor', style_class: 'cu-section-title'}));
         box.add_child(this._cycle);
         box.add_child(this._track);
@@ -88,8 +80,7 @@ export class CursorController {
                 // Team has a monthly limit → show a % gauge.
                 this._cycle.text = _('This cycle: $%s / $%s (%d%%) · %d members')
                     .format(c.cycleUSD.toFixed(2), c.limitUSD.toFixed(0), c.percent, c.members);
-                this._fill.style_class = `cu-fill ${thresholdClass(c.percent)}`;
-                this._fill.style = `width: ${Math.round((c.percent / 100) * TRACK_WIDTH)}px;`;
+                this._track.setFill(c.percent, thresholdClass(c.percent));
                 this._track.visible = true;
             } else {
                 this._cycle.text = _('This cycle: $%s · %d members')

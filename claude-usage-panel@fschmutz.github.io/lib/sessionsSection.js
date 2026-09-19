@@ -13,7 +13,7 @@ import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js'
 
 import {refreshSessions} from './sessionIndex.js';
 import {TERMINALS, compactTokens, interactiveResume, terminalArgv} from './pure.js';
-import {vbox} from './widgets.js';
+import {vbox, clipLabel} from './widgets.js';
 
 // How many of today's sessions the dropdown offers to resume.
 const SESSION_ROWS = 5;
@@ -101,12 +101,12 @@ export class SessionsController {
             const row = new St.BoxLayout({style_class: 'cu-session-row', x_expand: true});
             // The rows are buttons; a static screenshot cannot show a hover,
             // so the glyph is what says "this one is clickable".
-            row.add_child(new St.Label({
+            row.add_child(clipLabel(new St.Label({
                 text: `\u25b8 ${session.label}`,
                 style_class: 'cu-session-label',
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
-            }));
+            })));
             row.add_child(new St.Label({
                 text: `${compactTokens(session.tokens)}  ${session.when}`,
                 style_class: 'cu-session-meta',

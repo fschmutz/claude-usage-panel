@@ -20,7 +20,7 @@ import {
     accountSummary, autoSwitchTarget, formatAccountUsage, rowError, severityClass,
     usageSeverity, worstPercent,
 } from './pure.js';
-import {vbox, vboxProps} from './widgets.js';
+import {vbox, vboxProps, clipLabel} from './widgets.js';
 
 /**
  * The rows for the section, and the worst limit per account for the
@@ -83,17 +83,19 @@ class AccountsSection extends St.BoxLayout {
                 style_class: `cu-account-row${active ? ' cu-account-active' : ''}`,
                 x_expand: true,
             });
-            line.add_child(new St.Label({
+            line.add_child(clipLabel(new St.Label({
                 text: `${active ? '●' : '○'} ${row.name}`,
                 style_class: 'cu-account-name',
                 y_align: Clutter.ActorAlign.CENTER,
-            }));
-            line.add_child(new St.Label({
+            })));
+            // The email is the one field that can be arbitrarily long, so it
+            // is the one that gives way: it takes the slack and clips.
+            line.add_child(clipLabel(new St.Label({
                 text: row.email ?? '',
                 style_class: 'cu-account-meta',
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
-            }));
+            })));
             const meta = new St.Label({
                 text: this._metaText(row),
                 style_class: `cu-account-meta ${severityClass(usageSeverity(worstPercent(row.cards)))}`,
