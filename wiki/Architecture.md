@@ -74,7 +74,8 @@ claude-code/            # the Node clients (installed together under ~/.claude/c
 ├── paths.js            # every state/cache/config path, derived from one `io`
 ├── accounts-contract.js# the pure account rules (mirrors lib/pure/accounts.js 1:1)
 ├── accounts.js         # openStore(io): the account store - save, switch, refresh, usage
-├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the tab launch
+├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
+├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── session-cli.js      # `claudectl session`: the CLI over tabs.js
 └── claudectl.js        # the claudectl entry point: dispatches to the two groups

@@ -19,6 +19,9 @@
 // set of sessions changed since the last one, and keeps the newest N autos so
 // the store stays bounded. Manual saves are never pruned by autosave.
 //
+// Which terminal opens them, and how it gets a tab per session, is
+// terminals.js: the one the panels are configured to use.
+//
 // `openTabs(io)` binds all of it to one home dir, platform, clock, exec,
 // spawn and /proc root (every one overridable, read at call time), the same
 // shape openStore(io) takes, so the tests run against a throwaway HOME and a
@@ -29,11 +32,11 @@ import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
 import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
+import {TMUX_SESSION, launchSteps, onPath, resolveTerminal} from './terminals.js';
 
 export const AUTO_PREFIX = 'auto-';
 /** Autosaves kept by default: 48 half-hourly runs = one day of history. */
 export const AUTO_KEEP = 48;
-export const TMUX_SESSION = 'claudectl';
 const LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 export const isValidLabel = (label) => typeof label === 'string' && LABEL_RE.test(label);
@@ -56,39 +59,6 @@ export function stampLabel(ms) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_` +
     `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-}
-
-const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
-
-/** The command a tab runs: resume the session, then leave an interactive
- *  shell in that directory once claude exits. `-i` loads the user's rc, so
- *  the PATH (volta, nvm) and any `claude` alias are the ones a hand-opened
- *  tab gets. */
-export function tabCommand(row, shell = '/bin/bash') {
-  const inner = `claude --name ${shq(row.name)} --resume ${shq(row.session_id)}; exec ${shq(shell)}`;
-  return [shell, '-ic', inner];
-}
-
-/** gnome-terminal argv opening every row as a tab of one new window.
- *  `--command` is the only per-tab command form (a trailing `--` takes one
- *  command for the whole invocation); 3.58 still honours it with a
- *  deprecation note on stderr. */
-export function gnomeTerminalArgv(rows, shell) {
-  const argv = ['--window'];
-  rows.forEach((r, i) => {
-    if (i) argv.push('--tab');
-    argv.push('--title', r.name, '--working-directory', r.cwd,
-      '--command', tabCommand(r, shell).map(shq).join(' '));
-  });
-  return argv;
-}
-
-/** tmux calls building one detached session with a window per row. */
-export function tmuxCalls(rows, shell, session = TMUX_SESSION) {
-  return rows.map((r, i) => [
-    ...(i ? ['new-window', '-t', session] : ['new-session', '-d', '-s', session]),
-    '-n', r.name, '-c', r.cwd, tabCommand(r, shell).map(shq).join(' '),
-  ]);
 }
 
 function readJSON(file) {
@@ -279,32 +249,35 @@ export function openTabs(io = {}) {
     return {open, skipped};
   }
 
-  /** gnome-terminal when present (one window, one tab per row), else tmux (one
-   *  detached session, one window per row). */
-  function pickTerminal(want) {
-    if (want) return want;
-    try {
-      exec('sh', ['-c', 'command -v gnome-terminal'], {stdio: 'ignore'});
-      return 'gnome-terminal';
-    } catch {
-      return 'tmux';
+  /** Open rows in the terminal the panels use (terminals.js), or `terminal`
+   *  when given. Returns {terminal, how, steps}; dryRun runs nothing. */
+  function launch(rows, {terminal, windows = false, tmux = false, dryRun = false} = {}) {
+    const env = io.env ?? process.env;
+    const term = terminal ?? resolveTerminal({...io, env});
+    const hasTmux = onPath('tmux', env.PATH);
+    if (!term && !hasTmux) {
+      throw new Error('no terminal found - set one in the panel preferences, $TERMINAL, or --terminal=BIN');
     }
-  }
-
-  function launch(rows, {terminal, dryRun = false} = {}) {
-    const shell = (io.env ?? process.env).SHELL || '/bin/bash';
-    const term = pickTerminal(terminal);
-    const calls = term === 'tmux'
-      ? tmuxCalls(rows, shell).map((a) => ['tmux', a])
-      : [['gnome-terminal', gnomeTerminalArgv(rows, shell)]];
-    if (dryRun) return {terminal: term, calls};
-    if (term === 'tmux') {
-      for (const [cmd, args] of calls) exec(cmd, args, {stdio: 'ignore'});
-    } else {
-      const [cmd, args] = calls[0];
-      (io.spawn ?? nodeSpawn)(cmd, args, {detached: true, stdio: 'ignore'}).unref();
+    const {how, steps} = launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux});
+    const result = {terminal: term ?? 'tmux', how, steps};
+    if (dryRun) return result;
+    if (steps.some((s) => s.cmd === 'tmux')) {
+      let exists = true;
+      try {
+        exec('tmux', ['has-session', '-t', TMUX_SESSION], {stdio: 'ignore'});
+      } catch {
+        exists = false;
+      }
+      if (exists) {
+        throw new Error(`tmux session ${TMUX_SESSION} already exists - tmux attach -t ${TMUX_SESSION}, ` +
+          `or tmux kill-session -t ${TMUX_SESSION} first`);
+      }
     }
-    return {terminal: term, calls};
+    for (const s of steps) {
+      if (s.detach) (io.spawn ?? nodeSpawn)(s.cmd, s.args, {detached: true, stdio: 'ignore'}).unref();
+      else exec(s.cmd, s.args, {stdio: 'ignore'});
+    }
+    return result;
   }
 
   return {liveSessions, selfPid, blocker, snapshots, resolve, save, autosave, purge, plan, launch};

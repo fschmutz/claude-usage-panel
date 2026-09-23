@@ -35,7 +35,7 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `save [LABEL] [--exclude-self]` | Snapshot the running sessions |
 | `store [--json]` | Saved snapshots, newest first, numbered |
 | `show [SNAP] [--json]` | What a snapshot holds, and which of its sessions are running |
-| `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=gnome-terminal\|tmux]` | Reopen a snapshot |
+| `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux]` | Reopen a snapshot in your terminal |
 | `purge SNAP... \| --keep=N \| --auto \| --all [--yes]` | Delete snapshots (asks first) |
 | `autosave [--keep=N]` | What the schedule runs |
 
@@ -44,13 +44,23 @@ one, the newest snapshot is used.
 
 ## What `open` does
 
-- **One window.** On a desktop with `gnome-terminal`, one new window with a tab
-  per session, titled with the session name. Otherwise one detached tmux
-  session `claudectl` with a window per session (`tmux attach -t claudectl`).
+- **Your terminal.** The one a session click in the panel opens: on Linux
+  the GNOME preference *Terminal used to resume a session*
+  (`terminal-command`), then `$TERMINAL`, then the first installed of
+  Ghostty, kitty, WezTerm, Alacritty, foot, gnome-terminal, Konsole, Tilix,
+  xfce4-terminal, xterm; on macOS the app's *Open in* setting (Terminal or
+  iTerm). `--terminal=BIN` (or `iterm` / `terminal`) overrides it for one run.
+- **One window.** gnome-terminal and iTerm open one window with a native tab
+  per session. Every other terminal opens ONE window on a tmux session
+  `claudectl` holding a window per session (tmux's own tabs); `--windows`
+  opens one terminal window per session instead, and is what happens when
+  tmux is not installed. `--tmux` forces the tmux layout everywhere;
+  `--terminal=tmux` builds the tmux session without opening a terminal (over
+  ssh, say).
 - **The right directory.** Each tab starts in the directory the session ran
-  in and runs `claude --name <name> --resume <id>` through your interactive
-  shell, so its PATH (volta, nvm) and aliases apply. When claude exits, the
-  tab stays open on a shell in that directory.
+  in and runs `claude --name <name> --resume <id>` through a login shell, the
+  same command a panel click runs. When claude exits, the tab stays open on
+  a shell in that directory.
 - **No double resume.** A session still running is skipped (Claude Code
   refuses to resume a live session twice); `--force` tries anyway. A session
   whose directory or transcript is gone is skipped with the reason.

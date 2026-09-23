@@ -164,6 +164,8 @@ export function interactiveResume(entry, opts) {
 }
 
 // Terminals we know how to open at a directory with a command, best first.
+// Mirrored in claude-code/terminals.js (`claudectl session open` must open the
+// same terminal the same way); tests/terminals.test.js asserts the parity.
 // `argv(dir, cmd)` returns the full argv - no shell involved on our side, the
 // command string is handed to bash -lc by the terminal itself.
 export const TERMINALS = [

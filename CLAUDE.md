@@ -162,7 +162,10 @@ summarization, you must change it in **every** port and keep them matching.
   `statusline.js` (renders from Claude Code's stdin), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
   registry, checked against `/proc` start time; the snapshot store;
-  autosave; Node-only, no port to mirror). **One CLI, `claudectl`**:
+  autosave; Node-only, no port to mirror), `terminals.js` (which terminal
+  `session open` uses - the panels' own setting, never a separate one - and
+  how it gets a tab per session; its `TERMINALS` / `terminalArgv` mirror
+  `lib/pure/sessions.js`, parity in `tests/terminals.test.js`). **One CLI, `claudectl`**:
   `claudectl.js` only dispatches `account …` to `account-cli.js` and
   `session …` to `session-cli.js`; a new command group is a new
   `<group>-cli.js` exporting `main(argv, io)` + `HELP`, never a new binary.

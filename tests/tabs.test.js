@@ -7,10 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {
-    AUTO_PREFIX, gnomeTerminalArgv, isValidLabel, openTabs, sameSessions, stampLabel, tabCommand,
-    tmuxCalls, transcriptPath,
-} from '../claude-code/tabs.js';
+import {AUTO_PREFIX, isValidLabel, openTabs, sameSessions, stampLabel, transcriptPath} from '../claude-code/tabs.js';
 import {main} from '../claude-code/session-cli.js';
 import {tabsDir} from '../claude-code/paths.js';
 import {sandboxHome} from './helpers.js';
@@ -80,25 +77,6 @@ test('sameSessions ignores order, not content', () => {
     assert.ok(sameSessions([r('1'), r('2')], [r('2'), r('1')]));
     assert.ok(!sameSessions([r('1')], [r('1'), r('2')]));
     assert.ok(!sameSessions([r('1', 'X')], [r('1', 'Y')]));
-});
-
-test('a tab resumes its session by name, then leaves a shell in its cwd', () => {
-    assert.deepEqual(tabCommand({name: "it's", session_id: 'id1'}, '/bin/zsh'),
-        ['/bin/zsh', '-ic', `claude --name 'it'\\''s' --resume 'id1'; exec '/bin/zsh'`]);
-});
-
-test('gnome-terminal: one window, the rest as tabs, each with its own cwd', () => {
-    const argv = gnomeTerminalArgv([{name: 'A', cwd: '/a', session_id: '1'}, {name: 'B', cwd: '/b', session_id: '2'}]);
-    assert.equal(argv[0], '--window');
-    assert.equal(argv.filter((a) => a === '--tab').length, 1);
-    assert.deepEqual(argv.slice(1, 5), ['--title', 'A', '--working-directory', '/a']);
-    assert.equal(argv[argv.indexOf('--working-directory', 5) + 1], '/b');
-});
-
-test('tmux: one detached session, then a window per extra row', () => {
-    const calls = tmuxCalls([{name: 'A', cwd: '/a', session_id: '1'}, {name: 'B', cwd: '/b', session_id: '2'}], '/bin/bash', 'S');
-    assert.deepEqual(calls[0].slice(0, 8), ['new-session', '-d', '-s', 'S', '-n', 'A', '-c', '/a']);
-    assert.deepEqual(calls[1].slice(0, 7), ['new-window', '-t', 'S', '-n', 'B', '-c', '/b']);
 });
 
 // ── Live sessions ───────────────────────────────────────────────────────────────
@@ -204,33 +182,50 @@ test('plan skips running sessions (unless forced) and ones that cannot resume', 
     assert.deepEqual(tabs.plan(snap, {force: true, skip: ['API', 'GONE', 'NOLOG']}).open.map((r) => r.name), ['WEB']);
 });
 
-test('launch spawns ONE detached gnome-terminal for all tabs', (t) => {
+test('launch runs the resolved steps: terminals detached, tmux in order', (t) => {
     const io = world(t, [A, B]);
+    const bin = path.join(io.home, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'tmux'), '#!/bin/sh\n');
+    fs.chmodSync(path.join(bin, 'tmux'), 0o755);
+    io.env = {PATH: bin};
     const spawned = [];
+    const execd = [];
     io.spawn = (cmd, args, opts) => {
-        spawned.push({cmd, args, opts});
+        spawned.push({cmd, opts});
         return {unref() {}};
     };
-    const rows = openTabs(io).save('x').sessions;
-    openTabs(io).launch(rows, {terminal: 'gnome-terminal'});
-    assert.equal(spawned.length, 1);
-    assert.equal(spawned[0].cmd, 'gnome-terminal');
-    assert.equal(spawned[0].opts.detached, true);
-    assert.equal(spawned[0].args.filter((a) => a === '--tab').length, 1);
-});
-
-test('launch falls back to tmux when gnome-terminal is not on PATH', (t) => {
-    const io = world(t, [A]);
-    const calls = [];
     io.exec = (cmd, args) => {
-        calls.push([cmd, args]);
-        if (cmd === 'sh') throw new Error('not found');
+        execd.push([cmd, args[0]]);
+        if (args[0] === 'has-session') throw new Error('no session');
         return '';
     };
-    const r = openTabs(io).launch(openTabs(io).save('x').sessions);
-    assert.equal(r.terminal, 'tmux');
-    assert.equal(calls.at(-1)[0], 'tmux');
-    assert.equal(calls.at(-1)[1][0], 'new-session');
+    const rows = openTabs(io).save('x').sessions;
+    const r = openTabs(io).launch(rows, {terminal: 'ghostty'});
+    assert.equal(r.how, 'tmux');
+    assert.deepEqual(execd, [['tmux', 'has-session'], ['tmux', 'new-session'], ['tmux', 'new-window']]);
+    assert.deepEqual(spawned.map((s) => [s.cmd, s.opts.detached]), [['ghostty', true]]);
+});
+
+test('launch refuses to reuse a live tmux session and names the way out', (t) => {
+    const io = world(t, [A]);
+    const bin = path.join(io.home, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'tmux'), '#!/bin/sh\n');
+    fs.chmodSync(path.join(bin, 'tmux'), 0o755);
+    io.env = {PATH: bin};
+    io.exec = () => '';
+    io.spawn = () => assert.fail('nothing may launch');
+    const rows = openTabs(io).save('x').sessions;
+    assert.throws(() => openTabs(io).launch(rows, {terminal: 'ghostty'}), /already exists - tmux attach -t claudectl/);
+});
+
+test('launch with no terminal and no tmux says where to set one', (t) => {
+    const io = world(t, [A]);
+    io.env = {PATH: path.join(io.home, 'nowhere')};
+    io.exec = () => '';
+    const rows = openTabs(io).save('x').sessions;
+    assert.throws(() => openTabs(io).launch(rows), /no terminal found - set one in the panel preferences/);
 });
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────
@@ -259,6 +254,9 @@ test('CLI: open --dry-run prints the launch, --only narrows it, nothing spawns',
     assert.match(r.text, /^open WEB/m);
     assert.doesNotMatch(r.text, /^open API/m);
     assert.match(r.text, /^gnome-terminal "--window"/m);
+    assert.match(r.text, /^1 tabs in one gnome-terminal window$/m);
+    const w = await cli(io, 'open', '--force', '--dry-run', '--terminal=xterm', '--windows');
+    assert.match(w.text, /^2 xterm windows$/m);
     const none = await cli(io, 'open', 's');
     assert.equal(none.code, 1);
     assert.match(none.text, /skip API: already running/);

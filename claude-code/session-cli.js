@@ -3,7 +3,8 @@
 // one as tabs of a single terminal window, each in its own directory resuming
 // its own session. claudectl.js dispatches here.
 
-import {AUTO_KEEP, AUTO_PREFIX, TMUX_SESSION, openTabs, stampLabel} from './tabs.js';
+import {AUTO_KEEP, AUTO_PREFIX, openTabs, stampLabel} from './tabs.js';
+import {TMUX_SESSION} from './terminals.js';
 import {tabsDir} from './paths.js';
 
 export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as tabs
@@ -14,7 +15,7 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
   claudectl session store [--json]           saved snapshots, newest first
   claudectl session show [SNAP] [--json]     what a snapshot holds (default: newest)
   claudectl session open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run]
-                         [--terminal=gnome-terminal|tmux]
+                         [--terminal=BIN|iterm|terminal|tmux] [--windows|--tmux]
                                              reopen a snapshot, one tab per session
   claudectl session purge SNAP... | --keep=N | --auto | --all [--yes]
                                              delete snapshots
@@ -23,7 +24,11 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
 
 SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
 skips a session that is still running (--force to try anyway) and one whose
-directory or transcript is gone. \`./install.sh cli\` also schedules
+directory or transcript is gone. It opens the terminal the panels use (GNOME
+preference \`terminal-command\`, then $TERMINAL, then the first one installed;
+macOS: the app's Terminal/iTerm choice). gnome-terminal and iTerm get native
+tabs; any other terminal gets one window on a tmux session with a window per
+Claude session (--windows: one terminal window each). \`./install.sh cli\` also schedules
 \`autosave\` every 30 minutes (keeps ${AUTO_KEEP}, one day).
 Snapshots: ${tabsDir()}`;
 
@@ -126,15 +131,20 @@ export async function main(argv, io = {}) {
         return 1;
       }
       const terminal = typeof opts.terminal === 'string' ? opts.terminal : undefined;
-      const r = tabs.launch(open, {terminal, dryRun: Boolean(opts['dry-run'])});
+      const r = tabs.launch(open, {
+        terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), dryRun: Boolean(opts['dry-run']),
+      });
       for (const row of open) out(`open ${row.name.padEnd(20)} ${row.session_id.slice(0, 8)}  ${row.cwd}\n`);
       if (opts['dry-run']) {
-        for (const [c, a] of r.calls) out(`${c} ${a.map((x) => JSON.stringify(x)).join(' ')}\n`);
-      } else if (r.terminal === 'tmux') {
-        out(`${open.length} windows in tmux session ${TMUX_SESSION} - tmux attach -t ${TMUX_SESSION}\n`);
-      } else {
-        out(`${open.length} tabs in a new ${r.terminal} window\n`);
+        for (const st of r.steps) out(`${st.cmd} ${st.args.map((x) => JSON.stringify(x)).join(' ')}\n`);
       }
+      const n = open.length;
+      out({
+        'tabs': `${n} tabs in one ${r.terminal} window\n`,
+        'tmux': `${n} tmux windows (session ${TMUX_SESSION}) in one ${r.terminal} window\n`,
+        'windows': `${n} ${r.terminal} windows\n`,
+        'tmux-only': `${n} windows in tmux session ${TMUX_SESSION} - tmux attach -t ${TMUX_SESSION}\n`,
+      }[r.how]);
       return 0;
     }
     case 'purge': {

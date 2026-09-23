@@ -24,9 +24,12 @@ semantic versioning.
   own session registry (`~/.claude/sessions/<pid>.json`, the current session
   id after a `/clear`), checked against the process start time so a stale
   file or a reused pid is never taken for a session; `save` / `store` /
-  `show` / `purge` manage snapshots; `open` reopens one as tabs of ONE
-  gnome-terminal window (tmux elsewhere), each tab in its session's
-  directory running `claude --resume`, skipping sessions still running or
+  `show` / `purge` manage snapshots; `open` reopens one in the terminal the
+  panels are set to use (GNOME `terminal-command`, `$TERMINAL`, the first
+  installed; macOS Terminal/iTerm choice): native tabs in one window on
+  gnome-terminal and iTerm, one window on a tmux session elsewhere
+  (`--windows` for a window each), each tab in its session's directory
+  running `claude --resume`, skipping sessions still running or
   whose directory or transcript is gone. `./install.sh cli` installs it and
   schedules `claudectl session autosave` every 30 minutes (systemd timer /
   launchd / cron), which writes only when the set changed and keeps one day.
