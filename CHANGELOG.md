@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-23
+
 ### Added
 
 - **A restored session knows it was restarted.** `claudectl session open`

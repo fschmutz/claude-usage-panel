@@ -116,7 +116,7 @@ fill in the sha256 (the URL and version below already match what
 
 ```ruby
 cask "claude-usage-panel" do
-  version "2.0.0"
+  version "2.1.0"
   sha256 "REPLACE_WITH_SHA256"
 
   url "https://github.com/fschmutz/claude-usage-panel/releases/download/v#{version}/ClaudeUsagePanel-macos.zip"
