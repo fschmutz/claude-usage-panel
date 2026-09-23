@@ -1,5 +1,5 @@
 // Named accounts: the store / switch / refresh I/O (openStore bound to a
-// throwaway HOME) and the CLI (claude-account.js's main). No network: fetch is
+// throwaway HOME) and the CLI (account-cli.js's main, dispatched by claudectl). No network: fetch is
 // faked. The pure contract is pinned in parity.test.js against the fixture.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +10,7 @@ import {fileURLToPath} from 'node:url';
 
 import {openStore} from '../claude-code/accounts.js';
 import {autoSwitchTarget, worstFromCache, worstPercent} from '../claude-code/accounts-contract.js';
-import {main} from '../claude-code/claude-account.js';
+import {main} from '../claude-code/account-cli.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from '../claude-code/paths.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -450,7 +450,7 @@ test('CLI: save, list, current, use, remove', async () => {
     assert.match((await run(['remove', 'PRO'], io)).text, /removed PRO/);
     await assert.rejects(run(['use', 'PRO'], io), /no saved account named PRO/);
     await assert.rejects(run(['bogus'], io), /unknown command bogus/);
-    assert.match((await run([], io)).text, /claude-account list/);
+    assert.match((await run([], io)).text, /claudectl account list/);
 });
 
 test('CLI: use warns about running sessions; list --usage shows percents and fills the cache', async () => {

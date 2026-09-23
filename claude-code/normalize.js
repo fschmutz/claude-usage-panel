@@ -1,6 +1,6 @@
 // The Node port of the shared normalization contract: what a raw payload from
 // the usage endpoint becomes for every Node client (the MCP server, the
-// claude-account CLI). Mirrors lib/pure.js (GNOME) and Model.swift (macOS);
+// claudectl CLI). Mirrors lib/pure.js (GNOME) and Model.swift (macOS);
 // tests/fixtures/normalize.json + tests/parity.test.js keep the three in step.
 // No I/O, no Node built-ins - a pure module.
 

@@ -1,24 +1,19 @@
-#!/usr/bin/env node
-// claude-account: the command-line face of claude-code/accounts.js. Save the
-// login Claude Code holds now under a name, list the saved ones (with their
-// usage), switch, forget, refresh. `main` is exported for the tests; the file
-// runs it when invoked directly (also through the npm bin shim).
-
-import fs from 'node:fs';
-import {pathToFileURL} from 'node:url';
+// `claudectl account`: the command-line face of claude-code/accounts.js. Save
+// the login Claude Code holds now under a name, list the saved ones (with
+// their usage), switch, forget, refresh. claudectl.js dispatches here.
 
 import {openStore} from './accounts.js';
 import {tokenState} from './accounts-contract.js';
 import {accountsDir} from './paths.js';
 
-const HELP = `claude-account - named Claude Code accounts, switch without a browser
+export const HELP = `claudectl account - named Claude Code accounts, switch without a browser
 
-  claude-account list [--usage] [--json]   saved accounts, the active one marked
-  claude-account current [--json]          the active account's name
-  claude-account save NAME [--force]       save the current login as NAME
-  claude-account use NAME [--json]         make NAME the current login
-  claude-account remove NAME               forget a saved account
-  claude-account refresh [NAME]            refresh the stored token(s) now
+  claudectl account list [--usage] [--json]   saved accounts, the active one marked
+  claudectl account current [--json]          the active account's name
+  claudectl account save NAME [--force]       save the current login as NAME
+  claudectl account use NAME [--json]         make NAME the current login
+  claudectl account remove NAME               forget a saved account
+  claudectl account refresh [NAME]            refresh the stored token(s) now
 
 Names: letters, digits, . _ - (e.g. PRO, PERSO). Running Claude Code sessions
 keep their old login until restarted. Saved logins are kept, mode 0600, under
@@ -53,7 +48,7 @@ export async function main(argv, io = {}) {
         return 0;
       }
       if (!accounts.length) {
-        out('no saved accounts - `claude-account save NAME` saves the current login\n');
+        out('no saved accounts - `claudectl account save NAME` saves the current login\n');
         return 0;
       }
       for (const a of accounts) {
@@ -119,22 +114,4 @@ export async function main(argv, io = {}) {
     default:
       throw new Error(`unknown command ${cmd}\n${HELP}`);
   }
-}
-
-// Run when executed directly - including through the npm bin shim, which
-// invokes us via a node_modules/.bin symlink, so compare realpaths.
-const invokedAs = (() => {
-  try {
-    return process.argv[1] && pathToFileURL(fs.realpathSync(process.argv[1])).href;
-  } catch {
-    return null;
-  }
-})();
-if (invokedAs === import.meta.url) {
-  main(process.argv.slice(2)).then(
-    (code) => process.exit(code),
-    (e) => {
-      process.stderr.write(`claude-account: ${e.message}\n`);
-      process.exit(1);
-    });
 }

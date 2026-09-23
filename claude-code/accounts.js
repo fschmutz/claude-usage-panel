@@ -20,7 +20,7 @@
 //
 // `openStore(io)` binds all of this to one home dir, platform, clock, fetch
 // and exec (every one overridable, read at call time) so every consumer - the
-// claude-account CLI, the MCP tools, the status line, the tests - gets the
+// claudectl CLI, the MCP tools, the status line, the tests - gets the
 // same operations without threading paths through every call. It is also the
 // ONE reader of the live login: the usage fetch for the MCP server and the
 // Linux status bar goes through it too.
@@ -285,7 +285,7 @@ export function openStore(io = {}) {
     const twin = activeAccountName(profiles.filter((p) => p.name !== name), account);
     if (twin) {
       throw new Error(`this login (${account.emailAddress ?? 'no email'}) is already saved as ` +
-        `${twin} - \`claude-account remove ${twin}\` first if you meant to rename it`);
+        `${twin} - \`claudectl account remove ${twin}\` first if you meant to rename it`);
     }
     return snapshotLive(name);
   }
