@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-09-24
+
 ### Fixed
 
 - **Auto-update follows a rewritten upstream history.** A force-push (to
@@ -16,16 +18,6 @@ semantic versioning.
   nothing of its own (clean tree, no commit that was not already on the
   upstream it had fetched) follows it; one with local commits is still
   left alone.
-
-### Added
-
-- **A guard against private names in this public repo.**
-  `scripts/check-private-names.sh` (pre-commit hook, commit-msg hook) fails
-  when a file or a commit message contains a name from a list kept
-  OUTSIDE the repository - the list is private itself - and reports where,
-  never what. No list: skipped.
-
-### Fixed
 
 - **Sessions reopened from a Claude shell were invisible to each other.**
   gnome-terminal hands its caller's environment to the new tabs, so
@@ -42,6 +34,14 @@ semantic versioning.
   ones above, or one still at a startup prompt) looked closed and a second
   `open` would resume it again. A live `claude --resume <id>` process now
   counts as running too.
+
+### Added
+
+- **A guard against private names in this public repo.**
+  `scripts/check-private-names.sh` (pre-commit hook, commit-msg hook) fails
+  when a file or a commit message contains a name from a list kept
+  OUTSIDE the repository - the list is private itself - and reports where,
+  never what. No list: skipped.
 
 ## [2.1.0] - 2026-09-23
 

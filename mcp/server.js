@@ -25,7 +25,7 @@ import {
 import {warehouseAccount, withTrend} from './warehouse.js';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
-export const VERSION = '2.1.0';
+export const VERSION = '2.1.1';
 
 // Newest first; initialize echoes the client's requested version when we
 // support it, otherwise answers with our newest (per the MCP spec).
