@@ -200,9 +200,25 @@ test('launch runs the resolved steps: terminals detached, tmux in order', (t) =>
         if (args[0] === 'has-session') throw new Error('no session');
         return '';
     };
+    io.env = {...io.env, CLAUDECODE: '1', CLAUDE_PID: '1', CLAUDE_CODE_SESSION_ID: 'caller', LANG: 'C'};
+    const envs = [];
+    const exec0 = io.exec;
+    io.exec = (cmd, args, opts) => {
+        envs.push(opts.env);
+        return exec0(cmd, args, opts);
+    };
+    const spawn0 = io.spawn;
+    io.spawn = (cmd, args, opts) => {
+        envs.push(opts.env);
+        return spawn0(cmd, args, opts);
+    };
     const rows = openTabs(io).save('x').sessions;
     const r = openTabs(io).launch(rows, {terminal: 'ghostty'});
     assert.equal(r.how, 'tmux');
+    // tmux new-session / new-window and the terminal: none carries the caller's session
+    const launched = envs.filter(Boolean);
+    assert.equal(launched.length, 3);
+    for (const e of launched) assert.deepEqual(e, {PATH: io.env.PATH, LANG: 'C'});
     assert.deepEqual(execd, [['tmux', 'has-session'], ['tmux', 'new-session'], ['tmux', 'new-window']]);
     assert.deepEqual(spawned.map((s) => [s.cmd, s.opts.detached]), [['ghostty', true]]);
 });

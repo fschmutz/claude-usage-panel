@@ -11,7 +11,7 @@ import path from 'node:path';
 import * as gnome from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {
     GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TERMINALS, TMUX_SESSION, appleScript, gnomeTabsArgv,
-    launchSteps, onPath, pickTerminal, resolveTerminal, sessionCommand, terminalArgv,
+    launchSteps, onPath, pickTerminal, resolveTerminal, sessionCommand, sessionFreeEnv, terminalArgv,
     terminalForAlternative, terminalForDesktopId, tmuxCalls,
 } from '../claude-code/terminals.js';
 import {sandboxHome} from './helpers.js';
@@ -237,4 +237,24 @@ test('the resume prompt says when it was saved and what died with the process', 
     assert.match(p, /background shells, Monitors, \/loop and scheduled wakeups/);
     assert.match(p, /nothing destructive, outward-facing or still waiting on my answer without asking me first/);
     assert.equal(sessionCommand({name: 'A', session_id: 'i'}), `claude --name 'A' --resume 'i'; exec "$SHELL" -i`);
+});
+
+// ── The calling session's environment stays behind ──────────────────────────────
+
+test('sessionFreeEnv drops what names the calling Claude session, keeps configuration', () => {
+    // exactly what a gnome-terminal tab inherited on 2026-09-23 when `open` ran
+    // from a Claude shell: each resumed session thought it was HOME's child
+    const inherited = {
+        CLAUDECODE: '1', CLAUDE_CODE_CHILD_SESSION: '1', CLAUDE_CODE_ENTRYPOINT: 'cli',
+        CLAUDE_CODE_EXECPATH: '/x/claude', CLAUDE_CODE_MESSAGING_SOCKET: '/run/cc-socks/63052.sock',
+        CLAUDE_CODE_MESSAGING_TOKEN: 't', CLAUDE_CODE_SESSION_ATTENDED: '1',
+        CLAUDE_CODE_SESSION_ID: 'db1b26c0', CLAUDE_EFFORT: 'medium', CLAUDE_PID: '63052',
+    };
+    const config = {
+        PATH: '/usr/bin', HOME: '/h', SHELL: '/bin/bash', CLAUDE_CONFIG_DIR: '/c',
+        CLAUDE_CODE_USE_BEDROCK: '1', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '8000', ANTHROPIC_MODEL: 'm',
+    };
+    assert.deepEqual(sessionFreeEnv({...inherited, ...config}), config);
+    // a future variable of the same families is dropped too
+    assert.deepEqual(sessionFreeEnv({CLAUDE_CODE_SESSION_KIND: 'x', CLAUDE_CODE_MESSAGING_V2: 'y'}), {});
 });

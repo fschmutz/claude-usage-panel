@@ -6,6 +6,19 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sessions reopened from a Claude shell were invisible to each other.**
+  gnome-terminal hands its caller's environment to the new tabs, so
+  `claudectl session open` run inside a Claude Code session passed that
+  session's `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_PID`, session id and
+  messaging socket to every resumed session: each one took itself for the
+  caller's child, never registered in `~/.claude/sessions` (no peer could
+  list or message it, nor could `claudectl session list`) and routed its
+  messages to the caller. `open` now launches the terminal, tmux and
+  osascript without the calling session's variables (`sessionFreeEnv()`);
+  user configuration such as `CLAUDE_CONFIG_DIR` is kept.
+
 ## [2.1.0] - 2026-09-23
 
 ### Added

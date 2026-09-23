@@ -180,6 +180,23 @@ export function launchSteps(rows, terminal, {
   return {how: 'windows', steps: rows.map((r) => spawn(terminalArgv(terminal, r.cwd, sessionCommand(r, prompt))))};
 }
 
+// What Claude Code sets in the environment of the commands a session runs,
+// naming THAT session: its id, pid, messaging socket + token, "you are my
+// child". A terminal inherits its launcher's environment (gnome-terminal
+// forwards it to the tab), so a `claudectl session open` typed in a Claude
+// shell handed all of it to every resumed session: each believed it was a
+// child of the caller, never registered in ~/.claude/sessions, and was
+// invisible to its peers. Families by prefix, so a new SESSION_* or
+// MESSAGING_* variable is covered too; user configuration
+// (CLAUDE_CONFIG_DIR, CLAUDE_CODE_USE_BEDROCK, …) is not in these families.
+const SESSION_ENV =
+  /^(CLAUDECODE|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_CODE_(CHILD_SESSION|SESSION_[A-Z0-9_]+|MESSAGING_[A-Z0-9_]+|ENTRYPOINT|EXECPATH))$/;
+
+/** `env` without the calling Claude session's own variables. */
+export function sessionFreeEnv(env) {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !SESSION_ENV.test(k)));
+}
+
 /** An executable on PATH (or an absolute/relative path that is one). */
 export function onPath(bin, envPath = process.env.PATH ?? '') {
   if (!bin) return false;

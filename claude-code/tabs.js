@@ -32,7 +32,7 @@ import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
 import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
-import {TMUX_SESSION, launchSteps, onPath, resolveTerminal} from './terminals.js';
+import {TMUX_SESSION, launchSteps, onPath, resolveTerminal, sessionFreeEnv} from './terminals.js';
 import {formatClock, resetHint} from './stamps.js';
 
 export const AUTO_PREFIX = 'auto-';
@@ -298,9 +298,13 @@ export function openTabs(io = {}) {
           `or tmux kill-session -t ${TMUX_SESSION} first`);
       }
     }
+    // Every launched process - terminal, tmux, osascript - gets the caller's
+    // environment minus its Claude session: the resumed sessions must be
+    // top-level sessions of their own, not children of whoever ran `open`.
+    const childEnv = sessionFreeEnv(env);
     for (const s of steps) {
-      if (s.detach) (io.spawn ?? nodeSpawn)(s.cmd, s.args, {detached: true, stdio: 'ignore'}).unref();
-      else exec(s.cmd, s.args, {stdio: 'ignore'});
+      if (s.detach) (io.spawn ?? nodeSpawn)(s.cmd, s.args, {detached: true, stdio: 'ignore', env: childEnv}).unref();
+      else exec(s.cmd, s.args, {stdio: 'ignore', env: childEnv});
     }
     return result;
   }
