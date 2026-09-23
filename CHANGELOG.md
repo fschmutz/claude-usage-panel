@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-23
+
 ### Removed
 
 - **The `claude-account` command.** Use `claudectl account` (same
