@@ -20,7 +20,7 @@ function platform(io) {
   return io?.platform ?? process.platform;
 }
 
-/** Durable per-user state: the usage warehouse, saved accounts, the last ping. */
+/** Durable per-user state: the usage warehouse, saved accounts, tab snapshots, the last ping. */
 export function stateDir(io) {
   if (platform(io) === 'darwin') {
     return path.join(homedir(io), 'Library', 'Application Support', APP);
@@ -59,6 +59,16 @@ export function projectsDir(io) {
 /** Saved logins, one file per name, plus the usage cache and last-switch stamp. */
 export function accountsDir(io) {
   return path.join(stateDir(io), 'accounts');
+}
+
+/** Claude Code's live-session registry: one <pid>.json per running session. */
+export function sessionRegistryDir(io) {
+  return path.join(claudeDir(io), 'sessions');
+}
+
+/** `claudectl session` snapshots: one JSON file per saved set of sessions. */
+export function tabsDir(io) {
+  return path.join(stateDir(io), 'tabs');
 }
 
 /** 90 days of poll samples, one JSONL line per poll that moved. */
