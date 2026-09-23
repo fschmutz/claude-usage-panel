@@ -19,8 +19,13 @@
 #
 # It refuses to touch a checkout it does not own: a dirty worktree, a detached
 # HEAD, a branch with no upstream, or a missing remote each make it skip with a
-# message instead of moving anyone's work. Nothing here rebases, resets, stashes
-# or force-pushes - the only git write is `merge --ff-only`.
+# message instead of moving anyone's work. Nothing here rebases, stashes or
+# force-pushes; the git writes are `merge --ff-only`, and one reset: when the
+# upstream history itself was rewritten (a force-push to purge data from it),
+# a checkout that holds NOTHING of its own - clean tree, and every commit it
+# has was already on the upstream it had fetched - follows the new history
+# instead of being stranded on the old one forever. Any local commit and it
+# skips, as for any other divergence.
 #
 # Exit codes: 0 = up to date / updated / skipped, 10 = update available
 # (--check only), 1 = error, 2 = usage.
@@ -343,12 +348,27 @@ fi
 # ── Update ──────────────────────────────────────────────────────────────────────
 say "updating v$have → v$latest"
 upstream="$(git -C "$ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}')"
-git -C "$ROOT" fetch --quiet --tags origin || die "git fetch failed"
+# What this checkout last saw of its upstream, BEFORE the fetch moves it.
+seen="$(git -C "$ROOT" rev-parse --verify --quiet "$upstream" || true)"
+# --force for the tags only: a rewritten history re-points release tags that
+# already exist here, and without it the fetch refuses them and dies. Tags are
+# the upstream's to name; nothing local lives in them.
+git -C "$ROOT" fetch --quiet --tags --force origin || die "git fetch failed"
 # --ff-only: if the branch has diverged this refuses rather than merging or
-# rewriting anything, and the run ends here with the checkout untouched.
+# rewriting anything, and the run ends here with the checkout untouched -
+# unless the upstream was rewritten under a checkout with nothing of its own.
 if ! git -C "$ROOT" merge --ff-only --quiet "$upstream" 2>>"$LOG"; then
-    say "skip: $upstream is not a fast-forward from here - update by hand"
-    exit 0
+    if [ -n "$seen" ] &&
+        git -C "$ROOT" merge-base --is-ancestor HEAD "$seen" &&
+        ! git -C "$ROOT" merge-base --is-ancestor "$seen" "$upstream"; then
+        # repo_is_updatable already proved the tree clean; HEAD is contained
+        # in what upstream used to be, so no commit here is lost.
+        say "the upstream history was rewritten - following it (no local commits, clean tree)"
+        git -C "$ROOT" reset --hard --quiet "$upstream" || die "could not follow the rewritten $upstream"
+    else
+        say "skip: $upstream is not a fast-forward from here - update by hand"
+        exit 0
+    fi
 fi
 
 now="$(local_version)"

@@ -262,6 +262,48 @@ test('a diverged branch is refused rather than merged', (t) => {
     assert.equal(fs.readFileSync(path.join(c.work, 'local.txt'), 'utf8'), 'mine\n');
 });
 
+// Upstream rewritten (a force-push to purge data): the same history with
+// different SHAs, release tags re-pointed. Returns after cutting v1.6.0 on it.
+function rewriteUpstream(c) {
+    c.git(c.seed, 'commit', '-q', '--amend', '-m', 'seed (rewritten)');
+    c.git(c.seed, 'tag', '-f', 'v1.5.0');
+    const pkg = path.join(c.seed, 'package.json');
+    fs.writeFileSync(pkg, fs.readFileSync(pkg, 'utf8').replace('1.5.0', '1.6.0'));
+    c.git(c.seed, 'commit', '-qam', 'chore(release): v1.6.0');
+    c.git(c.seed, 'tag', 'v1.6.0');
+    c.git(c.seed, 'push', '-q', '--force', 'origin', 'main');
+    c.git(c.seed, 'push', '-q', '--force', 'origin', '--tags');
+}
+
+test('a rewritten upstream is followed when the checkout holds nothing of its own', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0']});
+    rewriteUpstream(c);
+    const r = runScript(c, []);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /upstream history was rewritten - following it/);
+    assert.match(r.stdout, /updated to v1\.6\.0/);
+    assert.equal(c.git(c.work, 'rev-parse', 'HEAD'), c.git(c.seed, 'rev-parse', 'HEAD'));
+    // the re-pointed tag was taken, not refused
+    assert.equal(c.git(c.work, 'rev-parse', 'v1.5.0^{}'), c.git(c.seed, 'rev-parse', 'v1.5.0^{}'));
+});
+
+test('a rewritten upstream never takes a local commit with it', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0']});
+    c.git(c.work, 'config', 'user.email', 'test@example.com');
+    c.git(c.work, 'config', 'user.name', 'test');
+    fs.writeFileSync(path.join(c.work, 'local.txt'), 'mine\n');
+    c.git(c.work, 'add', '-A');
+    c.git(c.work, 'commit', '-qm', 'local work');
+    const mine = c.git(c.work, 'rev-parse', 'HEAD');
+    rewriteUpstream(c);
+    const r = runScript(c, []);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /not a fast-forward/);
+    assert.equal(c.git(c.work, 'rev-parse', 'HEAD'), mine);
+    assert.equal(fs.readFileSync(path.join(c.work, 'local.txt'), 'utf8'), 'mine\n');
+    assert.equal(fs.existsSync(path.join(c.dir, 'install-calls.log')), false);
+});
+
 test('--quiet prints nothing but still logs', (t) => {
     const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.6.0']});
     const r = runScript(c, ['--check', '--quiet']);
