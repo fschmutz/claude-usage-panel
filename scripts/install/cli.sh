@@ -14,14 +14,14 @@ CLI_JS="$NODE_TREE/claude-code/claudectl.js"
 CLI_UNIT="claude-usage-panel-autosave"                     # systemd user units
 CLI_LABEL="io.github.fschmutz.claude-usage-panel.autosave" # launchd agent
 CLI_CRON_TAG="# claude-usage-panel session autosave"       # cron marker line
-# Before 1.14 the accounts CLI was its own binary. Its shim is ours to remove
+# Before 2.0 the accounts CLI was its own binary. Its shim is ours to remove
 # (recognised by the marker line we wrote in it), never a file we did not write.
 CLI_LEGACY_BIN="$HOME/.local/bin/claude-account"
 CLI_SHIM_MARK="# claude-usage-panel:"
 
 _cli_installed() {
     [ -x "$CLI_BIN" ] && return 0
-    # a pre-1.14 install: report it so `update` migrates it to claudectl
+    # a pre-2.0 install: report it so `update` migrates it to claudectl
     [ -f "$CLI_LEGACY_BIN" ] && grep -qF "$CLI_SHIM_MARK" "$CLI_LEGACY_BIN"
 }
 

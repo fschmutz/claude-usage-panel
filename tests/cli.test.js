@@ -1,6 +1,6 @@
 // claudectl: the dispatcher (claudectl.js) and its install target
 // (scripts/install/cli.sh, run for real against a stubbed HOME + crontab),
-// including the migration of a pre-1.14 claude-account shim. The groups
+// including the migration of a pre-2.0 claude-account shim. The groups
 // themselves are covered in accounts.test.js and tabs.test.js.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -61,7 +61,7 @@ const env = (home) => ({
 
 const shim = (home, name) => path.join(home, '.local', 'bin', name);
 
-test('install.sh cli: claudectl shim, autosave cron line, pre-1.14 shim migrated', (t) => {
+test('install.sh cli: claudectl shim, autosave cron line, pre-2.0 shim migrated', (t) => {
     const home = stubbedHome(t, {prefix: 'cup-cli-'});
     fs.mkdirSync(path.dirname(shim(home, 'x')), {recursive: true});
     fs.writeFileSync(shim(home, 'claude-account'),
@@ -69,7 +69,7 @@ test('install.sh cli: claudectl shim, autosave cron line, pre-1.14 shim migrated
     fs.chmodSync(shim(home, 'claude-account'), 0o755);
     const stale = path.join(home, '.claude', 'claude-usage-panel', 'claude-code', 'claude-account.js');
     fs.mkdirSync(path.dirname(stale), {recursive: true});
-    fs.writeFileSync(stale, '// pre-1.14\n');
+    fs.writeFileSync(stale, '// pre-2.0\n');
 
     // the old target names are aliases, and naming both installs once
     const r = run('bash', [INSTALL, 'accounts', 'tabs'], {env: env(home)});
@@ -109,7 +109,7 @@ test('install.sh cli never removes a claude-account it did not write', (t) => {
     assert.ok(fs.existsSync(shim(home, 'claude-account')));
 });
 
-test('a pre-1.14 claude-account shim counts as an installed cli, so update migrates it', (t) => {
+test('a pre-2.0 claude-account shim counts as an installed cli, so update migrates it', (t) => {
     const home = stubbedHome(t, {prefix: 'cup-cli-'});
     fs.mkdirSync(path.dirname(shim(home, 'x')), {recursive: true});
     fs.writeFileSync(shim(home, 'claude-account'), '#!/bin/sh\n# claude-usage-panel: named Claude Code accounts\n');

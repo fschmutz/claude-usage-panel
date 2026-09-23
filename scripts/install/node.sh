@@ -19,7 +19,7 @@ _install_node_tree() {
     act cp "$ROOT"/mcp/*.js "$NODE_TREE/mcp/"
     act cp "$ROOT"/claude-code/*.js "$NODE_TREE/claude-code/"
     # A module renamed or dropped in the checkout (claude-account.js became
-    # account-cli.js in 1.14) must not linger in the tree as a stale copy.
+    # account-cli.js in 2.0) must not linger in the tree as a stale copy.
     local dir f
     for dir in mcp claude-code; do
         for f in "$NODE_TREE/$dir"/*.js; do
