@@ -72,8 +72,8 @@ msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
 #: extension.js:427 extension.js:441 lib/accountsSection.js:287
-#: lib/accountsSection.js:293 lib/sessionsSection.js:145
-#: lib/sessionsSection.js:155
+#: lib/accountsSection.js:293 lib/sessionsSection.js:159
+#: lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Claude の使用状況"
 
@@ -178,11 +178,11 @@ msgstr "今日のセッション (推定・インデックス作成中)"
 msgid "Today’s sessions (est.)"
 msgstr "今日のセッション (推定)"
 
-#: lib/sessionsSection.js:146
+#: lib/sessionsSection.js:160
 msgid "No terminal found - set one in the extension preferences."
 msgstr "ターミナルが見つかりません - 拡張機能の設定で指定してください。"
 
-#: lib/sessionsSection.js:155
+#: lib/sessionsSection.js:169
 #, javascript-format
 msgid "Could not open %s"
 msgstr "%s を開けませんでした"
@@ -321,11 +321,13 @@ msgstr "ターミナル"
 
 #: prefs.js:187
 msgid ""
-"Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
-"alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
+"Leave empty for the desktop default terminal ($TERMINAL first); without one: "
+"ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
+"xfce4-terminal, xterm. Also used by claudectl session open."
 msgstr ""
-"空にすると自動検出します: $TERMINAL、次に ghostty, kitty, wezterm, "
-"alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm。"
+"空にするとデスクトップの既定の端末を使います ($TERMINAL を優先)。未設定なら: "
+"ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
+"xfce4-terminal, xterm。claudectl session open でも使用されます。"
 
 #: prefs.js:202
 msgid "Session pings"

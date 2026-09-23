@@ -72,8 +72,8 @@ msgid "Session pings: %s"
 msgstr "Sitzungs-Pings: %s"
 
 #: extension.js:427 extension.js:441 lib/accountsSection.js:287
-#: lib/accountsSection.js:293 lib/sessionsSection.js:145
-#: lib/sessionsSection.js:155
+#: lib/accountsSection.js:293 lib/sessionsSection.js:159
+#: lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Claude-Nutzung"
 
@@ -179,12 +179,12 @@ msgstr "Heutige Sitzungen (geschätzt, wird noch indiziert)"
 msgid "Today’s sessions (est.)"
 msgstr "Heutige Sitzungen (geschätzt)"
 
-#: lib/sessionsSection.js:146
+#: lib/sessionsSection.js:160
 msgid "No terminal found - set one in the extension preferences."
 msgstr ""
 "Kein Terminal gefunden - in den Erweiterungseinstellungen eines festlegen."
 
-#: lib/sessionsSection.js:155
+#: lib/sessionsSection.js:169
 #, javascript-format
 msgid "Could not open %s"
 msgstr "%s konnte nicht geöffnet werden"
@@ -325,12 +325,13 @@ msgstr "Terminal"
 
 #: prefs.js:187
 msgid ""
-"Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
-"alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
+"Leave empty for the desktop default terminal ($TERMINAL first); without one: "
+"ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
+"xfce4-terminal, xterm. Also used by claudectl session open."
 msgstr ""
-"Leer lassen für automatische Erkennung: $TERMINAL, dann ghostty, kitty, "
-"wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, "
-"xterm."
+"Leer lassen für das Standard-Terminal des Desktops ($TERMINAL zuerst); ohne "
+"eines: ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, "
+"tilix, xfce4-terminal, xterm. Wird auch von claudectl session open verwendet."
 
 #: prefs.js:202
 msgid "Session pings"

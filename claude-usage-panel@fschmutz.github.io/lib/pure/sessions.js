@@ -169,18 +169,68 @@ export function interactiveResume(entry, opts) {
 // `argv(dir, cmd)` returns the full argv - no shell involved on our side, the
 // command string is handed to bash -lc by the terminal itself.
 export const TERMINALS = [
-    {bin: 'ghostty', argv: (d, c) => [`--working-directory=${d}`, '-e', 'bash', '-lc', c]},
-    {bin: 'kitty', argv: (d, c) => ['--directory', d, 'bash', '-lc', c]},
-    {bin: 'wezterm', argv: (d, c) => ['start', '--cwd', d, '--', 'bash', '-lc', c]},
-    {bin: 'alacritty', argv: (d, c) => ['--working-directory', d, '-e', 'bash', '-lc', c]},
-    {bin: 'foot', argv: (d, c) => ['-D', d, 'bash', '-lc', c]},
-    {bin: 'gnome-terminal', argv: (d, c) => [`--working-directory=${d}`, '--', 'bash', '-lc', c]},
-    {bin: 'konsole', argv: (d, c) => ['--workdir', d, '-e', 'bash', '-lc', c]},
-    {bin: 'tilix', argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
-    {bin: 'xfce4-terminal', argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
-    {bin: 'x-terminal-emulator', argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
-    {bin: 'xterm', argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+    {bin: 'ghostty', desktop: ['com.mitchellh.ghostty.desktop'],
+        argv: (d, c) => [`--working-directory=${d}`, '-e', 'bash', '-lc', c]},
+    {bin: 'kitty', desktop: ['kitty.desktop'], argv: (d, c) => ['--directory', d, 'bash', '-lc', c]},
+    {bin: 'wezterm', desktop: ['org.wezfurlong.wezterm.desktop'],
+        argv: (d, c) => ['start', '--cwd', d, '--', 'bash', '-lc', c]},
+    {bin: 'alacritty', desktop: ['Alacritty.desktop'],
+        argv: (d, c) => ['--working-directory', d, '-e', 'bash', '-lc', c]},
+    {bin: 'foot', desktop: ['foot.desktop', 'footclient.desktop'], argv: (d, c) => ['-D', d, 'bash', '-lc', c]},
+    {bin: 'gnome-terminal', desktop: ['org.gnome.Terminal.desktop'],
+        argv: (d, c) => [`--working-directory=${d}`, '--', 'bash', '-lc', c]},
+    {bin: 'konsole', desktop: ['org.kde.konsole.desktop'], argv: (d, c) => ['--workdir', d, '-e', 'bash', '-lc', c]},
+    {bin: 'tilix', desktop: ['com.gexperts.Tilix.desktop'], argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
+    {bin: 'xfce4-terminal', desktop: ['xfce4-terminal.desktop'],
+        argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
+    {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+    {bin: 'xterm', desktop: ['xterm.desktop', 'debian-xterm.desktop'],
+        argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+    // The Default Terminal spec launcher: whatever the desktop's default is,
+    // even one we have no entry for. Last, so plain autodetection prefers a
+    // terminal we can drive directly.
+    {bin: 'xdg-terminal-exec', desktop: [], argv: (d, c) => [`--dir=${d}`, '--', 'bash', '-lc', c]},
 ];
+
+/** The terminal binary behind a Desktop Entry ID, as `xdg-terminal-exec
+ *  --print-id` prints it (an action may follow a colon), or null. */
+export function terminalForDesktopId(id) {
+    const bare = String(id ?? '').trim().split(':')[0];
+    return TERMINALS.find(t => t.desktop.includes(bare))?.bin ?? null;
+}
+
+/** The terminal behind Debian's x-terminal-emulator alternative
+ *  (/usr/bin/gnome-terminal.wrapper -> gnome-terminal), or null. */
+export function terminalForAlternative(target) {
+    const name = String(target ?? '').split('/').pop().replace(/\.wrapper$/, '');
+    return TERMINALS.find(t => t.bin === name && t.bin !== 'x-terminal-emulator')?.bin ?? null;
+}
+
+/**
+ * Which terminal a resume opens. The user's explicit choice, then $TERMINAL,
+ * then the DESKTOP's default terminal (the Default Terminal spec, then the
+ * Debian alternative) - installing a second emulator must not silently take
+ * over - and only then the first installed one we know.
+ * @param {object} p {configured, envTerminal, desktopId, alternative}
+ * @param {(bin: string) => boolean} installed
+ */
+export function pickTerminal({configured, envTerminal, desktopId, alternative}, installed) {
+    if (configured)
+        return configured;
+    if (envTerminal && installed(envTerminal))
+        return envTerminal;
+    if (desktopId) {
+        const bin = terminalForDesktopId(desktopId);
+        if (bin && installed(bin))
+            return bin;
+        if (installed('xdg-terminal-exec'))
+            return 'xdg-terminal-exec';
+    }
+    const alt = terminalForAlternative(alternative);
+    if (alt && installed(alt))
+        return alt;
+    return TERMINALS.find(t => installed(t.bin))?.bin ?? null;
+}
 
 /**
  * argv for launching `command` in `cwd`.

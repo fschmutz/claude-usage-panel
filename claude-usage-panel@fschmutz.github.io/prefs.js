@@ -184,7 +184,7 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
             settings.set_string('terminal-command', row.text.trim()));
         sessions.add(terminalRow);
         const terminalHint = new Adw.ActionRow({
-            subtitle: _('Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm.'),
+            subtitle: _('Leave empty for the desktop default terminal ($TERMINAL first); without one: ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm. Also used by claudectl session open.'),
             sensitive: false,
         });
         sessions.add(terminalHint);

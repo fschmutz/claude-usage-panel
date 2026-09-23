@@ -12,7 +12,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {refreshSessions} from './sessionIndex.js';
-import {TERMINALS, compactTokens, interactiveResume, terminalArgv} from './pure.js';
+import {compactTokens, interactiveResume, pickTerminal, terminalArgv} from './pure.js';
 import {vbox, clipLabel} from './widgets.js';
 
 // How many of today's sessions the dropdown offers to resume.
@@ -123,20 +123,34 @@ export class SessionsController {
         }
     }
 
-    // The terminal to open: the explicit setting first, then $TERMINAL, then
-    // the first emulator we know how to drive that is actually installed.
+    // The terminal to open: pickTerminal() decides (setting, $TERMINAL, the
+    // desktop's default, then the first known one installed); this only
+    // gathers its inputs. `xdg-terminal-exec --print-id` runs on a click, not
+    // in the refresh path, and is a short shell script.
     _detectTerminal() {
-        const configured = this._settings.get_string('terminal-command').trim();
-        if (configured)
-            return configured;
-        const env = GLib.getenv('TERMINAL');
-        if (env && GLib.find_program_in_path(env))
-            return env;
-        for (const term of TERMINALS) {
-            if (GLib.find_program_in_path(term.bin))
-                return term.bin;
+        const installed = bin => GLib.find_program_in_path(bin) !== null;
+        let desktopId = null;
+        if (installed('xdg-terminal-exec')) {
+            try {
+                const [ok, out] = GLib.spawn_command_line_sync('xdg-terminal-exec --print-id');
+                if (ok)
+                    desktopId = new TextDecoder().decode(out).trim() || null;
+            } catch {
+                desktopId = null;
+            }
         }
-        return null;
+        let alternative = null;
+        try {
+            alternative = GLib.file_read_link('/etc/alternatives/x-terminal-emulator');
+        } catch {
+            alternative = null;
+        }
+        return pickTerminal({
+            configured: this._settings.get_string('terminal-command').trim(),
+            envTerminal: GLib.getenv('TERMINAL'),
+            desktopId,
+            alternative,
+        }, installed);
     }
 
     _open(session) {

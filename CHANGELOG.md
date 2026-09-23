@@ -48,6 +48,15 @@ semantic versioning.
 
 ### Fixed
 
+- **A session click opened Ghostty on a GNOME Terminal desktop.** With no
+  terminal set in the preferences, autodetection took the first emulator
+  of its list that happened to be installed, so installing Ghostty (or
+  kitty…) silently took over from the desktop's default. It now asks the
+  desktop first: `$TERMINAL`, then the Default Terminal spec
+  (`xdg-terminal-exec --print-id`), then Debian's `x-terminal-emulator`,
+  and falls back to the list only when none answers. Same order in the
+  panel and `claudectl session open` (`pickTerminal()`, parity-tested).
+
 - **The GNOME dropdown sized itself from its longest line, so the bars lied.**
   The track was a fixed 300 px while the popup grew to fit whatever the
   widest reset line happened to be, so on a laptop a card could be far wider

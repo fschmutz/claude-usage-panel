@@ -46,9 +46,10 @@ one, the newest snapshot is used.
 
 - **Your terminal.** The one a session click in the panel opens: on Linux
   the GNOME preference *Terminal used to resume a session*
-  (`terminal-command`), then `$TERMINAL`, then the first installed of
-  Ghostty, kitty, WezTerm, Alacritty, foot, gnome-terminal, Konsole, Tilix,
-  xfce4-terminal, xterm; on macOS the app's *Open in* setting (Terminal or
+  (`terminal-command`), then `$TERMINAL`, then the desktop's default
+  terminal (`xdg-terminal-exec`, then `x-terminal-emulator`), and only then
+  the first installed of Ghostty, kitty, WezTerm, Alacritty, foot,
+  gnome-terminal, Konsole, Tilix, xfce4-terminal, xterm; on macOS the app's *Open in* setting (Terminal or
   iTerm). `--terminal=BIN` (or `iterm` / `terminal`) overrides it for one run.
 - **One window.** gnome-terminal and iTerm open one window with a native tab
   per session. Every other terminal opens ONE window on a tmux session

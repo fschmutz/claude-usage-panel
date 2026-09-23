@@ -73,8 +73,8 @@ msgid "Session pings: %s"
 msgstr ""
 
 #: extension.js:427 extension.js:441 lib/accountsSection.js:287
-#: lib/accountsSection.js:293 lib/sessionsSection.js:145
-#: lib/sessionsSection.js:155
+#: lib/accountsSection.js:293 lib/sessionsSection.js:159
+#: lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr ""
 
@@ -179,11 +179,11 @@ msgstr ""
 msgid "Today’s sessions (est.)"
 msgstr ""
 
-#: lib/sessionsSection.js:146
+#: lib/sessionsSection.js:160
 msgid "No terminal found - set one in the extension preferences."
 msgstr ""
 
-#: lib/sessionsSection.js:155
+#: lib/sessionsSection.js:169
 #, javascript-format
 msgid "Could not open %s"
 msgstr ""
@@ -310,8 +310,9 @@ msgstr ""
 
 #: prefs.js:187
 msgid ""
-"Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
-"alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
+"Leave empty for the desktop default terminal ($TERMINAL first); without one: "
+"ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
+"xfce4-terminal, xterm. Also used by claudectl session open."
 msgstr ""
 
 #: prefs.js:202

@@ -11,7 +11,8 @@ import path from 'node:path';
 import * as gnome from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {
     GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TERMINALS, TMUX_SESSION, appleScript, gnomeTabsArgv,
-    launchSteps, onPath, resolveTerminal, sessionCommand, terminalArgv, tmuxCalls,
+    launchSteps, onPath, pickTerminal, resolveTerminal, sessionCommand, terminalArgv,
+    terminalForAlternative, terminalForDesktopId, tmuxCalls,
 } from '../claude-code/terminals.js';
 import {sandboxHome} from './helpers.js';
 
@@ -23,7 +24,7 @@ const rows = [
 // ── Parity with the panel ───────────────────────────────────────────────────────
 
 test('TERMINALS and terminalArgv match the GNOME port entry for entry', () => {
-    assert.deepEqual(TERMINALS.map((t) => t.bin), gnome.TERMINALS.map((t) => t.bin));
+    assert.deepEqual(TERMINALS.map((t) => [t.bin, t.desktop]), gnome.TERMINALS.map((t) => [t.bin, t.desktop]));
     for (const bin of [...gnome.TERMINALS.map((t) => t.bin), '/usr/bin/kitty', 'my-term', '']) {
         assert.deepEqual(terminalArgv(bin, '/r/a b', 'cmd x'), gnome.terminalArgv(bin, '/r/a b', 'cmd x'), bin);
     }
@@ -34,7 +35,48 @@ test('the tab command resumes by name then leaves a shell, like the panel click'
     assert.match(gnome.interactiveResume({cwd: '', sessionId: 'x'}), /; exec "\$SHELL" -i$/);
 });
 
-// ── Resolution: the user's setting first ────────────────────────────────────────
+// ── Choosing: the user's setting, then the desktop's default ───────────────────
+
+// [inputs, installed binaries, expected] - run through BOTH ports.
+const PICKS = [
+    [{configured: 'kitty', envTerminal: 'foot', desktopId: 'org.gnome.Terminal.desktop'}, [], 'kitty'],
+    [{envTerminal: 'foot', desktopId: 'org.gnome.Terminal.desktop'}, ['foot', 'gnome-terminal'], 'foot'],
+    // the regression: ghostty installed and first in the list must NOT beat the desktop default
+    [{envTerminal: 'foot', desktopId: 'org.gnome.Terminal.desktop'}, ['ghostty', 'gnome-terminal'], 'gnome-terminal'],
+    [{desktopId: 'org.gnome.Terminal.desktop:new-window'}, ['ghostty', 'gnome-terminal'], 'gnome-terminal'],
+    // a default we cannot drive ourselves goes through the spec launcher
+    [{desktopId: 'org.gnome.Ptyxis.desktop:new-window'}, ['ghostty', 'xdg-terminal-exec'], 'xdg-terminal-exec'],
+    [{desktopId: 'org.gnome.Ptyxis.desktop'}, ['ghostty'], 'ghostty'],
+    [{alternative: '/usr/bin/gnome-terminal.wrapper'}, ['ghostty', 'gnome-terminal'], 'gnome-terminal'],
+    [{alternative: '/usr/bin/konsole'}, ['ghostty'], 'ghostty'],
+    [{}, ['xterm', 'kitty'], 'kitty'],
+    [{}, [], null],
+];
+
+test('pickTerminal: same choice in the CLI and the GNOME panel, for every case', () => {
+    for (const [inputs, bins, want] of PICKS) {
+        const installed = (b) => bins.includes(b);
+        assert.equal(pickTerminal(inputs, installed), want, JSON.stringify(inputs));
+        assert.equal(gnome.pickTerminal(inputs, installed), want, JSON.stringify(inputs));
+    }
+});
+
+test('desktop ids and the Debian alternative map to the binaries we drive', () => {
+    for (const f of [terminalForDesktopId, gnome.terminalForDesktopId]) {
+        assert.equal(f('org.gnome.Terminal.desktop'), 'gnome-terminal');
+        assert.equal(f('com.mitchellh.ghostty.desktop:new-window'), 'ghostty');
+        assert.equal(f('org.gnome.Ptyxis.desktop'), null);
+        assert.equal(f(''), null);
+    }
+    for (const f of [terminalForAlternative, gnome.terminalForAlternative]) {
+        assert.equal(f('/usr/bin/gnome-terminal.wrapper'), 'gnome-terminal');
+        assert.equal(f('/usr/bin/xterm'), 'xterm');
+        assert.equal(f('/usr/bin/x-terminal-emulator'), null);
+        assert.equal(f(null), null);
+    }
+});
+
+// ── Resolution I/O ──────────────────────────────────────────────────────────────
 
 // A PATH dir holding the given executables.
 function binDir(t, names) {
@@ -46,26 +88,38 @@ function binDir(t, names) {
     return home;
 }
 
-const dconf = (value) => (cmd, args) => {
-    assert.deepEqual([cmd, ...args], ['dconf', 'read', GNOME_TERMINAL_KEY]);
-    if (value === null) throw new Error('no dconf');
-    return value;
+// exec fake: dconf prints `setting`, xdg-terminal-exec prints `desktopId`.
+const fakeExec = ({setting = '', desktopId = ''} = {}) => (cmd, args) => {
+    if (cmd === 'dconf') {
+        assert.deepEqual(args, ['read', GNOME_TERMINAL_KEY]);
+        if (setting === null) throw new Error('no dconf');
+        return setting;
+    }
+    if (cmd === 'xdg-terminal-exec') {
+        assert.deepEqual(args, ['--print-id']);
+        return desktopId;
+    }
+    throw new Error(`unexpected ${cmd}`);
 };
+const linux = (PATH, exec, extra = {}) => ({platform: 'linux', env: {PATH, ...extra}, exec, alternativePath: '/nonexistent'});
 
 test('linux: the GNOME terminal-command preference wins', (t) => {
     const PATH = binDir(t, ['ghostty', 'gnome-terminal']);
-    assert.equal(resolveTerminal({platform: 'linux', env: {PATH, TERMINAL: 'ghostty'}, exec: dconf("'kitty'\n")}), 'kitty');
-    assert.equal(resolveTerminal({platform: 'linux', env: {PATH}, exec: dconf("'/opt/x/foot'")}), '/opt/x/foot');
+    assert.equal(resolveTerminal(linux(PATH, fakeExec({setting: "'kitty'\n"}), {TERMINAL: 'ghostty'})), 'kitty');
+    assert.equal(resolveTerminal(linux(PATH, fakeExec({setting: "'/opt/x/foot'"}))), '/opt/x/foot');
 });
 
-test('linux: then $TERMINAL when it is installed, then the first known one', (t) => {
-    const PATH = binDir(t, ['gnome-terminal', 'kitty']);
-    assert.equal(resolveTerminal({platform: 'linux', env: {PATH, TERMINAL: 'gnome-terminal'}, exec: dconf("''")}), 'gnome-terminal');
-    // $TERMINAL not installed: fall through; kitty comes before gnome-terminal
-    assert.equal(resolveTerminal({platform: 'linux', env: {PATH, TERMINAL: 'nope'}, exec: dconf('')}), 'kitty');
-    // no dconf at all (not GNOME): same fallbacks
-    assert.equal(resolveTerminal({platform: 'linux', env: {PATH}, exec: dconf(null)}), 'kitty');
-    assert.equal(resolveTerminal({platform: 'linux', env: {PATH: binDir(t, [])}, exec: dconf(null)}), null);
+test('linux: the desktop default beats a merely installed emulator', (t) => {
+    const PATH = binDir(t, ['ghostty', 'gnome-terminal', 'xdg-terminal-exec']);
+    assert.equal(resolveTerminal(linux(PATH, fakeExec({desktopId: 'org.gnome.Terminal.desktop\n'}))), 'gnome-terminal');
+    // without xdg-terminal-exec, the Debian alternative
+    const noXte = binDir(t, ['ghostty', 'gnome-terminal']);
+    const alt = path.join(noXte, 'x-terminal-emulator');
+    fs.symlinkSync('/usr/bin/gnome-terminal.wrapper', alt);
+    assert.equal(resolveTerminal({...linux(noXte, fakeExec()), alternativePath: alt}), 'gnome-terminal');
+    // no signal at all: the first known one installed
+    assert.equal(resolveTerminal(linux(noXte, fakeExec({setting: null}))), 'ghostty');
+    assert.equal(resolveTerminal(linux(binDir(t, []), fakeExec({setting: null}))), null);
 });
 
 test('macOS: the app terminalChoice, auto = iTerm when installed', (t) => {

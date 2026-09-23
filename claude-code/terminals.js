@@ -5,11 +5,13 @@
 // order they use:
 //
 //   Linux  - the GNOME extension's `terminal-command` key (read with dconf),
-//            then $TERMINAL, then the first emulator of TERMINALS on PATH.
+//            then $TERMINAL, then the desktop's default terminal
+//            (`xdg-terminal-exec --print-id`, then x-terminal-emulator),
+//            then the first emulator of TERMINALS on PATH - pickTerminal().
 //   macOS  - the menu-bar app's `terminalChoice` default (auto / terminal /
 //            iterm; auto = iTerm when it is installed).
 //
-// TERMINALS and terminalArgv mirror lib/pure/sessions.js 1:1 (parity asserted
+// TERMINALS, terminalArgv and pickTerminal mirror lib/pure/sessions.js 1:1 (parity asserted
 // in tests/terminals.test.js), so a session opened from the CLI starts exactly
 // like one clicked in the panel.
 //
@@ -37,18 +39,52 @@ export const shellQuote = (s) => `'${String(s ?? '').replace(/'/g, `'\\''`)}'`;
 
 // Mirrors TERMINALS in lib/pure/sessions.js: same entries, same order.
 export const TERMINALS = [
-  {bin: 'ghostty', argv: (d, c) => [`--working-directory=${d}`, '-e', 'bash', '-lc', c]},
-  {bin: 'kitty', argv: (d, c) => ['--directory', d, 'bash', '-lc', c]},
-  {bin: 'wezterm', argv: (d, c) => ['start', '--cwd', d, '--', 'bash', '-lc', c]},
-  {bin: 'alacritty', argv: (d, c) => ['--working-directory', d, '-e', 'bash', '-lc', c]},
-  {bin: 'foot', argv: (d, c) => ['-D', d, 'bash', '-lc', c]},
-  {bin: 'gnome-terminal', argv: (d, c) => [`--working-directory=${d}`, '--', 'bash', '-lc', c]},
-  {bin: 'konsole', argv: (d, c) => ['--workdir', d, '-e', 'bash', '-lc', c]},
-  {bin: 'tilix', argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
-  {bin: 'xfce4-terminal', argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
-  {bin: 'x-terminal-emulator', argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
-  {bin: 'xterm', argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+  {bin: 'ghostty', desktop: ['com.mitchellh.ghostty.desktop'],
+    argv: (d, c) => [`--working-directory=${d}`, '-e', 'bash', '-lc', c]},
+  {bin: 'kitty', desktop: ['kitty.desktop'], argv: (d, c) => ['--directory', d, 'bash', '-lc', c]},
+  {bin: 'wezterm', desktop: ['org.wezfurlong.wezterm.desktop'],
+    argv: (d, c) => ['start', '--cwd', d, '--', 'bash', '-lc', c]},
+  {bin: 'alacritty', desktop: ['Alacritty.desktop'],
+    argv: (d, c) => ['--working-directory', d, '-e', 'bash', '-lc', c]},
+  {bin: 'foot', desktop: ['foot.desktop', 'footclient.desktop'], argv: (d, c) => ['-D', d, 'bash', '-lc', c]},
+  {bin: 'gnome-terminal', desktop: ['org.gnome.Terminal.desktop'],
+    argv: (d, c) => [`--working-directory=${d}`, '--', 'bash', '-lc', c]},
+  {bin: 'konsole', desktop: ['org.kde.konsole.desktop'], argv: (d, c) => ['--workdir', d, '-e', 'bash', '-lc', c]},
+  {bin: 'tilix', desktop: ['com.gexperts.Tilix.desktop'], argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
+  {bin: 'xfce4-terminal', desktop: ['xfce4-terminal.desktop'],
+    argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
+  {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+  {bin: 'xterm', desktop: ['xterm.desktop', 'debian-xterm.desktop'],
+    argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+  {bin: 'xdg-terminal-exec', desktop: [], argv: (d, c) => [`--dir=${d}`, '--', 'bash', '-lc', c]},
 ];
+
+/** Mirrors terminalForDesktopId in lib/pure/sessions.js. */
+export function terminalForDesktopId(id) {
+  const bare = String(id ?? '').trim().split(':')[0];
+  return TERMINALS.find((t) => t.desktop.includes(bare))?.bin ?? null;
+}
+
+/** Mirrors terminalForAlternative in lib/pure/sessions.js. */
+export function terminalForAlternative(target) {
+  const name = String(target ?? '').split('/').pop().replace(/\.wrapper$/, '');
+  return TERMINALS.find((t) => t.bin === name && t.bin !== 'x-terminal-emulator')?.bin ?? null;
+}
+
+/** Mirrors pickTerminal in lib/pure/sessions.js: the user's choice, then
+ *  $TERMINAL, then the desktop's default, then the first known installed. */
+export function pickTerminal({configured, envTerminal, desktopId, alternative}, installed) {
+  if (configured) return configured;
+  if (envTerminal && installed(envTerminal)) return envTerminal;
+  if (desktopId) {
+    const bin = terminalForDesktopId(desktopId);
+    if (bin && installed(bin)) return bin;
+    if (installed('xdg-terminal-exec')) return 'xdg-terminal-exec';
+  }
+  const alt = terminalForAlternative(alternative);
+  if (alt && installed(alt)) return alt;
+  return TERMINALS.find((t) => installed(t.bin))?.bin ?? null;
+}
 
 /** Mirrors terminalArgv in lib/pure/sessions.js. */
 export function terminalArgv(bin, cwd, command) {
@@ -164,7 +200,7 @@ function parseGVariantString(text) {
 
 /**
  * The terminal the panels would open, from the user's own setting.
- * io: platform, env, exec (execFileSync), itermApp. Returns a Linux
+ * io: platform, env, exec (execFileSync), itermApp, alternativePath. Returns a Linux
  * binary, 'iterm' / 'terminal' on macOS, or null when nothing is found.
  */
 export function resolveTerminal(io = {}) {
@@ -183,8 +219,17 @@ export function resolveTerminal(io = {}) {
     const itermApp = io.itermApp ?? '/Applications/iTerm.app';
     return fs.existsSync(itermApp) ? 'iterm' : 'terminal';
   }
-  const configured = parseGVariantString(read('dconf', ['read', GNOME_TERMINAL_KEY]));
-  if (configured) return configured;
-  if (env.TERMINAL && onPath(env.TERMINAL, env.PATH)) return env.TERMINAL;
-  return TERMINALS.find((t) => onPath(t.bin, env.PATH))?.bin ?? null;
+  const installed = (bin) => onPath(bin, env.PATH);
+  let alternative = null;
+  try {
+    alternative = fs.readlinkSync(io.alternativePath ?? '/etc/alternatives/x-terminal-emulator');
+  } catch {
+    alternative = null;
+  }
+  return pickTerminal({
+    configured: parseGVariantString(read('dconf', ['read', GNOME_TERMINAL_KEY])),
+    envTerminal: env.TERMINAL,
+    desktopId: installed('xdg-terminal-exec') ? read('xdg-terminal-exec', ['--print-id']).trim() || null : null,
+    alternative,
+  }, installed);
 }

@@ -72,8 +72,8 @@ msgid "Session pings: %s"
 msgstr "会话 ping：%s"
 
 #: extension.js:427 extension.js:441 lib/accountsSection.js:287
-#: lib/accountsSection.js:293 lib/sessionsSection.js:145
-#: lib/sessionsSection.js:155
+#: lib/accountsSection.js:293 lib/sessionsSection.js:159
+#: lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Claude 用量"
 
@@ -178,11 +178,11 @@ msgstr "今天的会话（估算，仍在索引）"
 msgid "Today’s sessions (est.)"
 msgstr "今天的会话（估算）"
 
-#: lib/sessionsSection.js:146
+#: lib/sessionsSection.js:160
 msgid "No terminal found - set one in the extension preferences."
 msgstr "未找到终端 - 请在扩展设置中指定一个。"
 
-#: lib/sessionsSection.js:155
+#: lib/sessionsSection.js:169
 #, javascript-format
 msgid "Could not open %s"
 msgstr "无法打开 %s"
@@ -319,11 +319,13 @@ msgstr "终端"
 
 #: prefs.js:187
 msgid ""
-"Leave empty to autodetect: $TERMINAL, then ghostty, kitty, wezterm, "
-"alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm."
+"Leave empty for the desktop default terminal ($TERMINAL first); without one: "
+"ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
+"xfce4-terminal, xterm. Also used by claudectl session open."
 msgstr ""
-"留空则自动检测：$TERMINAL，然后依次是 ghostty、kitty、wezterm、alacritty、"
-"foot、gnome-terminal、konsole、tilix、xfce4-terminal、xterm。"
+"留空则使用桌面默认终端（优先 $TERMINAL）；若无则依次为 ghostty、kitty、"
+"wezterm、alacritty、foot、gnome-terminal、konsole、tilix、xfce4-terminal、"
+"xterm。claudectl session open 也使用此设置。"
 
 #: prefs.js:202
 msgid "Session pings"
