@@ -44,7 +44,12 @@ semantic versioning.
   than one saved login, lit when it is armed), refresh, settings. Each carries
   a hover title, which is also its accessible name, since the auto-switch
   button has no other way to say which state it is in and at what threshold.
-  **Quit** stays at the bottom.
+  **Quit** is the cross at the right end of that row; the menu item at the
+  bottom is gone.
+- **GNOME: the preferences are four tabs instead of one long page.**
+  General, Accounts, Sessions, Integrations. The Sessions tab gains a
+  *Saved sessions* group: whether the `claudectl session` autosave is
+  scheduled, the newest snapshot, and a **Reopen** button.
 
 ### Fixed
 

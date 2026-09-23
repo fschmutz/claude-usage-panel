@@ -12,3 +12,4 @@ export * from './pure/pings.js';
 export * from './pure/sessions.js';
 export * from './pure/accounts.js';
 export * from './pure/layout.js';
+export * from './pure/snapshots.js';

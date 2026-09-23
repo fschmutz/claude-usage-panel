@@ -8,6 +8,12 @@ Open via the gear button in the dropdown's header, or:
 gnome-extensions prefs claude-usage-panel@fschmutz.github.io
 ```
 
+Four tabs: **General** (refresh, top bar, alerts, updates), **Accounts**,
+**Sessions** (today's sessions and the terminal, saved sessions, session
+pings) and **Integrations** (cost, Cursor). The cross at the right of the
+dropdown's header is **Quit**: it turns the extension off until you enable it
+again (`gnome-extensions enable claude-usage-panel@fschmutz.github.io`).
+
 ## macOS
 
 Quick toggles (Cost, Alerts, Refresh) live in the dropdown; a full **Settings** window
@@ -27,7 +33,8 @@ Quick toggles (Cost, Alerts, Refresh) live in the dropdown; a full **Settings** 
 | **Show today's sessions** | List today's sessions in the dropdown, ranked by the tokens each spent, with a click to resume one (see below). |
 | **Enable named accounts** | Off by default: nothing account-related is shown until it is on. Then the saved Claude logins appear: save the current one under a name, remove one, the auto-switch toggle + threshold. The same setting is a button in the GNOME dropdown's header (lit when armed, its hover title saying at which percentage), unless **Show the auto-switch button in the dropdown** is off; on macOS it stays a menu toggle next to the account rows. See [[Accounts]]. |
 | **Show the account name in the top bar / menu bar** | Prefix the readout with the active saved account's name: `PRO · Session 42%`. The prefix appears only once you have saved more than one login, and only while the whole readout fits the bar's 20-character budget - a name that would not fit is dropped rather than abbreviated (the dropdown names it in full). |
-| **Terminal** | Which terminal a resume click opens. GNOME: a binary name, empty means autodetect (`$TERMINAL`, then ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm). macOS: Automatic / Terminal / iTerm. |
+| **Terminal** | Which terminal a resume click and `claudectl session open` open. GNOME: a binary name; empty means `$TERMINAL`, then the desktop's default terminal (`xdg-terminal-exec`, then `x-terminal-emulator`), then the first installed of ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm. macOS: Automatic / Terminal / iTerm. |
+| **Saved sessions** (GNOME) | What `claudectl session` keeps: whether the 30-minute autosave is scheduled, the newest snapshot, and **Reopen** to bring it back as tabs (see [[Tabs]]). |
 
 ## Resuming today's sessions
 

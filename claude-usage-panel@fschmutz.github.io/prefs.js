@@ -12,6 +12,7 @@ import {
     listProfiles, liveAccountName, readLiveAccount, removeProfile, saveCurrent,
 } from './lib/accounts.js';
 import {run} from './lib/proc.js';
+import {claudectlPath, readSnapshots} from './lib/snapshots.js';
 import {isValidPingTime, normalizePingTime} from './lib/sessionPingUnit.js';
 import {applySchedule, hasSystemd, readLastPing, readSchedule} from './lib/sessionPing.js';
 
@@ -28,18 +29,26 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
             return false;
         });
 
-        const page = new Adw.PreferencesPage({
-            title: _('General'),
-            icon_name: 'utilities-system-monitor-symbolic',
-        });
-        page.add(this._buildBehavior(settings));
-        page.add(this._buildCost(settings));
-        page.add(this._buildCursor(settings));
-        this._buildAccountsGroups(settings, page);
-        page.add(this._buildSessions(settings));
-        this._buildPings(settings, page);
-        page.add(this._buildUpdates());
-        window.add(page);
+        // One tab per area; the window shows them as a view switcher.
+        const tab = (title, icon) => {
+            const page = new Adw.PreferencesPage({title, icon_name: icon});
+            window.add(page);
+            return page;
+        };
+        const general = tab(_('General'), 'utilities-system-monitor-symbolic');
+        general.add(this._buildBehavior(settings));
+        general.add(this._buildUpdates());
+
+        this._buildAccountsGroups(settings, tab(_('Accounts'), 'system-users-symbolic'));
+
+        const sessions = tab(_('Sessions'), 'utilities-terminal-symbolic');
+        sessions.add(this._buildSessions(settings));
+        sessions.add(this._buildSnapshots());
+        this._buildPings(settings, sessions);
+
+        const integrations = tab(_('Integrations'), 'application-x-addon-symbolic');
+        integrations.add(this._buildCost(settings));
+        integrations.add(this._buildCursor(settings));
     }
 
     // True once the window is gone: the continuation must not touch widgets.
@@ -197,6 +206,52 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
     // Three groups (switches + status, the ping times, the buttons), because
     // the times are rebuilt whenever the list changes and an Adw group has no
     // reorderable slot model.
+    // What `claudectl session` keeps: is the autosave scheduled, what is the
+    // newest snapshot, and a button that reopens it as tabs.
+    _buildSnapshots() {
+        const group = new Adw.PreferencesGroup({
+            title: _('Saved sessions'),
+            description: _('claudectl session keeps the running Claude Code sessions in snapshots and reopens them as tabs of one terminal window.'),
+        });
+        const autosaveRow = new Adw.ActionRow({title: _('Autosave'), subtitle: ''});
+        group.add(autosaveRow);
+        const newestRow = new Adw.ActionRow({title: _('Newest snapshot'), subtitle: ''});
+        const reopenBtn = new Gtk.Button({label: _('Reopen'), valign: Gtk.Align.CENTER});
+        newestRow.add_suffix(reopenBtn);
+        group.add(newestRow);
+
+        const cli = claudectlPath();
+        const render = () => {
+            const {newest} = readSnapshots();
+            if (!cli)
+                newestRow.subtitle = _('claudectl is not installed - run ./install.sh cli');
+            else if (!newest)
+                newestRow.subtitle = _('None yet - run claudectl session save, or wait for the autosave');
+            else
+                newestRow.subtitle = [newest.label,
+                    GLib.DateTime.new_from_unix_local(Math.floor(newest.savedAt / 1000)).format('%Y-%m-%d %H:%M'),
+                    newest.sessions.map(r => r.name).join(', ')].join(' · ');
+            reopenBtn.sensitive = Boolean(cli && newest);
+        };
+        render();
+        run(['systemctl', '--user', 'is-active', 'claude-usage-panel-autosave.timer'],
+            {cancellable: this._cancellable}).then(({ok}) => {
+            if (!this._closed())
+                autosaveRow.subtitle = ok ? _('Every 30 minutes') : _('Not scheduled - run ./install.sh cli');
+        });
+        reopenBtn.connect('clicked', async () => {
+            reopenBtn.sensitive = false;
+            const {stdout, stderr} = await run([cli, 'session', 'open'], {cancellable: this._cancellable});
+            if (this._closed())
+                return;
+            // the CLI's own last line says what it did, or why it opened nothing
+            const lines = `${stdout}${stderr}`.trim().split('\n');
+            render();
+            newestRow.subtitle = lines[lines.length - 1] || newestRow.subtitle;
+        });
+        return group;
+    }
+
     _buildPings(settings, page) {
         const pings = new Adw.PreferencesGroup({
             title: _('Session pings'),

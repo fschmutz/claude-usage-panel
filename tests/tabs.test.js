@@ -290,3 +290,31 @@ test('CLI: autosave reports what it did and rejects a bad --keep', async (t) => 
     await assert.rejects(cli(io, 'purge', '--keep', '--yes'), /whole number/);
     assert.equal(openTabs(io).snapshots().length, 1);
 });
+
+// ── The GNOME preferences read the same store ───────────────────────────────────
+
+test('the GNOME summary picks the newest snapshot the CLI lists first', async (t) => {
+    const {summarizeSnapshots} = await import('../claude-usage-panel@fschmutz.github.io/lib/pure.js');
+    const io = world(t, [A, B]);
+    const tabs = openTabs(io);
+    tabs.save('zeta');
+    tabs.autosave();
+    tabs.save('alpha');
+    fs.writeFileSync(path.join(tabsDir(io), 'broken.json'), '{not json');
+    const files = fs.readdirSync(tabsDir(io)).filter((f) => f.endsWith('.json')).map((f) => {
+        let data = null;
+        try {
+            data = JSON.parse(fs.readFileSync(path.join(tabsDir(io), f), 'utf8'));
+        } catch {
+            data = null;
+        }
+        return {label: f.slice(0, -5), data};
+    });
+    const summary = summarizeSnapshots(files);
+    assert.equal(summary.count, tabs.snapshots().length);
+    assert.equal(summary.count, 3);
+    assert.equal(summary.autos, 1);
+    assert.equal(summary.newest.label, tabs.snapshots()[0].label);
+    assert.equal(summary.newest.label, 'alpha');
+    assert.deepEqual(summarizeSnapshots([]), {count: 0, autos: 0, newest: null});
+});
