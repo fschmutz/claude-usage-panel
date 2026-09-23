@@ -13,7 +13,7 @@
       "account": {
         "accountUuid": "u-pro",
         "emailAddress": "pro@example.com",
-        "organizationName": "Premaccess",
+        "organizationName": "Example Org",
         "organizationType": "claude_max",
         "organizationRateLimitTier": "default_claude_max_20x",
         "displayName": "Pro"

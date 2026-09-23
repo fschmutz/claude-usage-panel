@@ -91,8 +91,8 @@
   "fold": {
     "defaultDay": "2026-09-01",
     "lines": [
-      "{\"type\":\"custom-title\",\"customTitle\":\"BAM-SALES\",\"sessionId\":\"S1\"}",
-      "{\"type\":\"user\",\"sessionId\":\"S1\",\"cwd\":\"/home/u/Git/BAM-SALES\"}",
+      "{\"type\":\"custom-title\",\"customTitle\":\"my-app\",\"sessionId\":\"S1\"}",
+      "{\"type\":\"user\",\"sessionId\":\"S1\",\"cwd\":\"/home/u/Git/my-app\"}",
       "{\"type\":\"assistant\",\"timestamp\":\"2026-09-01T10:00:00Z\",\"message\":{\"id\":\"m1\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20,\"cache_creation_input_tokens\":5,\"cache_read_input_tokens\":9000}}}",
       "{\"type\":\"assistant\",\"timestamp\":\"2026-09-01T10:05:00Z\",\"message\":{\"id\":\"m1\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20}}}",
       "{\"type\":\"assistant\",\"timestamp\":\"2026-08-31T23:50:00Z\",\"message\":{\"id\":\"m2\",\"usage\":{\"input_tokens\":7,\"output_tokens\":3}}}",
@@ -102,8 +102,8 @@
     ],
     "expected": {
       "sessionId": "S1",
-      "cwd": "/home/u/Git/BAM-SALES",
-      "title": "BAM-SALES",
+      "cwd": "/home/u/Git/my-app",
+      "title": "my-app",
       "lastMs": 1788256800000,
       "byDay": {
         "2026-09-01": 136,
@@ -116,8 +116,8 @@
     "entries": [
       {
         "sessionId": "A",
-        "cwd": "/home/u/Git/BAM-SALES",
-        "title": "BAM-SALES",
+        "cwd": "/home/u/Git/my-app",
+        "title": "my-app",
         "lastMs": 1788253200000,
         "byDay": {
           "2026-09-01": 5000
@@ -167,7 +167,7 @@
       },
       {
         "sessionId": "A",
-        "label": "BAM-SALES",
+        "label": "my-app",
         "tokens": 5000,
         "when": "09:00"
       },
@@ -181,10 +181,10 @@
   },
   "resume": [
     {
-      "cwd": "/home/u/Git/BAM-SALES",
+      "cwd": "/home/u/Git/my-app",
       "sessionId": "fd2d7081-86fa",
-      "command": "cd '/home/u/Git/BAM-SALES' && claude --resume 'fd2d7081-86fa'",
-      "interactive": "cd '/home/u/Git/BAM-SALES' && claude --resume 'fd2d7081-86fa'; exec \"$SHELL\" -i"
+      "command": "cd '/home/u/Git/my-app' && claude --resume 'fd2d7081-86fa'",
+      "interactive": "cd '/home/u/Git/my-app' && claude --resume 'fd2d7081-86fa'; exec \"$SHELL\" -i"
     },
     {
       "cwd": "/home/u/it's here",

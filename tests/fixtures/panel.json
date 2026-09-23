@@ -5,7 +5,7 @@
     {"name": "no account - short label", "account": "", "label": "Session", "percent": 5, "expected": "Session 5%"},
     {"name": "no account - the label is the part after the dot", "account": "", "label": "Weekly · Fable", "percent": 100, "expected": "Fable 100%"},
     {"name": "short name fits beside the reading", "account": "PRO", "label": "Session", "percent": 5, "expected": "PRO · Session 5%"},
-    {"name": "long name is dropped, never abbreviated", "account": "PREM-ADMIN", "label": "Weekly · Fable", "percent": 100, "expected": "Fable 100%"},
+    {"name": "long name is dropped, never abbreviated", "account": "TEAM-ADMIN", "label": "Weekly · Fable", "percent": 100, "expected": "Fable 100%"},
     {"name": "the name never squeezes the label", "account": "PERSO", "label": "Weekly · all models", "percent": 7, "expected": "all models 7%"},
     {"name": "name that fits exactly at the budget", "account": "PERSO", "label": "Weekly · Fable", "percent": 100, "expected": "PERSO · Fable 100%"},
     {"name": "a label of its own too long for the bar", "account": "", "label": "Weekly · all models Claude Fable 5", "percent": 100, "expected": "all models Cla… 100%"},

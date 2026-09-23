@@ -55,7 +55,7 @@ optional flags (baked into the installed command; re-run to change them):
     window. It is in the default set because it renders **nothing** until you
     schedule pings (`./install.sh sessionping`), so it costs an unconfigured
     line no width.
-  - **`sessions`** - `▸ BAM-SALES 412.0k`, today's biggest token spender among
+  - **`sessions`** - `▸ my-app 412.0k`, today's biggest token spender among
     your local sessions. Opt-in: the status line has little horizontal room. It
     only reads the session index the panels and the MCP server maintain, never
     parsing a transcript itself.

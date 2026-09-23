@@ -45,9 +45,9 @@ other MCP servers untouched).
   ],
   "lastPing": {"at": "2026-09-01T03:30:12Z", "label": "05:30"},
   "sessions": [
-    {"sessionId": "fd2d7081-…", "label": "BAM-SALES", "cwd": "/home/u/Git/BAM-SALES",
+    {"sessionId": "fd2d7081-…", "label": "my-app", "cwd": "/home/u/Git/my-app",
      "tokens": 412000, "when": "16:02",
-     "resumeCommand": "cd '/home/u/Git/BAM-SALES' && claude --resume 'fd2d7081-…'"}
+     "resumeCommand": "cd '/home/u/Git/my-app' && claude --resume 'fd2d7081-…'"}
   ]
 }
 ```

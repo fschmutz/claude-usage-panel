@@ -278,7 +278,7 @@ export function pingSegment({
   return label ? `${DIM}ping ${label}${RESET}` : '';
 }
 
-// "▸ BAM-SALES 412k": today's biggest token spender among the local sessions,
+// "▸ my-app 412k": today's biggest token spender among the local sessions,
 // read from the shared index (the MCP server / panels build it; the status
 // line must stay a sub-100ms command, so it never folds a transcript itself).
 // Opt-in (--segments=…,sessions) because the line has little horizontal room.
