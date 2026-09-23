@@ -87,9 +87,12 @@ test('install.sh cli: claudectl shim, autosave cron line, pre-1.14 shim migrated
     const cron = fs.readFileSync(path.join(home, 'crontab.txt'), 'utf8');
     assert.match(cron, /^\*\/30 \* \* \* \* ".+node" ".+claudectl\.js" session autosave .*# claude-usage-panel session autosave$/m);
 
-    // the installed tree runs through the shim
+    // the installed tree runs through the shim, and still does with no node
+    // on PATH (a GUI app's launchd PATH): it falls back to the install-time node
     const help = run(shim(home, 'claudectl'), ['session', 'help'], {env: env(home)});
     assert.match(help.stdout, /claudectl session - save/);
+    const bare = run(shim(home, 'claudectl'), ['session', 'help'], {env: {...env(home), PATH: '/nonexistent'}});
+    assert.match(bare.stdout, /claudectl session - save/, bare.stderr);
 
     const u = run('bash', [INSTALL, '--uninstall', 'cli'], {env: env(home)});
     assert.equal(u.status, 0, u.stderr);

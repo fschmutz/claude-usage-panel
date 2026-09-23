@@ -40,20 +40,24 @@ install_cli() {
     _install_node_tree
     _cli_drop_legacy
     act mkdir -p "$(dirname "$CLI_BIN")"
+    # Schedulers and GUI apps (the macOS app's Reopen, the GNOME preferences)
+    # run with a minimal PATH that rarely holds a volta/nvm node: the job
+    # calls the node found now by its absolute path, and the shim falls back
+    # to it when `node` is not on the caller's PATH.
+    local node_bin
+    node_bin="$(command -v node)"
     if $DRY; then
         echo "  would: write $CLI_BIN (exec node $CLI_JS)"
     else
         # rm first: a symlink left at this path would be written through.
         rm -f "$CLI_BIN"
-        printf '#!/bin/sh\n%s claudectl\nexec node "%s" "$@"\n' "$CLI_SHIM_MARK" "$CLI_JS" >"$CLI_BIN"
+        # shellcheck disable=SC2016 # the $(...) and "$@" are the generated shim's, expanded when it runs
+        printf '#!/bin/sh\n%s claudectl\nNODE="$(command -v node 2>/dev/null)" || NODE="%s"\nexec "$NODE" "%s" "$@"\n' \
+            "$CLI_SHIM_MARK" "$node_bin" "$CLI_JS" >"$CLI_BIN"
         chmod +x "$CLI_BIN"
         ok "installed $CLI_BIN"
     fi
 
-    # Schedulers run with a minimal PATH that rarely holds a volta/nvm node,
-    # so the job calls the node found now by its absolute path.
-    local node_bin
-    node_bin="$(command -v node)"
     local sched_service="[Unit]
 Description=Claude Usage Panel - snapshot running Claude Code sessions
 Documentation=https://github.com/fschmutz/claude-usage-panel/wiki/Tabs
