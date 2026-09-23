@@ -153,6 +153,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._extension.openPreferences();
             },
             onAutoSwitch: () => this._accounts.toggleAutoSwitch(),
+            onQuit: () => this._quit(),
         });
         header.add_child(this._header);
         this.menu.addMenuItem(header);
@@ -198,12 +199,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
             onActiveChanged: () => this._renderPanel(),
             syncAutoSwitch: state => this._header.syncAutoSwitch(state),
         });
-
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
-        const quitItem = new PopupMenu.PopupImageMenuItem(_('Quit'), 'application-exit-symbolic');
-        quitItem.connect('activate', () => this._quit());
-        this.menu.addMenuItem(quitItem);
     }
 
     // Disable the extension: unloads it now and keeps it off across logins

@@ -1,6 +1,6 @@
 // The dropdown's top row: title, plan label, and the controls as small icon
 // buttons - auto-switch (only when there is something to switch between),
-// refresh, settings. They live up here rather than at the foot of the panel so
+// refresh, settings, and quit as the cross in the corner. They live up here rather than at the foot of the panel so
 // the list below stays one column of data with nothing to scroll past, and
 // each carries a hover title (lib/tooltip.js) since an icon alone says little.
 
@@ -31,8 +31,9 @@ class HeaderBar extends St.BoxLayout {
      * @param {() => void} handlers.onRefresh poll now, without closing the menu
      * @param {() => void} handlers.onSettings open the preferences window
      * @param {() => void} handlers.onAutoSwitch flip the auto-switch setting
+     * @param {() => void} handlers.onQuit turn the extension off
      */
-    _init({onRefresh, onSettings, onAutoSwitch}) {
+    _init({onRefresh, onSettings, onAutoSwitch, onQuit}) {
         super._init({style_class: 'cu-header', x_expand: true});
 
         this.add_child(new St.Label({
@@ -59,6 +60,8 @@ class HeaderBar extends St.BoxLayout {
             'view-refresh-symbolic', _('Refresh now'), () => onRefresh()));
         this.add_child(iconButton(
             'emblem-system-symbolic', _('Settings'), () => onSettings()));
+        this.add_child(iconButton(
+            'window-close-symbolic', _('Quit'), () => onQuit()));
     }
 
     /** @param {string} text the plan name from the API, '' when unknown */
