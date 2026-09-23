@@ -3,7 +3,7 @@
 // one as tabs of a single terminal window, each in its own directory resuming
 // its own session. claudectl.js dispatches here.
 
-import {AUTO_KEEP, AUTO_PREFIX, openTabs, stampLabel} from './tabs.js';
+import {AUTO_KEEP, AUTO_PREFIX, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {TMUX_SESSION} from './terminals.js';
 import {tabsDir} from './paths.js';
 
@@ -16,6 +16,7 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
   claudectl session show [SNAP] [--json]     what a snapshot holds (default: newest)
   claudectl session open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run]
                          [--terminal=BIN|iterm|terminal|tmux] [--windows|--tmux]
+                         [--prompt=TEXT|--no-prompt]
                                              reopen a snapshot, one tab per session
   claudectl session purge SNAP... | --keep=N | --auto | --all [--yes]
                                              delete snapshots
@@ -28,7 +29,10 @@ directory or transcript is gone. It opens the terminal the panels use (GNOME
 preference \`terminal-command\`, then $TERMINAL, then the first one installed;
 macOS: the app's Terminal/iTerm choice). gnome-terminal and iTerm get native
 tabs; any other terminal gets one window on a tmux session with a window per
-Claude session (--windows: one terminal window each). \`./install.sh cli\` also schedules
+Claude session (--windows: one terminal window each). Each resumed session
+gets a first message telling it it was restarted: re-read where it stopped,
+re-check git / CI / jobs, re-arm its watchers, report, then carry on
+(--prompt=TEXT replaces it, --no-prompt sends none). \`./install.sh cli\` also schedules
 \`autosave\` every 30 minutes (keeps ${AUTO_KEEP}, one day).
 Snapshots: ${tabsDir()}`;
 
@@ -131,8 +135,12 @@ export async function main(argv, io = {}) {
         return 1;
       }
       const terminal = typeof opts.terminal === 'string' ? opts.terminal : undefined;
+      const prompt = opts['no-prompt'] ? ''
+        : (typeof opts.prompt === 'string' ? opts.prompt
+          : resumePrompt({label: snap.label, savedAt: snap.savedAt, nowMs: io.nowMs ? io.nowMs() : Date.now()}));
       const r = tabs.launch(open, {
-        terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), dryRun: Boolean(opts['dry-run']),
+        terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), prompt,
+        dryRun: Boolean(opts['dry-run']),
       });
       for (const row of open) out(`open ${row.name.padEnd(20)} ${row.session_id.slice(0, 8)}  ${row.cwd}\n`);
       if (opts['dry-run']) {

@@ -33,6 +33,7 @@ import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
 import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
 import {TMUX_SESSION, launchSteps, onPath, resolveTerminal} from './terminals.js';
+import {formatClock, resetHint} from './stamps.js';
 
 export const AUTO_PREFIX = 'auto-';
 /** Autosaves kept by default: 48 half-hourly runs = one day of history. */
@@ -51,6 +52,30 @@ export function transcriptPath(projects, cwd, sessionId) {
 export function sameSessions(a, b) {
   const key = (rows) => rows.map((r) => `${r.session_id}\t${r.cwd}\t${r.name}`).sort().join('\n');
   return key(a) === key(b);
+}
+
+/**
+ * The first message a restored session gets. A restart kills everything
+ * that lived only in the old process - background shells, Monitors, /loop
+ * and scheduled wakeups, the watch on a push or a CI run - and the
+ * conversation does not know it. So the prompt says so, has the session
+ * re-read where it stopped and re-check what moved meanwhile before it
+ * carries on, and restates that approvals do not carry over a restart.
+ */
+export function resumePrompt({label, savedAt, nowMs}) {
+  const ago = resetHint(nowMs, savedAt) || 'moments';
+  return `Resumed by claudectl after a restart: this session was saved in snapshot ${label} ` +
+    `at ${formatClock(savedAt)} (${ago} ago) and reopened at ${formatClock(nowMs)}. ` +
+    'Everything that lived only in the old process is gone: background shells, Monitors, ' +
+    '/loop and scheduled wakeups, watchers on a push or a CI run.\n\n' +
+    '1. Re-read the end of this conversation: my last request, what you finished, what was ' +
+    'still running or waiting.\n' +
+    '2. Check what moved while you were down: git status and recent commits here, and the ' +
+    'push, CI run, build or job you were waiting on, if any.\n' +
+    '3. Reply with a short status (done / interrupted / next), re-arm what you still need to ' +
+    'watch, then carry on with the interrupted work.\n\n' +
+    'Same rules as before: nothing destructive, outward-facing or still waiting on my answer ' +
+    'without asking me first.';
 }
 
 /** A local-time label: 2026-09-23_192140. */
@@ -251,14 +276,14 @@ export function openTabs(io = {}) {
 
   /** Open rows in the terminal the panels use (terminals.js), or `terminal`
    *  when given. Returns {terminal, how, steps}; dryRun runs nothing. */
-  function launch(rows, {terminal, windows = false, tmux = false, dryRun = false} = {}) {
+  function launch(rows, {terminal, windows = false, tmux = false, prompt = '', dryRun = false} = {}) {
     const env = io.env ?? process.env;
     const term = terminal ?? resolveTerminal({...io, env});
     const hasTmux = onPath('tmux', env.PATH);
     if (!term && !hasTmux) {
       throw new Error('no terminal found - set one in the panel preferences, $TERMINAL, or --terminal=BIN');
     }
-    const {how, steps} = launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux});
+    const {how, steps} = launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux, prompt});
     const result = {terminal: term ?? 'tmux', how, steps};
     if (dryRun) return result;
     if (steps.some((s) => s.cmd === 'tmux')) {

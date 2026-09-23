@@ -35,7 +35,7 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `save [LABEL] [--exclude-self]` | Snapshot the running sessions |
 | `store [--json]` | Saved snapshots, newest first, numbered |
 | `show [SNAP] [--json]` | What a snapshot holds, and which of its sessions are running |
-| `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux]` | Reopen a snapshot in your terminal |
+| `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux] [--prompt=TEXT\|--no-prompt]` | Reopen a snapshot in your terminal |
 | `purge SNAP... \| --keep=N \| --auto \| --all [--yes]` | Delete snapshots (asks first) |
 | `autosave [--keep=N]` | What the schedule runs |
 
@@ -62,6 +62,14 @@ one, the newest snapshot is used.
   in and runs `claude --name <name> --resume <id>` through a login shell, the
   same command a panel click runs. When claude exits, the tab stays open on
   a shell in that directory.
+- **It knows it was restarted.** Each resumed session gets a first message:
+  which snapshot it came from and how long ago, that everything living only
+  in the old process is gone (background shells, Monitors, `/loop` and
+  scheduled wakeups, watchers on a push or a CI run), and to re-read where it
+  stopped, re-check git / CI / the job it was waiting on, reply with a short
+  done / interrupted / next status, re-arm its watchers and carry on -
+  asking first for anything destructive or outward-facing, as before.
+  `--prompt=TEXT` sends your own message instead, `--no-prompt` none.
 - **No double resume.** A session still running is skipped (Claude Code
   refuses to resume a live session twice); `--force` tries anyway. A session
   whose directory or transcript is gone is skipped with the reason.

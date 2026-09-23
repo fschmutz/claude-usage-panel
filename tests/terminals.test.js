@@ -207,3 +207,34 @@ test('macOS Terminal.app: tmux in one window when installed, else a window each'
     assert.equal((win.steps[0].args[1].match(/do script/g) ?? []).length, 2);
     assert.equal(appleScript('iterm', rows, {tabs: false}).match(/create window/g).length, 2);
 });
+
+// ── The first message of a restored session ─────────────────────────────────────
+
+test('the resume prompt reaches claude as ONE argument, newlines and quotes intact', async () => {
+    const {resumePrompt} = await import('../claude-code/tabs.js');
+    const {run} = await import('./helpers.js');
+    const prompt = `${resumePrompt({label: 'auto-x', savedAt: 0, nowMs: 3_600_000})}\nit's "quoted" $HOME \`x\``;
+    // a stub claude that prints its argv as JSON, then the real bash parse
+    const stub = 'claude() { node -e "console.log(JSON.stringify(process.argv.slice(1)))" -- "$@"; }; ';
+    const cmd = sessionCommand({name: "it's", session_id: 'id-b'}, prompt).replace(/; exec "\$SHELL" -i$/, '');
+    const r = run('bash', ['-c', stub + cmd]);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), ['--name', "it's", '--resume', 'id-b', prompt]);
+    // and through the gnome-terminal layer: its --command is itself a shell word list
+    const gt = gnomeTabsArgv([{name: 'A', cwd: '/', session_id: 'id-a'}], prompt);
+    const inner = gt[gt.indexOf('--command') + 1];
+    // split it into words the way GLib does (POSIX quoting): bash, -lc, CMD
+    const r2 = run('bash', ['-c', `${stub}eval "set -- $1"; eval "\${3%%; exec *}"`, '_', inner]);
+    assert.equal(r2.status, 0, r2.stderr);
+    assert.deepEqual(JSON.parse(r2.stdout), ['--name', 'A', '--resume', 'id-a', prompt]);
+});
+
+test('the resume prompt says when it was saved and what died with the process', async () => {
+    const {resumePrompt} = await import('../claude-code/tabs.js');
+    const saved = new Date(2026, 8, 23, 19, 21).getTime();
+    const p = resumePrompt({label: 'auto-2026-09-23_192140', savedAt: saved, nowMs: saved + (3 * 60 + 44) * 60_000});
+    assert.match(p, /snapshot auto-2026-09-23_192140 at 19:21 \(3h44m ago\) and reopened at 23:05/);
+    assert.match(p, /background shells, Monitors, \/loop and scheduled wakeups/);
+    assert.match(p, /nothing destructive, outward-facing or still waiting on my answer without asking me first/);
+    assert.equal(sessionCommand({name: 'A', session_id: 'i'}), `claude --name 'A' --resume 'i'; exec "$SHELL" -i`);
+});

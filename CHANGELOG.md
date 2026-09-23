@@ -6,6 +6,17 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **A restored session knows it was restarted.** `claudectl session open`
+  resumes each session with a first message: the snapshot it came from and
+  how long ago, that background shells, Monitors, `/loop` and scheduled
+  wakeups and any watch on a push or CI died with the old process, and to
+  re-read where it stopped, re-check git / CI / the awaited job, report
+  done / interrupted / next, re-arm its watchers and carry on - approvals
+  still asked for, as before. `--prompt=TEXT` replaces it, `--no-prompt`
+  sends none. The Reopen buttons in both panels get it too.
+
 ## [2.0.0] - 2026-09-23
 
 ### Removed
