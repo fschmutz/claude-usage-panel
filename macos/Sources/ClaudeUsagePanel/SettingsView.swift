@@ -6,47 +6,104 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: UsageModel
 
+    // One tab per area, the same four as the GNOME preferences.
     var body: some View {
-        Form {
-            Section("General") {
-                Picker("Refresh interval", selection: $model.refreshMinutes) {
-                    ForEach([1, 5, 10, 15, 30, 60], id: \.self) { Text("\($0) min").tag($0) }
-                }
-                Toggle("Limit-crossing alerts (90% / 100%)", isOn: $model.alertsEnabled)
-                Toggle("Show session cost (ccusage)", isOn: $model.showCost)
-                Toggle("Start at login", isOn: $model.launchAtLogin)
-                TextField("Run on limit crossing or reset", text: $model.eventCommand)
-                Text(
-                    "%e event (threshold or reset) · %l label · %p percent · %t threshold · "
-                        + "%k key · %% a literal %. Empty disables it. Values are shell-quoted "
-                        + "when substituted."
-                )
-                .font(.footnote).foregroundColor(.secondary)
+        TabView {
+            SettingsTab {
+                general
+                UpdatesSection(updates: model.updates)
             }
-            Section("Today's sessions") {
-                Toggle("Show today's sessions in the dropdown", isOn: $model.showSessions)
-                Picker("Open in", selection: $model.terminalChoice) {
-                    ForEach(TerminalLauncher.Choice.allCases, id: \.self) { choice in
-                        Text(choice.label).tag(choice)
-                    }
-                }
-                .disabled(!model.showSessions)
-                Text(
-                    "Lists the sessions that spent the most tokens today, read from the local "
-                        + "transcripts in ~/.claude/projects. Clicking one resumes it in a "
-                        + "terminal, in its own project directory."
-                )
-                .font(.footnote).foregroundColor(.secondary)
+            .tabItem { Label("General", systemImage: "slider.horizontal.3") }
+            SettingsTab { AccountsSettingsSection(model: model) }
+                .tabItem { Label("Accounts", systemImage: "person.2") }
+            SettingsTab {
+                todaysSessions
+                SavedSessionsSection()
+                SessionPingSection(pings: model.sessionPing)
             }
-            SessionPingSection(pings: model.sessionPing)
-            AccountsSettingsSection(model: model)
-            UpdatesSection(updates: model.updates)
-            CursorSection(model: model)
+            .tabItem { Label("Sessions", systemImage: "terminal") }
+            SettingsTab {
+                Section("Cost") {
+                    Toggle("Show session cost (ccusage)", isOn: $model.showCost)
+                }
+                CursorSection(model: model)
+            }
+            .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
         }
-        .formStyle(.grouped)
-        .frame(width: 420)
-        .padding()
+        .frame(width: 480, height: 560)
         .onAppear { model.sessionPing.reload() }
+    }
+
+    private var general: some View {
+        Section("General") {
+            Picker("Refresh interval", selection: $model.refreshMinutes) {
+                ForEach([1, 5, 10, 15, 30, 60], id: \.self) { Text("\($0) min").tag($0) }
+            }
+            Toggle("Limit-crossing alerts (90% / 100%)", isOn: $model.alertsEnabled)
+            Toggle("Start at login", isOn: $model.launchAtLogin)
+            TextField("Run on limit crossing or reset", text: $model.eventCommand)
+            Text(
+                "%e event (threshold or reset) · %l label · %p percent · %t threshold · "
+                    + "%k key · %% a literal %. Empty disables it. Values are shell-quoted "
+                    + "when substituted."
+            )
+            .font(.footnote).foregroundColor(.secondary)
+        }
+    }
+
+    private var todaysSessions: some View {
+        Section("Today's sessions") {
+            Toggle("Show today's sessions in the dropdown", isOn: $model.showSessions)
+            Picker("Open in", selection: $model.terminalChoice) {
+                ForEach(TerminalLauncher.Choice.allCases, id: \.self) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+            Text(
+                "Lists the sessions that spent the most tokens today, read from the local "
+                    + "transcripts in ~/.claude/projects. Clicking one resumes it in a "
+                    + "terminal, in its own project directory. claudectl session open uses "
+                    + "the same terminal."
+            )
+            .font(.footnote).foregroundColor(.secondary)
+        }
+    }
+}
+
+/// A scrolling grouped form: the body of one Settings tab.
+private struct SettingsTab<Content: View>: View {
+    private let content: Content
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+    var body: some View {
+        Form { content }.formStyle(.grouped)
+    }
+}
+
+// MARK: - Saved sessions
+
+/// What `claudectl session` keeps: is the autosave scheduled, the newest
+/// snapshot, and Reopen to bring it back as tabs.
+private struct SavedSessionsSection: View {
+    @StateObject private var saved = SavedSessions()
+
+    var body: some View {
+        Section("Saved sessions") {
+            LabeledContent("Autosave", value: saved.autosave)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Newest snapshot")
+                    Text(saved.newestLine).font(.footnote).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button("Reopen") { saved.reopen() }.disabled(!saved.canReopen)
+            }
+            Text(
+                "claudectl session keeps the running Claude Code sessions in snapshots and "
+                    + "reopens them as tabs of one terminal window."
+            )
+            .font(.footnote).foregroundColor(.secondary)
+        }
+        .onAppear { saved.reload() }
     }
 }
 

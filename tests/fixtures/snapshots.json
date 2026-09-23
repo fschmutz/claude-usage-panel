@@ -1,0 +1,170 @@
+{
+  "cases": [
+    {
+      "name": "empty store",
+      "files": [],
+      "expect": {
+        "count": 0,
+        "autos": 0,
+        "newest": null
+      }
+    },
+    {
+      "name": "newest by savedAt, autos counted, broken files skipped",
+      "files": [
+        {
+          "label": "before-reboot",
+          "data": {
+            "version": 1,
+            "savedAt": 1790170000000,
+            "sessions": [
+              {
+                "name": "API",
+                "cwd": "/r/API",
+                "session_id": "API-id"
+              },
+              {
+                "name": "WEB",
+                "cwd": "/r/WEB",
+                "session_id": "WEB-id"
+              }
+            ]
+          }
+        },
+        {
+          "label": "auto-2026-09-23_220001",
+          "data": {
+            "version": 1,
+            "savedAt": 1790193601000,
+            "sessions": [
+              {
+                "name": "HOME",
+                "cwd": "/r/HOME",
+                "session_id": "HOME-id"
+              }
+            ]
+          }
+        },
+        {
+          "label": "auto-2026-09-23_193010",
+          "data": {
+            "version": 1,
+            "savedAt": 1790184610000,
+            "sessions": [
+              {
+                "name": "API",
+                "cwd": "/r/API",
+                "session_id": "API-id"
+              }
+            ]
+          }
+        },
+        {
+          "label": "broken",
+          "data": null
+        },
+        {
+          "label": "no-sessions",
+          "data": {
+            "version": 1,
+            "savedAt": 1799999999999
+          }
+        }
+      ],
+      "expect": {
+        "count": 3,
+        "autos": 2,
+        "newest": {
+          "label": "auto-2026-09-23_220001",
+          "savedAt": 1790193601000,
+          "names": [
+            "HOME"
+          ]
+        }
+      }
+    },
+    {
+      "name": "same savedAt: reverse code-point label order (B before a is NOT locale order)",
+      "files": [
+        {
+          "label": "a",
+          "data": {
+            "savedAt": 5,
+            "sessions": [
+              {
+                "name": "X",
+                "cwd": "/r/X",
+                "session_id": "X-id"
+              }
+            ]
+          }
+        },
+        {
+          "label": "B",
+          "data": {
+            "savedAt": 5,
+            "sessions": [
+              {
+                "name": "Y",
+                "cwd": "/r/Y",
+                "session_id": "Y-id"
+              }
+            ]
+          }
+        }
+      ],
+      "expect": {
+        "count": 2,
+        "autos": 0,
+        "newest": {
+          "label": "a",
+          "savedAt": 5,
+          "names": [
+            "X"
+          ]
+        }
+      }
+    },
+    {
+      "name": "missing savedAt sorts last",
+      "files": [
+        {
+          "label": "old",
+          "data": {
+            "sessions": [
+              {
+                "name": "X",
+                "cwd": "/r/X",
+                "session_id": "X-id"
+              }
+            ]
+          }
+        },
+        {
+          "label": "new",
+          "data": {
+            "savedAt": 1,
+            "sessions": [
+              {
+                "name": "Y",
+                "cwd": "/r/Y",
+                "session_id": "Y-id"
+              }
+            ]
+          }
+        }
+      ],
+      "expect": {
+        "count": 2,
+        "autos": 0,
+        "newest": {
+          "label": "new",
+          "savedAt": 1,
+          "names": [
+            "Y"
+          ]
+        }
+      }
+    }
+  ]
+}

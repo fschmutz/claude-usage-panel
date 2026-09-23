@@ -50,6 +50,16 @@ semantic versioning.
   General, Accounts, Sessions, Integrations. The Sessions tab gains a
   *Saved sessions* group: whether the `claudectl session` autosave is
   scheduled, the newest snapshot, and a **Reopen** button.
+- **macOS: the same header, tabs and saved sessions as GNOME.** Refresh,
+  Settings and Quit leave the footer for icons in the dropdown's header
+  (Quit is the cross), next to an auto-switch icon that replaces the
+  checkbox under the accounts. Settings is four tabs - General, Accounts,
+  Sessions, Integrations - and Sessions has the *Saved sessions* group
+  (`ClaudeUsageCore/Snapshots.swift`, pinned to the GNOME reader by
+  `tests/fixtures/snapshots.json`).
+- **The `claudectl` shim runs without `node` on PATH.** It falls back to the
+  node found at install time, so a GUI app (the macOS Reopen button, the
+  GNOME preferences) or a scheduler can call it.
 
 ### Fixed
 

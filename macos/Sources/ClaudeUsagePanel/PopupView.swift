@@ -104,12 +104,33 @@ struct PopupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
+            // Title, plan, then the controls as icons - the GNOME header's
+            // layout: auto-switch (only with something to switch between),
+            // refresh, settings, and quit as the cross in the corner.
+            HStack(alignment: .center, spacing: 4) {
                 Text("Claude usage").font(.system(size: 15, weight: .bold))
                 Spacer()
                 if let plan = model.planLabel, !plan.isEmpty {
                     Text(plan).font(.system(size: 12, weight: .semibold)).foregroundColor(
                         .secondary)
+                }
+                if model.accountsEnabled && model.accounts.count >= 2
+                    && model.showAutoSwitchInMenu
+                {
+                    // No text of its own, so the hover title says which way it is set.
+                    HeaderIcon(
+                        systemImage: "person.2.circle",
+                        title: "Auto-switch at \(model.accountsSwitchThreshold)% · "
+                            + (model.accountsAutoSwitch ? "on" : "off"),
+                        lit: model.accountsAutoSwitch
+                    ) { model.accountsAutoSwitch.toggle() }
+                }
+                HeaderIcon(systemImage: "arrow.clockwise", title: "Refresh now") {
+                    Task { await model.refresh() }
+                }
+                SettingsIcon()
+                HeaderIcon(systemImage: "xmark", title: "Quit") {
+                    NSApplication.shared.terminate(nil)
                 }
             }
 
@@ -192,41 +213,6 @@ struct PopupView: View {
                     ForEach([1, 5, 10, 15, 30, 60], id: \.self) { Text("\($0)m").tag($0) }
                 }.labelsHidden().frame(width: 70)
             }
-
-            HStack {
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    Label("Refresh now", systemImage: "arrow.clockwise")
-                }
-                if #available(macOS 14.0, *) {
-                    OpenSettingsButton()
-                } else {
-                    Button {
-                        // An .accessory app is not active when the popup is
-                        // clicked - without activate the window opens behind
-                        // everything (or seemingly not at all).
-                        NSApp.activate(ignoringOtherApps: true)
-                        // Renamed across versions; try both.
-                        if !NSApp.sendAction(
-                            Selector(("showSettingsWindow:")), to: nil, from: nil)
-                        {
-                            NSApp.sendAction(
-                                Selector(("showPreferencesWindow:")), to: nil, from: nil)
-                        }
-                    } label: {
-                        Label("Settings…", systemImage: "gearshape")
-                    }
-                }
-                Spacer()
-                Button(role: .destructive) {
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    Label("Quit", systemImage: "power")
-                }
-            }
-            .buttonStyle(.borderless)
-            .font(.system(size: 12))
         }
         .padding(14)
         .frame(width: 340)
@@ -234,19 +220,56 @@ struct PopupView: View {
     }
 }
 
-// Settings opener for macOS 14+. SettingsLink alone does not activate an
-// .accessory (menu-bar only) app, so the window opens behind everything and
-// looks like it never appeared; the openSettings environment action plus an
-// explicit activate brings it to front reliably.
+// One header control: an icon, its hover title (which is also its accessible
+// name - the icon alone says little), lit when the setting it shows is on.
+private struct HeaderIcon: View {
+    let systemImage: String
+    let title: String
+    var lit = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(lit ? .accentColor : .secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+}
+
+// The settings icon. An .accessory (menu-bar only) app is not active when the
+// popup is clicked, so without an explicit activate the window opens behind
+// everything and looks like it never appeared.
+private struct SettingsIcon: View {
+    var body: some View {
+        if #available(macOS 14.0, *) {
+            SettingsIcon14()
+        } else {
+            HeaderIcon(systemImage: "gearshape", title: "Settings") {
+                NSApp.activate(ignoringOtherApps: true)
+                // Renamed across versions; try both.
+                if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+                    NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                }
+            }
+        }
+    }
+}
+
+// macOS 14+: SettingsLink alone does not activate the app either; the
+// openSettings environment action plus an explicit activate does.
 @available(macOS 14.0, *)
-private struct OpenSettingsButton: View {
+private struct SettingsIcon14: View {
     @Environment(\.openSettings) private var openSettings
     var body: some View {
-        Button {
+        HeaderIcon(systemImage: "gearshape", title: "Settings") {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
-        } label: {
-            Label("Settings…", systemImage: "gearshape")
         }
     }
 }

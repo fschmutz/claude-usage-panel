@@ -14,13 +14,15 @@ Keychain access - click **Always Allow**.
 
 ## Settings
 
-Quick toggles (Cost, Alerts, Refresh) sit in the dropdown. A full **Settings**
-window (⌘, or the dropdown's **Settings…** button) holds every option:
-**Today's sessions** (list today's biggest token spenders in the dropdown, and
-which terminal - Automatic / Terminal / iTerm - a resume click opens),
-**Session pings** (schedule, suggested times, coverage, and when a ping last
-fired), Updates, and the optional **Cursor** team-spend section (toggle + Admin
-API key). Preferences persist via `UserDefaults`; the session-ping schedule
+Quick toggles (Cost, Alerts, Refresh) sit in the dropdown; its header holds the
+controls as icons - auto-switch (with two saved logins or more), refresh,
+settings, and **Quit** as the cross in the corner, as in the GNOME panel. The
+**Settings** window (⌘, or the gear) has the GNOME preferences' four tabs:
+**General** (refresh, alerts, login item, event command, Updates),
+**Accounts**, **Sessions** (today's biggest token spenders and which terminal -
+Automatic / Terminal / iTerm - a resume click and `claudectl session open`
+use; **Saved sessions**: the autosave, the newest snapshot, **Reopen**; session
+pings) and **Integrations** (cost, the optional **Cursor** team spend). Preferences persist via `UserDefaults`; the session-ping schedule
 lives in the launchd agent it shares with `./install.sh sessionping`.
 
 ## Requirements
@@ -84,8 +86,8 @@ Login Items ▸ **+**.)
   says "Share of the weekly all-models limit" under the countdown.
 - Toggle **Cost** and change the **Refresh** interval directly in the dropdown;
   both persist via `UserDefaults`.
-- **Quit** terminates the app. Remove it from Login Items to stop it starting
-  at login.
+- **Quit** (the cross at the right of the header) terminates the app. Remove it
+  from Login Items to stop it starting at login.
 - Read-only w.r.t. credentials; one request per refresh to Anthropic's API with
   your own token. No telemetry.
 

@@ -182,3 +182,17 @@ for (const c of panelFix.cases) {
         }), c.expected);
     });
 }
+
+// ── Session snapshots ───────────────────────────────────────────────────────────
+// The claudectl snapshot store as the panels summarise it (GNOME pure here;
+// the Swift twin is SnapshotsParityTests).
+
+test('snapshots: every case of the shared fixture', () => {
+    for (const c of fixture('snapshots.json').cases) {
+        const got = pure.summarizeSnapshots(c.files);
+        const newest = got.newest && {
+            label: got.newest.label, savedAt: got.newest.savedAt, names: got.newest.sessions.map(r => r.name),
+        };
+        assert.deepEqual({count: got.count, autos: got.autos, newest}, c.expect, c.name);
+    }
+});

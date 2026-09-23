@@ -166,7 +166,7 @@ export function openTabs(io = {}) {
         return {label: f.slice(0, -5), file: path.join(store(), f), savedAt: d.savedAt ?? 0, sessions: d.sessions};
       })
       .filter(Boolean)
-      .sort((a, b) => b.savedAt - a.savedAt || b.label.localeCompare(a.label));
+      .sort((a, b) => b.savedAt - a.savedAt || (a.label === b.label ? 0 : (a.label < b.label ? 1 : -1)));
   }
 
   /** A label, a unique label prefix, or a 1-based index into snapshots();
