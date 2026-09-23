@@ -2,6 +2,7 @@
 # Install:  pipx install pre-commit && pre-commit install
 # Run all:  pre-commit run --all-files
 minimum_pre_commit_version: "3.5.0"
+default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   # Generic hygiene
@@ -24,6 +25,22 @@ repos:
     rev: v8.21.2
     hooks:
       - id: gitleaks
+
+  # Private names (internal projects, customers, work addresses) must never
+  # reach this public repo. The list lives OUTSIDE it (it is private itself):
+  # see scripts/check-private-names.sh. Without a list the hook is skipped.
+  - repo: local
+    hooks:
+      - id: private-names
+        name: no private names
+        language: system
+        entry: scripts/check-private-names.sh
+        types: [text]
+      - id: private-names-message
+        name: no private names in the commit message
+        language: system
+        entry: scripts/check-private-names.sh --message-file
+        stages: [commit-msg]
 
   # JavaScript (GNOME Shell / GJS)
   - repo: https://github.com/pre-commit/mirrors-eslint

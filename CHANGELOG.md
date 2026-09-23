@@ -8,6 +8,25 @@ semantic versioning.
 
 ### Fixed
 
+- **Auto-update follows a rewritten upstream history.** A force-push (to
+  purge data from the history) re-points the release tags: `git fetch
+  --tags` refused them and every run died on "git fetch failed", leaving
+  installs stranded on the old history. Tags are now fetched with
+  `--force`, and when `main` itself was rewritten, a checkout that holds
+  nothing of its own (clean tree, no commit that was not already on the
+  upstream it had fetched) follows it; one with local commits is still
+  left alone.
+
+### Added
+
+- **A guard against private names in this public repo.**
+  `scripts/check-private-names.sh` (pre-commit hook, commit-msg hook) fails
+  when a file or a commit message contains a name from a list kept
+  OUTSIDE the repository - the list is private itself - and reports where,
+  never what. No list: skipped.
+
+### Fixed
+
 - **Sessions reopened from a Claude shell were invisible to each other.**
   gnome-terminal hands its caller's environment to the new tabs, so
   `claudectl session open` run inside a Claude Code session passed that
