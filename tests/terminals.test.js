@@ -258,3 +258,21 @@ test('sessionFreeEnv drops what names the calling Claude session, keeps configur
     // a future variable of the same families is dropped too
     assert.deepEqual(sessionFreeEnv({CLAUDE_CODE_SESSION_KIND: 'x', CLAUDE_CODE_MESSAGING_V2: 'y'}), {});
 });
+
+test('the resume prompt names the peers, and who shares a working tree', async () => {
+    const {peersNote, resumePrompt} = await import('../claude-code/tabs.js');
+    const peers = [
+        {name: 'api', cwd: '/h/Git/api'}, {name: 'api-admin', cwd: '/h/Git/api'},
+        {name: 'web', cwd: '/h/Git/web'}, {name: 'HOME', cwd: '/h'},
+    ];
+    const note = peersNote(peers, '/h');
+    assert.match(note, /api \(~\/Git\/api\), api-admin \(~\/Git\/api\), web \(~\/Git\/web\), HOME \(~\) are up too/);
+    assert.match(note, /reachable by name \(ListAgents, SendMessage\)/);
+    assert.match(note, /^api, api-admin share the working tree ~\/Git\/api: tell the others before you commit/m);
+    assert.doesNotMatch(note, /web, /);
+    // alone: nothing to say; and the prompt carries the note before the rules
+    assert.equal(peersNote([peers[0]], '/h'), '');
+    const p = resumePrompt({label: 'l', savedAt: 0, nowMs: 60_000, peers, homedir: '/h'});
+    assert.ok(p.indexOf('You are not alone') < p.indexOf('Same rules as before'));
+    assert.doesNotMatch(resumePrompt({label: 'l', savedAt: 0, nowMs: 60_000}), /not alone/);
+});

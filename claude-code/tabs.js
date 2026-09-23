@@ -62,7 +62,7 @@ export function sameSessions(a, b) {
  * re-read where it stopped and re-check what moved meanwhile before it
  * carries on, and restates that approvals do not carry over a restart.
  */
-export function resumePrompt({label, savedAt, nowMs}) {
+export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = ''}) {
   const ago = resetHint(nowMs, savedAt) || 'moments';
   return `Resumed by claudectl after a restart: this session was saved in snapshot ${label} ` +
     `at ${formatClock(savedAt)} (${ago} ago) and reopened at ${formatClock(nowMs)}. ` +
@@ -74,8 +74,31 @@ export function resumePrompt({label, savedAt, nowMs}) {
     'push, CI run, build or job you were waiting on, if any.\n' +
     '3. Reply with a short status (done / interrupted / next), re-arm what you still need to ' +
     'watch, then carry on with the interrupted work.\n\n' +
+    peersNote(peers, homedir) +
     'Same rules as before: nothing destructive, outward-facing or still waiting on my answer ' +
     'without asking me first.';
+}
+
+/**
+ * Who else is up: the sessions reopened together plus those already
+ * running, reachable by name through peer messaging. Sessions sharing one
+ * working tree are named, since a commit, stash, branch switch or rebase by
+ * one lands in the others' tree. '' when the session is alone.
+ * @param {{name: string, cwd: string}[]} peers every session, this one included
+ */
+export function peersNote(peers, homedir = '') {
+  if (peers.length < 2) return '';
+  const short = (cwd) => (homedir && (cwd === homedir || cwd.startsWith(`${homedir}/`))
+    ? `~${cwd.slice(homedir.length)}` : cwd);
+  const byCwd = new Map();
+  for (const p of peers) byCwd.set(p.cwd, [...(byCwd.get(p.cwd) ?? []), p.name]);
+  const shared = [...byCwd].filter(([, names]) => names.length > 1)
+    .map(([cwd, names]) => `${names.join(', ')} share the working tree ${short(cwd)}: tell the ` +
+      'others before you commit, stash, switch branch or rebase there.\n');
+  return `You are not alone: ${peers.map((p) => `${p.name} (${short(p.cwd)})`).join(', ')} are up ` +
+    'too, each in its own session and reachable by name (ListAgents, SendMessage). When your ' +
+    'work touches theirs, coordinate with them directly - ask, hand over, split the work; you do ' +
+    'not need me in the middle for that.\n' + shared.join('') + '\n';
 }
 
 /** A local-time label: 2026-09-23_192140. */

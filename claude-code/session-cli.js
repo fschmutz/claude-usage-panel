@@ -3,6 +3,8 @@
 // one as tabs of a single terminal window, each in its own directory resuming
 // its own session. claudectl.js dispatches here.
 
+import os from 'node:os';
+
 import {AUTO_KEEP, AUTO_PREFIX, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {TMUX_SESSION} from './terminals.js';
 import {tabsDir} from './paths.js';
@@ -137,7 +139,12 @@ export async function main(argv, io = {}) {
       const terminal = typeof opts.terminal === 'string' ? opts.terminal : undefined;
       const prompt = opts['no-prompt'] ? ''
         : (typeof opts.prompt === 'string' ? opts.prompt
-          : resumePrompt({label: snap.label, savedAt: snap.savedAt, nowMs: io.nowMs ? io.nowMs() : Date.now()}));
+          : resumePrompt({
+            label: snap.label, savedAt: snap.savedAt, nowMs: io.nowMs ? io.nowMs() : Date.now(),
+            // everyone up after this: the reopened ones and those still running
+            peers: [...open, ...tabs.liveSessions().filter((l) => !open.some((o) => o.session_id === l.session_id))],
+            homedir: io.homedir ?? os.homedir(),
+          }));
       const r = tabs.launch(open, {
         terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), prompt,
         dryRun: Boolean(opts['dry-run']),

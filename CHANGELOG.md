@@ -36,6 +36,11 @@ semantic versioning.
   done / interrupted / next, re-arm its watchers and carry on - approvals
   still asked for, as before. `--prompt=TEXT` replaces it, `--no-prompt`
   sends none. The Reopen buttons in both panels get it too.
+- **...and knows who else is up.** The same message names the sessions
+  reopened with it and those already running, reachable by name through
+  peer messaging, says coordinating with them directly is fine, and names
+  the sessions sharing one working tree so none commits, stashes or
+  rebases under another's feet.
 
 ## [2.0.0] - 2026-09-23
 
