@@ -152,6 +152,33 @@ export function openTabs(io = {}) {
     return rows.sort((a, b) => a.startedAt - b.startedAt);
   }
 
+  /** Session ids a live `claude --resume <id>` process holds, whether or not
+   *  it registered (Linux: /proc/<pid>/cmdline). A session that never wrote
+   *  its registry file - a child of another session, a startup still at a
+   *  prompt - is running all the same, and must not be resumed twice. */
+  function resumedIds() {
+    const ids = new Set();
+    if (platform() !== 'linux') return ids;
+    let pids;
+    try {
+      pids = fs.readdirSync(procDir()).filter((d) => /^\d+$/.test(d));
+    } catch {
+      return ids;
+    }
+    for (const pid of pids) {
+      let argv;
+      try {
+        argv = fs.readFileSync(path.join(procDir(), pid, 'cmdline'), 'utf8').split('\0');
+      } catch {
+        continue;
+      }
+      if (path.basename(argv[0] ?? '') !== 'claude') continue;
+      const i = argv.findIndex((a) => a === '--resume' || a === '-r');
+      if (i >= 0 && argv[i + 1]) ids.add(argv[i + 1]);
+    }
+    return ids;
+  }
+
   /** The live session this process runs under (walks the parent chain), or
    *  null - lets `list` mark it and `save --exclude-self` drop it. */
   function selfPid(live) {
@@ -261,7 +288,7 @@ export function openTabs(io = {}) {
    *  already running is skipped unless `force` - Claude Code refuses to
    *  resume a live session in a second process anyway. */
   function plan(snap, {only = [], skip = [], force = false} = {}) {
-    const running = new Set(liveSessions().map((r) => r.session_id));
+    const running = new Set([...liveSessions().map((r) => r.session_id), ...resumedIds()]);
     const open = [];
     const skipped = [];
     for (const row of snap.sessions) {

@@ -182,6 +182,24 @@ test('plan skips running sessions (unless forced) and ones that cannot resume', 
     assert.deepEqual(tabs.plan(snap, {force: true, skip: ['API', 'GONE', 'NOLOG']}).open.map((r) => r.name), ['WEB']);
 });
 
+test('plan also counts an unregistered `claude --resume <id>` process as running', (t) => {
+    const io = world(t, [A, B]);
+    const tabs = openTabs(io);
+    const snap = tabs.save('both');
+    // both closed from the registry's point of view ...
+    for (const pid of [A.pid, B.pid]) fs.rmSync(path.join(io.procDir, String(pid)), {recursive: true});
+    // ... but API still runs as a child that never registered (resumed with its id)
+    fs.mkdirSync(path.join(io.procDir, '777'));
+    fs.writeFileSync(path.join(io.procDir, '777', 'cmdline'),
+        ['claude', '--name', 'API', '--resume', A.id, 'first message'].join('\0') + '\0');
+    // a non-claude process quoting an id is not a session
+    fs.mkdirSync(path.join(io.procDir, '778'));
+    fs.writeFileSync(path.join(io.procDir, '778', 'cmdline'), ['grep', '--resume', B.id].join('\0'));
+    const {open, skipped} = tabs.plan(snap);
+    assert.deepEqual(open.map((r) => r.name), ['WEB']);
+    assert.deepEqual(skipped.map((s) => [s.row.name, s.why]), [['API', 'already running']]);
+});
+
 test('launch runs the resolved steps: terminals detached, tmux in order', (t) => {
     const io = world(t, [A, B]);
     const bin = path.join(io.home, 'bin');

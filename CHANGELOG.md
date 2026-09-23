@@ -18,6 +18,11 @@ semantic versioning.
   messages to the caller. `open` now launches the terminal, tmux and
   osascript without the calling session's variables (`sessionFreeEnv()`);
   user configuration such as `CLAUDE_CONFIG_DIR` is kept.
+- **`session open` could resume a session twice.** "Already running" came
+  from the registry alone, so a session that never registered (like the
+  ones above, or one still at a startup prompt) looked closed and a second
+  `open` would resume it again. A live `claude --resume <id>` process now
+  counts as running too.
 
 ## [2.1.0] - 2026-09-23
 
