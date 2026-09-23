@@ -7,11 +7,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {run} from './helpers.js';
+import {run, stubbedHome} from './helpers.js';
 
 import {
     DEFAULT_DAYS, daysArg, isValidPingTime, normalizePingTime,
@@ -22,41 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'session-ping.sh');
 const INSTALL = path.join(ROOT, 'install.sh');
 
-// A sandbox HOME with stub executables on its own bin dir: `claude` appends
-// its argv to $HOME/claude-calls.log, and `crontab` serves $HOME/crontab.txt
-// so no test ever reads (or writes!) the developer's real crontab.
-function makeSandbox(t) {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-sp-'));
-    t.after(() => fs.rmSync(home, {recursive: true, force: true}));
-    const bin = path.join(home, 'bin');
-    fs.mkdirSync(bin);
-    fs.writeFileSync(
-        path.join(bin, 'claude'),
-        '#!/bin/sh\necho "$@" >>"$HOME/claude-calls.log"\n',
-    );
-    fs.chmodSync(path.join(bin, 'claude'), 0o755);
-    fs.writeFileSync(
-        path.join(bin, 'crontab'),
-        '#!/bin/sh\n'
-            + 'case "$1" in\n'
-            + '    -l) cat "$HOME/crontab.txt" 2>/dev/null || exit 1 ;;\n'
-            + '    *) cat >"$HOME/crontab.txt" ;;\n'
-            + 'esac\n',
-    );
-    fs.chmodSync(path.join(bin, 'crontab'), 0o755);
-    // launchctl/systemctl operate on the REAL user domain regardless of HOME -
-    // a sandboxed uninstall would otherwise boot out the developer's actual
-    // session-ping agent. install.sh calls them unqualified, so PATH stubs
-    // (which just record the call) keep every test inside the sandbox.
-    for (const tool of ['launchctl', 'systemctl']) {
-        fs.writeFileSync(
-            path.join(bin, tool),
-            `#!/bin/sh\necho "${tool} $@" >>"$HOME/scheduler-calls.log"\n`,
-        );
-        fs.chmodSync(path.join(bin, tool), 0o755);
-    }
-    return home;
-}
+const makeSandbox = (t) => stubbedHome(t, {prefix: 'cup-sp-'});
 
 // PATH and the script's probe list (SP_TEST_CLAUDE_PATHS) are fully replaced:
 // the script must find only the stub, never a real `claude` install, and

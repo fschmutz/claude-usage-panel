@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Unified installer for Claude Usage Panel - one entrypoint for every client:
 # the GNOME extension, the macOS menu-bar app, the Claude Code status line, the
-# MCP server, the claude-account CLI, and the two scheduled jobs.
+# MCP server, the claudectl CLI, and the scheduled jobs.
 #
 #   ./install.sh                    auto-detect this OS and install the sensible set
 #   ./install.sh gnome              GNOME Shell extension only
 #   ./install.sh statusline         Claude Code status line only
 #   ./install.sh mcp                MCP server (get_usage + account tools in Claude Code + Cursor)
-#   ./install.sh accounts           claude-account CLI: save the current login under a
-#                                   name (PRO, PERSO…) and switch between them
+#   ./install.sh cli                claudectl CLI: `account` saves each login under a
+#                                   name (PRO, PERSO…) and switches between them;
+#                                   `session` snapshots the running Claude Code
+#                                   sessions (autosave every 30 min) and reopens them
+#                                   as tabs of one terminal window (alias: accounts, tabs)
 #   ./install.sh macos              build the macOS .app bundle
 #   ./install.sh autoupdate         check for a new release once a day and install it
 #   ./install.sh sessionping [HH:MM ...] [--days=mon,wed,fri|all]
@@ -52,6 +55,8 @@ UUID="claude-usage-panel@fschmutz.github.io"
 . "$ROOT/scripts/install/macos.sh"
 # shellcheck source=scripts/install/autoupdate.sh
 . "$ROOT/scripts/install/autoupdate.sh"
+# shellcheck source=scripts/install/cli.sh
+. "$ROOT/scripts/install/cli.sh"
 # shellcheck source=scripts/install/sessionping.sh
 . "$ROOT/scripts/install/sessionping.sh"
 # shellcheck source=scripts/install/targets.sh
@@ -97,8 +102,10 @@ for arg in "$@"; do
             exit 2
             ;;
         *)
+            arg="$(target_alias "$arg")"
             if is_target "$arg"; then
-                targets+=("$arg")
+                # accounts + tabs both map to cli: keep one
+                [[ " ${targets[*]-} " == *" $arg "* ]] || targets+=("$arg")
             elif [[ "$arg" =~ ^[0-9]{1,2}:[0-9]{2}$ ]]; then
                 SP_TIMES+=("$arg") # sessionping ping times
             else

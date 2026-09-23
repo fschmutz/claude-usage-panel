@@ -41,3 +41,39 @@ export function writeLiveLogin(home, credentials, oauthAccount, extraConfig = {}
             JSON.stringify({oauthAccount, ...extraConfig}));
     }
 }
+
+// A sandbox HOME with stub executables on its own bin dir: `claude` appends
+// its argv to $HOME/claude-calls.log, and `crontab` serves $HOME/crontab.txt
+// so no test ever reads (or writes!) the developer's real crontab.
+export function stubbedHome(t, {prefix = 'cup-stub-'} = {}) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    t.after(() => fs.rmSync(home, {recursive: true, force: true}));
+    const bin = path.join(home, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(
+        path.join(bin, 'claude'),
+        '#!/bin/sh\necho "$@" >>"$HOME/claude-calls.log"\n',
+    );
+    fs.chmodSync(path.join(bin, 'claude'), 0o755);
+    fs.writeFileSync(
+        path.join(bin, 'crontab'),
+        '#!/bin/sh\n'
+            + 'case "$1" in\n'
+            + '    -l) cat "$HOME/crontab.txt" 2>/dev/null || exit 1 ;;\n'
+            + '    *) cat >"$HOME/crontab.txt" ;;\n'
+            + 'esac\n',
+    );
+    fs.chmodSync(path.join(bin, 'crontab'), 0o755);
+    // launchctl/systemctl operate on the REAL user domain regardless of HOME -
+    // a sandboxed uninstall would otherwise boot out the developer's actual
+    // scheduled agents. install.sh calls them unqualified, so PATH stubs
+    // (which just record the call) keep every test inside the sandbox.
+    for (const tool of ['launchctl', 'systemctl']) {
+        fs.writeFileSync(
+            path.join(bin, tool),
+            `#!/bin/sh\necho "${tool} $@" >>"$HOME/scheduler-calls.log"\n`,
+        );
+        fs.chmodSync(path.join(bin, tool), 0o755);
+    }
+    return home;
+}

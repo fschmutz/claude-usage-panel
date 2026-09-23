@@ -1,8 +1,9 @@
 # shellcheck shell=bash
-# Sourced by install.sh: the three Node clients - status line, MCP server,
-# claude-account CLI - and the one installed tree they share.
+# Sourced by install.sh: the Node clients - status line, MCP server (the
+# claudectl CLI is scripts/install/cli.sh) - and the one installed tree they
+# share.
 #
-# The status line, the MCP server and the claude-account CLI are ES modules
+# The status line, the MCP server and the claudectl CLI are ES modules
 # that import each other by relative path (mcp/server.js -> ../claude-code/…).
 # They are installed as ONE tree that mirrors the checkout's layout, so every
 # import resolves exactly as it does in the repo - no per-file renaming, no
@@ -10,8 +11,6 @@
 NODE_TREE="$HOME/.claude/claude-usage-panel"
 SL_DEST="$NODE_TREE/claude-code/statusline.js"
 MCP_DEST="$NODE_TREE/mcp/server.js"
-ACCOUNTS_BIN="$HOME/.local/bin/claude-account"
-ACCOUNTS_CLI="$NODE_TREE/claude-code/claude-account.js"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 CURSOR_MCP="$HOME/.cursor/mcp.json"
 
@@ -19,6 +18,15 @@ _install_node_tree() {
     act mkdir -p "$NODE_TREE/mcp" "$NODE_TREE/claude-code"
     act cp "$ROOT"/mcp/*.js "$NODE_TREE/mcp/"
     act cp "$ROOT"/claude-code/*.js "$NODE_TREE/claude-code/"
+    # A module renamed or dropped in the checkout (claude-account.js became
+    # account-cli.js in 1.14) must not linger in the tree as a stale copy.
+    local dir f
+    for dir in mcp claude-code; do
+        for f in "$NODE_TREE/$dir"/*.js; do
+            [ -e "$f" ] || continue
+            [ -e "$ROOT/$dir/$(basename "$f")" ] || act rm -f "$f"
+        done
+    done
     if $DRY; then
         echo "  would: write $NODE_TREE/package.json ({\"type\": \"module\"})"
     else
@@ -32,7 +40,7 @@ _install_node_tree() {
 # Drop the tree once nothing installed uses it any more.
 _prune_node_tree() {
     [ -d "$NODE_TREE" ] || return 0
-    [ -x "$ACCOUNTS_BIN" ] && return 0
+    _cli_installed && return 0 # scripts/install/cli.sh
     _statusline_installed && return 0
     _mcp_installed && return 0
     act rm -rf "$NODE_TREE"
@@ -171,43 +179,4 @@ uninstall_mcp() {
     fi
     _prune_node_tree
     ok "removed"
-}
-
-# ── Named accounts CLI ──────────────────────────────────────────────────────────
-# A shim on PATH in front of the shared module: `claude-account save PRO`,
-# `claude-account use PERSO`, `claude-account list --usage`. The saved logins
-# live under the panel's state dir (0600); see the wiki page Accounts.
-install_accounts() {
-    info "Named accounts (claude-account CLI)"
-    if ! command -v node >/dev/null; then
-        skip "accounts: Node.js not found on PATH"
-        return 0
-    fi
-    _install_node_tree
-    act mkdir -p "$(dirname "$ACCOUNTS_BIN")"
-    if $DRY; then
-        echo "  would: write $ACCOUNTS_BIN (exec node $ACCOUNTS_CLI)"
-        ok "dry-run: no changes written"
-        return 0
-    fi
-    printf '#!/bin/sh\n# claude-usage-panel: named Claude Code accounts\nexec node "%s" "$@"\n' \
-        "$ACCOUNTS_CLI" >"$ACCOUNTS_BIN"
-    chmod +x "$ACCOUNTS_BIN"
-    ok "installed $ACCOUNTS_BIN"
-    case ":$PATH:" in
-        *":$(dirname "$ACCOUNTS_BIN"):"*) ;;
-        *) echo "  $(dirname "$ACCOUNTS_BIN") is not on your PATH - add it, or call the full path." ;;
-    esac
-    echo "  Save the login you are on now:  claude-account save PRO"
-    echo "  Log in to the other one (claude auth login), then:  claude-account save PERSO"
-    echo "  Switch any time:  claude-account use PERSO   (running sessions keep the old login)"
-}
-
-uninstall_accounts() {
-    info "Named accounts (claude-account CLI)"
-    act rm -f "$ACCOUNTS_BIN"
-    _prune_node_tree
-    ok "removed the CLI; the saved logins are kept (delete the folder to forget them):"
-    echo "  Linux:  \${XDG_STATE_HOME:-\$HOME/.local/state}/claude-usage-panel/accounts"
-    echo "  macOS:  \$HOME/Library/Application Support/claude-usage-panel/accounts"
 }
