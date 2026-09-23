@@ -36,7 +36,7 @@ pre-commit run zizmor --all-files   # workflow security audit (actionlint = vali
 ./install.sh gnome           # GNOME extension only → then log out/in (Wayland)
 ./install.sh statusline      # status line → merges into ~/.claude/settings.json
 ./install.sh mcp             # MCP server → claude mcp add + ~/.cursor/mcp.json
-./install.sh accounts        # claude-account CLI (named logins: save / use / list --usage)
+./install.sh cli             # claudectl: `account` (named logins) + `session` (snapshot/reopen as tabs) + 30-min autosave
 ./install.sh macos           # build macos/ClaudeUsagePanel.app
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
@@ -104,7 +104,7 @@ process: `wiki/CI.md`.
 ## Named accounts - one store, three ports
 
 `claude-code/accounts.js` is the single implementation behind the
-`claude-account` CLI (`claude-code/claude-account.js`), the MCP server's
+`claudectl account` CLI (`claude-code/account-cli.js`), the MCP server's
 `list_accounts` / `save_account` / `switch_account` tools (`mcp/tools.js`) and
 the status line's `account` segment - all static imports. Its pure half is the
 contract; `openStore(io)` binds the I/O (home, platform, clock, fetch, exec -
@@ -159,8 +159,13 @@ summarization, you must change it in **every** port and keep them matching.
   (every state/cache/config path derived from one `io`, nothing at module
   load), `accounts-contract.js` (the pure account rules, mirroring
   `lib/pure/accounts.js` 1:1), `accounts.js` (`openStore(io)`),
-  `claude-account.js` (the CLI), `statusline.js` (renders from Claude Code's
-  stdin).
+  `statusline.js` (renders from Claude Code's stdin), `tabs.js`
+  (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
+  registry, checked against `/proc` start time; the snapshot store;
+  autosave; Node-only, no port to mirror). **One CLI, `claudectl`**:
+  `claudectl.js` only dispatches `account …` to `account-cli.js` and
+  `session …` to `session-cli.js`; a new command group is a new
+  `<group>-cli.js` exporting `main(argv, io)` + `HELP`, never a new binary.
 - **`mcp/`** - the MCP server: `server.js` is transport + `get_usage` only
   (~175 lines), `tools.js` the tool schemas / renderers / account tool calls,
   `sessions.js` the session + ping index, `warehouse.js` the 90-day history
@@ -171,7 +176,7 @@ summarization, you must change it in **every** port and keep them matching.
 - **Installed as one tree.** `install.sh` copies `mcp/` and `claude-code/`
   into `~/.claude/claude-usage-panel/` (plus a `{"type":"module"}`
   package.json) so the relative imports resolve exactly as in the checkout;
-  the status line command, the MCP registration and the `claude-account` shim
+  the status line command, the MCP registration and the `claudectl` shim
   point into it. Pre-1.11 loose `.mjs` copies are removed on update.
 - **No file in the repo is over 700 lines.** The 1k flag is the ceiling, not
   the target: when a file approaches it, split by concern (that is how

@@ -85,15 +85,16 @@ claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel
 
 See [[MCP Tool]].
 
-## Named accounts
+## claudectl: named accounts and session tabs
 
 ```bash
-./install.sh accounts     # claude-account on your PATH (~/.local/bin)
-claude-account save PRO   # then `claude auth login` to the other one, save PERSO
-claude-account use PERSO
+./install.sh cli                  # claudectl on your PATH (~/.local/bin) + session autosave every 30 min
+claudectl account save PRO        # then `claude auth login` to the other one, save PERSO
+claudectl account use PERSO
+claudectl session open            # after a reboot: every session back, one tab each
 ```
 
-The panels and the MCP server need no extra step. See [[Accounts]].
+The panels and the MCP server need no extra step. See [[Accounts]] and [[Tabs]].
 
 ## Staying up to date
 

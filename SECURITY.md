@@ -13,7 +13,7 @@ token Claude Code already stores locally and calls Anthropic's official usage AP
 The optional Cursor integration calls `api.cursor.com` with a key you provide; the
 optional cost feature runs `ccusage` locally. No telemetry, no third-party servers.
 
-The one deliberate exception is **named accounts** (`./install.sh accounts`, the
+The one deliberate exception is **named accounts** (`./install.sh cli`, the
 account rows in the panels, the `switch_account` MCP tool): a switch you ask for
 writes the tokens you previously saved for that account into Claude Code's
 credential slot and updates the `oauthAccount` block of `~/.claude.json`. Saved

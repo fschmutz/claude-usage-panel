@@ -7,10 +7,10 @@ them. Claude Code has no account switcher of its own
 saves each login under a name and switches in place:
 
 ```bash
-claude-account save PRO        # the login you are on now
+claudectl account save PRO        # the login you are on now
 claude auth login              # sign in to the other account, once
-claude-account save PERSO
-claude-account use PRO         # from now on: no browser, no logout
+claudectl account save PERSO
+claudectl account use PRO         # from now on: no browser, no logout
 ```
 
 Every client shows the same thing: the GNOME dropdown and the macOS menu list
@@ -21,7 +21,7 @@ to PERSO"* in the conversation.
 
 ## Install
 
-`./install.sh accounts` puts `claude-account` on your PATH (`~/.local/bin`).
+`./install.sh cli` puts `claudectl` on your PATH (`~/.local/bin`).
 The desktop panels and the MCP server need nothing extra: the same module is
 installed alongside them by `./install.sh statusline` / `mcp`, and the GNOME
 extension and the macOS app carry their own port of it.
@@ -101,12 +101,12 @@ credentials.
 ## CLI reference
 
 ```text
-claude-account list [--usage] [--json]   saved accounts, the active one marked
-claude-account current [--json]          the active account's name (exit 1 if unsaved)
-claude-account save NAME [--force]       save the current login as NAME
-claude-account use NAME [--json]         make NAME the current login
-claude-account remove NAME               forget a saved account
-claude-account refresh [NAME]            refresh the stored token(s) now
+claudectl account list [--usage] [--json]         saved accounts, the active one marked
+claudectl account current [--json]                the active account's name (exit 1 if unsaved)
+claudectl account save NAME [--force]             save the current login as NAME
+claudectl account use NAME [--json]               make NAME the current login
+claudectl account remove NAME                     forget a saved account
+claudectl account refresh [NAME]                  refresh the stored token(s) now
 ```
 
 `save` refuses a name that already belongs to a different account, and refuses

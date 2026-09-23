@@ -42,13 +42,13 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+) | [macos/README.md](macos/README.md) |
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
 | `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
-| `accounts` | `claude-account` CLI: save each Claude login under a name (`PRO`, `PERSO`) and switch between them without a browser | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) |
+| `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) |
 | `autoupdate` | Daily check for a new release, installed automatically (on by default) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#staying-up-to-date) |
 | `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
 
-**Two subscriptions, one machine.** `claude-account save PRO`, sign in to the
-other one once, `claude-account save PERSO` - then switch from any client in one
+**Two subscriptions, one machine.** `claudectl account save PRO`, sign in to the
+other one once, `claudectl account save PERSO` - then switch from any client in one
 click, with each account's usage side by side, and an optional auto-switch to
 the account with the most headroom when the one you are on hits 90%. Only the
 login changes; settings, hooks, MCP servers and history stay. Off by default in
@@ -152,7 +152,7 @@ GET https://api.anthropic.com/api/oauth/usage
 The response's `limits[]` array drives one card per limit. If the token
 expires, the panel tells you to run any Claude Code command (which refreshes
 it) - it never writes the token itself. The only time a client writes into
-`~/.claude` is a switch you asked for: `claude-account use PERSO` (or the same
+`~/.claude` is a switch you asked for: `claudectl account use PERSO` (or the same
 click in a panel) installs the tokens you saved for that account and updates
 `oauthAccount` in `~/.claude.json`, nothing else. An idle saved account's token
 is refreshed with its own refresh token when it is needed, into the panel's
@@ -170,6 +170,7 @@ with your own admin key.
 | [claude-code/README.md](claude-code/README.md) | Status line segments, token modes, manual setup |
 | [mcp/README.md](mcp/README.md) | MCP server, `get_usage` + account tools, all four install paths |
 | [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) | Named accounts: what a switch touches, token refresh, auto-switch, CLI |
+| [wiki/Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) | Session tabs: snapshot the running sessions, reopen them as tabs, autosave |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, pre-commit hooks, parity-test contract |
 | [PUBLISHING.md](PUBLISHING.md) | Store listings, release flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |

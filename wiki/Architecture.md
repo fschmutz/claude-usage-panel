@@ -74,7 +74,10 @@ claude-code/            # the Node clients (installed together under ~/.claude/c
 ├── paths.js            # every state/cache/config path, derived from one `io`
 ├── accounts-contract.js# the pure account rules (mirrors lib/pure/accounts.js 1:1)
 ├── accounts.js         # openStore(io): the account store - save, switch, refresh, usage
-└── claude-account.js   # the claude-account CLI over the store
+├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the tab launch
+├── account-cli.js      # `claudectl account`: the CLI over the account store
+├── session-cli.js      # `claudectl session`: the CLI over tabs.js
+└── claudectl.js        # the claudectl entry point: dispatches to the two groups
 
 mcp/                    # MCP server (Claude Code, Cursor…)
 ├── server.js           # stdio JSON-RPC transport + get_usage; also the npx bin

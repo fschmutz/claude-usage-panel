@@ -6,6 +6,32 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Removed
+
+- **The `claude-account` command.** Use `claudectl account` (same
+  subcommands and flags). `./install.sh update` and the daily auto-update
+  remove the old `~/.local/bin/claude-account` shim (only one this project
+  wrote) and install `claudectl`. The `accounts` install target is now
+  `cli`; `accounts` (and `tabs`) are still accepted as aliases. That
+  update also schedules the 30-minute session autosave below, which is part
+  of the `cli` target.
+
+### Added
+
+- **`claudectl`: one CLI for accounts and sessions.** `claudectl account …`
+  is the former `claude-account` (same commands: list, current, save, use,
+  remove, refresh). `claudectl session …` is new: `list` reads Claude Code's
+  own session registry (`~/.claude/sessions/<pid>.json`, the current session
+  id after a `/clear`), checked against the process start time so a stale
+  file or a reused pid is never taken for a session; `save` / `store` /
+  `show` / `purge` manage snapshots; `open` reopens one as tabs of ONE
+  gnome-terminal window (tmux elsewhere), each tab in its session's
+  directory running `claude --resume`, skipping sessions still running or
+  whose directory or transcript is gone. `./install.sh cli` installs it and
+  schedules `claudectl session autosave` every 30 minutes (systemd timer /
+  launchd / cron), which writes only when the set changed and keeps one day.
+  Wiki page Tabs.
+
 ### Changed
 
 - **GNOME: the dropdown's controls moved into its header, as icon buttons.**
