@@ -91,8 +91,14 @@ for arg in "$@"; do
         --uninstall) action=uninstall ;;
         --pull) PULL=true ;;
         --build-only) BUILD_ONLY=true ;;
-        --segments=*) SL_SEGMENTS="${arg#*=}" ;;
-        --tokens=*) SL_TOKENS="${arg#*=}" ;;
+        --segments=*)
+            SL_SEGMENTS="${arg#*=}"
+            SL_SEGMENTS_SET=true
+            ;;
+        --tokens=*)
+            SL_TOKENS="${arg#*=}"
+            SL_TOKENS_SET=true
+            ;;
         --days=*) SP_DAYS="${arg#*=}" ;;
         --dry-run | -n) DRY=true ;;
         --list) action=list ;;
@@ -174,4 +180,23 @@ for t in "${targets[@]}"; do
     if [ "$action" = update ]; then install_"$t"; else "${action}_${t}"; fi
     echo
 done
+
+# `update` reinstalls only targets this machine already has, so a target that
+# could not be installed is a failed update, not a choice. Say so and exit
+# non-zero: auto-update.sh keys "the clients are now on the new version" off
+# this exit status, and a silent partial update is how a Mac or a scheduled
+# Linux run ended up running two-month-old clients while reporting success.
+if [ "$action" = update ] && [ -n "$INCOMPLETE" ]; then
+    echo "install: these targets are installed but could not be reinstalled:$INCOMPLETE" >&2
+    echo "install: nothing was recorded as updated - fix the above and re-run" >&2
+    exit 1
+fi
+
+if [ "$action" = uninstall ]; then
+    # Nothing of ours left: drop the state the update path reads, so a later
+    # reinstall does not inherit a version stamp for clients that are gone.
+    [ -n "$(installed_targets)" ] || forget_install_state
+else
+    record_install_state
+fi
 info "Done. Requires an active Claude Code login (~/.claude/.credentials.json)."

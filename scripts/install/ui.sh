@@ -11,6 +11,61 @@ info() { printf '\033[1m%s\033[0m\n' "$*"; }
 skip() { printf '  \033[33mskip\033[0m %s\n' "$*"; }
 ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 
+# A skip that means THE TARGET WAS NOT INSTALLED - a missing node, no Swift, no
+# scheduler - as opposed to an optional extra that was not there (no Cursor to
+# register with). On `update` every target in the set is one the machine
+# already has, so a skip of this kind is a failed reinstall: install.sh exits
+# non-zero at the end, and the caller (scripts/auto-update.sh) then does not
+# stamp the new version and retries on its next run. Before this, a scheduled
+# update with no node on PATH dropped the status line, the MCP server and the
+# CLI, exited 0, and recorded the release as installed.
+# shellcheck disable=SC2034  # read by install.sh after the target loop
+INCOMPLETE=""
+skip_fatal() {
+    INCOMPLETE="$INCOMPLETE
+  $*"
+    skip "$*"
+}
+
+# Where the update worker keeps its state, and the two facts only the
+# installer can record:
+#   installed-version  what the CLIENTS now run. Written here, after a
+#                      successful run, so a manual `./install.sh update`, the
+#                      curl bootstrap and a fresh install all move it - not
+#                      only the daily job. When only the daily job wrote it,
+#                      every other path left it absent or stale, and the whole
+#                      update decision reads it.
+#   checkout-path      where this checkout is. The GNOME extension's copy of
+#                      auto-update.sh and the macOS app live outside it and
+#                      used to find it only through an installed schedule, so
+#                      opting out of autoupdate hid the checkout from both.
+_state_dir() { echo "${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"; }
+
+record_install_state() {
+    local dir
+    dir="$(_state_dir)"
+    if $DRY; then
+        echo "  would: record $(version) + $ROOT in $dir"
+        return 0
+    fi
+    mkdir -p "$dir" 2>/dev/null || return 0
+    printf '%s\n' "$(version)" >"$dir/installed-version" 2>/dev/null || true
+    printf '%s\n' "$ROOT" >"$dir/checkout-path" 2>/dev/null || true
+    # Whatever reinstall was owed has just been done.
+    rm -f "$dir/update-pending" 2>/dev/null || true
+}
+
+forget_install_state() {
+    local dir
+    dir="$(_state_dir)"
+    if $DRY; then
+        echo "  would: drop the version stamp and checkout pointer in $dir"
+        return 0
+    fi
+    rm -f "$dir/installed-version" "$dir/checkout-path" "$dir/update-pending" \
+        2>/dev/null || true
+}
+
 # --dry-run: print each mutating action instead of doing it. Read-only probes
 # (command -v, gsettings get, uname) always run. `act` wraps a plain command;
 # anything more involved is guarded inline with `$DRY`.
@@ -27,6 +82,14 @@ BUILD_ONLY=false
 SL_SEGMENTS="context,limits,tokens,ping"
 # shellcheck disable=SC2034  # read by node.sh
 SL_TOKENS="all"
+# Did THIS invocation choose them? If not, a reinstall keeps whatever the
+# installed status line already uses: `update` runs with no flags, and
+# re-baking the defaults silently reset every customised status line on every
+# update.
+# shellcheck disable=SC2034  # read by node.sh
+SL_SEGMENTS_SET=false
+# shellcheck disable=SC2034  # read by node.sh
+SL_TOKENS_SET=false
 # shellcheck disable=SC2034  # read by sessionping.sh
 SP_TIMES=()
 # shellcheck disable=SC2034  # read by sessionping.sh

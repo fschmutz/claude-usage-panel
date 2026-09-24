@@ -14,8 +14,22 @@
 #
 # "Latest version" is the highest `vX.Y.Z` tag on the origin remote - i.e. a cut
 # release, not whatever is on main right now. When one exists, the checkout is
-# fast-forwarded and `install.sh update` reinstalls exactly the targets that are
+# fast-forwarded TO THAT TAG (not to the branch tip, which carries unreleased
+# commits) and `install.sh update` reinstalls exactly the targets that are
 # already installed (never adds new ones).
+#
+# What it compares is the DEPLOYED version - what the clients run, from
+# $STATE_DIR/installed-version, which install.sh writes on every successful
+# run - and never the checkout's package.json. The two drift apart after a
+# manual pull, an interrupted reinstall or an install that dropped a target,
+# and comparing the checkout meant every one of those states read as "up to
+# date" while the clients stayed behind for good. A reinstall that was owed but
+# did not finish is recorded in $STATE_DIR/update-pending and retried.
+#
+# A scheduled run (--quiet) also skips when the last successful check is less
+# than CUP_MIN_CHECK_HOURS old, which is what lets the job fire at login and at
+# resume as well as daily: a laptop that was off at the scheduled minute still
+# gets its check, without one per login.
 #
 # It refuses to touch a checkout it does not own: a dirty worktree, a detached
 # HEAD, a branch with no upstream, or a missing remote each make it skip with a
@@ -32,6 +46,7 @@
 set -euo pipefail
 
 SELF_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"
 
 # A directory is the checkout only if it has both halves: the manifest this
 # script reads the version from, and a git worktree it can fast-forward.
@@ -77,6 +92,17 @@ resolve_root() {
         return 0
     fi
     local line runner candidate
+    # The pointer install.sh drops on every successful run. It is the only
+    # source that works for an install with no scheduled job at all - a zip
+    # install, or `./install.sh --uninstall autoupdate` - which otherwise left
+    # the extension's copy and the macOS app with no checkout to look at.
+    if [ -f "$STATE_DIR/checkout-path" ]; then
+        candidate="$(cat "$STATE_DIR/checkout-path" 2>/dev/null || true)"
+        if is_checkout "$candidate"; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    fi
     while IFS= read -r line; do
         runner="$(runner_in "$line")"
         [ -n "$runner" ] || continue
@@ -93,7 +119,6 @@ resolve_root() {
 
 ROOT="$(resolve_root)"
 SCRIPT_NAME=auto-update
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"
 LOG="$STATE_DIR/auto-update.log"
 LOCK="$STATE_DIR/update.lock"
 
@@ -101,6 +126,17 @@ QUIET=false
 FORCE=false
 MODE=run # run | check | status
 JSON=false
+
+# A scheduled run that finds the network down (the timer fires at resume or at
+# login before DNS is up) retries inside the same run instead of waiting a full
+# day. Overridable so the tests do not sleep.
+: "${CUP_RETRY_TRIES:=3}"
+: "${CUP_RETRY_SLEEP:=60}"
+# How long a successful check is good for. Scheduled runs (--quiet) skip inside
+# that window, which is what makes it safe to also run the job at load/boot:
+# a laptop that is off at the scheduled minute checks when it comes back,
+# without checking again on every login.
+: "${CUP_MIN_CHECK_HOURS:=20}"
 
 # log / say / die / usage / trim_log / take_lock - shared with session-ping.sh.
 # Every copy of this script travels with lib.sh (install.sh gnome, the GNOME
@@ -154,23 +190,70 @@ local_version() {
 # Stamped after every successful reinstall; unknown before the first one.
 deployed_version() {
     [ -f "$STATE_DIR/installed-version" ] && cat "$STATE_DIR/installed-version" && return 0
-    # No stamp yet: fall back to whatever the GNOME extension declares, which is
-    # the one client that records its version on disk.
+    # No stamp yet (an install from before install.sh started stamping): fall
+    # back to a client that records its own version on disk - the GNOME
+    # extension's metadata, or the macOS bundle's Info.plist.
     local meta="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions"
     meta="$meta/claude-usage-panel@fschmutz.github.io/metadata.json"
-    [ -f "$meta" ] || return 0
-    sed -nE 's/.*"version-name": *"([^"]+)".*/\1/p' "$meta" | head -1
+    if [ -f "$meta" ]; then
+        sed -nE 's/.*"version-name": *"([^"]+)".*/\1/p' "$meta" | head -1
+        return 0
+    fi
+    local plist="/Applications/ClaudeUsagePanel.app/Contents/Info.plist"
+    [ -f "$plist" ] || return 0
+    # Both the XML and the binary form answer to PlistBuddy/defaults; the app is
+    # written with the XML one, so a plain grep of the following <string> works
+    # and needs no macOS-only tool (this function also runs under the tests).
+    sed -nE -e '/CFBundleShortVersionString/{n;s@.*<string>([^<]+)</string>.*@\1@p;}' "$plist" | head -1
 }
 
 stamp_deployed_version() {
     mkdir -p "$STATE_DIR" 2>/dev/null || return 0
     printf '%s\n' "$1" >"$STATE_DIR/installed-version" 2>/dev/null || true
+    rm -f "$STATE_DIR/update-pending" 2>/dev/null || true
 }
 
-# Highest released vX.Y.Z tag on the remote. Prints nothing if the remote is
-# unreachable or has no version tags - callers treat that as "skip, try tomorrow".
-latest_remote_version() {
-    local ref tag best=""
+# A reinstall that is owed. Written before `install.sh update` runs and cleared
+# only when it succeeds, so an install that failed - or a run that was killed
+# between the fast-forward and the reinstall - is still owed on the next run.
+# Without it the checkout already carries the new version, and every comparison
+# that could notice ("checkout vs latest", "deployed vs latest", both) says up
+# to date while the clients sit on the old release for good.
+pending_version() {
+    [ -f "$STATE_DIR/update-pending" ] && cat "$STATE_DIR/update-pending"
+    return 0
+}
+
+mark_update_pending() {
+    mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+    printf '%s\n' "$1" >"$STATE_DIR/update-pending" 2>/dev/null || true
+}
+
+# Highest released vX.Y.Z tag on the remote. Prints nothing when the lookup
+# found none - and then REMOTE_ERROR says whether that was a failure (auth, DNS,
+# a dead URL, no ssh-agent) or a reachable remote that has cut no release yet.
+# Swallowing both into one empty string is what reported every one of them as
+# "offline?" for two months, so nobody ever saw the real error.
+# Both results are globals, not stdout: a `$(...)` would run the lookup in a
+# subshell and the error would die with it, which is exactly how every failure
+# came back as an empty string in the first place.
+LATEST_REMOTE=""
+REMOTE_ERROR=""
+lookup_remote() {
+    local ref tag best="" out status=0
+    LATEST_REMOTE=""
+    REMOTE_ERROR=""
+    out="$(git -C "$ROOT" ls-remote --tags --refs origin 'v*' 2>&1)" || status=$?
+    if [ "$status" -ne 0 ]; then
+        # One line: the first fatal/error git printed ("Repository not found",
+        # "Permission denied (publickey)", "Could not resolve host"). Not the
+        # last line - that is the tail of git's advice paragraph, which says
+        # nothing about what went wrong.
+        REMOTE_ERROR="$(printf '%s' "$out" | grep -m1 -E '^(fatal|error|ssh|remote):' || true)"
+        [ -n "$REMOTE_ERROR" ] || REMOTE_ERROR="$(printf '%s' "$out" | grep -m1 -v '^$' || true)"
+        REMOTE_ERROR="${REMOTE_ERROR:-git ls-remote failed with status $status}"
+        return 0
+    fi
     while read -r _ ref; do
         tag="${ref#refs/tags/}"
         tag="${tag#v}"
@@ -178,8 +261,54 @@ latest_remote_version() {
         if [ -z "$best" ] || [ "$(version_compare "$tag" "$best")" = "1" ]; then
             best="$tag"
         fi
-    done < <(git -C "$ROOT" ls-remote --tags --refs origin 'v*' 2>/dev/null || true)
-    printf '%s' "$best"
+    done <<<"$out"
+    LATEST_REMOTE="$best"
+    [ -n "$best" ] || REMOTE_ERROR="the remote has no vX.Y.Z release tag"
+}
+
+# The same lookup, but a scheduled run gives the network a few chances: the
+# timer fires on resume and at login, both of which routinely beat DNS.
+lookup_remote_retrying() {
+    local try=1
+    while :; do
+        lookup_remote
+        [ -z "$LATEST_REMOTE" ] || return 0
+        # A remote we reached that simply has no release tag is a final answer.
+        case "$REMOTE_ERROR" in *'no vX.Y.Z release tag') return 0 ;; esac
+        [ "$try" -lt "$CUP_RETRY_TRIES" ] || return 0
+        log "remote unreachable ($REMOTE_ERROR) - retry $try/$((CUP_RETRY_TRIES - 1)) in ${CUP_RETRY_SLEEP}s"
+        sleep "$CUP_RETRY_SLEEP"
+        try=$((try + 1))
+    done
+}
+
+# Everything the Node clients need is invisible to a scheduler: launchd and
+# systemd hand the job a minimal PATH, so `command -v node` fails and the
+# status line, the MCP server and claudectl were dropped from every update
+# while the run still reported success. Put the usual version-manager shims
+# back on PATH before the installer looks.
+ensure_node_on_path() {
+    command -v node >/dev/null && return 0
+    local dir
+    for dir in "$HOME/.volta/bin" "$HOME/.local/share/fnm/aliases/default/bin" \
+        "$HOME/.asdf/shims" "$HOME/.local/bin" /opt/homebrew/bin /usr/local/bin \
+        "$HOME/.nvm/current/bin"; do
+        [ -x "$dir/node" ] || continue
+        PATH="$dir:$PATH"
+        export PATH
+        log "added $dir to PATH for the reinstall (node is not on the scheduler's PATH)"
+        return 0
+    done
+    # nvm keeps one directory per version and no stable symlink: take the
+    # highest version, not the alphabetically last one (v9 sorts after v10).
+    # shellcheck disable=SC2012  # version directories, not user filenames
+    dir="$(ls -d "$HOME/.nvm/versions/node"/*/bin 2>/dev/null | sort -V | tail -1)"
+    if [ -n "$dir" ] && [ -x "$dir/node" ]; then
+        PATH="$dir:$PATH"
+        export PATH
+        log "added $dir to PATH for the reinstall (node is not on the scheduler's PATH)"
+    fi
+    command -v node >/dev/null
 }
 
 # Desktop notification, best effort - never fail the run over it.
@@ -217,6 +346,18 @@ repo_is_updatable() {
         return 1
     fi
     return 0
+}
+
+# Diverged from the upstream it last fetched: the run will refuse to merge, and
+# the UIs used to show a cheerful "Update available" with a button that did
+# nothing at all. Read-only - no fetch - so it reports on what the checkout
+# already knows.
+divergence_reason() {
+    local upstream
+    upstream="$(git -C "$ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)" ||
+        return 0
+    git -C "$ROOT" merge-base --is-ancestor HEAD "$upstream" 2>/dev/null && return 0
+    echo "this checkout has commits $upstream does not - update it by hand"
 }
 
 # ── Args ────────────────────────────────────────────────────────────────────────
@@ -257,7 +398,8 @@ if [ "$MODE" = status ]; then
     installed="$(local_version)"
     deployed="$(deployed_version)"
     [ -n "$deployed" ] || deployed="$installed"
-    latest="$(latest_remote_version || true)"
+    lookup_remote
+    latest="$LATEST_REMOTE"
     last_check="never"
     [ -f "$STATE_DIR/last-check" ] && last_check="$(cat "$STATE_DIR/last-check")"
 
@@ -267,6 +409,21 @@ if [ "$MODE" = status ]; then
     # repo_is_updatable prints nothing when the checkout is fine, so the
     # capture is the reason or empty.
     blocked_reason="$(repo_is_updatable)" || true
+    [ -n "$blocked_reason" ] || blocked_reason="$(divergence_reason)"
+    # A lookup that failed is not "up to date": say which failure it was.
+    remote_error="$REMOTE_ERROR"
+
+    # What the RUNNING GNOME Shell loaded, which the extension stamps at
+    # enable(). New code on disk does not reach a running shell, so an update
+    # that installed perfectly still needs a log out - and until this was
+    # reported, every surface said "Up to date" while the old code ran.
+    loaded_version=""
+    [ -f "$STATE_DIR/loaded-version" ] && loaded_version="$(cat "$STATE_DIR/loaded-version")"
+    reload_needed=false
+    if [ -n "$loaded_version" ] && [ -n "$deployed" ] &&
+        [ "$(version_compare "$deployed" "$loaded_version")" = 1 ]; then
+        reload_needed=true
+    fi
 
     # Compare against what is DEPLOYED, not what the checkout says. Those drift
     # apart the moment someone runs `git pull` by hand, and comparing the
@@ -280,7 +437,7 @@ if [ "$MODE" = status ]; then
     # installed. `./install.sh update` fixes it; the daily run will not, because
     # it only reinstalls after a fast-forward it performed itself.
     clients_stale=false
-    if [ "$(version_compare "$installed" "$deployed")" = 1 ]; then
+    if [ "$(version_compare "$installed" "$deployed")" = 1 ] || [ -n "$(pending_version)" ]; then
         clients_stale=true
     fi
 
@@ -294,6 +451,9 @@ if [ "$MODE" = status ]; then
         printf '  "clientsStale": %s,\n' "$clients_stale"
         printf '  "blocked": %s,\n' "$([ -n "$blocked_reason" ] && echo true || echo false)"
         printf '  "blockedReason": "%s",\n' "$(json_escape "$blocked_reason")"
+        printf '  "remoteError": "%s",\n' "$(json_escape "$remote_error")"
+        printf '  "loadedVersion": "%s",\n' "$(json_escape "$loaded_version")"
+        printf '  "reloadNeeded": %s,\n' "$reload_needed"
         printf '  "lastCheck": "%s",\n' "$(json_escape "$last_check")"
         printf '  "log": "%s"\n' "$(json_escape "$LOG")"
         printf '}\n'
@@ -306,7 +466,9 @@ if [ "$MODE" = status ]; then
     printf 'latest:     %s\n' "$latest"
     printf 'update:     %s\n' "$($update_available && echo "available" || echo "up to date")"
     $clients_stale && printf 'action:     run ./install.sh update - the clients are behind the checkout\n'
+    $reload_needed && printf 'action:     log out and back in - the shell still runs %s\n' "$loaded_version"
     [ -n "$blocked_reason" ] && printf 'blocked:    %s\n' "$blocked_reason"
+    [ -n "$remote_error" ] && printf 'remote:     %s\n' "$remote_error"
     printf 'last check: %s\n' "$last_check"
     printf 'log:        %s\n' "$LOG"
     exit 0
@@ -320,6 +482,19 @@ if ! take_lock 360; then
 fi
 
 # ── Check ───────────────────────────────────────────────────────────────────────
+# A scheduled run inside the freshness window is a no-op. That is what lets the
+# job also fire at load/boot (a laptop that was off at the scheduled minute
+# still gets its daily check) without checking on every single login.
+if $QUIET && [ "$MODE" = run ] && ! $FORCE && [ -f "$STATE_DIR/last-check-epoch" ]; then
+    last_epoch="$(cat "$STATE_DIR/last-check-epoch" 2>/dev/null || echo 0)"
+    [ -n "${last_epoch//[!0-9]/}" ] || last_epoch=0
+    age=$(($(date +%s) - ${last_epoch:-0}))
+    if [ "$age" -ge 0 ] && [ "$age" -lt $((CUP_MIN_CHECK_HOURS * 3600)) ]; then
+        log "skip: checked $((age / 60)) min ago (min interval ${CUP_MIN_CHECK_HOURS}h)"
+        exit 0
+    fi
+fi
+
 if ! reason="$(repo_is_updatable)"; then
     say "skip: $reason"
     exit 0
@@ -327,26 +502,45 @@ fi
 
 have="$(local_version)"
 [ -n "$have" ] || die "could not read the version from $ROOT/package.json"
+# What the CLIENTS run. The checkout is not it: a manual pull, an interrupted
+# reinstall or an installer that dropped a target all leave the two apart, and
+# comparing the checkout is what made a stranded install report "up to date"
+# forever and never retry.
+deployed="$(deployed_version)"
+[ -n "$deployed" ] || deployed="$have"
 
-latest="$(latest_remote_version)"
-date '+%Y-%m-%dT%H:%M:%S%z' >"$STATE_DIR/last-check"
+if $QUIET; then
+    lookup_remote_retrying
+else
+    lookup_remote
+fi
+latest="$LATEST_REMOTE"
 if [ -z "$latest" ]; then
-    say "skip: could not reach the remote (offline?) - will retry tomorrow"
+    # Not a check: nothing was compared, so the timestamp must not move or the
+    # freshness window above would swallow tomorrow's real check.
+    say "skip: $REMOTE_ERROR - will retry"
     exit 0
 fi
+date '+%Y-%m-%dT%H:%M:%S%z' >"$STATE_DIR/last-check"
+date +%s >"$STATE_DIR/last-check-epoch"
 
-if [ "$(version_compare "$latest" "$have")" != "1" ] && ! $FORCE; then
-    say "up to date (v$have, latest v$latest)"
+pending="$(pending_version)"
+if [ "$(version_compare "$latest" "$deployed")" != "1" ] && [ -z "$pending" ] && ! $FORCE; then
+    say "up to date (v$deployed, latest v$latest)"
     exit 0
 fi
 
 if [ "$MODE" = check ]; then
-    say "update available: v$have → v$latest"
+    if [ -n "$pending" ] && [ "$(version_compare "$latest" "$deployed")" != "1" ]; then
+        say "reinstall owed: v$pending was fetched but never installed"
+    else
+        say "update available: v$deployed → v$latest"
+    fi
     exit 10
 fi
 
 # ── Update ──────────────────────────────────────────────────────────────────────
-say "updating v$have → v$latest"
+say "updating v$deployed → v$latest"
 upstream="$(git -C "$ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}')"
 # What this checkout last saw of its upstream, BEFORE the fetch moves it.
 seen="$(git -C "$ROOT" rev-parse --verify --quiet "$upstream" || true)"
@@ -354,34 +548,60 @@ seen="$(git -C "$ROOT" rev-parse --verify --quiet "$upstream" || true)"
 # already exist here, and without it the fetch refuses them and dies. Tags are
 # the upstream's to name; nothing local lives in them.
 git -C "$ROOT" fetch --quiet --tags --force origin || die "git fetch failed"
+
+# Move to the TAG, not to the branch tip. The version that was compared is the
+# newest release; fast-forwarding to origin/main instead installs whatever was
+# merged since it, under the release's version number.
+target="v$latest"
+git -C "$ROOT" rev-parse --verify --quiet "refs/tags/$target" >/dev/null ||
+    target="$upstream"
+
+# The checkout may already hold the release and only the clients be behind (a
+# manual pull, or a reinstall that failed last time). Then there is nothing to
+# fast-forward - go straight to the reinstall, which is the part that was
+# missing.
+if git -C "$ROOT" merge-base --is-ancestor "$target" HEAD 2>/dev/null; then
+    say "the checkout already holds v$latest - reinstalling the clients (on v$deployed)"
 # --ff-only: if the branch has diverged this refuses rather than merging or
 # rewriting anything, and the run ends here with the checkout untouched -
 # unless the upstream was rewritten under a checkout with nothing of its own.
-if ! git -C "$ROOT" merge --ff-only --quiet "$upstream" 2>>"$LOG"; then
+elif ! git -C "$ROOT" merge --ff-only --quiet "$target" 2>>"$LOG"; then
     if [ -n "$seen" ] &&
         git -C "$ROOT" merge-base --is-ancestor HEAD "$seen" &&
         ! git -C "$ROOT" merge-base --is-ancestor "$seen" "$upstream"; then
         # repo_is_updatable already proved the tree clean; HEAD is contained
         # in what upstream used to be, so no commit here is lost.
         say "the upstream history was rewritten - following it (no local commits, clean tree)"
-        git -C "$ROOT" reset --hard --quiet "$upstream" || die "could not follow the rewritten $upstream"
+        git -C "$ROOT" reset --hard --quiet "$target" || die "could not follow the rewritten $upstream"
     else
-        say "skip: $upstream is not a fast-forward from here - update by hand"
+        say "skip: $target is not a fast-forward from here - update by hand"
         exit 0
     fi
+else
+    say "fast-forwarded to $target"
 fi
 
 now="$(local_version)"
-say "fast-forwarded to v$now - reinstalling the targets already installed"
+say "reinstalling the targets already installed (v$now)"
+mark_update_pending "$now"
+
+# The scheduler's PATH has no node on it, and without node the Node clients
+# drop out of the install set silently. Put it back before asking.
+ensure_node_on_path ||
+    log "no node found on PATH or in the usual version-manager locations"
 
 # `install.sh update` reinstalls only what `--list` reports as installed, so
-# this never adds a client the user chose not to have.
-if "$ROOT/install.sh" update >>"$LOG" 2>&1; then
+# this never adds a client the user chose not to have. CUP_UPDATE_RUN tells the
+# scheduler layer it is running inside the job it would otherwise restart.
+if CUP_UPDATE_RUN=1 "$ROOT/install.sh" update >>"$LOG" 2>&1; then
     stamp_deployed_version "$now"
     say "updated to v$now"
     notify "Claude Usage Panel updated" "Now on v$now. GNOME: log out and back in to load it."
 else
-    say "install.sh update failed after fast-forwarding to v$now - see $LOG"
+    # No stamp: the deployed version stays where it was, so the next run sees
+    # the clients are still behind and tries again instead of declaring
+    # victory over a half-installed tree.
+    say "install.sh update failed at v$now - see $LOG (will retry on the next run)"
     notify "Claude Usage Panel update failed" "Fetched v$now but the reinstall failed. See $LOG"
     exit 1
 fi
