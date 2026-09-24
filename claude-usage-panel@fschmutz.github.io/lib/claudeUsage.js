@@ -4,12 +4,36 @@
 
 import Soup from 'gi://Soup';
 
+import Gettext from 'gettext';
+
 import {readAccessToken} from './claudeFiles.js';
 import {parseBody, send} from './http.js';
 import {httpFailure, normalizeUsage, normalizeExtraUsage} from './pure.js';
 
+// The prefs process loads this file too (through lib/accounts.js), and it
+// cannot import the Shell's extension.js, so the catalog is named directly -
+// the domain metadata.json declares, bound in both processes at enable.
+const {gettext: _} = Gettext.domain('claude-usage-panel');
+
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
+
+/**
+ * The plan the header shows, from the login's own credentials: the usage
+ * endpoint names no plan. `subscriptionType` is the plan ("max" -> "Max"),
+ * and a `rateLimitTier` ending in a multiplier ("default_claude_max_20x")
+ * says which tier of it ("Max 20x"). '' when the login does not say.
+ * @param {?object} oauth the `claudeAiOauth` block of .credentials.json
+ */
+export function planLabel(oauth) {
+    const type = typeof oauth?.subscriptionType === 'string' ? oauth.subscriptionType.trim() : '';
+    if (!type)
+        return '';
+    const plan = type.charAt(0).toUpperCase() + type.slice(1);
+    const tier = typeof oauth.rateLimitTier === 'string'
+        ? /_(\d+x)$/.exec(oauth.rateLimitTier)?.[1] : null;
+    return tier ? `${plan} ${tier}` : plan;
+}
 
 /**
  * Fetch usage from the endpoint. `token` defaults to the live login's; a
@@ -22,7 +46,7 @@ export async function fetchUsage(session, token = readAccessToken()) {
         return {
             ok: false,
             code: 'no_token',
-            message: 'No Claude credentials found. Sign in with Claude Code.',
+            message: _('No Claude credentials found. Sign in with Claude Code.'),
         };
     }
     const message = Soup.Message.new('GET', USAGE_ENDPOINT);
@@ -39,7 +63,7 @@ export async function fetchUsage(session, token = readAccessToken()) {
         return {
             ok: false,
             code: 'auth_expired',
-            message: 'Claude session expired. Run any Claude Code command to refresh.',
+            message: _('Claude session expired. Run any Claude Code command to refresh.'),
         };
     }
     if (status < 200 || status >= 300) {

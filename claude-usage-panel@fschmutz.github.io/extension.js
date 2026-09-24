@@ -1,4 +1,4 @@
-// Claude Usage Panel - GNOME Shell 45-50
+// Claude Usage Panel - GNOME Shell 45-51
 // Shows Claude Code plan limits (session / weekly / per-model) in the top bar
 // with a designed dropdown, plus optional session cost via ccusage.
 //
@@ -16,10 +16,10 @@ import Soup from 'gi://Soup';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {Extension, gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {fetchUsage} from './lib/claudeUsage.js';
-import {readLiveAccount} from './lib/claudeFiles.js';
+import {fetchUsage, planLabel} from './lib/claudeUsage.js';
+import {readLiveAccount, readLiveCredentials} from './lib/claudeFiles.js';
 import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
 import {readLastPing, readSchedule} from './lib/sessionPing.js';
@@ -35,7 +35,7 @@ import {run} from './lib/proc.js';
 import {stateDir} from './lib/paths.js';
 import {readSnapshots, claudectlPath} from './lib/snapshots.js';
 import {
-    severityClass, formatResets, alertThreshold,
+    severityClass, formatResets, latchCrossings, latchPaceAlerts, refreshSections,
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek,
@@ -218,7 +218,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._header.syncReopen({
             visible,
             title: visible
-                ? _('Reopen %s (%d sessions)').format(newest.label, newest.sessions.length)
+                ? ngettext('Reopen %s (%d session)', 'Reopen %s (%d sessions)', newest.sessions.length)
+                    .format(newest.label, newest.sessions.length)
                 : '',
         });
     }
@@ -331,49 +332,68 @@ class ClaudeUsageButton extends PanelMenu.Button {
             if (this._destroyed)
                 return;
             this._retry = !result.ok && result.code === 'transient';
-            if (!result.ok) {
-                // A "not now" answer (424, 429, 5xx) keeps the last good cards
-                // up and says so under them; only a real failure blanks them.
-                if (this._retry && this._latest.length)
-                    this._updatedLabel.text = _('%s - retrying, showing the last reading').format(result.message);
-                else
-                    this._renderError(result.message);
-                return;
-            }
-            const now = Date.now();
-            const moved = !sameUsage(this._latest, result.cards);
-            this._idleStreak = moved ? 0 : this._idleStreak + 1;
-            // Only record what moved: a flat afternoon would otherwise write
-            // one identical line every poll for 90 days.
-            // Filed under the live login: the file is shared by every account
-            // on the machine and a peak must never come from another one.
-            this._warehouseAccount = warehouseAccount(readLiveAccount());
-            if (moved) {
-                const entry = warehouseEntry(result.cards, now, this._warehouseAccount);
-                this._warehouse.push(entry);
-                appendWarehouse(entry);
-            }
-            this._runEventCommand(detectEvents(this._latest, result.cards));
-            this._latest = result.cards;
-            this._recordSamples(result.cards, now);
-            this._renderCards(result.cards, now);
-            this._renderExtraUsage(result.extraUsage);
-            this._renderPanel();
-            this._updatedLabel.text = _('Updated %s').format(formatClock(now));
-            this._renderPing();
-            // Plan label from the raw spend/extra hints, best-effort.
-            this._header.setPlan(result.raw?.plan_label ?? '');
+            if (result.ok)
+                this._renderUsage(result);
+            // A "not now" answer (424, 429, 5xx) keeps the last good cards
+            // up and says so under them; only a real failure blanks them.
+            else if (this._retry && this._latest.length)
+                this._updatedLabel.text = _('%s - retrying, showing the last reading').format(result.message);
+            else
+                this._renderError(result.message);
 
-            await this._refreshCost();
-            await this._sessions.refresh();
-            await this._cursor.refresh();
-            await this._accounts.refresh(result.cards);
+            // After a failed poll too: none of these needs the Claude token,
+            // and the account switcher is the fix for an expired login.
+            await this._refreshSections(result);
         } finally {
             this._refreshing = false;
             // Re-arm from the numbers this poll just produced: the timer is
             // one-shot, so a missed re-arm would stop the panel dead.
             if (!this._destroyed)
                 this._restartTimer();
+        }
+    }
+
+    _renderUsage(result) {
+        const now = Date.now();
+        const moved = !sameUsage(this._latest, result.cards);
+        this._idleStreak = moved ? 0 : this._idleStreak + 1;
+        // Only record what moved: a flat afternoon would otherwise write
+        // one identical line every poll for 90 days.
+        // Filed under the live login: the file is shared by every account
+        // on the machine and a peak must never come from another one.
+        this._warehouseAccount = warehouseAccount(readLiveAccount());
+        if (moved) {
+            const entry = warehouseEntry(result.cards, now, this._warehouseAccount);
+            this._warehouse.push(entry);
+            appendWarehouse(entry);
+        }
+        this._runEventCommand(detectEvents(this._latest, result.cards));
+        this._latest = result.cards;
+        this._recordSamples(result.cards, now);
+        this._renderCards(result.cards, now);
+        this._renderExtraUsage(result.extraUsage);
+        this._renderPanel();
+        this._updatedLabel.text = _('Updated %s').format(formatClock(now));
+        this._renderPing();
+        // The usage endpoint names no plan; the live login's credentials do.
+        this._header.setPlan(planLabel(readLiveCredentials()?.claudeAiOauth));
+    }
+
+    // Each section is bounded by refreshSections' deadline, so a hung child
+    // process (a stalled `ccusage`) costs one section one poll instead of
+    // stopping every poll after it.
+    async _refreshSections(result) {
+        const outcomes = await refreshSections({
+            cost: () => this._refreshCost(),
+            sessions: () => this._sessions.refresh(),
+            cursor: () => this._cursor.refresh(),
+            accounts: cards => this._accounts.refresh(cards),
+        }, {result, latest: this._latest});
+        for (const {section, outcome, error} of outcomes) {
+            if (outcome === 'failed')
+                logError(error, `claude-usage-panel: the ${section} section failed to refresh`);
+            else if (outcome === 'timeout')
+                console.warn(`claude-usage-panel: the ${section} section is still refreshing, polling on`);
         }
     }
 
@@ -449,38 +469,21 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._pingLabel.visible = true;
     }
 
-    // Notify when a limit first crosses 90% or 100% (with hysteresis so a
-    // fresh window can alert again after the usage drops back down).
+    // Notify when a limit first crosses 90% or 100%, and once per window when
+    // the pace projects it running dry at least 1 h before its reset. The
+    // latches (lib/pure/events.js) hold the hysteresis; this only notifies.
     _checkAlerts(cards) {
         if (!this._settings.get_boolean('alerts-enabled'))
             return;
-        for (const card of cards) {
-            const prev = this._alertFired.get(card.key) ?? 0;
-            const threshold = alertThreshold(card.percent);
-            if (threshold > prev) {
-                this._alertFired.set(card.key, threshold);
-                const tail = card.resetsAt ? ` - ${formatResets(card.resetsAt)}` : '';
-                Main.notify(_('Claude usage'),
-                    _('%s reached %d%%').format(card.label, threshold) + tail);
-            } else if (threshold < prev && card.percent < 85) {
-                this._alertFired.set(card.key, threshold); // re-arm for the next cycle
-            }
-
-            // Predictive: warn ONCE per window when the pace first projects the
-            // limit running dry at least 1 h before its reset. Re-arm only once
-            // the projection clears by a 2 h margin (or goes away), so a pace
-            // hovering at the edge can't ping-pong notifications.
-            const fc = this._forecasts.get(card.key);
-            if (fc?.exhaustsBeforeReset && fc.marginHours <= -1) {
-                if (!this._paceAlerted.has(card.key)) {
-                    this._paceAlerted.add(card.key);
-                    Main.notify(_('Claude usage'),
-                        _('%s is on pace to run out before it resets').format(card.label) +
-                        ` - ${formatForecast(fc)}`);
-                }
-            } else if (!fc || (!fc.exhaustsBeforeReset && (fc.marginHours ?? 99) >= 2)) {
-                this._paceAlerted.delete(card.key);
-            }
+        for (const {card, threshold} of latchCrossings(this._alertFired, cards)) {
+            const tail = card.resetsAt ? ` - ${formatResets(card.resetsAt)}` : '';
+            Main.notify(_('Claude usage'),
+                _('%s reached %d%%').format(card.label, threshold) + tail);
+        }
+        for (const {card, forecast: fc} of latchPaceAlerts(this._paceAlerted, cards, this._forecasts)) {
+            Main.notify(_('Claude usage'),
+                _('%s is on pace to run out before it resets').format(card.label) +
+                ` - ${formatForecast(fc)}`);
         }
     }
 

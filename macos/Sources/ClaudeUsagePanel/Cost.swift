@@ -3,6 +3,8 @@ import Foundation
 // Optional cost layer: the official usage API does not expose dollar cost on
 // subscription plans, so we shell out to `ccusage` (computed from the local
 // ~/.claude/projects/*.jsonl logs). Mirrors the GNOME extension's lib/cost.js.
+// Only an installed `ccusage` runs: no `npx ccusage@latest` fallback, which
+// fetched and ran the newest unpinned npm release on every poll.
 
 struct ActiveCost {
     let costUSD: Double
@@ -10,17 +12,11 @@ struct ActiveCost {
 }
 
 enum Cost {
-    /// Run `ccusage blocks --active --json`. Tries a global `ccusage` first,
-    /// then falls back to `npx`. Returns nil if unavailable.
+    static let argv = ["ccusage", "blocks", "--active", "--json"]
+
+    /// Run `ccusage blocks --active --json`. Returns nil if unavailable.
     static func fetchActiveCost() async -> ActiveCost? {
-        let candidates: [[String]] = [
-            ["ccusage", "blocks", "--active", "--json"],
-            ["npx", "-y", "ccusage@latest", "blocks", "--active", "--json"],
-        ]
-        for argv in candidates {
-            if let cost = run(argv) { return cost }
-        }
-        return nil
+        run(argv)
     }
 
     private static func run(_ argv: [String]) -> ActiveCost? {

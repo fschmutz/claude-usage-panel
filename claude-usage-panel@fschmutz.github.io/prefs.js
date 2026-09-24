@@ -121,7 +121,7 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
     _buildCost(settings) {
         const cost = new Adw.PreferencesGroup({
             title: _('Cost'),
-            description: _('The official API does not expose dollar cost on subscription plans. Enable this to compute it locally with ccusage (requires Node/npx).'),
+            description: _('The official API does not expose dollar cost on subscription plans. Enable this to compute it locally with ccusage (requires ccusage installed: npm i -g ccusage).'),
         });
         const costRow = new Adw.SwitchRow({
             title: _('Show session cost'),
@@ -177,7 +177,7 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
     _buildSessions(settings) {
         const sessions = new Adw.PreferencesGroup({
             title: _('Today’s sessions'),
-            description: _('List the sessions that spent the most tokens today, biggest first, and resume one in a terminal with a click. Read from the local transcripts in ~/.claude/projects.'),
+            description: _('List the sessions that spent the most tokens today, biggest first, and resume one in a terminal with a click. Read from the local transcripts in $CLAUDE_CONFIG_DIR/projects (~/.claude/projects by default).'),
         });
         const sessionsRow = new Adw.SwitchRow({
             title: _('Show today’s sessions'),
@@ -449,10 +449,12 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         // is cancelled with the window; APPLYING is not. Cancelling kills the
         // script, and closing the window mid-update used to do exactly that
         // between the fast-forward and the reinstall - which leaves the
-        // clients on the old release with no run left to fix them.
+        // clients on the old release with no run left to fix them. For the
+        // same reason applying has no time limit; a status read keeps run()'s.
         const runUpdateScript = async (args, {cancel = true} = {}) =>
-            run(['bash', scriptPath, ...args],
-                {cancellable: cancel ? this._cancellable : null});
+            run(['bash', scriptPath, ...args], cancel
+                ? {cancellable: this._cancellable}
+                : {cancellable: null, timeoutSeconds: 0});
 
         const renderUpdate = (stdout) => {
             updateBtn.sensitive = true;

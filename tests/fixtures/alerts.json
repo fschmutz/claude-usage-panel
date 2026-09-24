@@ -1,0 +1,608 @@
+{
+  "_comment": "The notification latches, one sequence of polls per case. thresholds: the 90/100 latch (lib/pure/events.js latchCrossings, Swift AlertLatch), re-armed below 85. pace: the exhaustion latch (latchPaceAlerts), firing at marginHours <= -1 and re-armed once the forecast is gone or clears the reset by 2 h. expected[i] is what poll i announces.",
+  "thresholds": [
+    {
+      "name": "fires once at 90 and once at 100",
+      "polls": [
+        [
+          {
+            "key": "session",
+            "percent": 50
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 91
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 95
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 100
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 100
+          }
+        ]
+      ],
+      "expected": [
+        [],
+        [
+          {
+            "key": "session",
+            "threshold": 90
+          }
+        ],
+        [],
+        [
+          {
+            "key": "session",
+            "threshold": 100
+          }
+        ],
+        []
+      ]
+    },
+    {
+      "name": "jumping straight to 100 reports only 100",
+      "polls": [
+        [
+          {
+            "key": "session",
+            "percent": 100
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "key": "session",
+            "threshold": 100
+          }
+        ]
+      ]
+    },
+    {
+      "name": "a wobble around 90 does not re-fire",
+      "polls": [
+        [
+          {
+            "key": "session",
+            "percent": 92
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 89
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 93
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "key": "session",
+            "threshold": 90
+          }
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "name": "85 is still the old window, 84 re-arms",
+      "polls": [
+        [
+          {
+            "key": "session",
+            "percent": 92
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 85
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 91
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 84
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 90
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "key": "session",
+            "threshold": 90
+          }
+        ],
+        [],
+        [],
+        [],
+        [
+          {
+            "key": "session",
+            "threshold": 90
+          }
+        ]
+      ]
+    },
+    {
+      "name": "a window reset re-arms",
+      "polls": [
+        [
+          {
+            "key": "session",
+            "percent": 92
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 3
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 91
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "key": "session",
+            "threshold": 90
+          }
+        ],
+        [],
+        [
+          {
+            "key": "session",
+            "threshold": 90
+          }
+        ]
+      ]
+    },
+    {
+      "name": "from 100 back to 90 is no new crossing",
+      "polls": [
+        [
+          {
+            "key": "session",
+            "percent": 100
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 90
+          }
+        ],
+        [
+          {
+            "key": "session",
+            "percent": 100
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "key": "session",
+            "threshold": 100
+          }
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "name": "limits are independent",
+      "polls": [
+        [
+          {
+            "key": "session",
+            "percent": 95
+          },
+          {
+            "key": "weekly_all",
+            "percent": 40
+          }
+        ],
+        [
+          {
+            "key": "weekly_all",
+            "percent": 100
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "key": "session",
+            "threshold": 90
+          }
+        ],
+        [
+          {
+            "key": "weekly_all",
+            "threshold": 100
+          }
+        ]
+      ]
+    }
+  ],
+  "pace": [
+    {
+      "name": "fires at a one-hour margin, once",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -1
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -3
+            }
+          }
+        }
+      ],
+      "expected": [
+        [
+          "session"
+        ],
+        []
+      ]
+    },
+    {
+      "name": "under an hour short is not yet worth a warning",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -0.5
+            }
+          }
+        }
+      ],
+      "expected": [
+        []
+      ]
+    },
+    {
+      "name": "no forecast, no alert",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {}
+        }
+      ],
+      "expected": [
+        []
+      ]
+    },
+    {
+      "name": "a projection that clears by less than 2 h stays latched",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": false,
+              "marginHours": 1.5
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        }
+      ],
+      "expected": [
+        [
+          "session"
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "name": "still exhausting but inside the hour stays latched",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -0.5
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        }
+      ],
+      "expected": [
+        [
+          "session"
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "name": "clearing by 2 h re-arms",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": false,
+              "marginHours": 2
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        }
+      ],
+      "expected": [
+        [
+          "session"
+        ],
+        [],
+        [
+          "session"
+        ]
+      ]
+    },
+    {
+      "name": "the forecast going away re-arms",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": null
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        }
+      ],
+      "expected": [
+        [
+          "session"
+        ],
+        [],
+        [
+          "session"
+        ]
+      ]
+    },
+    {
+      "name": "a forecast with no margin that does not exhaust re-arms",
+      "polls": [
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": false,
+              "marginHours": null
+            }
+          }
+        },
+        {
+          "cards": [
+            "session"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            }
+          }
+        }
+      ],
+      "expected": [
+        [
+          "session"
+        ],
+        [],
+        [
+          "session"
+        ]
+      ]
+    },
+    {
+      "name": "limits are independent",
+      "polls": [
+        {
+          "cards": [
+            "session",
+            "weekly_all"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            },
+            "weekly_all": {
+              "exhaustsBeforeReset": false,
+              "marginHours": 10
+            }
+          }
+        },
+        {
+          "cards": [
+            "session",
+            "weekly_all"
+          ],
+          "forecasts": {
+            "session": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -2
+            },
+            "weekly_all": {
+              "exhaustsBeforeReset": true,
+              "marginHours": -4
+            }
+          }
+        }
+      ],
+      "expected": [
+        [
+          "session"
+        ],
+        [
+          "weekly_all"
+        ]
+      ]
+    }
+  ]
+}

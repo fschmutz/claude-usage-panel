@@ -101,7 +101,7 @@
     <key name="history" type="s">
       <default>'{}'</default>
       <summary>Sparkline history</summary>
-      <description>JSON map of limit id to recent percentages, so the sparkline survives a restart.</description>
+      <description>JSON map of limit id to recent [epochMs, percent] samples, so the sparkline and the burn-rate forecast survive a restart.</description>
     </key>
   </schema>
 </schemalist>

@@ -2,7 +2,7 @@
   "uuid": "claude-usage-panel@fschmutz.github.io",
   "name": "Claude Usage Panel",
   "description": "Show Claude Code plan usage limits (current session, weekly all-models, and per-model like Fable) in the GNOME top bar, with a designed dropdown, severity colors, reset timers, and optional session cost via ccusage. Reads the local Claude Code OAuth token (read-only) and queries the official usage endpoint. Optional Cursor team-spend section via the Cursor Admin API.",
-  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
   "url": "https://github.com/fschmutz/claude-usage-panel",
   "settings-schema": "org.gnome.shell.extensions.claude-usage-panel",
   "gettext-domain": "claude-usage-panel",

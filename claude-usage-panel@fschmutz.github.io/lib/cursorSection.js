@@ -7,7 +7,7 @@
 import St from 'gi://St';
 
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {fetchCursor} from './cursorUsage.js';
 import {storeSecret, lookupSecret} from './secretStore.js';
@@ -37,7 +37,7 @@ export class CursorController {
         this._track.visible = false;
         this._today = wrapLabel(new St.Label({text: '', style_class: 'cu-updated'}));
         this._top = wrapLabel(new St.Label({text: '', style_class: 'cu-updated'}));
-        box.add_child(new St.Label({text: 'Cursor', style_class: 'cu-section-title'}));
+        box.add_child(new St.Label({text: _('Cursor'), style_class: 'cu-section-title'}));
         box.add_child(this._cycle);
         box.add_child(this._track);
         box.add_child(this._today);
@@ -61,10 +61,16 @@ export class CursorController {
     }
 
     async refresh() {
+        // Off (the default) means off: no keyring lookup either, which on a
+        // desktop without a Secret Service logs a warning on every poll.
+        if (!this._settings.get_boolean('cursor-enabled')) {
+            this._item.visible = false;
+            return;
+        }
         const key = await this._key();
         if (this._isDestroyed())
             return;
-        if (!this._settings.get_boolean('cursor-enabled') || !key) {
+        if (!key) {
             this._item.visible = false;
             return;
         }
@@ -78,12 +84,15 @@ export class CursorController {
                 return;
             if (c.percent !== null) {
                 // Team has a monthly limit → show a % gauge.
-                this._cycle.text = _('This cycle: $%s / $%s (%d%%) · %d members')
+                this._cycle.text = ngettext(
+                    'This cycle: $%s / $%s (%d%%) · %d member',
+                    'This cycle: $%s / $%s (%d%%) · %d members', c.members)
                     .format(c.cycleUSD.toFixed(2), c.limitUSD.toFixed(0), c.percent, c.members);
                 this._track.setFill(c.percent, thresholdClass(c.percent));
                 this._track.visible = true;
             } else {
-                this._cycle.text = _('This cycle: $%s · %d members')
+                this._cycle.text = ngettext(
+                    'This cycle: $%s · %d member', 'This cycle: $%s · %d members', c.members)
                     .format(c.cycleUSD.toFixed(2), c.members);
                 this._track.visible = false;
             }

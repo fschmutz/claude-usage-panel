@@ -22,85 +22,87 @@ msgstr "Uso adicional"
 
 #: extension.js:221
 #, javascript-format
-msgid "Reopen %s (%d sessions)"
-msgstr "Reabrir %s (%d sesiones)"
+msgid "Reopen %s (%d session)"
+msgid_plural "Reopen %s (%d sessions)"
+msgstr[0] "Reabrir %s (%d sesión)"
+msgstr[1] "Reabrir %s (%d sesiones)"
 
-#: extension.js:240
+#: extension.js:241
 msgid "Reopened your sessions"
 msgstr "Sesiones reabiertas"
 
-#: extension.js:240
+#: extension.js:241
 msgid "Could not reopen the sessions"
 msgstr "No se pudieron reabrir las sesiones"
 
-#: extension.js:338
+#: extension.js:340
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - reintentando, mostrando la última lectura"
 
-#: extension.js:362
+#: extension.js:376
 #, javascript-format
 msgid "Updated %s"
 msgstr "Actualizado %s"
 
-#: extension.js:388
+#: extension.js:408
 msgid "Session cost: computing…"
 msgstr "Coste de la sesión: calculando…"
 
-#: extension.js:393
+#: extension.js:413
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "Coste de la sesión: $%s · %s tokens (est.)"
 
-#: extension.js:395
+#: extension.js:415
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "Coste de la sesión: no disponible (instala ccusage)"
 
-#: extension.js:425
+#: extension.js:445
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (%d%% del límite)"
 
-#: extension.js:442
+#: extension.js:462
 #, javascript-format
 msgid "last %s"
 msgstr "última %s"
 
-#: extension.js:442 prefs.js:332
+#: extension.js:462 prefs.js:332
 msgid "never"
 msgstr "nunca"
 
-#: extension.js:446
+#: extension.js:466
 #, javascript-format
 msgid "next %s"
 msgstr "próxima %s"
 
-#: extension.js:448
+#: extension.js:468
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "Pings de sesión: %s"
 
-#: extension.js:463 extension.js:477 lib/accountsSection.js:287
-#: lib/accountsSection.js:293 lib/sessionsSection.js:159
+#: extension.js:480 extension.js:484 lib/accountsSection.js:289
+#: lib/accountsSection.js:295 lib/headerBar.js:41 lib/sessionsSection.js:159
 #: lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Uso de Claude"
 
-#: extension.js:464
+#: extension.js:481
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s alcanzó el %d%%"
 
-#: extension.js:478
+#: extension.js:485
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s se agotará antes de reiniciarse al ritmo actual"
 
-#: extension.js:605
+#: extension.js:608
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:65 prefs.js:42 prefs.js:555
+#: lib/accountsSection.js:65 prefs.js:42 prefs.js:557
 msgid "Accounts"
 msgstr "Cuentas"
 
@@ -128,46 +130,77 @@ msgstr "Cambiado de %s → %s: %s estaba al %d%%"
 msgid "Switched %s → %s"
 msgstr "Cambiado de %s → %s"
 
-#: lib/accountsSection.js:284
+#: lib/accountsSection.js:285
 #, javascript-format
-msgid " - %d running session(s) keep the old login until restarted"
-msgstr ""
-" - %d sesión(es) en curso conservan el inicio de sesión anterior hasta "
-"reiniciar"
+msgid " - %d running session keeps the old login until restarted"
+msgid_plural " - %d running sessions keep the old login until restarted"
+msgstr[0] ""
+" - %d sesión en curso conserva el inicio de sesión anterior hasta reiniciarse"
+msgstr[1] ""
+" - %d sesiones en curso conservan el inicio de sesión anterior hasta "
+"reiniciarse"
 
-#: lib/accountsSection.js:294
+#: lib/accountsSection.js:296
 #, javascript-format
 msgid "Could not switch to %s: %s"
 msgstr "No se pudo cambiar a %s: %s"
 
-#: lib/cursorSection.js:72
+#: lib/claudeUsage.js:49
+msgid "No Claude credentials found. Sign in with Claude Code."
+msgstr ""
+"No se encontraron credenciales de Claude. Inicia sesión con Claude Code."
+
+#: lib/claudeUsage.js:66
+msgid "Claude session expired. Run any Claude Code command to refresh."
+msgstr ""
+"La sesión de Claude caducó. Ejecuta cualquier comando de Claude Code para "
+"renovarla."
+
+#: lib/cursorSection.js:40
+msgid "Cursor"
+msgstr "Cursor"
+
+#: lib/cursorSection.js:78
 msgid "Loading…"
 msgstr "Cargando…"
 
-#: lib/cursorSection.js:81
+#: lib/cursorSection.js:88
 #, javascript-format
-msgid "This cycle: $%s / $%s (%d%%) · %d members"
-msgstr "Este ciclo: $%s / $%s (%d%%) · %d miembros"
+msgid "This cycle: $%s / $%s (%d%%) · %d member"
+msgid_plural "This cycle: $%s / $%s (%d%%) · %d members"
+msgstr[0] "Este ciclo: $%s / $%s (%d%%) · %d miembro"
+msgstr[1] "Este ciclo: $%s / $%s (%d%%) · %d miembros"
 
-#: lib/cursorSection.js:86
+#: lib/cursorSection.js:95
 #, javascript-format
-msgid "This cycle: $%s · %d members"
-msgstr "Este ciclo: $%s · %d miembros"
+msgid "This cycle: $%s · %d member"
+msgid_plural "This cycle: $%s · %d members"
+msgstr[0] "Este ciclo: $%s · %d miembro"
+msgstr[1] "Este ciclo: $%s · %d miembros"
 
-#: lib/cursorSection.js:91
+#: lib/cursorSection.js:100
 #, javascript-format
 msgid "Today: $%s"
 msgstr "Hoy: $%s"
 
-#: lib/cursorSection.js:93
+#: lib/cursorSection.js:102
 #, javascript-format
 msgid "Top: %s $%s"
 msgstr "Máximo: %s $%s"
 
-#: lib/cursorSection.js:97
+#: lib/cursorSection.js:106
 #, javascript-format
 msgid "Cursor: %s"
 msgstr "Cursor: %s"
+
+#: lib/cursorUsage.js:24
+msgid "Cursor API key rejected"
+msgstr "Clave API de Cursor rechazada"
+
+#: lib/cursorUsage.js:26
+#, javascript-format
+msgid "Cursor HTTP %d"
+msgstr "Cursor: HTTP %d"
 
 #: lib/headerBar.js:69
 msgid "Refresh now"
@@ -180,6 +213,31 @@ msgstr "Ajustes"
 #: lib/headerBar.js:73
 msgid "Quit"
 msgstr "Salir"
+
+#: lib/sessionPing.js:87
+msgid "systemctl failed"
+msgstr "systemctl falló"
+
+#: lib/sessionPing.js:101
+msgid ""
+"No systemd user session here - schedule pings with ./install.sh sessionping "
+"instead."
+msgstr ""
+"No hay sesión de usuario de systemd aquí: programa los pings con ./"
+"install.sh sessionping."
+
+#: lib/sessionPing.js:111
+msgid "Add at least one ping time (HH:MM)."
+msgstr "Añade al menos una hora de ping (HH:MM)."
+
+#: lib/sessionPing.js:114
+msgid "session-ping.sh not found - reinstall with ./install.sh gnome."
+msgstr "No se encontró session-ping.sh: reinstala con ./install.sh gnome."
+
+#: lib/sessionPing.js:119
+#, javascript-format
+msgid "Could not write the systemd units: %s"
+msgstr "No se pudieron escribir las unidades de systemd: %s"
 
 #: lib/sessionsSection.js:46 prefs.js:179
 msgid "Today’s sessions"
@@ -286,10 +344,12 @@ msgstr "Coste"
 #: prefs.js:124
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires Node/npx)."
+"this to compute it locally with ccusage (requires ccusage installed: npm i "
+"-g ccusage)."
 msgstr ""
 "La API oficial no expone el coste en dólares en los planes de suscripción. "
-"Actívalo para calcularlo localmente con ccusage (requiere Node/npx)."
+"Actívalo para calcularlo localmente con ccusage (requiere ccusage instalado: "
+"npm i -g ccusage)."
 
 #: prefs.js:127
 msgid "Show session cost"
@@ -328,11 +388,11 @@ msgstr "Clave de la API de administración de Cursor"
 msgid ""
 "List the sessions that spent the most tokens today, biggest first, and "
 "resume one in a terminal with a click. Read from the local transcripts in "
-"~/.claude/projects."
+"$CLAUDE_CONFIG_DIR/projects (~/.claude/projects by default)."
 msgstr ""
 "Lista las sesiones que más tokens gastaron hoy, de mayor a menor, y reanuda "
 "una en un terminal con un clic. Se lee de las transcripciones locales en "
-"~/.claude/projects."
+"$CLAUDE_CONFIG_DIR/projects (~/.claude/projects por defecto)."
 
 #: prefs.js:183
 msgid "Show today’s sessions"
@@ -502,55 +562,55 @@ msgstr "Actualizaciones"
 msgid "Daily check, and whether it is actually running."
 msgstr "Comprobación diaria, y si realmente se está ejecutando."
 
-#: prefs.js:436 prefs.js:522
+#: prefs.js:436 prefs.js:524
 msgid "Checking…"
 msgstr "Comprobando…"
 
-#: prefs.js:440 prefs.js:462 prefs.js:486 prefs.js:493 prefs.js:501
-#: prefs.js:508
+#: prefs.js:440 prefs.js:464 prefs.js:488 prefs.js:495 prefs.js:503
+#: prefs.js:510
 msgid "Check now"
 msgstr "Comprobar ahora"
 
-#: prefs.js:460
+#: prefs.js:462
 msgid "Cannot self-update"
 msgstr "No se puede actualizar solo"
 
-#: prefs.js:461
+#: prefs.js:463
 msgid "No git checkout found for auto-update.sh."
 msgstr "No se encontró ningún checkout de git para auto-update.sh."
 
-#: prefs.js:469
+#: prefs.js:471
 msgid "Could not read the update status"
 msgstr "No se pudo leer el estado de la actualización"
 
-#: prefs.js:478
+#: prefs.js:480
 #, javascript-format
 msgid "Installed %s, checkout %s"
 msgstr "Instalado %s, checkout %s"
 
-#: prefs.js:479
+#: prefs.js:481
 msgid "The clients are behind the code - reinstall them."
 msgstr "Los clientes están por detrás del código: reinstálalos."
 
-#: prefs.js:480 prefs.js:497 prefs.js:521
+#: prefs.js:482 prefs.js:499 prefs.js:523
 msgid "Update now"
 msgstr "Actualizar ahora"
 
-#: prefs.js:484
+#: prefs.js:486
 #, javascript-format
 msgid "Installed %s, running %s"
 msgstr "Instalado %s, en ejecución %s"
 
-#: prefs.js:485
+#: prefs.js:487
 msgid "Log out and back in to load it."
 msgstr "Cierra la sesión y vuelve a entrar para cargarlo."
 
-#: prefs.js:488
+#: prefs.js:490
 #, javascript-format
 msgid "Paused: %s"
 msgstr "En pausa: %s"
 
-#: prefs.js:490
+#: prefs.js:492
 msgid ""
 "The daily check will not touch this checkout until that is resolved. It only "
 "ever fast-forwards a clean checkout."
@@ -558,39 +618,39 @@ msgstr ""
 "La comprobación diaria no tocará este checkout hasta que se resuelva. Solo "
 "hace fast-forward en un checkout limpio."
 
-#: prefs.js:495
+#: prefs.js:497
 #, javascript-format
 msgid "Update available: %s → %s"
 msgstr "Actualización disponible: %s → %s"
 
-#: prefs.js:496 prefs.js:500 prefs.js:507
+#: prefs.js:498 prefs.js:502 prefs.js:509
 #, javascript-format
 msgid "Last checked %s"
 msgstr "Comprobado %s"
 
-#: prefs.js:499
+#: prefs.js:501
 #, javascript-format
 msgid "Up to date (%s)"
 msgstr "Al día (%s)"
 
-#: prefs.js:506
+#: prefs.js:508
 #, javascript-format
 msgid "%s (could not check)"
 msgstr "%s (no se pudo comprobar)"
 
-#: prefs.js:522
+#: prefs.js:524
 msgid "Updating…"
 msgstr "Actualizando…"
 
-#: prefs.js:539
+#: prefs.js:541
 msgid "The update failed"
 msgstr "La actualización falló"
 
-#: prefs.js:541
+#: prefs.js:543
 msgid "See the log for details."
 msgstr "Consulta el registro para más detalles."
 
-#: prefs.js:556
+#: prefs.js:558
 msgid ""
 "Save the login Claude Code holds now under a name (PRO, PERSO) and switch "
 "between saved logins from the dropdown, no browser needed. Only the "
@@ -604,33 +664,33 @@ msgstr ""
 "plugins e historial se conservan. Las sesiones de Claude Code ya abiertas "
 "mantienen el inicio de sesión anterior hasta reiniciarse."
 
-#: prefs.js:563
+#: prefs.js:565
 msgid "Enable named accounts"
 msgstr "Activar cuentas con nombre"
 
-#: prefs.js:564
+#: prefs.js:566
 msgid "Off by default - nothing account-related is shown until you turn it on"
 msgstr ""
 "Desactivado por defecto: no se muestra nada sobre cuentas hasta que lo "
 "actives"
 
-#: prefs.js:571
+#: prefs.js:573
 msgid "Current login"
 msgstr "Sesión actual"
 
-#: prefs.js:573
+#: prefs.js:575
 msgid "Save the current login as"
 msgstr "Guardar el inicio de sesión actual como"
 
-#: prefs.js:574
+#: prefs.js:576
 msgid "Save"
 msgstr "Guardar"
 
-#: prefs.js:583
+#: prefs.js:585
 msgid "Switch accounts automatically"
 msgstr "Cambiar de cuenta automáticamente"
 
-#: prefs.js:584
+#: prefs.js:586
 msgid ""
 "When the active account reaches the threshold, move to the saved account "
 "with the most headroom"
@@ -638,30 +698,30 @@ msgstr ""
 "Cuando la cuenta activa alcance el umbral, pasar a la cuenta guardada con "
 "más margen"
 
-#: prefs.js:589
+#: prefs.js:591
 msgid "Auto-switch threshold"
 msgstr "Umbral de cambio automático"
 
-#: prefs.js:590
+#: prefs.js:592
 msgid "Worst limit percentage that counts as full"
 msgstr "Porcentaje del peor límite que cuenta como lleno"
 
-#: prefs.js:598
+#: prefs.js:600
 msgid "Show the auto-switch button in the dropdown"
 msgstr "Mostrar el botón de cambio automático en el menú"
 
-#: prefs.js:599
+#: prefs.js:601
 msgid ""
 "Off hides the auto-switch button from the panel header; the option stays here"
 msgstr ""
 "Al desactivarlo se oculta el botón de la cabecera del panel; la opción sigue "
 "aquí"
 
-#: prefs.js:604
+#: prefs.js:606
 msgid "Show the account name in the top bar"
 msgstr "Mostrar el nombre de la cuenta en la barra superior"
 
-#: prefs.js:605
+#: prefs.js:607
 msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
@@ -669,29 +729,29 @@ msgstr ""
 "«PRO · Sesión 42%» - se muestra cuando hay dos cuentas guardadas, y solo "
 "mientras quepa en la barra"
 
-#: prefs.js:623
+#: prefs.js:625
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s, guardada como %s"
 
-#: prefs.js:624
+#: prefs.js:626
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s (aún no guardada)"
 
-#: prefs.js:625
+#: prefs.js:627
 msgid "No Claude Code login found"
 msgstr "No se encontró ningún inicio de sesión de Claude Code"
 
-#: prefs.js:631
+#: prefs.js:633
 msgid "login expired - sign in and save it again"
 msgstr "sesión caducada - inicia sesión y guárdala de nuevo"
 
-#: prefs.js:638
+#: prefs.js:640
 msgid "Forget this saved login"
 msgstr "Olvidar este inicio de sesión guardado"
 
-#: prefs.js:658
+#: prefs.js:660
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "Los nombres solo usan letras, dígitos, . _ - (hasta 32 caracteres)"
 

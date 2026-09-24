@@ -4,6 +4,8 @@
 
 import GLib from 'gi://GLib';
 
+import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+
 import {jsonMessage, parseBody, send} from './http.js';
 import {summarizeCursorSpend, summarizeCursorToday} from './pure.js';
 
@@ -19,9 +21,9 @@ async function postJSON(session, key, path, body) {
     message.request_headers.append('authorization', basicAuth(key));
     const {status, bytes} = await send(session, message);
     if (status === 401 || status === 403)
-        throw new Error('Cursor API key rejected');
+        throw new Error(_('Cursor API key rejected'));
     if (status < 200 || status >= 300)
-        throw new Error(`Cursor HTTP ${status}`);
+        throw new Error(_('Cursor HTTP %d').format(status));
     return parseBody(bytes);
 }
 

@@ -38,7 +38,7 @@ class HeaderBar extends St.BoxLayout {
         super._init({style_class: 'cu-header', x_expand: true});
 
         this.add_child(new St.Label({
-            text: 'Claude usage',
+            text: _('Claude usage'),
             style_class: 'cu-title',
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,

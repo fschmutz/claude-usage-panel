@@ -120,3 +120,39 @@ public struct AlertLatch: Equatable, Sendable {
         return out
     }
 }
+
+/// The pace alert: a limit whose burn rate projects it running dry at least
+/// an hour before its reset, announced once per window. Mirrors pure.js
+/// latchPaceAlerts(); tests/fixtures/alerts.json pins both. A limit re-arms
+/// only once its forecast goes away or clears the reset by 2 h, so a pace
+/// hovering at the edge cannot ping-pong notifications.
+public struct PaceAlertLatch: Equatable, Sendable {
+    /// Fire once the projection runs dry this many hours (or more) early.
+    public static let alertMarginHours = -1.0
+    /// Re-arm only once the projection clears the reset by this margin.
+    public static let rearmMarginHours = 2.0
+
+    private var alerted: Set<String> = []
+
+    public init() {}
+
+    /// The limits to warn about for this poll, in card order.
+    public mutating func alerts(
+        _ cards: [LimitCard], forecasts: [String: Forecast]
+    ) -> [(card: LimitCard, forecast: Forecast)] {
+        var out: [(card: LimitCard, forecast: Forecast)] = []
+        for card in cards {
+            let fc = forecasts[card.id]
+            if let fc, fc.exhaustsBeforeReset, let margin = fc.marginHours,
+                margin <= Self.alertMarginHours
+            {
+                if alerted.insert(card.id).inserted { out.append((card, fc)) }
+            } else if fc.map({
+                !$0.exhaustsBeforeReset && ($0.marginHours ?? .infinity) >= Self.rearmMarginHours
+            }) ?? true {
+                alerted.remove(card.id)
+            }
+        }
+        return out
+    }
+}
