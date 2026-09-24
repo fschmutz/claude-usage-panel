@@ -81,6 +81,22 @@ public struct UpdateStatus: Equatable, Sendable {
         )
     }
 
+    /// The checkout root recorded in `<state dir>/checkout-path`, accepted or
+    /// rejected. That is a plain file in a user-writable directory and its
+    /// contents end up on a command line, so it is validated like any other
+    /// untrusted input rather than trusted for having been written by our own
+    /// installer: one line, absolute, no traversal, and no shell-significant or
+    /// control characters. Pure, so the Linux test job covers it; the caller
+    /// still has to check that the script under it is executable.
+    public static func validatedCheckoutRoot(_ pointer: String) -> String? {
+        let root = pointer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard root.count > 1, root.count <= 512, root.hasPrefix("/"),
+            !root.contains(".."),
+            root.range(of: "^/[A-Za-z0-9._/@+-]+$", options: .regularExpression) != nil
+        else { return nil }
+        return root
+    }
+
     /// Dotted-version ordering, the rule version_compare() uses in
     /// scripts/auto-update.sh: numeric per component, a leading "v" and any
     /// -prerelease suffix ignored, a missing component read as 0.

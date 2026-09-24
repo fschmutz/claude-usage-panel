@@ -105,6 +105,23 @@ final class UpdateStatusTests: XCTestCase {
         XCTAssertEqual(quiet?.summary, "2.1.2 (could not reach the remote)")
     }
 
+    // The pointer file is user-writable and its contents reach a command line.
+    func testTheCheckoutPointerIsValidatedBeforeItIsUsed() {
+        XCTAssertEqual(
+            UpdateStatus.validatedCheckoutRoot("/Users/me/Git/claude-usage-panel\n"),
+            "/Users/me/Git/claude-usage-panel")
+        XCTAssertEqual(
+            UpdateStatus.validatedCheckoutRoot("/opt/app-1.2_beta+x/@scope"),
+            "/opt/app-1.2_beta+x/@scope")
+        for bad in [
+            "", "/", "relative/path", "/tmp/../etc", "/tmp/x; id", "/tmp/$(id)",
+            "/tmp/`id`", "/tmp/a\nb", "/tmp/a b", "/tmp/'x'",
+            "/" + String(repeating: "a", count: 600),
+        ] {
+            XCTAssertNil(UpdateStatus.validatedCheckoutRoot(bad), "accepted \(bad)")
+        }
+    }
+
     // Mirrors version_compare in scripts/auto-update.sh: numeric per
     // component, v-prefix and prerelease suffix ignored.
     func testVersionOrderingMatchesTheShellComparator() {

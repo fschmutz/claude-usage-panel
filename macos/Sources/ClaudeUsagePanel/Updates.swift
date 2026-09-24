@@ -33,11 +33,20 @@ enum Updates {
         // from a checkout whose owner ran `--uninstall autoupdate` reported
         // "No git checkout found" while the checkout sat right there.
         if let root = try? String(contentsOf: checkoutPointer, encoding: .utf8) {
-            let candidate =
-                root.trimmingCharacters(in: .whitespacesAndNewlines) + "/scripts/auto-update.sh"
-            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
+            return scriptInCheckout(root)
         }
         return nil
+    }
+
+    /// `<root>/scripts/auto-update.sh`, for a root UpdateStatus accepts and a
+    /// file that is actually executable; nil otherwise. The script's name is a
+    /// constant here - only the directory can come from the pointer file.
+    static func scriptInCheckout(_ pointer: String) -> String? {
+        guard let root = UpdateStatus.validatedCheckoutRoot(pointer) else { return nil }
+        let candidate = URL(fileURLWithPath: root, isDirectory: true)
+            .appendingPathComponent("scripts/auto-update.sh").standardizedFileURL.path
+        guard FileManager.default.isExecutableFile(atPath: candidate) else { return nil }
+        return candidate
     }
 
     /// The public repository, for the one install shape that has no checkout:
@@ -45,6 +54,14 @@ enum Updates {
     /// can at least know that a newer release exists instead of sitting on the
     /// version it was downloaded at forever.
     static let releasesURL = "https://github.com/fschmutz/claude-usage-panel"
+
+    /// Installed by `brew install --cask claude-usage-panel`. Such a build has
+    /// no checkout either, but it does have an updater - telling that user to
+    /// download a zip by hand would fight Homebrew for the same bundle.
+    static var caskRoot: String? {
+        ["/opt/homebrew/Caskroom/claude-usage-panel", "/usr/local/Caskroom/claude-usage-panel"]
+            .first { FileManager.default.fileExists(atPath: $0) }
+    }
 
     /// Highest released vX.Y.Z tag on the public remote, or nil. Mirrors
     /// latest_remote_version in scripts/auto-update.sh, including "released
