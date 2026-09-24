@@ -33,7 +33,7 @@ export function severityClass(severity) {
 // Which pool a limit draws from. The API sends `group` ("session" / "weekly");
 // payloads that predate it are grouped by the kind prefix instead.
 function groupOf(kind, group) {
-    if (group)
+    if (typeof group === 'string' && group)
         return group;
     return String(kind).startsWith('weekly') ? 'weekly' : String(kind);
 }
@@ -55,20 +55,32 @@ export function kindLabel(kind) {
     return words(k) || 'Limit';
 }
 
+// The payload is read strictly, the way Model.swift's `as?` casts read it: a
+// field of the wrong JSON type counts as absent. Number("42") and Number(null)
+// would otherwise turn a string or a null into a reading Swift never shows
+// (tests/fixtures/normalize.json pins the malformed shapes).
+const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const str = v => (typeof v === 'string' ? v : null);
+const SEVERITIES = ['normal', 'warning', 'critical'];
+// Swift casts limits[] as [[String: Any]]: one non-object entry fails the
+// whole cast and the legacy fields are read instead.
+const isObject = v => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
 function normalizeLimit(entry) {
-    let label = kindLabel(entry.kind);
-    const model = entry.scope?.model?.display_name;
+    const kind = str(entry?.kind) ?? 'unknown';
+    let label = kindLabel(kind);
+    const model = str(entry?.scope?.model?.display_name);
     if (model)
         label = `${label} · ${model}`;
     return {
-        key: entry.kind + (model ? `:${model}` : ''),
+        key: kind + (model ? `:${model}` : ''),
         label,
-        group: groupOf(entry.kind, entry.group),
+        group: groupOf(kind, entry?.group),
         scoped: Boolean(model),
-        percent: clampPercent(entry.percent),
-        severity: entry.severity ?? 'normal',
-        resetsAt: entry.resets_at ?? null,
-        active: Boolean(entry.is_active),
+        percent: clampPercent(num(entry?.percent) ?? 0),
+        severity: SEVERITIES.includes(entry?.severity) ? entry.severity : 'normal',
+        resetsAt: str(entry?.resets_at),
+        active: entry?.is_active === true,
     };
 }
 
@@ -91,7 +103,8 @@ function inheritPooledResets(cards) {
 // Extract normalized limit cards from the raw usage payload. Prefers the modern
 // `limits[]` array; falls back to legacy five_hour / seven_day fields.
 export function normalizeUsage(payload) {
-    if (Array.isArray(payload?.limits) && payload.limits.length) {
+    if (Array.isArray(payload?.limits) && payload.limits.length &&
+        payload.limits.every(isObject)) {
         return inheritPooledResets(payload.limits.map(normalizeLimit))
             .sort((a, b) => {
                 const ai = KIND_ORDER.indexOf(a.key.split(':')[0]);
@@ -100,20 +113,22 @@ export function normalizeUsage(payload) {
             });
     }
     const cards = [];
-    if (Number.isFinite(Number(payload?.five_hour?.utilization))) {
+    const five = num(payload?.five_hour?.utilization);
+    if (five !== null) {
         cards.push({
             key: 'session', label: KIND_LABELS.session,
             group: 'session', scoped: false,
-            percent: clampPercent(payload.five_hour.utilization),
-            severity: 'normal', resetsAt: payload.five_hour.resets_at ?? null, active: true,
+            percent: clampPercent(five),
+            severity: 'normal', resetsAt: str(payload.five_hour.resets_at), active: true,
         });
     }
-    if (Number.isFinite(Number(payload?.seven_day?.utilization))) {
+    const seven = num(payload?.seven_day?.utilization);
+    if (seven !== null) {
         cards.push({
             key: 'weekly_all', label: KIND_LABELS.weekly_all,
             group: 'weekly', scoped: false,
-            percent: clampPercent(payload.seven_day.utilization),
-            severity: 'normal', resetsAt: payload.seven_day.resets_at ?? null, active: false,
+            percent: clampPercent(seven),
+            severity: 'normal', resetsAt: str(payload.seven_day.resets_at), active: false,
         });
     }
     return cards;
@@ -181,37 +196,56 @@ export function normalizeExtraUsage(payload) {
     };
 }
 
+// The sparkline shows the newest SPARK_SAMPLES readings. Part of the shared
+// contract: Swift's Sparkline mirrors it, tests/fixtures/sparkline.json pins
+// both (including the half-step boundaries, which round up in every port).
+export const SPARK_SAMPLES = 12;
+
 // Render a history array (percentages) as a unicode sparkline.
 export function sparkline(history) {
-    if (!history || history.length < 2)
+    const tail = (history ?? []).slice(-SPARK_SAMPLES);
+    if (tail.length < 2)
         return '';
-    return history.map(p => {
-        const i = Math.max(0, Math.min(8, Math.round((p / 100) * 8)));
+    return tail.map(p => {
+        const i = Number.isFinite(p) ? Math.max(0, Math.min(8, Math.round((p / 100) * 8))) : 0;
         return SPARK_BLOCKS[i];
     }).join('');
 }
 
-// "Resets in 3h 06m" / "Resets in 4d 2h". nowMs is injectable for tests.
-export function formatResets(iso, nowMs = Date.now()) {
+// The reset countdown every client prints, broken into units: whole seconds
+// FLOORED (a reset 59 s away is "0m", never "1m"; 23h59m40s is never "1d"),
+// then days / hours / minutes. null without a parseable date, {past: true}
+// once the reset is due. The status line / MCP (claude-code/stamps.js
+// resetHint) and Swift (ResetCountdown) split it the same way;
+// tests/fixtures/resets.json pins all three. Only the labels differ per port.
+export function resetParts(iso, nowMs = Date.now()) {
     if (!iso)
-        return '';
+        return null;
     const target = Date.parse(iso);
     if (Number.isNaN(target))
-        return '';
+        return null;
     let delta = Math.floor((target - nowMs) / 1000);
     if (delta <= 0)
-        return 'Resetting…';
+        return {past: true};
     const d = Math.floor(delta / 86400);
     delta %= 86400;
-    const h = Math.floor(delta / 3600);
-    const m = Math.floor((delta % 3600) / 60);
+    return {past: false, d, h: Math.floor(delta / 3600), m: Math.floor((delta % 3600) / 60)};
+}
+
+// "Resets in 3h 06m" / "Resets in 4d 2h". nowMs is injectable for tests.
+export function formatResets(iso, nowMs = Date.now()) {
+    const r = resetParts(iso, nowMs);
+    if (!r)
+        return '';
+    if (r.past)
+        return 'Resetting…';
     let span;
-    if (d > 0)
-        span = `${d}d ${h}h`;
-    else if (h > 0)
-        span = `${h}h ${String(m).padStart(2, '0')}m`;
+    if (r.d > 0)
+        span = `${r.d}d ${r.h}h`;
+    else if (r.h > 0)
+        span = `${r.h}h ${String(r.m).padStart(2, '0')}m`;
     else
-        span = `${m}m`;
+        span = `${r.m}m`;
     return `Resets in ${span}`;
 }
 

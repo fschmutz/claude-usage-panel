@@ -94,6 +94,47 @@
       "name": "empty limits[] → no cards",
       "input": {"limits": []},
       "expected": []
+    },
+    {
+      "name": "legacy: a null or string utilization is absent, never 0 % or a coerced number",
+      "input": {
+        "five_hour": {"utilization": null, "resets_at": "2026-07-20T05:00:00Z"},
+        "seven_day": {"utilization": "37"}
+      },
+      "expected": []
+    },
+    {
+      "name": "legacy: a numeric utilization still renders beside a null one",
+      "input": {
+        "five_hour": {"utilization": null},
+        "seven_day": {"utilization": 37, "resets_at": "2026-07-24T00:00:00Z"}
+      },
+      "expected": [
+        {"kind": "weekly_all", "group": "weekly", "scoped": false, "percent": 37, "severity": "normal", "resetsAt": "2026-07-24T00:00:00Z", "active": false}
+      ]
+    },
+    {
+      "name": "limits[]: string percent reads 0, missing kind is unknown, unknown severity is normal, non-string reset and non-bool active are absent",
+      "input": {
+        "limits": [
+          {"kind": "session", "percent": "42", "severity": "urgent", "is_active": true},
+          {"percent": 10, "resets_at": 1800000000, "is_active": "yes"}
+        ]
+      },
+      "expected": [
+        {"kind": "session", "group": "session", "scoped": false, "percent": 0, "severity": "normal", "resetsAt": null, "active": true},
+        {"kind": "unknown", "group": "unknown", "scoped": false, "percent": 10, "severity": "normal", "resetsAt": null, "active": false}
+      ]
+    },
+    {
+      "name": "limits[] with a non-object entry is unreadable: the legacy fields are used",
+      "input": {
+        "limits": [{"kind": "session", "percent": 5}, null],
+        "five_hour": {"utilization": 12}
+      },
+      "expected": [
+        {"kind": "session", "group": "session", "scoped": false, "percent": 12, "severity": "normal", "resetsAt": null, "active": true}
+      ]
     }
   ]
 }

@@ -289,6 +289,15 @@ public enum UsageForecast {
     static let minSpanMs: Double = 30 * 60_000  // …or from a burst narrower than 30 min
     static let minPace = 0.2  // %/h below this is idle → no forecast
 
+    /// Round half toward +infinity, as `floor(x + 0.5)` - the rule every port
+    /// writes out. Swift's default `.rounded()` sends -0.5 away from zero, and
+    /// a margin of whole minutes lands on an exact negative half-tenth one gap
+    /// in six (3 min early is -0.05 h). Mirrors pure.js `roundHalfUp()`.
+    public static func roundHalfUp(_ x: Double, decimals: Int = 0) -> Double {
+        let k = pow(10, Double(decimals))
+        return (x * k + 0.5).rounded(.down) / k
+    }
+
     /// - Parameters:
     ///   - samples: chronological (epochMs, percent) pairs
     ///   - resetsAt: reset instant of the limit (nil → no comparison)
@@ -339,13 +348,26 @@ public enum UsageForecast {
         let projectedMs = (fullMs / 60_000).rounded() * 60_000  // minute precision
         let projected = Date(timeIntervalSince1970: projectedMs / 1000)
         let margin: Double? = resetsAt.map {
-            (((projectedMs - $0.timeIntervalSince1970 * 1000) / 3_600_000) * 10).rounded() / 10
+            roundHalfUp((projectedMs - $0.timeIntervalSince1970 * 1000) / 3_600_000, decimals: 1)
         }
         return Forecast(
             pctPerHour: (slope * 100).rounded() / 100,
             projectedFullAt: projected,
             exhaustsBeforeReset: margin.map { $0 < 0 } ?? false,
             marginHours: margin)
+    }
+
+    /// How far ahead of the reset a limit runs out: "1d10h", "8h", "<1h". The
+    /// lead is rounded to whole hours BEFORE the day split, so 47.6 h reads
+    /// "2d0h", never "1d24h", and under half an hour it is "<1h", never "0h".
+    /// Mirrors pure.js `forecastLead()`; forecast.json `leads` pins both.
+    public static func lead(_ marginHours: Double) -> String {
+        let total = roundHalfUp(abs(marginHours))
+        guard total.isFinite, total >= 1 else { return "<1h" }
+        let hours = Int(total)
+        let dd = hours / 24
+        let hh = hours % 24
+        return dd > 0 ? "\(dd)d\(hh)h" : "\(hh)h"
     }
 
     /// "↗ 1.8%/h - full ~Sun 03:40, 1d10h before reset" (alarming) or
@@ -362,10 +384,7 @@ public enum UsageForecast {
         let f = DateFormatter()
         f.dateFormat = "EEE HH:mm"
         f.locale = Locale(identifier: "en_US_POSIX")
-        let lead = abs(fc.marginHours ?? 0)
-        let dd = Int(lead / 24)
-        let hh = Int((lead.truncatingRemainder(dividingBy: 24)).rounded())
-        let span = dd > 0 ? "\(dd)d\(hh)h" : "\(hh)h"
+        let span = lead(fc.marginHours ?? 0)
         return "\(pace) - full ~\(f.string(from: fc.projectedFullAt)), \(span) before reset"
     }
 }

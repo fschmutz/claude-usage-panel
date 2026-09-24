@@ -41,6 +41,13 @@ const FORECAST_MIN_SAMPLES = 3;
 const FORECAST_MIN_SPAN_MS = 30 * 60_000;
 const FORECAST_MIN_PACE = 0.2; // %/h - below this the projection is noise
 
+// Round half toward +infinity, identically in every port (Swift's default
+// rounding sends -0.5 away from zero). Mirrors lib/pure.js roundHalfUp().
+export function roundHalfUp(x, decimals = 0) {
+  const k = 10 ** decimals;
+  return Math.floor(x * k + 0.5) / k;
+}
+
 /**
  * Project when a limit hits 100%. `samples` are [epochMs, percent] pairs;
  * the regression is weighted toward recent samples, restarts after a window
@@ -80,9 +87,7 @@ export function forecast(samples, resetsAt, nowMs) {
   const fullMs = tLast + ((100 - pLast) / slope) * 3600_000;
   const projected = Math.round(fullMs / 60_000) * 60_000;
   const resetMs = resetsAt ? Date.parse(resetsAt) : NaN;
-  const margin = Number.isFinite(resetMs)
-    ? Math.round(((projected - resetMs) / 3600_000) * 10) / 10
-    : null;
+  const margin = Number.isFinite(resetMs) ? roundHalfUp((projected - resetMs) / 3600_000, 1) : null;
   return {
     pctPerHour: Math.round(slope * 100) / 100,
     projectedFullAt: new Date(projected).toISOString(),
@@ -96,30 +101,65 @@ export function forecast(samples, resetsAt, nowMs) {
 // appended by whichever client runs so each densifies the other's history.
 // Best-effort: a concurrent write may win a race - one sample lost, never an
 // error - and a read-only tmp dir just means no forecast.
+//
+// With an `account` (the live login's uuid or email) the key is
+// "<account>|<card key>": two logins are two quota pools, and one series
+// spanning a switch from a 10 % account to a 60 % one regresses as a burn and
+// raises a false "full before reset". Without one the key is the bare card key.
+//
+// The file lives in a shared tmp dir, so anything may have written it: only a
+// plain object survives the read, and in it only [finite t, finite p] pairs.
+// A foreign entry must cost its own sample, never the forecast (which
+// destructures every entry) or the whole status line.
 
 const HISTORY_MAX_SAMPLES = 200;
 
-/** Append this call's samples and return the updated {key: [[t, p], …]} map. */
-export function recordHistory(cards, {nowMs = Date.now(), historyPath = defaultHistoryPath()} = {}) {
+const isPair = (e) =>
+  Array.isArray(e) && e.length === 2 && Number.isFinite(e[0]) && Number.isFinite(e[1]);
+
+/** A parsed history file reduced to what forecast() can read: {key: [[t, p], …]}. */
+export function sanitizeHistory(parsed) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const out = Object.create(null); // a "__proto__" key stays a plain key
+  for (const [key, list] of Object.entries(parsed)) {
+    if (!Array.isArray(list)) continue;
+    const pairs = list.filter(isPair);
+    if (pairs.length) out[key] = pairs;
+  }
+  return out;
+}
+
+/** The history key of one card for one login. */
+export function historyKey(cardKey, account) {
+  return account ? `${account}|${cardKey}` : cardKey;
+}
+
+/**
+ * Append this call's samples and return the updated map, keyed by card key
+ * for this `account` (the file holds every account's series).
+ */
+export function recordHistory(cards, {nowMs = Date.now(), historyPath = defaultHistoryPath(), account} = {}) {
   let hist = {};
   try {
-    const parsed = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
-    if (parsed && typeof parsed === 'object') hist = parsed;
+    hist = sanitizeHistory(JSON.parse(fs.readFileSync(historyPath, 'utf8')));
   } catch {
     // no history yet
   }
-  if (!cards.length) return hist; // nothing to add - do not rewrite the file
+  const mine = () =>
+    Object.fromEntries(cards.map((c) => [c.key, hist[historyKey(c.key, account)] ?? []]));
+  if (!cards.length) return mine(); // nothing to add - do not rewrite the file
   for (const c of cards) {
-    const list = Array.isArray(hist[c.key]) ? hist[c.key] : [];
+    const key = historyKey(c.key, account);
+    const list = hist[key] ?? [];
     list.push([nowMs, c.percent]);
-    hist[c.key] = list.slice(-HISTORY_MAX_SAMPLES);
+    hist[key] = list.slice(-HISTORY_MAX_SAMPLES);
   }
   try {
     fs.writeFileSync(historyPath, JSON.stringify(hist), {mode: 0o600});
   } catch {
     // read-only tmp dir just means no forecast; not fatal
   }
-  return hist;
+  return mine();
 }
 
 /** Record the cards, then project each one: Map of card key to forecast|null. */

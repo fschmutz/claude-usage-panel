@@ -18,6 +18,7 @@ import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import * as normalize from '../claude-code/normalize.js';
 import * as pace from '../claude-code/pace.js';
 import * as accounts from '../claude-code/accounts-contract.js';
+import {resetHint} from '../claude-code/stamps.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(here, 'fixtures', name), 'utf8'));
@@ -53,6 +54,39 @@ for (const [portName, fn] of [['pure.js', pure.forecast], ['pace.js', pace.forec
             assert.deepEqual(fn(c.samples, c.resetsAt, forecastFix.now), c.expected);
         });
     }
+}
+
+// The lead the alarming sub-line prints ("1d10h before reset"). Only the
+// panels render it (GNOME here, Swift ForecastParityTests.testLeads).
+for (const {marginHours, lead} of forecastFix.leads) {
+    test(`pure.js forecastLead - ${marginHours} h reads ${lead}`, () => {
+        assert.equal(pure.forecastLead(marginHours), lead);
+    });
+}
+
+// ── Reset countdown ─────────────────────────────────────────────────────────────
+// Every client prints it next to the same limit, so every client must split it
+// the same way: whole seconds floored, two most significant units. Labels are
+// per port - `panel` for GNOME (and Swift ResetCountdown), `compact` for the
+// status line / MCP - and both are pinned so neither can round on its own.
+const resetsFix = fixture('resets.json');
+const resetsNow = Date.parse(resetsFix.now);
+for (const c of resetsFix.cases) {
+    test(`reset countdown - ${c.name}`, () => {
+        assert.equal(pure.formatResets(c.resetsAt, resetsNow), c.panel, 'pure.js formatResets');
+        assert.equal(resetHint(c.resetsAt, resetsNow), c.compact, 'stamps.js resetHint');
+    });
+}
+
+// ── Sparkline ───────────────────────────────────────────────────────────────────
+const sparkFix = fixture('sparkline.json');
+test('pure.js sparkline - sample count is the fixture\'s', () => {
+    assert.equal(pure.SPARK_SAMPLES, sparkFix.samples);
+});
+for (const c of sparkFix.cases) {
+    test(`pure.js sparkline - ${c.name}`, () => {
+        assert.equal(pure.sparkline(c.percents), c.expected);
+    });
 }
 
 // ── Clock pace ──────────────────────────────────────────────────────────────────

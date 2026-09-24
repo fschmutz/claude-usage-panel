@@ -3,9 +3,10 @@
 // and docs/og.svg (the social card) from scripts/screenshots/data.json, driving
 // the REAL shared logic - normalizeUsage, forecast, formatForecast, poolNote,
 // formatResets, sparkline from lib/pure.js - so the pictures can't drift from
-// what the code actually renders. A fixed clock in data.json makes the output
-// byte-identical everywhere; CI regenerates and `git diff --exit-code`s it, so
-// a UI-visible contract change that forgets its screenshot goes red.
+// what the code actually renders. A fixed clock in data.json and a fixed zone
+// (UTC, set below before any Date is read) make the output byte-identical
+// everywhere; CI runs `--check`, so a UI-visible contract change that forgets
+// its screenshot goes red.
 //
 // docs/og.png (OpenGraph needs a raster) is refreshed from og.svg when
 // rsvg-convert or cairosvg is available, and skipped with a note otherwise.
@@ -18,10 +19,15 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {
-  normalizeUsage, poolNote, sparkline, formatResets, forecast,
+  normalizeUsage, poolNote, sparkline, formatResets, forecast, formatForecast,
   clockPace,
   severityClass, compactTokens, formatAccountUsage,
 } from '../../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+
+// formatForecast prints the LOCAL weekday and time, as the panel does. Pin the
+// zone so the picture does not depend on where it was rendered; Node applies a
+// runtime TZ change to every Date read after it, and nothing above reads one.
+process.env.TZ = 'UTC';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DATA = JSON.parse(
@@ -74,24 +80,6 @@ const forecastFor = (raw, card) => {
   return forecast(samples, card.resetsAt, NOW);
 };
 
-// pure.js's formatForecast prints in the LOCAL zone of the render host; the
-// generated file must not depend on where it was rendered, so this fixed-zone
-// variant applies identical logic on the UTC clock. (formatResets is
-// duration-only - zone-free - and is used directly.)
-const fmtForecastUTC = (fc) => {
-  if (!fc) return '';
-  const pace = `↗ ${fc.pctPerHour}%/h`;
-  if (!fc.exhaustsBeforeReset)
-    return fc.marginHours === null ? pace : `${pace} - lasts past reset`;
-  const d = new Date(fc.projectedFullAt);
-  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
-  const hm = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-  const lead = Math.abs(fc.marginHours);
-  const dd = Math.floor(lead / 24);
-  const hh = Math.round(lead % 24);
-  return `${pace} - full ~${day} ${hm}, ${dd > 0 ? `${dd}d${hh}h` : `${hh}h`} before reset`;
-};
-
 // ── Dropdown SVG ────────────────────────────────────────────────────────────────
 const W = 380;
 const PAD = 18;
@@ -125,7 +113,7 @@ for (const [i, card] of cards.entries()) {
   const fc = forecastFor(raw, card);
   const color = sevColor(card.severity);
   const note = poolNote(card);
-  const fcText = fmtForecastUTC(fc);
+  const fcText = formatForecast(fc);
   const spark = sparkline(raw.history);
   // Where the window's own clock stands - the caret the real cards draw under
   // the bar, from the same clockPace() the panels use.

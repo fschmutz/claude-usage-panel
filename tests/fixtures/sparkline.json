@@ -1,0 +1,82 @@
+{
+  "note": "sparkline(): the newest 12 percents as blocks ' ▁▂▃▄▅▆▇█', index round(p/100*8) with halves rounded up, clamped 0..8; fewer than 2 samples render nothing.",
+  "samples": 12,
+  "cases": [
+    {
+      "name": "empty",
+      "percents": [],
+      "expected": ""
+    },
+    {
+      "name": "one sample is not a line",
+      "percents": [
+        50
+      ],
+      "expected": ""
+    },
+    {
+      "name": "the extremes",
+      "percents": [
+        0,
+        100
+      ],
+      "expected": " █"
+    },
+    {
+      "name": "half-steps round up",
+      "percents": [
+        6.25,
+        18.75,
+        31.25,
+        43.75,
+        56.25,
+        68.75,
+        81.25,
+        93.75
+      ],
+      "expected": "▁▂▃▄▅▆▇█"
+    },
+    {
+      "name": "just under a half-step rounds down",
+      "percents": [
+        6.24,
+        18.74,
+        31.24,
+        43.74,
+        56.24,
+        68.74,
+        81.24,
+        93.74
+      ],
+      "expected": " ▁▂▃▄▅▆▇"
+    },
+    {
+      "name": "out of range clamps",
+      "percents": [
+        -20,
+        150
+      ],
+      "expected": " █"
+    },
+    {
+      "name": "only the newest 12 are drawn",
+      "percents": [
+        100,
+        100,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        50
+      ],
+      "expected": "           ▄"
+    }
+  ]
+}

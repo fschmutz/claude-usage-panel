@@ -71,6 +71,15 @@ const FORECAST_MIN_SAMPLES = 3;          // never extrapolate from 2 points
 const FORECAST_MIN_SPAN_MS = 30 * 60_000; // …or from a burst narrower than 30 min
 const FORECAST_MIN_PACE = 0.2;           // %/h below this is idle → no forecast
 
+// Round half toward +infinity, written out so every port computes the same
+// thing: Swift's default `.rounded()` sends -0.5 away from zero, and a margin
+// of whole minutes lands on an exact negative half-tenth one gap in six (3
+// min early is -0.05 h). floor(x + 0.5) also never yields -0.
+export function roundHalfUp(x, decimals = 0) {
+    const k = 10 ** decimals;
+    return Math.floor(x * k + 0.5) / k;
+}
+
 /**
  * @param {Array<[number, number]>} samples chronological [epochMs, percent]
  * @param {?string} resetsAt ISO reset time of the limit (null → no comparison)
@@ -127,13 +136,26 @@ export function forecast(samples, resetsAt, nowMs) {
     const projected = Math.round(fullMs / 60_000) * 60_000; // minute precision
     const resetMs = resetsAt ? Date.parse(resetsAt) : NaN;
     const margin = Number.isFinite(resetMs)
-        ? Math.round(((projected - resetMs) / 3600_000) * 10) / 10 : null;
+        ? roundHalfUp((projected - resetMs) / 3600_000, 1) : null;
     return {
         pctPerHour: Math.round(slope * 100) / 100,
         projectedFullAt: new Date(projected).toISOString(),
         exhaustsBeforeReset: margin !== null && margin < 0,
         marginHours: margin,
     };
+}
+
+// How far ahead of the reset a limit runs out: "1d10h", "8h", "<1h". The lead
+// is rounded to whole hours BEFORE the day split, so 47.6 h reads "2d0h", never
+// "1d24h"; under half an hour it is "<1h", never "0h before reset". Part of
+// the forecast contract (tests/fixtures/forecast.json `leads`).
+export function forecastLead(marginHours) {
+    const total = roundHalfUp(Math.abs(marginHours));
+    if (!Number.isFinite(total) || total < 1)
+        return '<1h';
+    const dd = Math.floor(total / 24);
+    const hh = total % 24;
+    return dd > 0 ? `${dd}d${hh}h` : `${hh}h`;
 }
 
 // "↗ 1.8%/h - full ~Sun 03:40, 1d10h before reset" (alarming) or
@@ -148,11 +170,7 @@ export function formatForecast(fc) {
     const d = new Date(fc.projectedFullAt);
     const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
     const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    const lead = Math.abs(fc.marginHours);
-    const dd = Math.floor(lead / 24);
-    const hh = Math.round(lead % 24);
-    const span = dd > 0 ? `${dd}d${hh}h` : `${hh}h`;
-    return `${pace} - full ~${day} ${hm}, ${span} before reset`;
+    return `${pace} - full ~${day} ${hm}, ${forecastLead(fc.marginHours)} before reset`;
 }
 
 // History entries are stored as [t, p] pairs; entries written by versions that

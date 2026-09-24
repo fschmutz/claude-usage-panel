@@ -1,0 +1,96 @@
+{
+  "now": "2026-07-01T00:00:00.000Z",
+  "note": "The reset countdown in every port: whole seconds floored, then the two most significant units. panel = GNOME formatResets and Swift ResetCountdown.text; compact = claude-code/stamps.js resetHint (status line, MCP).",
+  "cases": [
+    {
+      "name": "no reset",
+      "resetsAt": null,
+      "panel": "",
+      "compact": ""
+    },
+    {
+      "name": "an unparseable date",
+      "resetsAt": "not-a-date",
+      "panel": "",
+      "compact": ""
+    },
+    {
+      "name": "exactly now is due",
+      "resetsAt": "2026-07-01T00:00:00.000Z",
+      "panel": "Resetting…",
+      "compact": ""
+    },
+    {
+      "name": "an hour ago is due",
+      "resetsAt": "2026-06-30T23:00:00.000Z",
+      "panel": "Resetting…",
+      "compact": ""
+    },
+    {
+      "name": "half a second ahead floors to zero seconds",
+      "resetsAt": "2026-07-01T00:00:00.500Z",
+      "panel": "Resetting…",
+      "compact": ""
+    },
+    {
+      "name": "59 s ahead is 0m, not 1m",
+      "resetsAt": "2026-07-01T00:00:59.000Z",
+      "panel": "Resets in 0m",
+      "compact": "0m"
+    },
+    {
+      "name": "exactly one minute",
+      "resetsAt": "2026-07-01T00:01:00.000Z",
+      "panel": "Resets in 1m",
+      "compact": "1m"
+    },
+    {
+      "name": "59m59s stays in minutes",
+      "resetsAt": "2026-07-01T00:59:59.000Z",
+      "panel": "Resets in 59m",
+      "compact": "59m"
+    },
+    {
+      "name": "exactly one hour",
+      "resetsAt": "2026-07-01T01:00:00.000Z",
+      "panel": "Resets in 1h 00m",
+      "compact": "1h00m"
+    },
+    {
+      "name": "3h05m40s floors to 3h05m",
+      "resetsAt": "2026-07-01T03:05:40.000Z",
+      "panel": "Resets in 3h 05m",
+      "compact": "3h05m"
+    },
+    {
+      "name": "3h06m",
+      "resetsAt": "2026-07-01T03:06:00.000Z",
+      "panel": "Resets in 3h 06m",
+      "compact": "3h06m"
+    },
+    {
+      "name": "23h59m40s is not a day yet",
+      "resetsAt": "2026-07-01T23:59:40.000Z",
+      "panel": "Resets in 23h 59m",
+      "compact": "23h59m"
+    },
+    {
+      "name": "exactly one day",
+      "resetsAt": "2026-07-02T00:00:00.000Z",
+      "panel": "Resets in 1d 0h",
+      "compact": "1d0h"
+    },
+    {
+      "name": "4d2h",
+      "resetsAt": "2026-07-05T02:00:00.000Z",
+      "panel": "Resets in 4d 2h",
+      "compact": "4d2h"
+    },
+    {
+      "name": "6d23h59m keeps the hours floored",
+      "resetsAt": "2026-07-07T23:59:59.000Z",
+      "panel": "Resets in 6d 23h",
+      "compact": "6d23h"
+    }
+  ]
+}

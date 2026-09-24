@@ -217,9 +217,10 @@ final class ClockPaceParityTests: XCTestCase {
 }
 
 /// Forecast parity: the burn-rate projection against the same fixture the three
-/// JS copies assert (tests/parity.test.js). Numbers must match exactly - the
-/// fixture is designed away from rounding boundaries so double math agrees
-/// across languages.
+/// JS copies assert (tests/parity.test.js). Numbers must match exactly. Most
+/// cases sit away from rounding boundaries so double math agrees; the margin
+/// cases at 3, 15 and 57 min land ON a half-tenth tie on purpose, pinning the
+/// round-half-up rule every port writes out.
 final class ForecastParityTests: XCTestCase {
     func testMatchesSharedFixtures() throws {
         let fix = try Fixtures.load("forecast.json")
@@ -281,5 +282,23 @@ final class ForecastParityTests: XCTestCase {
                     exhaustsBeforeReset: false, marginHours: nil)),
             "↗ 4%/h")
         XCTAssertEqual(UsageForecast.format(nil), "")
+    }
+
+    func testLeads() throws {
+        for l in try Fixtures.load("forecast.json")["leads"] as! [[String: Any]] {
+            let margin = (l["marginHours"] as! NSNumber).doubleValue
+            XCTAssertEqual(UsageForecast.lead(margin), l["lead"] as? String, "lead \(margin)")
+        }
+    }
+
+    func testFormatNeverPrintsADayOf24HoursOrZeroHours() {
+        let at = { (margin: Double) in
+            UsageForecast.format(
+                Forecast(
+                    pctPerHour: 1, projectedFullAt: Date(timeIntervalSince1970: 0),
+                    exhaustsBeforeReset: true, marginHours: margin))
+        }
+        XCTAssertTrue(at(-47.6).hasSuffix(", 2d0h before reset"), at(-47.6))
+        XCTAssertTrue(at(-0.3).hasSuffix(", <1h before reset"), at(-0.3))
     }
 }

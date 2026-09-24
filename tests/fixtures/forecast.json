@@ -271,6 +271,213 @@
       ],
       "resetsAt": "2027-01-16T04:00:00.000Z",
       "expected": null
+    },
+    {
+      "name": "3 min before the reset is a half-tenth tie: rounds up to 0, no exhaustion",
+      "samples": [
+        [
+          1799989200000,
+          40
+        ],
+        [
+          1799991000000,
+          42
+        ],
+        [
+          1799992800000,
+          44
+        ],
+        [
+          1799994600000,
+          46
+        ],
+        [
+          1799996400000,
+          48
+        ],
+        [
+          1799998200000,
+          50
+        ],
+        [
+          1800000000000,
+          52
+        ]
+      ],
+      "resetsAt": "2027-01-15T20:03:00.000Z",
+      "expected": {
+        "pctPerHour": 4,
+        "projectedFullAt": "2027-01-15T20:00:00.000Z",
+        "exhaustsBeforeReset": false,
+        "marginHours": 0
+      }
+    },
+    {
+      "name": "15 min before the reset: -0.25 h rounds half up to -0.2",
+      "samples": [
+        [
+          1799989200000,
+          40
+        ],
+        [
+          1799991000000,
+          42
+        ],
+        [
+          1799992800000,
+          44
+        ],
+        [
+          1799994600000,
+          46
+        ],
+        [
+          1799996400000,
+          48
+        ],
+        [
+          1799998200000,
+          50
+        ],
+        [
+          1800000000000,
+          52
+        ]
+      ],
+      "resetsAt": "2027-01-15T20:15:00.000Z",
+      "expected": {
+        "pctPerHour": 4,
+        "projectedFullAt": "2027-01-15T20:00:00.000Z",
+        "exhaustsBeforeReset": true,
+        "marginHours": -0.2
+      }
+    },
+    {
+      "name": "57 min before the reset: -0.95 h rounds half up to -0.9, under the -1 h alert",
+      "samples": [
+        [
+          1799989200000,
+          40
+        ],
+        [
+          1799991000000,
+          42
+        ],
+        [
+          1799992800000,
+          44
+        ],
+        [
+          1799994600000,
+          46
+        ],
+        [
+          1799996400000,
+          48
+        ],
+        [
+          1799998200000,
+          50
+        ],
+        [
+          1800000000000,
+          52
+        ]
+      ],
+      "resetsAt": "2027-01-15T20:57:00.000Z",
+      "expected": {
+        "pctPerHour": 4,
+        "projectedFullAt": "2027-01-15T20:00:00.000Z",
+        "exhaustsBeforeReset": true,
+        "marginHours": -0.9
+      }
+    },
+    {
+      "name": "3 min after the reset: +0.05 h rounds up to 0.1",
+      "samples": [
+        [
+          1799989200000,
+          40
+        ],
+        [
+          1799991000000,
+          42
+        ],
+        [
+          1799992800000,
+          44
+        ],
+        [
+          1799994600000,
+          46
+        ],
+        [
+          1799996400000,
+          48
+        ],
+        [
+          1799998200000,
+          50
+        ],
+        [
+          1800000000000,
+          52
+        ]
+      ],
+      "resetsAt": "2027-01-15T19:57:00.000Z",
+      "expected": {
+        "pctPerHour": 4,
+        "projectedFullAt": "2027-01-15T20:00:00.000Z",
+        "exhaustsBeforeReset": false,
+        "marginHours": 0.1
+      }
+    }
+  ],
+  "leadNote": "formatForecast's lead: whole hours rounded half up BEFORE the day split; under half an hour is <1h",
+  "leads": [
+    {
+      "marginHours": -34.3,
+      "lead": "1d10h"
+    },
+    {
+      "marginHours": -8,
+      "lead": "8h"
+    },
+    {
+      "marginHours": -47.6,
+      "lead": "2d0h"
+    },
+    {
+      "marginHours": -23.5,
+      "lead": "1d0h"
+    },
+    {
+      "marginHours": -23.4,
+      "lead": "23h"
+    },
+    {
+      "marginHours": -24,
+      "lead": "1d0h"
+    },
+    {
+      "marginHours": -1,
+      "lead": "1h"
+    },
+    {
+      "marginHours": -0.5,
+      "lead": "1h"
+    },
+    {
+      "marginHours": -0.3,
+      "lead": "<1h"
+    },
+    {
+      "marginHours": -0.1,
+      "lead": "<1h"
+    },
+    {
+      "marginHours": -167.9,
+      "lead": "7d0h"
     }
   ]
 }

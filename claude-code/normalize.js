@@ -21,7 +21,7 @@ export function clampPercent(v) {
 // Which pool a limit draws from. The API sends `group` ("session" / "weekly");
 // payloads that predate it are grouped by the kind prefix instead.
 function groupOf(kind, group) {
-  if (group) return group;
+  if (typeof group === 'string' && group) return group;
   return String(kind).startsWith('weekly') ? 'weekly' : String(kind);
 }
 
@@ -75,19 +75,31 @@ export function normalizeExtraUsage(payload) {
   };
 }
 
+// The payload is read strictly, the way Model.swift's `as?` casts read it: a
+// field of the wrong JSON type counts as absent. Number("42") and Number(null)
+// would otherwise turn a string or a null into a reading Swift never shows
+// (tests/fixtures/normalize.json pins the malformed shapes).
+const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const str = v => (typeof v === 'string' ? v : null);
+const SEVERITIES = ['normal', 'warning', 'critical'];
+// Swift casts limits[] as [[String: Any]]: one non-object entry fails the
+// whole cast and the legacy fields are read instead.
+const isObject = v => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
 function normalizeLimit(entry) {
-  let label = kindLabel(entry.kind);
-  const model = entry.scope?.model?.display_name;
+  const kind = str(entry?.kind) ?? 'unknown';
+  let label = kindLabel(kind);
+  const model = str(entry?.scope?.model?.display_name);
   if (model) label = `${label} · ${model}`;
   return {
-    key: entry.kind + (model ? `:${model}` : ''),
+    key: kind + (model ? `:${model}` : ''),
     label,
-    group: groupOf(entry.kind, entry.group),
+    group: groupOf(kind, entry?.group),
     scoped: Boolean(model),
-    percent: clampPercent(entry.percent),
-    severity: entry.severity ?? 'normal',
-    resetsAt: entry.resets_at ?? null,
-    active: Boolean(entry.is_active),
+    percent: clampPercent(num(entry?.percent) ?? 0),
+    severity: SEVERITIES.includes(entry?.severity) ? entry.severity : 'normal',
+    resetsAt: str(entry?.resets_at),
+    active: entry?.is_active === true,
   };
 }
 
@@ -107,7 +119,8 @@ function inheritPooledResets(cards) {
 // Extract normalized limit cards from the raw usage payload. Prefers the modern
 // `limits[]` array; falls back to legacy five_hour / seven_day fields.
 export function normalizeUsage(payload) {
-  if (Array.isArray(payload?.limits) && payload.limits.length) {
+  if (Array.isArray(payload?.limits) && payload.limits.length &&
+    payload.limits.every(isObject)) {
     return inheritPooledResets(payload.limits.map(normalizeLimit)).sort((a, b) => {
       const ai = KIND_ORDER.indexOf(a.key.split(':')[0]);
       const bi = KIND_ORDER.indexOf(b.key.split(':')[0]);
@@ -115,20 +128,22 @@ export function normalizeUsage(payload) {
     });
   }
   const cards = [];
-  if (Number.isFinite(Number(payload?.five_hour?.utilization))) {
+  const five = num(payload?.five_hour?.utilization);
+  if (five !== null) {
     cards.push({
       key: 'session', label: KIND_LABELS.session,
       group: 'session', scoped: false,
-      percent: clampPercent(payload.five_hour.utilization),
-      severity: 'normal', resetsAt: payload.five_hour.resets_at ?? null, active: true,
+      percent: clampPercent(five),
+      severity: 'normal', resetsAt: str(payload.five_hour.resets_at), active: true,
     });
   }
-  if (Number.isFinite(Number(payload?.seven_day?.utilization))) {
+  const seven = num(payload?.seven_day?.utilization);
+  if (seven !== null) {
     cards.push({
       key: 'weekly_all', label: KIND_LABELS.weekly_all,
       group: 'weekly', scoped: false,
-      percent: clampPercent(payload.seven_day.utilization),
-      severity: 'normal', resetsAt: payload.seven_day.resets_at ?? null, active: false,
+      percent: clampPercent(seven),
+      severity: 'normal', resetsAt: str(payload.seven_day.resets_at), active: false,
     });
   }
   return cards;

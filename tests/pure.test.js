@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-    clampPercent, severityClass, normalizeUsage, sparkline,
+    clampPercent, severityClass, normalizeUsage, sparkline, SPARK_SAMPLES,
     formatResets, alertThreshold, poolNote,
     forecast, formatForecast, normalizeHistory, historyPercents,
     summarizeCursorSpend, summarizeCursorToday,
@@ -168,6 +168,32 @@ test('formatForecast renders the alarming and calm shapes', () => {
     });
     assert.equal(noReset, '↗ 4%/h');
     assert.equal(formatForecast(null), '');
+});
+
+test('formatForecast rounds the lead before splitting days: never "1d24h" or "0h"', () => {
+    const at = (marginHours) => formatForecast({
+        pctPerHour: 1, projectedFullAt: '2026-09-24T10:00:00.000Z',
+        exhaustsBeforeReset: true, marginHours,
+    });
+    assert.match(at(-47.6), /, 2d0h before reset$/);
+    assert.match(at(-23.6), /, 1d0h before reset$/);
+    assert.match(at(-0.3), /, <1h before reset$/);
+    assert.match(at(-0.1), /, <1h before reset$/);
+});
+
+test('sparkline draws only the newest SPARK_SAMPLES readings', () => {
+    const long = [...Array(SPARK_SAMPLES).fill(0), 100];
+    assert.equal(sparkline(long).length, SPARK_SAMPLES);
+    assert.equal(sparkline(long).at(-1), '█');
+});
+
+test('formatResets reaches every branch: minutes only, exactly an hour, due', () => {
+    const now = Date.parse('2026-07-01T00:00:00Z');
+    assert.equal(formatResets('2026-07-01T00:00:59Z', now), 'Resets in 0m');
+    assert.equal(formatResets('2026-07-01T00:59:59Z', now), 'Resets in 59m');
+    assert.equal(formatResets('2026-07-01T01:00:00Z', now), 'Resets in 1h 00m');
+    assert.equal(formatResets('2026-07-01T23:59:40Z', now), 'Resets in 23h 59m');
+    assert.equal(formatResets('2026-07-01T00:00:00.500Z', now), 'Resetting…');
 });
 
 test('normalizeHistory migrates bare percents to [0, p] pairs', () => {

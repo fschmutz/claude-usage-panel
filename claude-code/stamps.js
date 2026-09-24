@@ -1,7 +1,8 @@
 // Timestamps as the clients show them: the session-ping stamp parser and the
 // "05:30" / "yesterday 05:30" / "Tue 05:30" formatting behind every ping line,
 // plus the "3h06m" / "4d2h" reset countdown. Pure. Mirrors lib/pure.js on
-// GNOME and Swift's SessionPing; tests/fixtures/sessions.json pins the stamps.
+// GNOME and Swift's SessionPing / ResetCountdown; tests/fixtures/sessions.json
+// pins the stamps, tests/fixtures/resets.json the countdown.
 //
 // The ping stamp's offset has no colon (+0200), which Date.parse only accepts
 // through a legacy path, so it is parsed explicitly. localDay / formatClock
@@ -34,6 +35,16 @@ export function localDay(ms) {
     `${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// The local calendar day `offset` days from the day of `ms`, as a Date at local
+// noon. Days step on the calendar, never as 86_400_000 ms: across a 23 h or
+// 25 h DST day a fixed step lands on the wrong date (Mon 00:30 minus 24 h is
+// Sat across spring-forward). Noon stays clear of every transition. Mirrors
+// lib/pure.js shiftLocalDay and Swift SessionFormat.shiftDay.
+export function shiftLocalDay(ms, offset) {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset, 12);
+}
+
 export function formatClock(ms) {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -47,20 +58,24 @@ export function formatLastPing(text, nowMs) {
   const clock = formatClock(at);
   const day = localDay(at);
   if (day === localDay(nowMs)) return clock;
-  if (day === localDay(nowMs - 86_400_000)) return `yesterday ${clock}`;
+  if (day === localDay(shiftLocalDay(nowMs, -1).getTime())) return `yesterday ${clock}`;
   if (nowMs - at < 6 * 86_400_000) return `${DAY_NAMES[(new Date(at).getDay() + 6) % 7]} ${clock}`;
   return `${day} ${clock}`;
 }
 
 // "3h06m" / "4d2h" - the two most significant units; '' when past or absent.
+// Whole seconds are FLOORED exactly like the panels' "Resets in 3h 05m"
+// (lib/pure.js formatResets, Swift ResetCountdown): rounding to the nearest
+// minute put the status line a minute ahead of the panel and turned 23h59m40s
+// into "1d0h". tests/fixtures/resets.json pins every port.
 export function resetHint(resetsAt, nowMs = Date.now()) {
   if (!resetsAt) return '';
-  const ms = new Date(resetsAt).getTime() - nowMs;
-  if (!Number.isFinite(ms) || ms <= 0) return '';
-  const mins = Math.round(ms / 60_000);
-  const d = Math.floor(mins / 1440);
-  const h = Math.floor((mins % 1440) / 60);
-  const m = mins % 60;
+  let secs = Math.floor((new Date(resetsAt).getTime() - nowMs) / 1000);
+  if (!Number.isFinite(secs) || secs <= 0) return '';
+  const d = Math.floor(secs / 86400);
+  secs %= 86400;
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
   if (d > 0) return `${d}d${h}h`;
   if (h > 0) return `${h}h${String(m).padStart(2, '0')}m`;
   return `${m}m`;

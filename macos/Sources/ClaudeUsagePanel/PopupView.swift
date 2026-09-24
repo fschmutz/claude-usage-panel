@@ -2,20 +2,6 @@ import AppKit
 import ClaudeUsageCore
 import SwiftUI
 
-// MARK: - Reset-time helper
-
-private func resetsText(_ date: Date?) -> String {
-    guard let date else { return "" }
-    let delta = Int(date.timeIntervalSinceNow)
-    if delta <= 0 { return "Resetting…" }
-    let d = delta / 86400
-    let h = (delta % 86400) / 3600
-    let m = (delta % 3600) / 60
-    if d > 0 { return "Resets in \(d)d \(h)h" }
-    if h > 0 { return String(format: "Resets in %dh %02dm", h, m) }
-    return "Resets in \(m)m"
-}
-
 // MARK: - Views
 
 private struct ProgressBar: View {
@@ -67,7 +53,7 @@ private struct CardView: View {
                 // reset as the all-models card it draws from.
                 Text(
                     [
-                        resetsText(card.resetsAt), UsageNormalizer.poolNote(card),
+                        ResetCountdown.text(card.resetsAt), UsageNormalizer.poolNote(card),
                         UsageClock.format(pace),
                     ]
                     .filter { !$0.isEmpty }.joined(separator: " · ")
@@ -148,7 +134,8 @@ struct PopupView: View {
             } else {
                 ForEach(model.cards) {
                     CardView(
-                        card: $0, spark: model.spark(for: $0.id),
+                        card: $0,
+                        spark: Sparkline.render(Sparkline.percents(model.history[$0.id] ?? [])),
                         forecast: model.forecasts[$0.id], trend: model.trends[$0.id])
                 }
                 // The cards are the last good reading; this is why they are.
