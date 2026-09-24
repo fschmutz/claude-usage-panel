@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-09-24
+
 ### Fixed
 
 - **Autosave skipped sessions that never registered.** It read only
