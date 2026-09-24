@@ -9,11 +9,16 @@ import fs from 'node:fs';
 import {Buffer} from 'node:buffer';
 import path from 'node:path';
 
-import {formatClock, formatLastPing, localDay, parseStamp} from '../claude-code/stamps.js';
+import {
+  formatClock, formatLastPing, localDay, parseStamp, shiftLocalDay,
+} from '../claude-code/stamps.js';
 import {lastPingPath, projectsDir, sessionIndexPath} from '../claude-code/paths.js';
 
 const INDEX_VERSION = 1;
 const SESSION_BUDGET_BYTES = 16 << 20; // per call: a cold index warms over a few
+// A newline-less run this long is not a line (lib/sessionIndex.js CARRY_MAX):
+// it is skipped, not re-read on every call with the offset stuck before it.
+const CARRY_MAX = 1 << 20;
 const SEEN_IDS_MAX = 32;
 const SESSION_LIMIT = 5;
 
@@ -32,8 +37,11 @@ export function newSessionAcc() {
 
 export function foldSessionLine(line, acc, defaultDay) {
   if (!line) return acc;
+  // skip the parse unless the line can change something: a usage turn, or a
+  // rename (the LAST custom title wins)
   const hasUsage = line.indexOf('"usage"') >= 0;
-  if (!hasUsage && acc.sessionId && acc.cwd && acc.title) return acc;
+  const hasTitle = line.indexOf('"customTitle"') >= 0;
+  if (!hasUsage && !hasTitle && acc.sessionId && acc.cwd) return acc;
   let o;
   try {
     o = JSON.parse(line);
@@ -58,8 +66,15 @@ export function foldSessionLine(line, acc, defaultDay) {
   return acc;
 }
 
+/** The mtime an index entry records: whole seconds, in ms - the precision
+ *  every port can stat (GIO gives seconds), so an entry one port wrote
+ *  compares equal to another port's stat of the same file. */
+export function indexMtime(ms) {
+  return Math.floor(Number(ms) / 1000) * 1000;
+}
+
 export function pruneByDay(byDay, nowMs) {
-  const keep = new Set([localDay(nowMs), localDay(nowMs - 86_400_000)]);
+  const keep = new Set([localDay(nowMs), localDay(shiftLocalDay(nowMs, -1).getTime())]);
   const out = {};
   for (const [day, n] of Object.entries(byDay ?? {})) if (keep.has(day)) out[day] = n;
   return out;
@@ -140,7 +155,7 @@ function sessionCandidates(projectsDir, nowMs) {
       const file = path.join(dir, name);
       try {
         const st = fs.statSync(file);
-        if (st.mtimeMs >= cutoff) out.push({path: file, size: st.size, mtimeMs: st.mtimeMs});
+        if (st.mtimeMs >= cutoff) out.push({path: file, size: st.size, mtimeMs: indexMtime(st.mtimeMs)});
       } catch {
         // vanished between readdir and stat
       }
@@ -172,11 +187,17 @@ function foldTail(file, entry, budget, nowMs) {
     const buf = Buffer.allocUnsafe(want);
     const read = fs.readSync(fd, buf, 0, want, start);
     const lastNewline = buf.subarray(0, read).lastIndexOf(0x0a);
-    if (lastNewline < 0) return 0; // no complete line yet
-    consumed = lastNewline + 1;
-    const day = localDay(nowMs);
-    for (const line of buf.subarray(0, consumed).toString('utf8').split('\n')) {
-      foldSessionLine(line, entry, day);
+    if (lastNewline >= 0) {
+      consumed = lastNewline + 1;
+      const day = localDay(nowMs);
+      for (const line of buf.subarray(0, consumed).toString('utf8').split('\n')) {
+        foldSessionLine(line, entry, day);
+      }
+    } else if (read >= CARRY_MAX) {
+      // No complete line, and the window is already past what a line can
+      // be: consume it so the index moves on. The rest of that "line" then
+      // fails to parse, like any fragment.
+      consumed = read;
     }
   } catch {
     consumed = 0;
@@ -190,6 +211,22 @@ function foldTail(file, entry, budget, nowMs) {
   entry.offset = start + consumed;
   entry.byDay = pruneByDay(entry.byDay, nowMs);
   return consumed;
+}
+
+// Atomic, like the GNOME port's saveIndex: every client reads this file, and a
+// torn read (or a crash mid-write) would hand them all an empty index to
+// re-fold from scratch. The temp name carries the pid - several MCP servers
+// can run at once.
+function writeIndex(indexPath, index) {
+  const tmp = `${indexPath}.${process.pid}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(indexPath), {recursive: true, mode: 0o700});
+    fs.writeFileSync(tmp, JSON.stringify(index), {mode: 0o600});
+    fs.renameSync(tmp, indexPath);
+  } catch {
+    // A read-only cache dir means no cache, not a broken tool call.
+    fs.rmSync(tmp, {force: true});
+  }
 }
 
 /**
@@ -232,14 +269,7 @@ export function refreshSessions(io = {}) {
       dirty = true;
     }
   }
-  if (dirty) {
-    try {
-      fs.mkdirSync(path.dirname(indexPath), {recursive: true, mode: 0o700});
-      fs.writeFileSync(indexPath, JSON.stringify(index), {mode: 0o600});
-    } catch {
-      // A read-only cache dir means no cache, not a broken tool call.
-    }
-  }
+  if (dirty) writeIndex(indexPath, index);
   return rankSessions(Object.values(index.files), {nowMs, limit});
 }
 

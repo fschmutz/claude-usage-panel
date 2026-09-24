@@ -3,8 +3,9 @@
     "Shared contract for session pings and today's sessions, asserted by",
     "tests/sessions.test.js (lib/pure.js, claude-code/stamps.js,",
     "mcp/sessions.js) and macos SessionsParityTests (ClaudeUsageCore).",
-    "Everything is pinned in UTC: the JS suites set TZ=UTC, the Swift test passes",
-    "the UTC time zone in, because localDay/formatClock are deliberately local."
+    "Everything is pinned in UTC except `dst`: the JS suites set TZ=UTC, the Swift test passes",
+    "the UTC time zone in, because localDay/formatClock are deliberately local.",
+    "Offsets past +-18h are malformed but reachable from a hand-edited line; every port applies them as arithmetic and must not crash."
   ],
   "tz": "UTC",
   "nowMs": 1788264000000,
@@ -38,6 +39,21 @@
       "raw": "not a stamp",
       "atMs": null,
       "lastPing": ""
+    },
+    {
+      "raw": "2026-01-01T00:00:00+99:00",
+      "atMs": 1766869200000,
+      "lastPing": "2025-12-27 21:00"
+    },
+    {
+      "raw": "2026-08-31T20:00:00+18:30",
+      "atMs": 1788139800000,
+      "lastPing": "yesterday 01:30"
+    },
+    {
+      "raw": "2026-09-01T02:00:00-1830",
+      "atMs": 1788294600000,
+      "lastPing": "20:30"
     }
   ],
   "nextPing": [
@@ -97,13 +113,14 @@
       "{\"type\":\"assistant\",\"timestamp\":\"2026-09-01T10:05:00Z\",\"message\":{\"id\":\"m1\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20}}}",
       "{\"type\":\"assistant\",\"timestamp\":\"2026-08-31T23:50:00Z\",\"message\":{\"id\":\"m2\",\"usage\":{\"input_tokens\":7,\"output_tokens\":3}}}",
       "{\"type\":\"assistant\",\"message\":{\"id\":\"m3\",\"usage\":{\"output_tokens\":11}}}",
+      "{\"type\":\"custom-title\",\"customTitle\":\"my-app-renamed\",\"sessionId\":\"S1\"}",
       "{\"broken json",
       ""
     ],
     "expected": {
       "sessionId": "S1",
       "cwd": "/home/u/Git/my-app",
-      "title": "my-app",
+      "title": "my-app-renamed",
       "lastMs": 1788256800000,
       "byDay": {
         "2026-09-01": 136,
@@ -216,5 +233,156 @@
       "n": 1240000,
       "expected": "1.2M"
     }
-  ]
+  ],
+  "indexMtime": {
+    "_comment": [
+      "The mtime an index entry records: whole seconds, in ms. The index is shared,",
+      "and GIO stats whole seconds, node fractional ms, Foundation a Double."
+    ],
+    "cases": [
+      {
+        "ms": 1790248582090.5537,
+        "expected": 1790248582000
+      },
+      {
+        "ms": 1790248582000,
+        "expected": 1790248582000
+      },
+      {
+        "ms": 1790248582999.999,
+        "expected": 1790248582000
+      },
+      {
+        "ms": 999,
+        "expected": 0
+      }
+    ]
+  },
+  "projectsDir": {
+    "_comment": [
+      "Where every port reads transcripts: <config dir>/projects, the config dir",
+      "being CLAUDE_CONFIG_DIR when set and non-empty, else <home>/.claude."
+    ],
+    "cases": [
+      {
+        "env": {},
+        "home": "/home/u",
+        "expected": "/home/u/.claude/projects"
+      },
+      {
+        "env": {
+          "CLAUDE_CONFIG_DIR": "/home/u/.claude-work"
+        },
+        "home": "/home/u",
+        "expected": "/home/u/.claude-work/projects"
+      },
+      {
+        "env": {
+          "CLAUDE_CONFIG_DIR": ""
+        },
+        "home": "/home/u",
+        "expected": "/home/u/.claude/projects"
+      }
+    ]
+  },
+  "nodeIndexEntry": {
+    "_comment": [
+      "An index entry exactly as mcp/sessions.js writes it (no carry key); the",
+      "Swift port must decode it (tests/sessions.test.js pins the key set)."
+    ],
+    "entry": {
+      "sessionId": "S1",
+      "cwd": "/home/u/p",
+      "title": "P",
+      "lastMs": 1788264000000,
+      "byDay": {
+        "2026-09-01": 100
+      },
+      "ids": [
+        "m1"
+      ],
+      "offset": 180,
+      "size": 180,
+      "mtimeMs": 1788264000000
+    }
+  },
+  "dst": {
+    "_comment": [
+      "Day arithmetic across DST, run in the `tz` below (never UTC): yesterday and",
+      "the next ping step CALENDAR days, not 86_400_000 ms. 2026-10-25 is a 25 h",
+      "day in Europe/Paris, 2026-03-29 a 23 h one; a fixed 24 h step lands on the",
+      "same day or skips one. Asserted by lib/pure.js, claude-code/stamps.js,",
+      "mcp/sessions.js and Swift SessionsParityTests."
+    ],
+    "tz": "Europe/Paris",
+    "lastPing": [
+      {
+        "nowMs": 1792967400000,
+        "raw": "2026-10-24T22:00:00+0200",
+        "expected": "yesterday 22:00"
+      },
+      {
+        "nowMs": 1792967400000,
+        "raw": "2026-10-25T01:30:00+0200",
+        "expected": "01:30"
+      },
+      {
+        "nowMs": 1774823400000,
+        "raw": "2026-03-29T10:00:00+0200",
+        "expected": "yesterday 10:00"
+      },
+      {
+        "nowMs": 1774823400000,
+        "raw": "2026-03-28T23:00:00+0100",
+        "expected": "Sat 23:00"
+      }
+    ],
+    "nextPing": [
+      {
+        "nowMs": 1792881000000,
+        "times": [
+          "00:10"
+        ],
+        "days": [],
+        "expected": "Mon 00:10"
+      },
+      {
+        "nowMs": 1774737000000,
+        "times": [
+          "09:00"
+        ],
+        "days": [
+          7,
+          1
+        ],
+        "expected": "Sun 09:00"
+      }
+    ],
+    "prune": [
+      {
+        "nowMs": 1792967400000,
+        "byDay": {
+          "2026-10-23": 3,
+          "2026-10-24": 2,
+          "2026-10-25": 1
+        },
+        "expected": {
+          "2026-10-24": 2,
+          "2026-10-25": 1
+        }
+      },
+      {
+        "nowMs": 1774823400000,
+        "byDay": {
+          "2026-03-28": 3,
+          "2026-03-29": 2,
+          "2026-03-30": 1
+        },
+        "expected": {
+          "2026-03-29": 2,
+          "2026-03-30": 1
+        }
+      }
+    ]
+  }
 }

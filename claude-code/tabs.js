@@ -51,6 +51,43 @@ export function transcriptPath(projects, cwd, sessionId) {
   return path.join(projects, cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sessionId}.jsonl`);
 }
 
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CLI_JS_RE = /(^|\/)@anthropic-ai\/claude-code\/cli\.m?js$/;
+
+/** A /proc cmdline's arguments to claude, or null when it is not claude:
+ *  the native binary (`claude ...`) or an npm install run by its interpreter
+ *  (`node .../@anthropic-ai/claude-code/cli.js ...`). */
+export function claudeArgs(argv) {
+  const bin = path.basename(argv[0] ?? '');
+  if (bin === 'claude') return argv.slice(1);
+  if (/^(node|nodejs|bun)$/.test(bin) && (path.basename(argv[1] ?? '') === 'claude' || CLI_JS_RE.test(argv[1] ?? ''))) {
+    return argv.slice(2);
+  }
+  return null;
+}
+
+/** The value of a flag in `--flag V`, `--flag=V` or `-f V` form, or null.
+ *  A value is optional for some flags (`-r` alone opens the picker), so a
+ *  following argument that is itself a flag is not the value. */
+export function flagValue(args, long, short) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith(`${long}=`)) return a.slice(long.length + 1) || null;
+    if (a === long || a === short) {
+      const v = args[i + 1];
+      return v && !v.startsWith('-') ? v : null;
+    }
+  }
+  return null;
+}
+
+/** The session id a claude process resumed, or null: `--resume` also takes
+ *  a search term for the picker, which names no session. */
+export function resumeIdOf(args) {
+  const v = flagValue(args, '--resume', '-r');
+  return v && SESSION_ID_RE.test(v) ? v : null;
+}
+
 /** One line saying what launch() opened (or would): `n` sessions. */
 export function describeLaunch({how, terminal, windows, tmuxSessions}, n) {
   const where = `${windows === 1 ? 'one' : windows} ${terminal} window${windows === 1 ? '' : 's'}`;
@@ -80,7 +117,10 @@ export function sameSessions(a, b) {
  * carries on, and restates that approvals do not carry over a restart.
  */
 export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = ''}) {
-  const ago = resetHint(nowMs, savedAt) || 'moments';
+  // Under a minute the countdown floors to "0m" (or '' when not past):
+  // "(moments ago)" reads right, "(0m ago)" does not.
+  const hint = resetHint(nowMs, savedAt);
+  const ago = hint && hint !== '0m' ? hint : 'moments';
   return `Resumed by claudectl after a restart: this session was saved in snapshot ${label} ` +
     `at ${formatClock(savedAt)} (${ago} ago) and reopened at ${formatClock(nowMs)}. ` +
     'Everything that lived only in the old process is gone: background shells, Monitors, ' +
@@ -161,7 +201,7 @@ export function openTabs(io = {}) {
     try {
       const cmd = exec('ps', ['-o', 'command=', '-p', String(entry.pid)],
         {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']});
-      return /(^|\/)claude(\s|$)/.test(cmd.trim());
+      return /(^|\/)claude(\s|$)|(^|\/)@anthropic-ai\/claude-code\/cli\.m?js(\s|$)/.test(cmd.trim());
     } catch {
       return false;
     }
@@ -209,8 +249,8 @@ export function openTabs(io = {}) {
     return rows.sort((a, b) => a.startedAt - b.startedAt);
   }
 
-  /** Every live `claude` process (Linux: /proc): its resumed session id
-   *  (--resume/-r), --name, cwd, and whether it has a terminal. The registry
+  /** Every live `claude` process (Linux: /proc), native or npm-installed
+   *  (claudeArgs): its resumed session id (--resume/-r), --name, cwd, and whether it has a terminal. The registry
    *  is not the whole truth: a session launched as another session's child,
    *  or still at a startup prompt, never writes its registry file, and
    *  autosave went on reporting "unchanged" with eight of them open. */
@@ -231,11 +271,8 @@ export function openTabs(io = {}) {
       } catch {
         continue;
       }
-      if (path.basename(argv[0] ?? '') !== 'claude') continue;
-      const arg = (...flags) => {
-        const i = argv.findIndex((a) => flags.includes(a));
-        return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
-      };
+      const args = claudeArgs(argv);
+      if (!args) continue;
       let cwd = null;
       try {
         cwd = fs.readlinkSync(path.join(dir, 'cwd'));
@@ -249,7 +286,7 @@ export function openTabs(io = {}) {
       } catch {
         tty = false;
       }
-      out.push({pid: Number(pid), resumeId: arg('--resume', '-r'), name: arg('--name', '-n'), cwd, tty});
+      out.push({pid: Number(pid), resumeId: resumeIdOf(args), name: flagValue(args, '--name', '-n'), cwd, tty});
     }
     return out;
   }
@@ -261,19 +298,33 @@ export function openTabs(io = {}) {
     return claudeProcesses().filter((p) => p.tty && !p.resumeId && !registered.has(p.pid));
   }
 
-  /** The live session this process runs under (walks the parent chain), or
-   *  null - lets `list` mark it and `save --exclude-self` drop it. */
+  // The parent of a pid: /proc on Linux, `ps` elsewhere (macOS has no
+  // /proc). 0 when it cannot be read.
+  function parentPid(pid) {
+    try {
+      if (platform() === 'linux') {
+        const status = fs.readFileSync(path.join(procDir(), String(pid), 'status'), 'utf8');
+        return Number(/^PPid:\s*(\d+)/m.exec(status)?.[1] ?? 0);
+      }
+      return Number(String(exec('ps', ['-o', 'ppid=', '-p', String(pid)],
+        {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']})).trim()) || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** The live session this process runs under, or null - lets `list` mark
+   *  it and `save --exclude-self` drop it. Claude Code names it in
+   *  CLAUDE_PID for every command it runs, on every platform; without that
+   *  (a terminal of its own), walk the parent chain. */
   function selfPid(live) {
     const pids = new Set(live.map((r) => r.pid));
+    const named = Number((io.env ?? process.env).CLAUDE_PID);
+    if (pids.has(named)) return named;
     let pid = io.pid ?? process.pid;
     for (let hops = 0; pid > 1 && hops < 64; hops++) {
       if (pids.has(pid)) return pid;
-      try {
-        const status = fs.readFileSync(path.join(procDir(), String(pid), 'status'), 'utf8');
-        pid = Number(/^PPid:\s*(\d+)/m.exec(status)?.[1] ?? 0);
-      } catch {
-        return null;
-      }
+      pid = parentPid(pid);
     }
     return null;
   }
@@ -309,9 +360,12 @@ export function openTabs(io = {}) {
     const all = snapshots();
     if (!all.length) throw new Error('no snapshots - `claudectl session save` stores the running sessions');
     if (ref === undefined || ref === null) return all[0];
-    if (/^\d+$/.test(ref) && Number(ref) >= 1 && Number(ref) <= all.length) return all[Number(ref) - 1];
+    // a label is a name the user gave: an all-digit one (`save 2`) must
+    // reach its own snapshot, never the 2nd newest - purge --yes trusts this
     const exact = all.filter((s) => s.label === ref);
-    const hits = exact.length ? exact : all.filter((s) => s.label.startsWith(ref));
+    if (exact.length) return exact[0];
+    if (/^\d+$/.test(ref) && Number(ref) >= 1 && Number(ref) <= all.length) return all[Number(ref) - 1];
+    const hits = all.filter((s) => s.label.startsWith(ref));
     if (hits.length !== 1) throw new Error(`snapshot ${ref}: ${hits.length ? 'ambiguous' : 'not found'}`);
     return hits[0];
   }

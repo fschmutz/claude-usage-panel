@@ -22,6 +22,7 @@ import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import * as statusline from '../claude-code/statusline.js';
 import * as stamps from '../claude-code/stamps.js';
 import * as mcp from '../mcp/sessions.js';
+import * as paths from '../claude-code/paths.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fix = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'sessions.json'), 'utf8'));
@@ -46,6 +47,40 @@ for (const c of fix.nextPing) {
     test(`pure.js nextPing - ${c.times.join(',') || 'none'}`, () => {
         assert.equal(pure.nextPing(c.times, c.days, NOW), c.expected);
     });
+}
+
+// The DST slice runs in a zone that has one: Node re-reads TZ on assignment,
+// and the zone goes back to UTC after each test so nothing else inherits it.
+function inDstZone(t) {
+    process.env.TZ = fix.dst.tz;
+    t.after(() => {
+        process.env.TZ = 'UTC';
+    });
+}
+
+for (const [portName, port] of Object.entries(stampPorts)) {
+    for (const c of fix.dst.lastPing) {
+        test(`${portName} formatLastPing across DST - ${c.raw} at ${c.nowMs}`, (t) => {
+            inDstZone(t);
+            assert.equal(port.formatLastPing(c.raw, c.nowMs), c.expected);
+        });
+    }
+}
+
+for (const c of fix.dst.nextPing) {
+    test(`pure.js nextPing across DST - ${c.times.join(',')} at ${c.nowMs}`, (t) => {
+        inDstZone(t);
+        assert.equal(pure.nextPing(c.times, c.days, c.nowMs), c.expected);
+    });
+}
+
+for (const [portName, port] of Object.entries(foldPorts)) {
+    for (const c of fix.dst.prune) {
+        test(`${portName} pruneByDay across DST - keeps yesterday at ${c.nowMs}`, (t) => {
+            inDstZone(t);
+            assert.deepEqual(port.pruneByDay(c.byDay, c.nowMs), c.expected);
+        });
+    }
 }
 
 for (const [portName, port] of Object.entries(foldPorts)) {
@@ -74,6 +109,20 @@ for (const [portName, port] of Object.entries(foldPorts)) {
             assert.equal(port.resumeCommand({cwd: c.cwd, sessionId: c.sessionId}), c.command);
         });
     }
+}
+
+for (const [portName, port] of Object.entries(foldPorts)) {
+    for (const c of fix.indexMtime.cases) {
+        test(`${portName} indexMtime - ${c.ms}`, () => {
+            assert.equal(port.indexMtime(c.ms), c.expected);
+        });
+    }
+}
+
+for (const c of fix.projectsDir.cases) {
+    test(`paths.js projectsDir - ${JSON.stringify(c.env)}`, () => {
+        assert.equal(paths.projectsDir({env: c.env, homedir: c.home}), c.expected);
+    });
 }
 
 for (const c of fix.resume) {
@@ -203,6 +252,104 @@ test('a half-written last line is folded once the rest arrives, not twice', () =
     assert.equal(complete[0].tokens, 42);
 
     fs.rmSync(root, {recursive: true, force: true});
+});
+
+// The rename a session gets mid-way (`/rename`, a custom-title line) must win
+// over the first one, however many turns came between.
+test('the last custom title wins, after the header fields are all known', () => {
+    for (const port of [pure, mcp]) {
+        const acc = port.newSessionAcc();
+        for (const title of ['first', 'second', 'third']) {
+            port.foldSessionLine(JSON.stringify({type: 'user', sessionId: 'S', cwd: '/p'}), acc, '2026-09-01');
+            port.foldSessionLine(JSON.stringify({type: 'custom-title', customTitle: title, sessionId: 'S'}), acc, '2026-09-01');
+        }
+        assert.equal(acc.title, 'third');
+    }
+});
+
+// The entry mcp/sessions.js writes is the shape the Swift port must decode
+// (SessionsParityTests reads fix.nodeIndexEntry): pin the key set to the real
+// writer, so the fixture cannot drift from it.
+test('the Node index entry fixture has exactly the keys the MCP writer emits', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-sessions-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const project = path.join(root, 'projects', '-home-u-p');
+    fs.mkdirSync(project, {recursive: true});
+    fs.writeFileSync(path.join(project, 'S1.jsonl'), `${JSON.stringify({
+        type: 'assistant', sessionId: 'S1', cwd: '/home/u/p', timestamp: new Date(NOW).toISOString(),
+        message: {id: 'm1', usage: {input_tokens: 100}},
+    })}\n`);
+    const indexPath = path.join(root, 'index.json');
+    mcp.refreshSessions({nowMs: NOW, projects: path.join(root, 'projects'), indexPath});
+    const [entry] = Object.values(JSON.parse(fs.readFileSync(indexPath, 'utf8')).files);
+    assert.deepEqual(Object.keys(entry).sort(), Object.keys(fix.nodeIndexEntry.entry).sort());
+});
+
+test('a line longer than the budget is skipped, not re-read forever', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-sessions-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const projects = path.join(root, 'projects');
+    fs.mkdirSync(path.join(projects, '-home-u-p'), {recursive: true});
+    const transcript = path.join(projects, '-home-u-p', 'S3.jsonl');
+    const indexPath = path.join(root, 'index.json');
+    // a pasted-image user turn of 1.5 MiB, then a billed turn
+    const huge = JSON.stringify({type: 'user', sessionId: 'S3', cwd: '/home/u/p', text: 'x'.repeat(3 << 19)});
+    const turn = JSON.stringify({
+        type: 'assistant', sessionId: 'S3', cwd: '/home/u/p', timestamp: new Date(NOW).toISOString(),
+        message: {id: 'm1', usage: {input_tokens: 42}},
+    });
+    fs.writeFileSync(transcript, `${huge}\n${turn}\n`);
+    const size = fs.statSync(transcript).size;
+    let got = [];
+    for (let i = 0; i < 5 && !got.length; i++) {
+        got = mcp.refreshSessions({nowMs: NOW, projects, indexPath, budgetBytes: 1 << 20});
+    }
+    const entry = JSON.parse(fs.readFileSync(indexPath, 'utf8')).files[transcript];
+    assert.equal(entry.offset, size, 'the offset reached the end of the file');
+    assert.equal(got[0]?.tokens, 42, 'the turn after the long line is counted');
+});
+
+test('the shared index is replaced atomically, never truncated in place', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-sessions-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const project = path.join(root, 'projects', '-home-u-p');
+    fs.mkdirSync(project, {recursive: true});
+    const transcript = path.join(project, 'S4.jsonl');
+    const indexPath = path.join(root, 'index.json');
+    fs.writeFileSync(transcript, `${JSON.stringify({type: 'user', sessionId: 'S4', cwd: '/p'})}\n`);
+    fs.writeFileSync(indexPath, JSON.stringify({version: 1, files: {}}));
+    // a reader holding the old file must keep seeing a whole index: the new
+    // one arrives by rename (a new inode), not by rewriting the old in place
+    const before = fs.statSync(indexPath).ino;
+    const held = fs.openSync(indexPath, 'r');
+    t.after(() => fs.closeSync(held));
+    mcp.refreshSessions({nowMs: NOW, projects: path.join(root, 'projects'), indexPath});
+    assert.notEqual(fs.statSync(indexPath).ino, before);
+    assert.deepEqual(JSON.parse(fs.readFileSync(held, 'utf8')), {version: 1, files: {}});
+    assert.equal(fs.statSync(indexPath).mode & 0o777, 0o600);
+    assert.deepEqual(fs.readdirSync(root).sort(), ['index.json', 'projects'], 'no temp file left behind');
+});
+
+// An entry another port wrote (GIO: whole-second mtimes) must be taken as
+// up to date by this one, or each port re-folds and rewrites the whole index
+// after the other on every refresh.
+test('an index entry stamped at whole seconds is not re-folded or rewritten', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-sessions-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const projects = path.join(root, 'projects');
+    fs.mkdirSync(path.join(projects, '-home-u-p'), {recursive: true});
+    const transcript = path.join(projects, '-home-u-p', 'S5.jsonl');
+    fs.writeFileSync(transcript, `${JSON.stringify({type: 'user', sessionId: 'S5', cwd: '/p'})}\n`);
+    // a sub-second mtime, as every real file system hands node
+    fs.utimesSync(transcript, NOW / 1000, NOW / 1000 + 0.5371);
+    const st = fs.statSync(transcript);
+    const indexPath = path.join(root, 'index.json');
+    const entry = {...pure.newSessionAcc(), sessionId: 'S5', cwd: '/p', offset: st.size,
+        size: st.size, mtimeMs: Math.floor(st.mtimeMs / 1000) * 1000};
+    fs.writeFileSync(indexPath, JSON.stringify({version: 1, files: {[transcript]: entry}}));
+    const before = fs.statSync(indexPath).ino;
+    mcp.refreshSessions({nowMs: NOW, projects, indexPath});
+    assert.equal(fs.statSync(indexPath).ino, before, 'the index was rewritten');
 });
 
 // ── Status line segments ────────────────────────────────────────────────────

@@ -7,8 +7,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {AUTO_PREFIX, isValidLabel, openTabs, sameSessions, stampLabel, transcriptPath} from '../claude-code/tabs.js';
-import {main} from '../claude-code/session-cli.js';
+import {
+    AUTO_PREFIX, flagValue, isValidLabel, openTabs, resumePrompt, sameSessions, stampLabel, transcriptPath,
+} from '../claude-code/tabs.js';
+import {HELP, main} from '../claude-code/session-cli.js';
 import {tabsDir} from '../claude-code/paths.js';
 import {TMUX_SESSION} from '../claude-code/terminals.js';
 import {binDir, sandboxHome} from './helpers.js';
@@ -110,6 +112,34 @@ test('selfPid finds the session this process runs under', (t) => {
     assert.equal(tabs.selfPid(tabs.liveSessions()), B.pid);
 });
 
+test('selfPid on macOS: CLAUDE_PID names the session, else ps walks the parents', (t) => {
+    // no /proc at all: the walk used to stop at the first read and return null,
+    // so `save --exclude-self` saved the caller and `list` never marked it
+    const io = world(t, [A, B]);
+    Object.assign(io, {platform: 'darwin', procDir: path.join(io.home, 'no-proc'), env: {CLAUDE_PID: String(B.pid)}});
+    io.exec = (cmd, args) => (args[0] === '-o' && args[1] === 'command=' ? 'claude\n' : '');
+    const tabs = openTabs(io);
+    const live = tabs.liveSessions();
+    assert.equal(tabs.selfPid(live), B.pid);
+    assert.deepEqual(tabs.save('x', {excludeSelf: true}).sessions.map((s) => s.name), ['API']);
+    // no CLAUDE_PID (a terminal of its own): `ps -o ppid=` walks 9999 -> 4242 -> A
+    io.env = {};
+    const parents = {9999: 4242, 4242: A.pid};
+    io.exec = (cmd, args) => {
+        if (args[1] === 'command=') return 'claude\n';
+        if (args[1] === 'ppid=') return `  ${parents[args[3]] ?? 1}\n`;
+        return '';
+    };
+    assert.equal(openTabs(io).selfPid(live), A.pid);
+});
+
+test('selfPid: a CLAUDE_PID that is not a live session falls back to the walk', (t) => {
+    const io = world(t, [A, B], {selfParent: B.pid});
+    io.env = {CLAUDE_PID: '31337'};
+    const tabs = openTabs(io);
+    assert.equal(tabs.selfPid(tabs.liveSessions()), B.pid);
+});
+
 test('no registry dir means no live sessions, not an error', (t) => {
     const io = sandboxHome(t);
     assert.deepEqual(openTabs(io).liveSessions(), []);
@@ -183,6 +213,15 @@ test('resolve: newest by default, exact label, unique prefix, 1-based index', (t
     assert.equal(tabs.resolve('3').label, 'alpha');
     assert.throws(() => tabs.resolve('zz'), /not found/);
     assert.throws(() => openTabs(world(t, [])).resolve(), /no snapshots/);
+});
+
+test('resolve: an all-digit label is its own snapshot before it is an index', (t) => {
+    const io = world(t, [A]);
+    const tabs = openTabs(io);
+    for (const label of ['2', 'mid', 'newest']) tabs.save(label);
+    assert.equal(tabs.resolve('2').label, '2');
+    assert.equal(tabs.resolve('3').label, '2', 'a number that is no label is still an index');
+    assert.equal(tabs.resolve('1').label, 'newest');
 });
 
 test('autosave writes only when the set changed, and keeps the newest N autos', (t) => {
@@ -266,6 +305,33 @@ test('unregistered `claude --resume` sessions are listed and autosaved', (t) => 
     const r = openTabs(io).autosave();
     assert.deepEqual(r.saved.sessions.map((s) => s.name), ['API', 'WEB']);
     assert.deepEqual(r.missed, []);
+});
+
+test('claude argv: --resume=ID, a flag after -r, a picker search term, an npm install', (t) => {
+    const io = world(t, []);
+    const cwd = path.join(io.home, 'repos', 'WEB');
+    fs.mkdirSync(cwd, {recursive: true});
+    const npm = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
+    addProcess(io, {pid: 910, argv: ['claude', `--resume=${A.id}`, '--name=API'], cwd});
+    addProcess(io, {pid: 911, argv: ['claude', '-r', '--dangerously-skip-permissions'], cwd});
+    addProcess(io, {pid: 912, argv: ['claude', '--resume', 'login bug'], cwd});
+    addProcess(io, {pid: 913, argv: ['node', npm, '--resume', B.id, '-n', 'WEB'], cwd});
+    addProcess(io, {pid: 914, argv: ['/usr/bin/node', npm], cwd});
+    addProcess(io, {pid: 915, argv: ['node', '/srv/app/cli.js', '--resume', B.id], cwd});
+    const tabs = openTabs(io);
+    // a flag is never a session id, and a search term names no session
+    assert.deepEqual(tabs.liveSessions().map((r) => [r.name, r.session_id, r.pid]),
+        [['API', A.id, 910], ['WEB', B.id, 913]]);
+    // what cannot be resumed by id is reported, the npm install included
+    assert.deepEqual(tabs.unaccounted().map((p) => p.pid).sort(), [911, 912, 914]);
+});
+
+test('flagValue: an optional value is absent when a flag follows', () => {
+    assert.equal(flagValue(['-r', '--verbose'], '--resume', '-r'), null);
+    assert.equal(flagValue(['--name', 'x', '-r'], '--resume', '-r'), null);
+    assert.equal(flagValue(['--name=a b'], '--name', '-n'), 'a b');
+    assert.equal(flagValue(['-n', 'API'], '--name', '-n'), 'API');
+    assert.equal(flagValue(['--resume='], '--resume', '-r'), null);
 });
 
 test('autosave FAILS on a terminal claude it cannot identify, and says which', async (t) => {
@@ -445,4 +511,21 @@ test('the GNOME summary picks the newest snapshot the CLI lists first', async (t
     assert.equal(summary.newest.label, tabs.snapshots()[0].label);
     assert.equal(summary.newest.label, 'alpha');
     assert.deepEqual(summarizeSnapshots([]), {count: 0, autos: 0, newest: null});
+});
+
+test('HELP names every step pickTerminal takes, in its order', () => {
+    // terminals.js pickTerminal: setting, $TERMINAL, desktop default, first installed
+    assert.match(HELP.replace(/\s+/g, ' '),
+        /terminal-command`, then \$TERMINAL, then the desktop's default terminal, then the first one installed/);
+});
+
+test('the resume prompt says "moments ago" under a minute, never "0m ago"', () => {
+    const at = 1_790_000_000_000;
+    for (const gap of [0, 5_000, 30_000, 59_999]) {
+        const p = resumePrompt({label: 'l', savedAt: at, nowMs: at + gap});
+        assert.match(p, /\(moments ago\)/, `gap ${gap} ms`);
+        assert.doesNotMatch(p, /0m ago/, `gap ${gap} ms`);
+    }
+    assert.match(resumePrompt({label: 'l', savedAt: at, nowMs: at + 60_000}), /\(1m ago\)/);
+    assert.match(resumePrompt({label: 'l', savedAt: at, nowMs: at + 3_780_000}), /\(1h03m ago\)/);
 });

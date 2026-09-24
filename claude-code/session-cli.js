@@ -1,7 +1,7 @@
 // `claudectl session`: the command-line face of claude-code/tabs.js. Snapshot
 // every running Claude Code session, list and purge the snapshots, and reopen
-// one as tabs of a single terminal window, each in its own directory resuming
-// its own session. claudectl.js dispatches here.
+// one in the same windows and tabs, each in its own directory resuming its
+// own session. claudectl.js dispatches here.
 
 import os from 'node:os';
 
@@ -27,8 +27,9 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
 SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
 skips a session that is still running (--force to try anyway) and one whose
 directory or transcript is gone. It opens the terminal the panels use (GNOME
-preference \`terminal-command\`, then $TERMINAL, then the first one installed;
-macOS: the app's Terminal/iTerm choice), laid out as saved: the same
+preference \`terminal-command\`, then $TERMINAL, then the desktop's default
+terminal, then the first one installed; macOS: the app's Terminal/iTerm
+choice), laid out as saved: the same
 windows, the same tabs in order. iTerm, gnome-terminal and xfce4-terminal get
 native tabs; any other terminal gets one tmux session per saved window
 (claudectl, claudectl-2, ...), each in a window of its own, or without tmux

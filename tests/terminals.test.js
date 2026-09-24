@@ -6,6 +6,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import * as gnome from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
@@ -15,7 +16,7 @@ import {
     terminalForDesktopId, tmuxCalls, tmuxSessionNames, windowGroups,
 } from '../claude-code/terminals.js';
 import {onPath, toolPath} from '../claude-code/tools.js';
-import {binDir, sandboxHome} from './helpers.js';
+import {binDir, run, sandboxHome} from './helpers.js';
 
 const rows = [
     {name: 'API', cwd: '/r/api', session_id: 'id-a'},
@@ -29,6 +30,26 @@ test('TERMINALS and terminalArgv match the GNOME port entry for entry', () => {
     for (const bin of [...gnome.TERMINALS.map((t) => t.bin), '/usr/bin/kitty', 'my-term', '']) {
         assert.deepEqual(terminalArgv(bin, '/r/a b', 'cmd x'), gnome.terminalArgv(bin, '/r/a b', 'cmd x'), bin);
     }
+});
+
+// The cwd of a -e terminal reaches `bash -lc` inside a `cd` string. It comes
+// from a transcript or a snapshot file, so a space must not split it and
+// `$(...)` / `;` / a quote must not run: bash has to land in exactly that dir.
+test('xterm and x-terminal-emulator hand bash -lc the cwd as ONE literal word, in both ports', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-term-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const dir = path.join(root, "a b;touch PWNED_SEMI $(touch PWNED_SUB) it's");
+    fs.mkdirSync(dir);
+    for (const port of [{terminalArgv}, gnome]) {
+        for (const bin of ['xterm', 'x-terminal-emulator']) {
+            const argv = port.terminalArgv(bin, dir, 'pwd');
+            assert.deepEqual(argv.slice(0, 4), [bin, '-e', 'bash', '-lc'], bin);
+            const r = run('bash', ['-c', argv[4]], {cwd: root});
+            assert.equal(r.status, 0, `${bin}: ${r.stderr}`);
+            assert.equal(r.stdout.trim(), dir, bin);
+        }
+    }
+    assert.deepEqual(fs.readdirSync(root), [path.basename(dir)], 'nothing injected ran');
 });
 
 test('the tab command resumes by name then leaves a shell, like the panel click', () => {
@@ -316,6 +337,22 @@ test('sessionFreeEnv drops what names the calling Claude session, keeps configur
     assert.deepEqual(sessionFreeEnv({...inherited, ...config}), config);
     // a future variable of the same families is dropped too
     assert.deepEqual(sessionFreeEnv({CLAUDE_CODE_SESSION_KIND: 'x', CLAUDE_CODE_MESSAGING_V2: 'y'}), {});
+});
+
+test('sessionFreeEnv drops what Claude injects into its tool shells, only under a Claude shell', () => {
+    // a Claude Code tool shell on 2026-09-24: none of these is in the claude
+    // process's own environment, so none is the user's
+    const injected = {
+        GIT_EDITOR: 'true', AI_AGENT: 'claude-code_2-1-281_agent', COREPACK_ENABLE_AUTO_PIN: '0',
+        NoDefaultCurrentDirectoryInExePath: '1',
+    };
+    const config = {PATH: '/usr/bin', HOME: '/h'};
+    assert.deepEqual(sessionFreeEnv({CLAUDECODE: '1', ...injected, ...config}), config);
+    // the user's own values survive, under Claude or not
+    const own = {...config, GIT_EDITOR: 'vim', AI_AGENT: 'mine', COREPACK_ENABLE_AUTO_PIN: '1'};
+    assert.deepEqual(sessionFreeEnv({CLAUDECODE: '1', ...own}), own);
+    // outside a Claude shell nothing is guessed away, not even GIT_EDITOR=true
+    assert.deepEqual(sessionFreeEnv({...injected, ...config}), {...injected, ...config});
 });
 
 test('the resume prompt names the peers, and who shares a working tree', async () => {

@@ -1,7 +1,7 @@
 // Pure logic - no GJS/gi imports, so it is unit-testable under plain `node`.
 // Re-exported by lib/pure.js; import from there.
 
-import {formatClock, localDay, parseStamp} from './pings.js';
+import {formatClock, localDay, parseStamp, shiftLocalDay} from './pings.js';
 
 // ── Recent Claude Code sessions ─────────────────────────────────────────────
 // Rank today's sessions by the tokens they actually spent, so the dropdown's
@@ -45,9 +45,12 @@ export function foldSessionLine(line, acc, defaultDay) {
     // Most lines of a long transcript are user text and tool results with no
     // usage block. Once the header fields are known, a substring probe skips
     // the JSON.parse for all of them - that is what makes a 60 MB transcript
-    // affordable to scan at all.
+    // affordable to scan at all. A rename line is still parsed: the LAST
+    // custom title wins, and a session that was never named must not pay a
+    // parse per line for a title it will never get.
     const hasUsage = line.indexOf('"usage"') >= 0;
-    if (!hasUsage && acc.sessionId && acc.cwd && acc.title)
+    const hasTitle = line.indexOf('"customTitle"') >= 0;
+    if (!hasUsage && !hasTitle && acc.sessionId && acc.cwd)
         return acc;
     let o;
     try {
@@ -80,10 +83,20 @@ export function foldSessionLine(line, acc, defaultDay) {
     return acc;
 }
 
+/** The mtime an index entry records for a file: whole seconds, in ms. Every
+ *  port stats at a different precision (GIO whole seconds, node fractional
+ *  ms, Foundation a Double), and the entry is shared - an entry one port
+ *  wrote must compare equal to the other ports' stat of the same file, or
+ *  each re-folds and rewrites the whole index after the other. */
+export function indexMtime(ms) {
+    return Math.floor(Number(ms) / 1000) * 1000;
+}
+
 /** Drop every day but the two the UI can show, so the on-disk index cannot grow
- *  without bound as sessions are resumed across weeks. */
+ *  without bound as sessions are resumed across weeks. Yesterday is a calendar
+ *  step: 24 h before 23:30 on a 25 h fall-back day is still that same day. */
 export function pruneByDay(byDay, nowMs) {
-    const keep = new Set([localDay(nowMs), localDay(nowMs - 86_400_000)]);
+    const keep = new Set([localDay(nowMs), localDay(shiftLocalDay(nowMs, -1).getTime())]);
     const out = {};
     for (const [day, n] of Object.entries(byDay ?? {})) {
         if (keep.has(day))
@@ -183,9 +196,9 @@ export const TERMINALS = [
     {bin: 'tilix', desktop: ['com.gexperts.Tilix.desktop'], argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
     {bin: 'xfce4-terminal', desktop: ['xfce4-terminal.desktop'],
         argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
-    {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+    {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
     {bin: 'xterm', desktop: ['xterm.desktop', 'debian-xterm.desktop'],
-        argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+        argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
     // The Default Terminal spec launcher: whatever the desktop's default is,
     // even one we have no entry for. Last, so plain autodetection prefers a
     // terminal we can drive directly.

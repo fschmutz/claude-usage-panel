@@ -36,21 +36,23 @@ public enum SessionPingStatus {
         comps.second = Int(group(6) ?? "")
 
         var calendar = Calendar(identifier: .gregorian)
-        if let zone = group(7) {
-            if zone == "Z" {
-                calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-            } else {
-                let digits = zone.dropFirst().replacingOccurrences(of: ":", with: "")
-                let hours = Int(digits.prefix(2)) ?? 0
-                let minutes = Int(digits.suffix(2)) ?? 0
-                let sign = zone.hasPrefix("-") ? -1 : 1
-                calendar.timeZone = TimeZone(secondsFromGMT: sign * (hours * 3600 + minutes * 60))!
-            }
-        } else {
+        guard let zone = group(7) else {
             // No offset: local time, which is what `date` would have printed.
             calendar.timeZone = .current
+            return calendar.date(from: comps)
         }
-        return calendar.date(from: comps)
+        // The wall clock read as UTC, then the offset applied as arithmetic,
+        // like the JS ports. Never through TimeZone(secondsFromGMT:): it is
+        // nil past +-18h, and the pattern lets "+99:00" from a hand-edited
+        // line through - a force-unwrap there crashed every scan.
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? calendar.timeZone
+        guard let utc = calendar.date(from: comps) else { return nil }
+        if zone == "Z" { return utc }
+        let digits = zone.dropFirst().replacingOccurrences(of: ":", with: "")
+        let hours = Int(digits.prefix(2)) ?? 0
+        let minutes = Int(digits.suffix(2)) ?? 0
+        let sign = zone.hasPrefix("-") ? -1 : 1
+        return utc.addingTimeInterval(-Double(sign * (hours * 3600 + minutes * 60)))
     }
 
     /// Monday first, `date +%u` order - the one copy every UI reads.
@@ -65,7 +67,7 @@ public enum SessionPingStatus {
         let clock = SessionFormat.clock(at, zone: zone)
         let day = SessionFormat.day(at, zone: zone)
         if day == SessionFormat.day(now, zone: zone) { return clock }
-        if day == SessionFormat.day(now.addingTimeInterval(-86400), zone: zone) {
+        if day == SessionFormat.day(SessionFormat.shiftDay(now, by: -1, zone: zone), zone: zone) {
             return "yesterday \(clock)"
         }
         if now.timeIntervalSince(at) < 6 * 86400 {
@@ -88,7 +90,7 @@ public enum SessionPingStatus {
         cal.timeZone = zone
         let nowMinute = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
         for ahead in 0..<8 {
-            let day = now.addingTimeInterval(Double(ahead) * 86400)
+            let day = SessionFormat.shiftDay(now, by: ahead, zone: zone)
             let weekday = ((cal.component(.weekday, from: day) + 5) % 7) + 1  // 1 = Monday
             guard wanted.contains(weekday) else { continue }
             for minute in minutes {
@@ -108,6 +110,20 @@ public enum SessionFormat {
         cal.timeZone = zone
         let c = cal.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    /// Local noon of the calendar day `offset` days from the day of `date`.
+    /// Days step on the calendar, never as 86400 s: across a 23 h or 25 h DST
+    /// day a fixed step lands on the wrong date (Sat 23:30 + 24 h is Mon 00:30
+    /// across spring-forward). Noon stays clear of every transition. Mirrors
+    /// lib/pure.js shiftLocalDay.
+    public static func shiftDay(_ date: Date, by offset: Int, zone: TimeZone = .current) -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
+        var c = cal.dateComponents([.year, .month, .day], from: date)
+        c.hour = 12
+        let noon = cal.date(from: c) ?? date
+        return cal.date(byAdding: .day, value: offset, to: noon) ?? noon
     }
 
     /// Local wall-clock HH:MM.
@@ -142,15 +158,12 @@ public struct SessionAcc: Codable, Equatable, Sendable {
     public var ids: [String]
     /// Bytes of the transcript already folded (files are append-only).
     public var offset: Int
-    /// Node-port compatibility only: the shared index file carries it, this
-    /// port never reads or writes anything but the empty string.
-    public var carry: String
     public var size: Int?
     public var mtimeMs: Double?
 
     public init(
         sessionId: String? = nil, cwd: String? = nil, title: String? = nil, lastMs: Double = 0,
-        byDay: [String: Int] = [:], ids: [String] = [], offset: Int = 0, carry: String = "",
+        byDay: [String: Int] = [:], ids: [String] = [], offset: Int = 0,
         size: Int? = nil, mtimeMs: Double? = nil
     ) {
         self.sessionId = sessionId
@@ -160,9 +173,41 @@ public struct SessionAcc: Codable, Equatable, Sendable {
         self.byDay = byDay
         self.ids = ids
         self.offset = offset
-        self.carry = carry
         self.size = size
         self.mtimeMs = mtimeMs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionId, cwd, title, lastMs, byDay, ids, offset, size, mtimeMs
+    }
+
+    /// Tolerant: the index is written by every port, and the JS ones read a
+    /// missing counter as 0 / empty. A synthesized decoder instead throws on
+    /// any missing key, and one entry it cannot read makes the whole shared
+    /// index "empty" - re-folded from byte 0, then overwritten for everyone.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sessionId = try c.decodeIfPresent(String.self, forKey: .sessionId)
+        cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        lastMs = try c.decodeIfPresent(Double.self, forKey: .lastMs) ?? 0
+        byDay = try c.decodeIfPresent([String: Int].self, forKey: .byDay) ?? [:]
+        ids = try c.decodeIfPresent([String].self, forKey: .ids) ?? []
+        offset = try c.decodeIfPresent(Int.self, forKey: .offset) ?? 0
+        size = try c.decodeIfPresent(Int.self, forKey: .size)
+        mtimeMs = try c.decodeIfPresent(Double.self, forKey: .mtimeMs)
+    }
+}
+
+/// Where Claude Code keeps the transcripts: <config dir>/projects, the config
+/// dir being $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude - the
+/// same rule as the node ports (claude-code/paths.js) and GNOME
+/// (lib/sessionIndex.js), pinned by tests/fixtures/sessions.json.
+public enum SessionPaths {
+    public static func projectsDir(environment: [String: String], home: String) -> String {
+        let config = environment["CLAUDE_CONFIG_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+        let base = config ?? (home as NSString).appendingPathComponent(".claude")
+        return (base as NSString).appendingPathComponent("projects")
     }
 }
 
@@ -198,8 +243,10 @@ public enum SessionIndexer {
         // Most lines of a long transcript carry no usage block. Once the header
         // fields are known, this substring probe skips parsing all of them -
         // that is what makes a 60 MB transcript affordable to scan at all.
+        // A rename line is still parsed: the LAST custom title wins.
         let hasUsage = line.contains("\"usage\"")
-        if !hasUsage, acc.sessionId != nil, acc.cwd != nil, acc.title != nil { return }
+        let hasTitle = line.contains("\"customTitle\"")
+        if !hasUsage, !hasTitle, acc.sessionId != nil, acc.cwd != nil { return }
         guard let data = line.data(using: .utf8),
             let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
@@ -224,6 +271,28 @@ public enum SessionIndexer {
         acc.byDay[day, default: 0] += turnTokens(usage)
     }
 
+    /// The mtime an index entry records: whole seconds, in ms. The entry is
+    /// shared, and GIO stats whole seconds - an entry any port wrote must
+    /// compare equal to this port's stat of the same file.
+    public static func indexMtime(_ ms: Double) -> Double {
+        (ms / 1000).rounded(.down) * 1000
+    }
+
+    /// A newline-less run this long is not a line (lib/sessionIndex.js
+    /// CARRY_MAX, mcp/sessions.js): it is skipped, never re-read forever.
+    public static let carryMax = 1 << 20
+
+    /// How many bytes of a read window to consume: through its last newline
+    /// (the tail may be a half-written line, read again next time), or the
+    /// whole window when it holds no newline yet is already past what a line
+    /// can be - otherwise the offset would stay before it on every pass.
+    public static func consumable(_ window: Data) -> Int {
+        if let cut = window.lastIndex(of: 0x0a) {
+            return window.distance(from: window.startIndex, to: cut) + 1
+        }
+        return window.count >= carryMax ? window.count : 0
+    }
+
     /// Keep only the days the UI can show, so the index cannot grow without
     /// bound as sessions are resumed across weeks.
     public static func pruneByDay(_ byDay: [String: Int], now: Date, zone: TimeZone = .current)
@@ -231,7 +300,7 @@ public enum SessionIndexer {
     {
         let keep: Set<String> = [
             SessionFormat.day(now, zone: zone),
-            SessionFormat.day(now.addingTimeInterval(-86400), zone: zone),
+            SessionFormat.day(SessionFormat.shiftDay(now, by: -1, zone: zone), zone: zone),
         ]
         return byDay.filter { keep.contains($0.key) }
     }

@@ -55,9 +55,9 @@ export const TERMINALS = [
   {bin: 'tilix', desktop: ['com.gexperts.Tilix.desktop'], argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
   {bin: 'xfce4-terminal', desktop: ['xfce4-terminal.desktop'],
     argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
-  {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+  {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
   {bin: 'xterm', desktop: ['xterm.desktop', 'debian-xterm.desktop'],
-    argv: (d, c) => ['-e', 'bash', '-lc', `cd ${d} && ${c}`]},
+    argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
   {bin: 'xdg-terminal-exec', desktop: [], argv: (d, c) => [`--dir=${d}`, '--', 'bash', '-lc', c]},
 ];
 
@@ -254,9 +254,26 @@ export function launchSteps(rows, terminal, {
 const SESSION_ENV =
   /^(CLAUDECODE|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_CODE_(CHILD_SESSION|SESSION_[A-Z0-9_]+|MESSAGING_[A-Z0-9_]+|ENTRYPOINT|EXECPATH))$/;
 
+// What Claude Code sets for its tool shells ON TOP of the session identity:
+// a no-op git editor (a tool cannot answer one), an agent marker, and two
+// tool-behaviour switches. None is in the claude process's own environment,
+// so none is user configuration - but every name is one a user may well set
+// themselves, so each is dropped only under a Claude shell (CLAUDECODE set)
+// AND only with the exact value Claude injects. Left in, the `exec "$SHELL"
+// -i` each reopened tab ends on opened `true` as the editor of every plain
+// `git commit` and told tools the human was an agent.
+const INJECTED_ENV = {
+  GIT_EDITOR: (v) => v === 'true',
+  AI_AGENT: (v) => /^claude-code/.test(v),
+  COREPACK_ENABLE_AUTO_PIN: (v) => v === '0',
+  NoDefaultCurrentDirectoryInExePath: (v) => v === '1',
+};
+
 /** `env` without the calling Claude session's own variables. */
 export function sessionFreeEnv(env) {
-  return Object.fromEntries(Object.entries(env).filter(([k]) => !SESSION_ENV.test(k)));
+  const underClaude = Boolean(env.CLAUDECODE);
+  return Object.fromEntries(Object.entries(env).filter(([k, v]) =>
+    !SESSION_ENV.test(k) && !(underClaude && INJECTED_ENV[k]?.(String(v)))));
 }
 
 // dconf prints a GVariant: 'ghostty' (quoted), or nothing when unset.

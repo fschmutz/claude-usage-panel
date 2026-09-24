@@ -5,7 +5,7 @@ import Foundation
 // the node ports maintain (lib/sessionIndex.js, mcp/server.js), and the same
 // resume command - opened here in Terminal or iTerm instead of a Linux emulator.
 //
-// The transcripts under ~/.claude/projects are append-only and reach tens of
+// The transcripts under <config dir>/projects are append-only and reach tens of
 // megabytes each, so each file is folded once and thereafter only from the byte
 // offset it was folded to. A per-refresh byte budget caps one pass; `pending`
 // says the numbers are still a floor and the next pass continues.
@@ -30,8 +30,13 @@ enum SessionStore {
         return base.appendingPathComponent("claude-usage-panel/sessions.json")
     }
 
+    /// <config dir>/projects: follows CLAUDE_CONFIG_DIR like AccountStore and
+    /// the node ports, which index the same tree into the same file.
     static var projectsURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")
+        URL(
+            fileURLWithPath: SessionPaths.projectsDir(
+                environment: ProcessInfo.processInfo.environment,
+                home: FileManager.default.homeDirectoryForCurrentUser.path))
     }
 
     /// Where scripts/session-ping.sh records its last successful ping - the
@@ -94,7 +99,7 @@ enum SessionStore {
                     Candidate(
                         path: file.path,
                         size: (attrs[.size] as? NSNumber)?.intValue ?? 0,
-                        mtimeMs: modified.timeIntervalSince1970 * 1000))
+                        mtimeMs: SessionIndexer.indexMtime(modified.timeIntervalSince1970 * 1000)))
             }
         }
         return out
@@ -115,12 +120,13 @@ enum SessionStore {
         }
         defer { try? handle.close() }
         guard (try? handle.seek(toOffset: UInt64(start))) != nil,
-            let data = try? handle.read(upToCount: want),
-            let cut = data.lastIndex(of: 0x0a)
+            let data = try? handle.read(upToCount: want)
         else { return 0 }
-
-        let consumed = data.distance(from: data.startIndex, to: cut) + 1
-        let text = String(decoding: data[data.startIndex..<data.index(after: cut)], as: UTF8.self)
+        // Through the last newline; a newline-less window past what a line
+        // can be is consumed whole, so the offset never sticks before it.
+        let consumed = SessionIndexer.consumable(data)
+        guard consumed > 0 else { return 0 }
+        let text = String(decoding: data.prefix(consumed), as: UTF8.self)
         let day = SessionFormat.day(now)
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             SessionIndexer.fold(line: String(line), into: &acc, defaultDay: day)

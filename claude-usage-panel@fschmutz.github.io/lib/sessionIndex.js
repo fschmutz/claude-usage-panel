@@ -1,6 +1,6 @@
 // Which Claude Code sessions spent the plan today, and where to resume them.
 //
-// The raw material is ~/.claude/projects/<project>/<session-id>.jsonl - append-
+// The raw material is <config dir>/projects/<project>/<session-id>.jsonl - append-
 // only transcripts that reach tens of megabytes each (160 MB touched in one day
 // is normal). Re-reading them on every dropdown open would hitch the shell, so
 // this keeps an incremental index in the cache directory: each file is folded
@@ -16,7 +16,8 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
 import {readJSON, writeText} from './fs.js';
-import {foldSessionLine, localDay, newSessionAcc, pruneByDay, rankSessions} from './pure.js';
+import {configDir} from './paths.js';
+import {foldSessionLine, indexMtime, localDay, newSessionAcc, pruneByDay, rankSessions} from './pure.js';
 
 const CHUNK_BYTES = 1 << 20; // 1 MiB reads: small enough to stay responsive
 const DEFAULT_BUDGET = 64 << 20; // …and at most this much parsing per refresh:
@@ -30,8 +31,12 @@ export function indexPath() {
     return GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-usage-panel', 'sessions.json']);
 }
 
-function projectsDir() {
-    return GLib.build_filenamev([GLib.get_home_dir(), '.claude', 'projects']);
+// Claude Code's transcripts follow CLAUDE_CONFIG_DIR, like its credentials:
+// the node ports index <config dir>/projects into this same file, and two
+// ports reading two trees would each delete the other's entries as "out of
+// the window" and re-fold them from byte 0 on every refresh.
+export function projectsDir() {
+    return GLib.build_filenamev([configDir(), 'projects']);
 }
 
 export function loadIndex() {
@@ -89,7 +94,7 @@ function candidates(nowMs) {
             out.push({
                 path: files.get_child(info).get_path(),
                 size: info.get_size(),
-                mtimeMs: mtime * 1000,
+                mtimeMs: indexMtime(mtime * 1000),
             });
         }
     }
