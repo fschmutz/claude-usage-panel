@@ -596,7 +596,11 @@ ensure_node_on_path ||
 if CUP_UPDATE_RUN=1 "$ROOT/install.sh" update >>"$LOG" 2>&1; then
     stamp_deployed_version "$now"
     say "updated to v$now"
-    notify "Claude Usage Panel updated" "Now on v$now. GNOME: log out and back in to load it."
+    # Installed is not running: the shell keeps the extension it loaded until
+    # the next login, and an MCP server keeps its code until Claude Code is
+    # restarted. Say both, or the next reading of "did the fix land?" is wrong.
+    notify "Claude Usage Panel updated" \
+        "Now on v$now. GNOME: log out and back in. MCP: restart Claude Code."
 else
     # No stamp: the deployed version stays where it was, so the next run sees
     # the clients are still behind and tries again instead of declaring
