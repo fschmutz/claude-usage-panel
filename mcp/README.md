@@ -1,14 +1,24 @@
 # Claude Usage MCP server
 
-One MCP tool - **`get_usage`** - that returns your Claude plan usage (session,
-weekly, and per-model limits with percent, severity, and reset time) inside any
-MCP client: Claude Code, Cursor, Claude Desktop… Ask *"how much of my plan have
+Four MCP tools for any MCP client (Claude Code, Cursor, Claude Desktop…).
+**`get_usage`** returns your Claude plan usage (session, weekly, and per-model
+limits with percent, severity, and reset time): ask *"how much of my plan have
 I used?"* and the assistant answers with live numbers from the official
-Anthropic usage endpoint - the same data as the GNOME and macOS panels.
+Anthropic usage endpoint, the same data as the GNOME and macOS panels.
+**`list_accounts`**, **`save_account`** and **`switch_account`** manage named
+Claude Code logins, so *"switch me to PERSO"* works in-conversation.
 
-Zero dependencies, stdio transport, read-only: it reads the OAuth token Claude
-Code already stores locally (`~/.claude/.credentials.json` on Linux, the login
-Keychain on macOS) and never writes it.
+Zero dependencies, stdio transport. What each tool touches:
+
+| Tool | Reads | Writes |
+| --- | --- | --- |
+| `get_usage` | the live login (`~/.claude/.credentials.json` on Linux, the login Keychain on macOS) | the live login's saved profile when Claude Code rotated its token; a stale profile's refreshed token when the live token is missing; the shared pace history (`claude-usage-history.json` in the per-user scratch dir); the session index cache (`sessions.json` in the cache dir) |
+| `list_accounts` | the live login and the saved profiles | the usage cache, the live login's profile when its token rotated, a stale profile's refreshed token |
+| `save_account` | the live login | one profile file in the account store |
+| `switch_account` | the target profile | **the live credentials** (file or Keychain item), the `oauthAccount` block of `~/.claude.json`, and the store (outgoing profile, switch stamp) |
+
+Every credential write stays under the account store. Only `switch_account` writes
+your Claude Code login, and only when you ask for the switch.
 
 ## Install
 
@@ -22,7 +32,8 @@ Pick whichever fits - all four register the exact same server:
 /plugin marketplace add fschmutz/claude-usage-panel
 /plugin install claude-usage@claude-usage-panel
 
-# 3. Claude Code CLI, straight from GitHub - no clone needed
+# 3. Claude Code CLI, straight from GitHub - no clone needed. The unpinned
+#    spec tracks main; append #vX.Y.Z to run one release, as the plugin does.
 claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel
 
 # 4. Cursor: click "Add to Cursor" on https://fschmutz.github.io/claude-usage-panel/
@@ -79,5 +90,6 @@ GET https://api.anthropic.com/api/oauth/usage
 
 The server is the fourth port of the repo's shared normalization contract (see
 `CLAUDE.md`) - `tests/parity.test.js` keeps it behaviorally identical to the
-GNOME, macOS, and status-line ports, and `tests/mcp.test.js` covers the MCP
-plumbing itself.
+GNOME, macOS, and status-line ports, `tests/warehouse-parity.test.js` runs the
+week-over-week fixture through its warehouse reader, and `tests/mcp.test.js`
+covers the MCP plumbing itself.

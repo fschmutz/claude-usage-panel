@@ -1,6 +1,9 @@
 {
   "name": "claude-usage-panel",
   "owner": {"name": "Falco Schmutz"},
+  "metadata": {
+    "description": "Claude Code plan usage and named-login switching, in any MCP client: the claude-usage plugin from claude-usage-panel."
+  },
   "plugins": [
     {
       "name": "claude-usage",

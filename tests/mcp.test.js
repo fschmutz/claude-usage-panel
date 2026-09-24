@@ -110,7 +110,14 @@ test('initialize - answers newest for an unknown version', async () => {
     const r = await handleRequest({
         method: 'initialize', params: {protocolVersion: '1999-01-01'},
     });
-    assert.equal(r.protocolVersion, '2025-06-18');
+    assert.equal(r.protocolVersion, '2025-11-25');
+});
+
+test('initialize - echoes the current 2025-11-25 revision, not a downgrade', async () => {
+    const r = await handleRequest({
+        method: 'initialize', params: {protocolVersion: '2025-11-25'},
+    });
+    assert.equal(r.protocolVersion, '2025-11-25');
 });
 
 test('ping - empty result', async () => {
@@ -155,6 +162,46 @@ test('tools/call get_usage - every fetch failure is a tool error, not a crash', 
     const io = world(t, {live: null});
     const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
     assert.match(r.content[0].text, /^no_token: No Claude credentials found/);
+});
+
+test('get_usage - a saved live login keeps the live refresh hint on a 401', async (t) => {
+    const io = world(t, {fetchImpl: okFetch({}, 401)});
+    openStore(io).saveCurrent('PRO');
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.equal(r.isError, true);
+    assert.equal(r.content[0].text,
+        'auth_expired: Claude session expired. Run any Claude Code command to refresh it.');
+});
+
+test('get_usage - a store it cannot write still answers with the usage', async (t) => {
+    const io = world(t);
+    const store = openStore(io);
+    store.saveCurrent('PRO');
+    // The live token rotated, so syncBack has a write to make, into a dir it cannot write.
+    writeLiveLogin(io.home,
+        {claudeAiOauth: {...creds('pro').claudeAiOauth, accessToken: 'at-rotated', refreshToken: 'rt-rotated'}},
+        account('pro'));
+    fs.chmodSync(store.dir, 0o500);
+    let r;
+    try {
+        assert.throws(() => store.syncBack(), 'the sandbox really is read-only');
+        r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    } finally {
+        fs.chmodSync(store.dir, 0o700); // before the sandbox cleanup removes it
+    }
+    assert.equal(r.isError, undefined);
+    assert.equal(r.structuredContent.limits.length, 2);
+    assert.equal(store.readProfile('PRO').credentials.claudeAiOauth.refreshToken, 'rt-pro');
+});
+
+test('get_usage - anything it throws is a tool error, never a -32603', async (t) => {
+    const io = world(t);
+    Object.defineProperty(io, 'nowMs', {get() {
+        throw new Error('clock unavailable');
+    }});
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.equal(r.isError, true);
+    assert.equal(r.content[0].text, 'internal_error: clock unavailable');
 });
 
 test('get_usage follows CLAUDE_CONFIG_DIR like the account store', async (t) => {
@@ -209,6 +256,23 @@ test('stdio round-trip - initialize, initialized, tools/list', async () => {
     assert.equal(lines[0].result.protocolVersion, '2025-06-18');
     assert.equal(lines[1].id, 2);
     assert.equal(lines[1].result.tools[0].name, 'get_usage');
+});
+
+test('stdio - a non-object line is an invalid request, and the server keeps serving', async () => {
+    const proc = spawn(process.execPath, [SERVER], {stdio: ['pipe', 'pipe', 'inherit']});
+    let out = '';
+    proc.stdout.on('data', chunk => {
+        out += chunk;
+    });
+    const exited = new Promise(resolve => proc.on('exit', resolve));
+    for (const line of ['null', '[]', '42', '"x"']) proc.stdin.write(`${line}\n`);
+    proc.stdin.write(`${JSON.stringify({jsonrpc: '2.0', id: 7, method: 'ping'})}\n`);
+    proc.stdin.end();
+    assert.equal(await exited, 0);
+    const lines = out.trim().split('\n').map(l => JSON.parse(l));
+    assert.deepEqual(lines.slice(0, 4).map(l => [l.id, l.error?.code]),
+        [[null, -32600], [null, -32600], [null, -32600], [null, -32600]]);
+    assert.deepEqual(lines[4], {jsonrpc: '2.0', id: 7, result: {}});
 });
 
 test('stdio - pending tools/call still answers after stdin EOF', async (t) => {
@@ -283,6 +347,20 @@ test('get_usage records its samples in the io tmpdir and projects from them', as
     const r = await call(NOW);
     assert.equal(r.structuredContent.limits[0].pace.pctPerHour, 4);
     assert.ok(fs.existsSync(path.join(io.home, 'claude-usage-history.json')), 'history lives in the sandbox');
+});
+
+test('get_usage files its pace history under the live login (uuid, else email)', async (t) => {
+    const io = world(t);
+    const hist = () => Object.keys(JSON.parse(
+        fs.readFileSync(path.join(io.home, 'claude-usage-history.json'), 'utf8')));
+    await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.ok(hist().length > 0);
+    assert.ok(hist().every((k) => k.startsWith('u-pro|')), hist().join(','));
+    // A login without a uuid is keyed by its email, never by a token.
+    writeLiveLogin(io.home, creds('perso'), {emailAddress: 'perso@example.com'});
+    await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, {...io, nowMs: NOW + 60_000});
+    assert.ok(hist().some((k) => k.startsWith('perso@example.com|')), hist().join(','));
+    assert.ok(!hist().some((k) => k.includes('at-')), 'no token in a history key');
 });
 
 // ── Warehouse-backed trend ──────────────────────────────────────────────────────
@@ -406,4 +484,15 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     r = await call('switch_account', {name: 'NOPE'});
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /no saved account named NOPE/);
+});
+
+// ── Plugin manifests ────────────────────────────────────────────────────────────
+// `claude plugin validate .` warns on a marketplace with no description of its
+// own (the plugin entry's description does not count).
+
+test('the marketplace manifest carries its own description', () => {
+    const market = JSON.parse(fs.readFileSync(
+        path.join(here, '..', '.claude-plugin', 'marketplace.json'), 'utf8'));
+    assert.equal(typeof market.metadata?.description, 'string');
+    assert.ok(market.metadata.description.trim().length > 0);
 });
