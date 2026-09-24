@@ -12,7 +12,7 @@ import * as gnome from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessio
 import {
     GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TERMINALS, TMUX_SESSION, appleScript, gnomeTabsArgv,
     launchSteps, onPath, pickTerminal, resolveTerminal, sessionCommand, sessionFreeEnv, terminalArgv,
-    terminalForAlternative, terminalForDesktopId, tmuxCalls, windowGroups, xfceTabsArgv,
+    terminalForAlternative, terminalForDesktopId, tmuxCalls, tmuxSessionNames, toolPath, windowGroups, xfceTabsArgv,
 } from '../claude-code/terminals.js';
 import {sandboxHome} from './helpers.js';
 
@@ -258,6 +258,22 @@ test('tmux: one tmux session per saved window, each attached in its own terminal
         tmuxSessions.map((n) => `tmux attach -t ${n}`));
     const mac = launchSteps(placed, 'terminal', {platform: 'darwin', hasTmux: true});
     assert.equal((mac.steps.at(-1).args[1].match(/do script "tmux attach/g) ?? []).length, 3);
+});
+
+test('tmuxSessionNames: saved tmux names come back, the rest take the first free claudectl-N', () => {
+    const g = (window) => [{name: 'x', cwd: '/', session_id: 'x', window}];
+    assert.deepEqual(tmuxSessionNames([g('tmux:work'), g('iterm:7'), g(undefined)]), ['work', TMUX_SESSION, `${TMUX_SESSION}-2`]);
+    // a name the server already runs is not reused, nor is one a shell would split
+    assert.deepEqual(tmuxSessionNames([g('tmux:work'), g('tmux:a b'), g('iterm:1')], ['work', TMUX_SESSION]),
+        [`${TMUX_SESSION}-2`, `${TMUX_SESSION}-3`, `${TMUX_SESSION}-4`]);
+    // a saved claudectl-2 is kept, and the fallback steps around it
+    assert.deepEqual(tmuxSessionNames([g('iterm:1'), g(`tmux:${TMUX_SESSION}-2`), g('iterm:2')]),
+        [TMUX_SESSION, `${TMUX_SESSION}-2`, `${TMUX_SESSION}-3`]);
+});
+
+test('toolPath appends only the tool dirs PATH lacks, PATH order first', () => {
+    assert.equal(toolPath('/usr/bin:/home/u/bin', ['/opt/homebrew/bin', '/usr/bin']), '/usr/bin:/home/u/bin:/opt/homebrew/bin');
+    assert.equal(toolPath(undefined, ['/bin']), '/bin');
 });
 
 // ── The first message of a restored session ─────────────────────────────────────

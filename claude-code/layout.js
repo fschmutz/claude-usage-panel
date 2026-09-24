@@ -2,52 +2,64 @@
 // which tab - so `claudectl session open` can put them back the same way
 // instead of piling every session into one window.
 //
-// A session is found by its controlling tty, matched against the terminals
-// that can list theirs, most exact first:
+// A session is found by its controlling tty (or, for kitty, its pid),
+// matched against the terminals that can list theirs, most exact first:
 //
-//   tmux   - `tmux list-panes -a`: a session inside tmux belongs to its tmux
-//            session (the window) and tmux window (the tab), whatever
-//            terminal shows it.
-//   iTerm  - AppleScript over windows > tabs > sessions: exact even after
-//            tabs were dragged around. Needs the Automation permission once;
-//            a scheduled run may be refused it, and then:
-//   iTerm  - $ITERM_SESSION_ID (w0t3p0:…) from the process environment:
-//            no permission, but set when the tab opened and never updated,
-//            so a tab moved since then is placed where it was born.
+//   tmux     - `tmux list-panes -a`: a session inside tmux belongs to its tmux
+//              session (the window) and tmux window (the tab), whatever
+//              terminal shows it.
+//   kitty    - `kitty @ ls` (remote control, asked only from inside kitty or
+//              with $KITTY_LISTEN_ON): OS windows > tabs > foreground pids.
+//   WezTerm  - `wezterm cli --no-auto-start list`: windows > tabs > ttys.
+//   iTerm    - AppleScript over windows > tabs > sessions: exact even after
+//   Terminal   tabs were dragged around. Needs the Automation permission, so
+//              only an interactive `save` asks (askApps), never the scheduled
+//              autosave, and only an app that is already running.
+//   iTerm    - $ITERM_SESSION_ID (w0t3p0:…) from the process environment:
+//              no permission, but set when the tab opened and never updated,
+//              so a tab moved since then is placed where it was born.
 //
+// The CLI tools are looked up on PATH plus TOOL_DIRS: the launchd / systemd
+// job that autosaves has neither /opt/homebrew/bin nor always /usr/local/bin.
 // Anything else (gnome-terminal cannot list its tabs) stays unplaced, and a
 // snapshot without placement reopens as before: one window.
 //
 // captureLayout() returns the rows with {window, tab} added where known and
 // sorted window by window, tab by tab: the order `open` recreates them in.
 
-import fs from 'node:fs';
-import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
-import {onPath} from './terminals.js';
+import {onPath, toolPath, TOOL_DIRS} from './terminals.js';
 
-/** Lists every iTerm session as `tty<TAB>window id<TAB>tab number`, windows
- *  front to back. `tab` is an iTerm class inside the tell block, hence the
- *  ASCII character. */
-export const ITERM_LAYOUT_SCRIPT = `tell application "iTerm"
+// `tab` is a class inside both tell blocks, hence the ASCII character.
+const tabbedScript = (app, perTab) => `tell application "${app}"
   set out to ""
   set tb to ASCII character 9
   repeat with w in windows
     set ti to 0
     repeat with t in tabs of w
       set ti to ti + 1
-      repeat with s in sessions of t
-        set out to out & (tty of s) & tb & (id of w) & tb & ti & linefeed
-      end repeat
+${perTab}
     end repeat
   end repeat
   return out
 end tell`;
 
-export const TMUX_LAYOUT_FORMAT = '#{pane_tty}\t#{session_name}\t#{window_index}';
+/** Every iTerm session as `tty<TAB>window id<TAB>tab number`, windows front
+ *  to back. */
+export const ITERM_LAYOUT_SCRIPT = tabbedScript('iTerm', `      repeat with s in sessions of t
+        set out to out & (tty of s) & tb & (id of w) & tb & ti & linefeed
+      end repeat`);
 
-/** `tty<TAB>window<TAB>tab` lines to Map(tty -> {window: prefix+window, tab,
+/** Every Terminal.app tab, same shape: a tab has one tty. */
+export const TERMINAL_LAYOUT_SCRIPT = tabbedScript('Terminal',
+  '      set out to out & (tty of t) & tb & (id of w) & tb & ti & linefeed');
+
+// `:` separates: tmux prints a tab in -F output as `_` (3.6), and forbids
+// `:` in a session name; a tty path and a window index have none either.
+export const TMUX_LAYOUT_FORMAT = '#{pane_tty}:#{session_name}:#{window_index}';
+
+/** `key<TAB>window<TAB>tab` lines to Map(key -> {window: prefix+window, tab,
  *  order}); order is the line number, so the listing's own order is kept. */
 export function parseTtyTable(text, prefix) {
   const map = new Map();
@@ -57,6 +69,45 @@ export function parseTtyTable(text, prefix) {
     map.set(tty, {window: `${prefix}${win}`, tab: Number(tab), order: i});
   });
   return map;
+}
+
+const parseJson = (text) => {
+  try {
+    const v = JSON.parse(String(text ?? ''));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
+
+/** `wezterm cli list --format json` to the same Map, keyed by tty. Tabs are
+ *  numbered in listing order within their window, from 1. */
+export function parseWeztermList(text) {
+  const lines = [];
+  const tabsOf = new Map();
+  for (const p of parseJson(text)) {
+    if (typeof p?.tty_name !== 'string' || !Number.isInteger(p.window_id) || !Number.isInteger(p.tab_id)) continue;
+    const tabs = tabsOf.get(p.window_id) ?? [];
+    if (!tabs.includes(p.tab_id)) tabs.push(p.tab_id);
+    tabsOf.set(p.window_id, tabs);
+    lines.push(`${p.tty_name}\t${p.window_id}\t${tabs.indexOf(p.tab_id) + 1}`);
+  }
+  return parseTtyTable(lines.join('\n'), 'wezterm:');
+}
+
+/** `kitty @ ls` to the same Map, keyed `pid:N` - kitty lists the pids in a
+ *  window (its own process and the foreground ones), not the tty. */
+export function parseKittyLs(text) {
+  const lines = [];
+  for (const osWin of parseJson(text)) {
+    (osWin?.tabs ?? []).forEach((tab, ti) => {
+      for (const w of tab?.windows ?? []) {
+        const pids = [w?.pid, ...(w?.foreground_processes ?? []).map((f) => f?.pid)];
+        for (const pid of pids.filter(Number.isInteger)) lines.push(`pid:${pid}\t${osWin.id}\t${ti + 1}`);
+      }
+    });
+  }
+  return parseTtyTable(lines.join('\n'), 'kitty:');
 }
 
 /** $ITERM_SESSION_ID (w0t3p0:UUID) to {window, tab, order}, or null. */
@@ -73,18 +124,29 @@ export function ttyPath(value) {
   return t.startsWith('/') ? t : `/dev/${t}`;
 }
 
+/** One batched `ps -o pid=,<field>=` listing to Map(pid -> rest of line). */
+export function parsePsColumns(text) {
+  const map = new Map();
+  for (const line of String(text ?? '').split('\n')) {
+    const m = /^\s*(\d+)\s+(.*)$/.exec(line);
+    if (m) map.set(Number(m[1]), m[2]);
+  }
+  return map;
+}
+
 /**
- * Place rows (live sessions with a pid) by window and tab. Pure: `sources`
- * are the three lookups, most exact first. Placed rows come first, window by
- * window in the order their source lists them, tabs in order; unplaced rows
- * follow in their own order.
+ * Place rows (live sessions with a pid) by window and tab. Pure: `tables`
+ * are the lookups most exact first, keyed by tty or `pid:N`; `envOf` gives
+ * a pid's $ITERM_SESSION_ID, the last resort. Placed rows come first, window
+ * by window in the order their source lists them, tabs in order; unplaced
+ * rows follow in their own order.
  */
 export function placeRows(rows, {ttyOf, tables, envOf}) {
   const placed = rows.map((r, i) => {
-    const tty = ttyOf(r.pid);
+    const keys = [ttyOf(r.pid), `pid:${r.pid}`].filter(Boolean);
     let loc = null;
     tables.forEach((table, rank) => {
-      const hit = !loc && tty && table.get(tty);
+      const hit = !loc && keys.map((k) => table.get(k)).find(Boolean);
       if (hit) loc = {...hit, rank};
     });
     if (!loc) {
@@ -109,43 +171,51 @@ export function placeRows(rows, {ttyOf, tables, envOf}) {
   return placed.sort(cmp).map(({r, loc}) => (loc ? {...r, window: loc.window, tab: loc.tab} : r));
 }
 
-/** captureLayout's I/O: io.platform, io.env (PATH), io.exec, io.procDir. */
-export function captureLayout(rows, io = {}) {
+/**
+ * captureLayout's I/O: io.platform, io.env, io.exec, io.toolDirs.
+ * opts.askApps lets it query running iTerm / Terminal.app by AppleScript,
+ * which may raise the Automation prompt: an interactive `save` only.
+ */
+export function captureLayout(rows, io = {}, {askApps = false} = {}) {
   const platform = io.platform ?? process.platform;
-  const env = io.env ?? process.env;
-  const exec = (cmd, args) => String((io.exec ?? execFileSync)(cmd, args,
-    {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000}));
-  const tryRun = (cmd, args) => {
+  const baseEnv = io.env ?? process.env;
+  const env = {...baseEnv, PATH: toolPath(baseEnv.PATH, io.toolDirs ?? TOOL_DIRS)};
+  const run = (cmd, args) => {
     try {
-      return exec(cmd, args);
+      return String((io.exec ?? execFileSync)(cmd, args,
+        {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000, env}));
     } catch {
       return '';
     }
   };
   const has = (bin) => onPath(bin, env.PATH);
-  const hasPs = has('ps');
+  const pids = rows.map((r) => r.pid).filter(Number.isInteger);
+  const hasPs = has('ps') && pids.length > 0;
+  const ps = (flags, field) => (hasPs
+    ? parsePsColumns(run('ps', [flags, '-o', `pid=,${field}=`, '-p', pids.join(',')])) : new Map());
 
   const tables = [];
-  if (has('tmux')) tables.push(parseTtyTable(tryRun('tmux', ['list-panes', '-a', '-F', TMUX_LAYOUT_FORMAT]), 'tmux:'));
-  // only ask a running iTerm: `tell application` would launch it (pgrep
-  // misses GUI apps under a sandbox; ps does not)
-  const itermRunning = () => tryRun('ps', ['-axco', 'comm=']).split('\n').some((c) => c.trim() === 'iTerm2');
-  if (platform === 'darwin' && hasPs && has('osascript') && itermRunning()) {
-    tables.push(parseTtyTable(tryRun('osascript', ['-e', ITERM_LAYOUT_SCRIPT]), 'iterm:'));
+  if (has('tmux')) {
+    const panes = run('tmux', ['list-panes', '-a', '-F', TMUX_LAYOUT_FORMAT]).replaceAll(':', '\t');
+    tables.push(parseTtyTable(panes, 'tmux:'));
+  }
+  if ((baseEnv.KITTY_LISTEN_ON || baseEnv.KITTY_WINDOW_ID) && has('kitty')) {
+    const to = baseEnv.KITTY_LISTEN_ON ? ['--to', baseEnv.KITTY_LISTEN_ON] : [];
+    tables.push(parseKittyLs(run('kitty', ['@', ...to, 'ls'])));
+  }
+  if (has('wezterm')) tables.push(parseWeztermList(run('wezterm', ['cli', '--no-auto-start', 'list', '--format', 'json'])));
+  if (platform === 'darwin' && askApps && hasPs && has('osascript')) {
+    // only ask a running app: `tell application` would launch it (pgrep
+    // misses GUI apps under a sandbox; ps does not)
+    const running = new Set(run('ps', ['-axco', 'comm=']).split('\n').map((c) => c.trim()));
+    if (running.has('iTerm2')) tables.push(parseTtyTable(run('osascript', ['-e', ITERM_LAYOUT_SCRIPT]), 'iterm:'));
+    if (running.has('Terminal')) tables.push(parseTtyTable(run('osascript', ['-e', TERMINAL_LAYOUT_SCRIPT]), 'terminal:'));
   }
 
-  const envOf = (pid) => {
-    if (platform === 'linux') {
-      try {
-        const environ = fs.readFileSync(path.join(io.procDir ?? '/proc', String(pid), 'environ'), 'utf8');
-        return environ.split('\0').find((e) => e.startsWith('ITERM_SESSION_ID='))?.slice(17) ?? null;
-      } catch {
-        return null;
-      }
-    }
-    if (!hasPs) return null;
-    return /(?:^|\s)ITERM_SESSION_ID=(\S+)/.exec(tryRun('ps', ['-wwE', '-o', 'command=', '-p', String(pid)]))?.[1] ?? null;
-  };
-  const ttyOf = (pid) => (hasPs && pid ? ttyPath(tryRun('ps', ['-o', 'tty=', '-p', String(pid)])) : null);
-  return placeRows(rows, {ttyOf, tables, envOf});
+  const ttys = ps('-ww', 'tty');
+  // $ITERM_SESSION_ID only exists for a process iTerm started: macOS only
+  // (-E appends the environment to the command)
+  const envs = platform === 'darwin' ? new Map([...ps('-wwE', 'command').entries()].map(([pid, line]) =>
+    [pid, (/(?:^|\s)ITERM_SESSION_ID=(\S+)/.exec(line) ?? [])[1] ?? null])) : new Map();
+  return placeRows(rows, {ttyOf: (pid) => ttyPath(ttys.get(pid)), tables, envOf: (pid) => envs.get(pid) ?? null});
 }

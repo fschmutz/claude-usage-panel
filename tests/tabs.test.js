@@ -48,7 +48,8 @@ function world(t, sessions = [], {selfParent} = {}) {
         fs.mkdirSync(path.join(proc, '9999'), {recursive: true});
         fs.writeFileSync(path.join(proc, '9999', 'status'), `Name:\tnode\nPPid:\t${selfParent}\n`);
     }
-    Object.assign(io, {procDir: proc, pid: 9999, nowMs: () => (clock += 60_000)});
+    // toolDirs: []: only the test's PATH counts, never the host's own tmux
+    Object.assign(io, {procDir: proc, pid: 9999, nowMs: () => (clock += 60_000), toolDirs: []});
     return io;
 }
 
@@ -135,9 +136,9 @@ test('save records the window and tab of each session tmux can place', (t) => {
     }
     io.env = {PATH: bin};
     // B sits in tmux window 0, A in window 2 of the same session
-    io.exec = (cmd, args) => {
-        if (cmd === 'ps') return {101: 'pts/1\n', 202: 'pts/2\n'}[args.at(-1)];
-        if (cmd === 'tmux') return '/dev/pts/2\twork\t0\n/dev/pts/9\tother\t0\n/dev/pts/1\twork\t2\n';
+    io.exec = (cmd) => {
+        if (cmd === 'ps') return '  101 pts/1\n  202 pts/2\n';
+        if (cmd === 'tmux') return '/dev/pts/2:work:0\n/dev/pts/9:other:0\n/dev/pts/1:work:2\n';
         return '';
     };
     const snap = openTabs(io).save('laid-out');
@@ -285,7 +286,8 @@ test('launch runs the resolved steps: terminals detached, tmux in order', (t) =>
     const envs = [];
     const exec0 = io.exec;
     io.exec = (cmd, args, opts) => {
-        envs.push(opts.env);
+        // the launches; queries (list-panes, list-sessions, has-session) run nothing
+        if (['new-session', 'new-window'].includes(args[0])) envs.push(opts.env);
         return exec0(cmd, args, opts);
     };
     const spawn0 = io.spawn;
@@ -297,11 +299,12 @@ test('launch runs the resolved steps: terminals detached, tmux in order', (t) =>
     const r = openTabs(io).launch(rows, {terminal: 'ghostty'});
     assert.equal(r.how, 'tmux');
     // tmux new-session / new-window and the terminal: none carries the caller's session
-    const launched = envs.filter(Boolean);
-    assert.equal(launched.length, 3);
-    for (const e of launched) assert.deepEqual(e, {PATH: io.env.PATH, LANG: 'C'});
-    // list-panes: save placing the sessions; then the launch itself
-    assert.deepEqual(execd, [['tmux', 'list-panes'], ['tmux', 'has-session'], ['tmux', 'new-session'], ['tmux', 'new-window']]);
+    assert.equal(envs.length, 3);
+    for (const e of envs) assert.deepEqual(e, {PATH: io.env.PATH, LANG: 'C'});
+    // list-panes: save placing the sessions; list-sessions: the names taken;
+    // then the launch itself
+    assert.deepEqual(execd, [['tmux', 'list-panes'], ['tmux', 'list-sessions'], ['tmux', 'has-session'],
+        ['tmux', 'new-session'], ['tmux', 'new-window']]);
     assert.deepEqual(spawned.map((s) => [s.cmd, s.opts.detached]), [['ghostty', true]]);
 });
 
@@ -316,6 +319,25 @@ test('launch refuses to reuse a live tmux session and names the way out', (t) =>
     io.spawn = () => assert.fail('nothing may launch');
     const rows = openTabs(io).save('x').sessions;
     assert.throws(() => openTabs(io).launch(rows, {terminal: 'ghostty'}), /already exists - tmux attach -t claudectl/);
+});
+
+test('launch gives a tmux window group its saved session name back, unless the server holds it', (t) => {
+    const io = world(t, []);
+    const bin = path.join(io.home, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'tmux'), '#!/bin/sh\n');
+    fs.chmodSync(path.join(bin, 'tmux'), 0o755);
+    io.env = {PATH: bin};
+    const rows = [
+        {name: 'A', cwd: '/r/a', session_id: 'a', window: 'tmux:work', tab: 0},
+        {name: 'B', cwd: '/r/b', session_id: 'b', window: 'tmux:ops', tab: 0},
+        {name: 'C', cwd: '/r/c', session_id: 'c', window: 'tmux:bad;name', tab: 0},
+        {name: 'D', cwd: '/r/d', session_id: 'd'},
+    ];
+    io.exec = (cmd, args) => (args[0] === 'list-sessions' ? 'ops\nclaudectl\n' : '');
+    const r = openTabs(io).launch(rows, {terminal: 'ghostty', dryRun: true});
+    // ops is running already, bad;name could reach a shell: both fall back
+    assert.deepEqual(r.tmuxSessions, ['work', 'claudectl-2', 'claudectl-3', 'claudectl-4']);
 });
 
 test('launch with no terminal and no tmux says where to set one', (t) => {

@@ -33,7 +33,7 @@ import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
 import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
-import {launchSteps, onPath, resolveTerminal, sessionFreeEnv} from './terminals.js';
+import {TOOL_DIRS, launchSteps, onPath, resolveTerminal, sessionFreeEnv, toolPath} from './terminals.js';
 import {captureLayout} from './layout.js';
 import {formatClock, resetHint} from './stamps.js';
 
@@ -326,12 +326,13 @@ export function openTabs(io = {}) {
       live = live.filter((r) => r.pid !== me);
     }
     if (!live.length) throw new Error('no running Claude Code session to save');
-    return write(label ?? stampLabel(now()), captureLayout(live, io));
+    return write(label ?? stampLabel(now()), captureLayout(live, io, {askApps: true}));
   }
 
   /** The scheduled job: a new auto snapshot only when the set changed, then
    *  prune autos beyond `keep`. Returns {saved, reason, pruned}. */
   function autosave({keep = AUTO_KEEP} = {}) {
+    // no AppleScript: a scheduled job must never raise the Automation prompt
     const live = captureLayout(liveSessions(), io);
     let saved = null;
     let reason;
@@ -376,22 +377,35 @@ export function openTabs(io = {}) {
   }
 
   /** Open rows in the terminal the panels use (terminals.js), or `terminal`
-   *  when given. Returns {terminal, how, steps}; dryRun runs nothing. */
+   *  when given. Returns {terminal, how, windows, tmuxSessions, steps};
+   *  dryRun runs nothing. */
   function launch(rows, {terminal, windows = false, tmux = false, prompt = '', dryRun = false} = {}) {
-    const env = io.env ?? process.env;
+    const callerEnv = io.env ?? process.env;
+    // the macOS app and the panels run this with a minimal PATH: find tmux
+    // where Homebrew and distros put it, and hand that PATH on to the tabs
+    const env = {...callerEnv, PATH: toolPath(callerEnv.PATH, io.toolDirs ?? TOOL_DIRS)};
     const term = terminal ?? resolveTerminal({...io, env});
     const hasTmux = onPath('tmux', env.PATH);
     if (!term && !hasTmux) {
       throw new Error('no terminal found - set one in the panel preferences, $TERMINAL, or --terminal=BIN');
     }
+    let tmuxTaken = [];
+    if (hasTmux) {
+      try {
+        tmuxTaken = String(exec('tmux', ['list-sessions', '-F', '#{session_name}'],
+          {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env})).split('\n').filter(Boolean);
+      } catch {
+        tmuxTaken = []; // no server running: every name is free
+      }
+    }
     const {how, windows: nWindows, tmuxSessions, steps} =
-      launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux, prompt});
+      launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux, prompt, tmuxTaken});
     const result = {terminal: term ?? 'tmux', how, windows: nWindows, tmuxSessions, steps};
     if (dryRun) return result;
     for (const name of tmuxSessions) {
       let exists = true;
       try {
-        exec('tmux', ['has-session', '-t', name], {stdio: 'ignore'});
+        exec('tmux', ['has-session', '-t', name], {stdio: 'ignore', env});
       } catch {
         exists = false;
       }

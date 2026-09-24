@@ -10,11 +10,15 @@ semantic versioning.
 
 - **`claudectl session open` puts sessions back where they were.** A snapshot
   now records which window and which tab each session was in (tmux panes,
-  iTerm by AppleScript, else `$ITERM_SESSION_ID`), and `open` recreates the
+  kitty, WezTerm, iTerm and Terminal.app by AppleScript, else
+  `$ITERM_SESSION_ID`), and `open` recreates the
   same windows with the same tabs in the same order: native tabs in iTerm,
   gnome-terminal and the newly supported xfce4-terminal, one tmux session per
-  window elsewhere. Snapshots without placement reopen in one window, as
-  before.
+  window elsewhere, reusing the saved tmux session name when it is free.
+  Snapshots without placement reopen in one window, as before. The scheduled
+  autosave never runs AppleScript (no surprise Automation prompt), and tmux,
+  kitty and WezTerm are found in the Homebrew and system bin directories when
+  the scheduler's PATH lacks them.
 
 ### Fixed
 

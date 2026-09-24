@@ -97,15 +97,25 @@ recorded, which also rejects a pid reused by another process; on macOS the pid
 must be alive and running `claude`.
 
 Placement - which window, which tab - is read at save time from each
-session's controlling tty, most exact source first: a session inside tmux
-belongs to its tmux session and window (`tmux list-panes -a`); in iTerm, an
-AppleScript query of windows ▸ tabs ▸ sessions, exact even after tabs were
-dragged around (macOS asks once for the Automation permission; a scheduled
-autosave may be refused it); failing that, the `ITERM_SESSION_ID` of the
-process, which is set when the tab opens and never updated, so a tab moved
-since is placed where it was born. gnome-terminal cannot list its tabs:
+session's controlling tty (kitty: its pid), most exact source first:
+
+| Source | How | Notes |
+|---|---|---|
+| tmux | `tmux list-panes -a` | tmux session = window, tmux window = tab, whatever terminal shows it |
+| kitty | `kitty @ ls` | only from inside kitty or with `$KITTY_LISTEN_ON`; needs `allow_remote_control` |
+| WezTerm | `wezterm cli --no-auto-start list` | never starts a WezTerm server |
+| iTerm, Terminal.app | AppleScript over windows ▸ tabs | exact after tabs were dragged; macOS asks once for the Automation permission, so only a `save` you type asks, never the scheduled autosave, and only an app already running |
+| iTerm | `ITERM_SESSION_ID` of the process | no permission; set when the tab opens and never updated, so a moved tab is placed where it was born |
+
+tmux, kitty and WezTerm are looked up on `PATH` and in `/opt/homebrew/bin`,
+`/usr/local/bin`, `/usr/bin`, `/bin`: the scheduled autosave and the macOS
+app run with a PATH that lacks Homebrew. gnome-terminal cannot list its tabs:
 those sessions are saved unplaced. Only Claude sessions are restored - a tab
 running a plain shell is not.
+
+A window saved from tmux reopens as a tmux session of the same name
+(`work`) when the server does not already run one; otherwise, and for every
+other window, the first free of `claudectl`, `claudectl-2`, …
 
 Snapshots store the name, the directory, the session id and, when known,
 `window` and `tab`, one `0600` JSON file per label:
