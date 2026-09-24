@@ -62,6 +62,18 @@ export function sandboxHome(t, {prefix = 'cup-'} = {}) {
     return {home, homedir: home, env: {}, platform: 'linux', tmpdir: home, procDir: path.join(home, 'proc')};
 }
 
+/** A PATH dir holding stub executables `names`: `<home>/bin` when `home`
+ *  is given, else a fresh sandbox of its own. */
+export function binDir(t, names, {home} = {}) {
+    const dir = home ? path.join(home, 'bin') : sandboxHome(t, {prefix: 'cup-bin-'}).home;
+    fs.mkdirSync(dir, {recursive: true});
+    for (const n of names) {
+        fs.writeFileSync(path.join(dir, n), '#!/bin/sh\n');
+        fs.chmodSync(path.join(dir, n), 0o755);
+    }
+    return dir;
+}
+
 /** Write a live Claude Code login into a sandbox HOME. */
 export function writeLiveLogin(home, credentials, oauthAccount, extraConfig = {}) {
     fs.mkdirSync(path.join(home, '.claude'), {recursive: true});

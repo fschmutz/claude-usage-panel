@@ -10,11 +10,12 @@ import path from 'node:path';
 
 import * as gnome from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {
-    GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TERMINALS, TMUX_SESSION, appleScript, gnomeTabsArgv,
-    launchSteps, onPath, pickTerminal, resolveTerminal, sessionCommand, sessionFreeEnv, terminalArgv,
-    terminalForAlternative, terminalForDesktopId, tmuxCalls, tmuxSessionNames, toolPath, windowGroups, xfceTabsArgv,
+    GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TERMINALS, TMUX_SESSION, appleScript, launchSteps, pickTerminal,
+    resolveTerminal, sessionCommand, sessionFreeEnv, tabsArgv, terminalArgv, terminalForAlternative,
+    terminalForDesktopId, tmuxCalls, tmuxSessionNames, windowGroups,
 } from '../claude-code/terminals.js';
-import {sandboxHome} from './helpers.js';
+import {onPath, toolPath} from '../claude-code/tools.js';
+import {binDir, sandboxHome} from './helpers.js';
 
 const rows = [
     {name: 'API', cwd: '/r/api', session_id: 'id-a'},
@@ -77,16 +78,6 @@ test('desktop ids and the Debian alternative map to the binaries we drive', () =
 });
 
 // ── Resolution I/O ──────────────────────────────────────────────────────────────
-
-// A PATH dir holding the given executables.
-function binDir(t, names) {
-    const {home} = sandboxHome(t);
-    for (const n of names) {
-        fs.writeFileSync(path.join(home, n), '#!/bin/sh\n');
-        fs.chmodSync(path.join(home, n), 0o755);
-    }
-    return home;
-}
 
 // exec fake: dconf prints `setting`, xdg-terminal-exec prints `desktopId`.
 const fakeExec = ({setting = '', desktopId = ''} = {}) => (cmd, args) => {
@@ -151,7 +142,7 @@ test('gnome-terminal: native tabs in ONE detached process', () => {
     assert.equal(how, 'tabs');
     assert.equal(steps.length, 1);
     assert.equal(steps[0].detach, true);
-    assert.deepEqual(steps[0].args, gnomeTabsArgv(rows));
+    assert.deepEqual(steps[0].args, tabsArgv('gnome-terminal', rows));
     assert.equal(steps[0].args.filter((a) => a === '--tab').length, 1);
     assert.deepEqual(steps[0].args.slice(1, 5), ['--title', 'API', '--working-directory', '/r/api']);
 });
@@ -205,7 +196,7 @@ test('macOS Terminal.app: tmux in one window when installed, else a window each'
     const win = launchSteps(rows, 'terminal', {platform: 'darwin', hasTmux: false});
     assert.equal(win.how, 'windows');
     assert.equal((win.steps[0].args[1].match(/do script/g) ?? []).length, 2);
-    assert.equal(appleScript('iterm', rows, {tabs: false}).match(/create window/g).length, 2);
+    assert.equal(appleScript('iterm', rows.map((r) => [r.cwd])).match(/create window/g).length, 2);
 });
 
 // ── Several windows ─────────────────────────────────────────────────────────────
@@ -235,15 +226,15 @@ test('macOS iTerm: a window per saved window, its tabs inside', () => {
 });
 
 test('gnome-terminal and xfce4-terminal: a --window per saved window, a --tab per further session', () => {
-    for (const [bin, argv] of [['gnome-terminal', gnomeTabsArgv], ['xfce4-terminal', xfceTabsArgv]]) {
+    for (const bin of ['gnome-terminal', 'xfce4-terminal']) {
         const {how, windows, steps} = launchSteps(placed, bin, {hasTmux: false});
         assert.equal(how, 'tabs', bin);
         assert.equal(windows, 3);
-        assert.deepEqual(steps[0].args, argv(placed));
+        assert.deepEqual(steps[0].args, tabsArgv(bin, placed));
         assert.deepEqual(steps[0].args.filter((a) => a === '--window' || a === '--tab'),
             ['--window', '--tab', '--window', '--window']);
     }
-    assert.deepEqual(xfceTabsArgv(rows).slice(0, 5), ['--window', '-T', 'API', '--working-directory=/r/api', '-e']);
+    assert.deepEqual(tabsArgv('xfce4-terminal', rows).slice(0, 5), ['--window', '-T', 'API', '--working-directory=/r/api', '-e']);
 });
 
 test('tmux: one tmux session per saved window, each attached in its own terminal window', () => {
@@ -289,7 +280,7 @@ test('the resume prompt reaches claude as ONE argument, newlines and quotes inta
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(JSON.parse(r.stdout), ['--name', "it's", '--resume', 'id-b', prompt]);
     // and through the gnome-terminal layer: its --command is itself a shell word list
-    const gt = gnomeTabsArgv([{name: 'A', cwd: '/', session_id: 'id-a'}], prompt);
+    const gt = tabsArgv('gnome-terminal', [{name: 'A', cwd: '/', session_id: 'id-a'}], prompt);
     const inner = gt[gt.indexOf('--command') + 1];
     // split it into words the way GLib does (POSIX quoting): bash, -lc, CMD
     const r2 = run('bash', ['-c', `${stub}eval "set -- $1"; eval "\${3%%; exec *}"`, '_', inner]);

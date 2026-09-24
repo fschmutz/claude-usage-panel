@@ -10,7 +10,8 @@ import path from 'node:path';
 import {AUTO_PREFIX, isValidLabel, openTabs, sameSessions, stampLabel, transcriptPath} from '../claude-code/tabs.js';
 import {main} from '../claude-code/session-cli.js';
 import {tabsDir} from '../claude-code/paths.js';
-import {sandboxHome} from './helpers.js';
+import {TMUX_SESSION} from '../claude-code/terminals.js';
+import {binDir, sandboxHome} from './helpers.js';
 
 // A HOME holding Claude Code's session registry, the matching transcripts and
 // a fake /proc, plus an io bound to all of it. `sessions`: {pid, name, cwd,
@@ -128,12 +129,7 @@ test('save writes a 0600 snapshot of name, cwd and id only', (t) => {
 
 test('save records the window and tab of each session tmux can place', (t) => {
     const io = world(t, [A, B]);
-    const bin = path.join(io.home, 'bin');
-    fs.mkdirSync(bin);
-    for (const b of ['tmux', 'ps']) {
-        fs.writeFileSync(path.join(bin, b), '#!/bin/sh\n');
-        fs.chmodSync(path.join(bin, b), 0o755);
-    }
+    const bin = binDir(t, ['tmux', 'ps'], {home: io.home});
     io.env = {PATH: bin};
     // B sits in tmux window 0, A in window 2 of the same session
     io.exec = (cmd) => {
@@ -145,6 +141,24 @@ test('save records the window and tab of each session tmux can place', (t) => {
     const stored = JSON.parse(fs.readFileSync(path.join(tabsDir(io), 'laid-out.json'), 'utf8'));
     assert.deepEqual(stored.sessions.map((r) => [r.name, r.window, r.tab]), [['WEB', 'tmux:work', 0], ['API', 'tmux:work', 2]]);
     assert.equal(snap.sessions.length, 2);
+});
+
+test('only a typed save asks iTerm by AppleScript, never the scheduled autosave', (t) => {
+    const io = world(t, [A]);
+    const bin = binDir(t, ['ps', 'osascript'], {home: io.home});
+    Object.assign(io, {platform: 'darwin', env: {PATH: bin}});
+    let asked = 0;
+    io.exec = (cmd, args) => {
+        if (cmd === 'osascript') return (asked++, '/dev/ttys1\t159\t1\n');
+        if (args[0] === '-axco') return 'iTerm2\n';
+        if (args[0] === '-ww') return '  101 ttys1\n';
+        return args[0] === '-o' ? 'claude\n' : ''; // isAlive
+    };
+    const tabs = openTabs(io);
+    tabs.autosave();
+    assert.equal(asked, 0, 'the Automation prompt must never come from a schedule');
+    assert.deepEqual(tabs.save('typed').sessions.map((r) => r.window), ['iterm:159']);
+    assert.equal(asked, 1);
 });
 
 test('save --exclude-self drops the session running the command', (t) => {
@@ -266,10 +280,7 @@ test('autosave FAILS on a terminal claude it cannot identify, and says which', a
 
 test('launch runs the resolved steps: terminals detached, tmux in order', (t) => {
     const io = world(t, [A, B]);
-    const bin = path.join(io.home, 'bin');
-    fs.mkdirSync(bin);
-    fs.writeFileSync(path.join(bin, 'tmux'), '#!/bin/sh\n');
-    fs.chmodSync(path.join(bin, 'tmux'), 0o755);
+    const bin = binDir(t, ['tmux'], {home: io.home});
     io.env = {PATH: bin};
     const spawned = [];
     const execd = [];
@@ -279,7 +290,7 @@ test('launch runs the resolved steps: terminals detached, tmux in order', (t) =>
     };
     io.exec = (cmd, args) => {
         execd.push([cmd, args[0]]);
-        if (args[0] === 'has-session') throw new Error('no session');
+        if (args[0] === 'list-sessions') throw new Error('no server running');
         return '';
     };
     io.env = {...io.env, CLAUDECODE: '1', CLAUDE_PID: '1', CLAUDE_CODE_SESSION_ID: 'caller', LANG: 'C'};
@@ -303,30 +314,27 @@ test('launch runs the resolved steps: terminals detached, tmux in order', (t) =>
     for (const e of envs) assert.deepEqual(e, {PATH: io.env.PATH, LANG: 'C'});
     // list-panes: save placing the sessions; list-sessions: the names taken;
     // then the launch itself
-    assert.deepEqual(execd, [['tmux', 'list-panes'], ['tmux', 'list-sessions'], ['tmux', 'has-session'],
-        ['tmux', 'new-session'], ['tmux', 'new-window']]);
+    assert.deepEqual(execd, [['tmux', 'list-panes'], ['tmux', 'list-sessions'], ['tmux', 'new-session'], ['tmux', 'new-window']]);
     assert.deepEqual(spawned.map((s) => [s.cmd, s.opts.detached]), [['ghostty', true]]);
 });
 
-test('launch refuses to reuse a live tmux session and names the way out', (t) => {
+test('launch never reuses a live tmux session: it opens the next free name', (t) => {
     const io = world(t, [A]);
-    const bin = path.join(io.home, 'bin');
-    fs.mkdirSync(bin);
-    fs.writeFileSync(path.join(bin, 'tmux'), '#!/bin/sh\n');
-    fs.chmodSync(path.join(bin, 'tmux'), 0o755);
-    io.env = {PATH: bin};
-    io.exec = () => '';
-    io.spawn = () => assert.fail('nothing may launch');
+    io.env = {PATH: binDir(t, ['tmux'], {home: io.home})};
+    const execd = [];
+    io.exec = (cmd, args) => {
+        execd.push(args.slice(0, 4));
+        return args[0] === 'list-sessions' ? 'claudectl\n' : '';
+    };
+    io.spawn = () => ({unref() {}});
     const rows = openTabs(io).save('x').sessions;
-    assert.throws(() => openTabs(io).launch(rows, {terminal: 'ghostty'}), /already exists - tmux attach -t claudectl/);
+    assert.deepEqual(openTabs(io).launch(rows, {terminal: 'ghostty'}).tmuxSessions, [`${TMUX_SESSION}-2`]);
+    assert.deepEqual(execd.at(-1), ['new-session', '-d', '-s', `${TMUX_SESSION}-2`]);
 });
 
 test('launch gives a tmux window group its saved session name back, unless the server holds it', (t) => {
     const io = world(t, []);
-    const bin = path.join(io.home, 'bin');
-    fs.mkdirSync(bin);
-    fs.writeFileSync(path.join(bin, 'tmux'), '#!/bin/sh\n');
-    fs.chmodSync(path.join(bin, 'tmux'), 0o755);
+    const bin = binDir(t, ['tmux'], {home: io.home});
     io.env = {PATH: bin};
     const rows = [
         {name: 'A', cwd: '/r/a', session_id: 'a', window: 'tmux:work', tab: 0},

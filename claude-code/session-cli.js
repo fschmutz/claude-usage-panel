@@ -5,7 +5,7 @@
 
 import os from 'node:os';
 
-import {AUTO_KEEP, AUTO_PREFIX, openTabs, resumePrompt, stampLabel} from './tabs.js';
+import {AUTO_KEEP, AUTO_PREFIX, describeLaunch, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {tabsDir} from './paths.js';
 
 export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as laid out
@@ -155,17 +155,7 @@ export async function main(argv, io = {}) {
       if (opts['dry-run']) {
         for (const st of r.steps) out(`${st.cmd} ${st.args.map((x) => JSON.stringify(x)).join(' ')}\n`);
       }
-      const n = open.length;
-      const w = r.windows === 1 ? 'one' : String(r.windows);
-      const ws = r.windows === 1 ? 'window' : 'windows';
-      const sessions = r.tmuxSessions.join(', ');
-      out({
-        'tabs': `${n} tabs in ${w} ${r.terminal} ${ws}\n`,
-        'tmux': `${n} tmux windows (session ${sessions}) in ${w} ${r.terminal} ${ws}\n`,
-        'windows': `${n} ${r.terminal} windows\n`,
-        'tmux-only': `${n} windows in tmux session ${sessions} - ` +
-          `${r.tmuxSessions.map((s) => `tmux attach -t ${s}`).join(' / ')}\n`,
-      }[r.how]);
+      out(`${describeLaunch(r, open.length)}\n`);
       return 0;
     }
     case 'purge': {

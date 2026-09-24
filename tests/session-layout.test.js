@@ -2,20 +2,18 @@
 // placement order, and the capture against faked ps / tmux / iTerm.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 
 import {
-    ITERM_LAYOUT_SCRIPT, TERMINAL_LAYOUT_SCRIPT, captureLayout, parseItermEnv, parseKittyLs, parseTtyTable,
-    parseWeztermList, placeRows, ttyPath,
+    ITERM_LAYOUT_SCRIPT, SOURCES, TERMINAL_LAYOUT_SCRIPT, captureLayout, parseItermEnv, parseKittyLs, parsePsEnv,
+    parseTmuxPanes, parseTtyTable, parseWeztermList, placeRows, ttyPath,
 } from '../claude-code/layout.js';
-import {sandboxHome} from './helpers.js';
+import {binDir} from './helpers.js';
 
 test('parseTtyTable keeps listing order and skips malformed lines', () => {
     const m = parseTtyTable('/dev/ttys4\t159\t2\nbroken\n/dev/ttys2\t159\tx\n/dev/ttys9\t160\t1\n', 'iterm:');
     assert.deepEqual([...m], [
         ['/dev/ttys4', {window: 'iterm:159', tab: 2, order: 0}],
-        ['/dev/ttys9', {window: 'iterm:160', tab: 1, order: 3}],
+        ['/dev/ttys9', {window: 'iterm:160', tab: 1, order: 1}],
     ]);
 });
 
@@ -56,16 +54,6 @@ test('placeRows: nothing known leaves rows as they were', () => {
     assert.deepEqual(placeRows(rows, {ttyOf: () => null, tables: [], envOf: () => null}), rows);
 });
 
-function binDir(t, names) {
-    const {home} = sandboxHome(t, {prefix: 'cup-layout-'});
-    const bin = path.join(home, 'bin');
-    fs.mkdirSync(bin);
-    for (const n of names) {
-        fs.writeFileSync(path.join(bin, n), '#!/bin/sh\n');
-        fs.chmodSync(path.join(bin, n), 0o755);
-    }
-    return bin;
-}
 
 // fake `ps`: the batched tty listing, the batched -E env listing, the app list
 const fakePs = (args, {ttys = {}, envs = {}, apps = ''} = {}) => {
@@ -193,4 +181,24 @@ test('captureLayout asks kitty only from inside kitty, wezterm without starting 
     calls.length = 0;
     captureLayout([{pid: 1, name: 'A'}], {platform: 'linux', env: {PATH, KITTY_LISTEN_ON: 'unix:/tmp/k'}, exec, toolDirs: []});
     assert.deepEqual(calls.find(([c]) => c === 'kitty'), ['kitty', '@', '--to', 'unix:/tmp/k', 'ls']);
+});
+
+test('parseTmuxPanes splits on `:`, which tmux keeps; a tab it prints as `_`', () => {
+    assert.deepEqual([...parseTmuxPanes('/dev/pts/8:work:1\n/dev/pts/9:ops:0\n')].map(([k, v]) => [k, v.window, v.tab]),
+        [['/dev/pts/8', 'tmux:work', 1], ['/dev/pts/9', 'tmux:ops', 0]]);
+    // what tmux 3.6 printed for a tab-separated format: nothing matches
+    assert.equal(parseTmuxPanes('/dev/pts/8_work_1\n').size, 0);
+});
+
+test('parsePsEnv: ITERM_SESSION_ID per pid from `ps -wwE`, never an argument lookalike', () => {
+    const m = parsePsEnv('  11 claude --x HOME=/u ITERM_SESSION_ID=w0t3p0:U\n  22 claude --name=ITERM_SESSION_ID=no\n');
+    assert.deepEqual([...m], [[11, 'w0t3p0:U']]);
+});
+
+test('parseKittyLs skips an OS window without an id', () => {
+    assert.equal(parseKittyLs(JSON.stringify([{tabs: [{windows: [{pid: 5}]}]}])).size, 0);
+});
+
+test('SOURCES precedence: tmux, kitty, wezterm, then the AppleScript apps', () => {
+    assert.deepEqual(SOURCES.map((s) => s.name), ['tmux', 'kitty', 'wezterm', 'iterm', 'terminal']);
 });

@@ -76,6 +76,8 @@ claude-code/            # the Node clients (installed together under ~/.claude/c
 ├── accounts.js         # openStore(io): the account store - save, switch, refresh, usage
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
+├── layout.js           # which window and tab each session sits in (tmux, kitty, WezTerm, iTerm, Terminal.app)
+├── tools.js            # finding and querying tmux / ps / osascript from a scheduler's minimal PATH
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── session-cli.js      # `claudectl session`: the CLI over tabs.js
 └── claudectl.js        # the claudectl entry point: dispatches to the two groups

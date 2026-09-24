@@ -2,8 +2,8 @@ import Foundation
 
 // The session snapshots `claudectl session` keeps (claude-code/tabs.js), as the
 // Settings window shows them. The CLI owns the store - one JSON file per label,
-// {version, savedAt, sessions: [{name, cwd, session_id}]} - and this only
-// reads it. Mirrors the GNOME extension's lib/pure/snapshots.js and is pinned
+// {version, savedAt, sessions: [{name, cwd, session_id, window?, tab?}]} - and
+// this only reads it (the placement keys are the CLI's, ignored here). Mirrors the GNOME extension's lib/pure/snapshots.js and is pinned
 // to it by tests/fixtures/snapshots.json.
 
 public enum Snapshots {

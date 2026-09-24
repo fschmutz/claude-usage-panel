@@ -185,7 +185,11 @@ summarization, you must change it in **every** port and keep them matching.
   autosave; Node-only, no port to mirror), `terminals.js` (which terminal
   `session open` uses - the panels' own setting, never a separate one - and
   how it gets a tab per session; its `TERMINALS` / `terminalArgv` mirror
-  `lib/pure/sessions.js`, parity in `tests/terminals.test.js`). **One CLI, `claudectl`**:
+  `lib/pure/sessions.js`, parity in `tests/terminals.test.js`), `layout.js`
+  (which window and tab each session sits in, from a precedence-ordered
+  `SOURCES` table; AppleScript only on an interactive `save`, never the
+  autosave; Node-only), `tools.js` (tool lookup on PATH plus Homebrew/system
+  dirs, for a scheduler's minimal PATH). **One CLI, `claudectl`**:
   `claudectl.js` only dispatches `account …` to `account-cli.js` and
   `session …` to `session-cli.js`; a new command group is a new
   `<group>-cli.js` exporting `main(argv, io)` + `HELP`, never a new binary.

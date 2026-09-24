@@ -33,7 +33,8 @@ import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
 import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
-import {TOOL_DIRS, launchSteps, onPath, resolveTerminal, sessionFreeEnv, toolPath} from './terminals.js';
+import {launchSteps, resolveTerminal, sessionFreeEnv} from './terminals.js';
+import {onPath, query, toolEnv} from './tools.js';
 import {captureLayout} from './layout.js';
 import {formatClock, resetHint} from './stamps.js';
 
@@ -48,6 +49,18 @@ export const isValidLabel = (label) => typeof label === 'string' && LABEL_RE.tes
  *  alphanumeric turned into '-'>/<id>.jsonl. */
 export function transcriptPath(projects, cwd, sessionId) {
   return path.join(projects, cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sessionId}.jsonl`);
+}
+
+/** One line saying what launch() opened (or would): `n` sessions. */
+export function describeLaunch({how, terminal, windows, tmuxSessions}, n) {
+  const where = `${windows === 1 ? 'one' : windows} ${terminal} window${windows === 1 ? '' : 's'}`;
+  const names = tmuxSessions.join(', ');
+  return {
+    'tabs': `${n} tabs in ${where}`,
+    'tmux': `${n} tmux windows (session ${names}) in ${where}`,
+    'windows': `${n} ${terminal} windows`,
+    'tmux-only': `${n} windows in tmux session ${names} - ${tmuxSessions.map((s) => `tmux attach -t ${s}`).join(' / ')}`,
+  }[how];
 }
 
 /** Two session lists describe the same set, laid out the same way
@@ -380,40 +393,21 @@ export function openTabs(io = {}) {
    *  when given. Returns {terminal, how, windows, tmuxSessions, steps};
    *  dryRun runs nothing. */
   function launch(rows, {terminal, windows = false, tmux = false, prompt = '', dryRun = false} = {}) {
-    const callerEnv = io.env ?? process.env;
     // the macOS app and the panels run this with a minimal PATH: find tmux
     // where Homebrew and distros put it, and hand that PATH on to the tabs
-    const env = {...callerEnv, PATH: toolPath(callerEnv.PATH, io.toolDirs ?? TOOL_DIRS)};
+    const env = toolEnv(io);
     const term = terminal ?? resolveTerminal({...io, env});
     const hasTmux = onPath('tmux', env.PATH);
     if (!term && !hasTmux) {
       throw new Error('no terminal found - set one in the panel preferences, $TERMINAL, or --terminal=BIN');
     }
-    let tmuxTaken = [];
-    if (hasTmux) {
-      try {
-        tmuxTaken = String(exec('tmux', ['list-sessions', '-F', '#{session_name}'],
-          {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env})).split('\n').filter(Boolean);
-      } catch {
-        tmuxTaken = []; // no server running: every name is free
-      }
-    }
+    // no server running answers '': every name is free. A name taken
+    // between this and new-session fails new-session itself, loudly.
+    const tmuxTaken = hasTmux ? query(io, env, 'tmux', ['list-sessions', '-F', '#{session_name}']).split('\n').filter(Boolean) : [];
     const {how, windows: nWindows, tmuxSessions, steps} =
       launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux, prompt, tmuxTaken});
     const result = {terminal: term ?? 'tmux', how, windows: nWindows, tmuxSessions, steps};
     if (dryRun) return result;
-    for (const name of tmuxSessions) {
-      let exists = true;
-      try {
-        exec('tmux', ['has-session', '-t', name], {stdio: 'ignore', env});
-      } catch {
-        exists = false;
-      }
-      if (exists) {
-        throw new Error(`tmux session ${name} already exists - tmux attach -t ${name}, ` +
-          `or tmux kill-session -t ${name} first`);
-      }
-    }
     // Every launched process - terminal, tmux, osascript - gets the caller's
     // environment minus its Claude session: the resumed sessions must be
     // top-level sessions of their own, not children of whoever ran `open`.
