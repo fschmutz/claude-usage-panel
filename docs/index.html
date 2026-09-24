@@ -116,7 +116,7 @@
       <a class="btn ghost" href="https://github.com/fschmutz/claude-usage-panel/releases/latest">Download release</a>
     </div>
     <div class="badges">
-      <img alt="GNOME 45-50" src="https://img.shields.io/badge/GNOME%20Shell-45--50-4A86CF?logo=gnome&logoColor=white">
+      <img alt="GNOME 45-51" src="https://img.shields.io/badge/GNOME%20Shell-45--51-4A86CF?logo=gnome&logoColor=white">
       <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-000?logo=apple&logoColor=white">
       <img alt="MIT" src="https://img.shields.io/badge/license-MIT-3DA639">
       <img alt="read-only" src="https://img.shields.io/badge/credentials-read--only-2ea44f">
@@ -194,6 +194,7 @@
 <pre id="cmd-mcp">claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel</pre>
       <button class="copy" data-copy="cmd-mcp" aria-label="Copy claude mcp add command">Copy</button>
     </div>
+    <p class="lead" style="margin-top:10px">This unpinned spec tracks <code>main</code>; append <code>#vX.Y.Z</code> to run one release, as the plugin does.</p>
   </div>
   <div class="pane" id="cursor">
     <p class="lead" style="margin-top:6px">One click adds the <b>get_usage</b> MCP tool to Cursor - ask "how much of my Claude plan have I used?" in chat:</p>
@@ -205,6 +206,7 @@
 <pre id="cmd-cursor">"claude-usage": {"command": "npx", "args": ["-y", "github:fschmutz/claude-usage-panel"]}</pre>
       <button class="copy" data-copy="cmd-cursor" aria-label="Copy Cursor mcp.json entry">Copy</button>
     </div>
+    <p class="lead" style="margin-top:10px">The button and this entry track <code>main</code>; append <code>#vX.Y.Z</code> to the spec to pin one release.</p>
     <p class="lead" style="margin-top:14px">The desktop panels can also show your Cursor <b>team spend</b> (Admin API key, optional) - see <a href="https://github.com/fschmutz/claude-usage-panel/blob/main/docs/GNOME.md">the guide</a>.</p>
   </div>
   <p class="lead" style="margin-top:14px">It keeps itself current: a daily check installs new releases for you (only ever fast-forwarding a clean checkout, and only the clients you already have). Prefer to drive it yourself? <code>./install.sh update --pull</code> upgrades on demand, and <code>./install.sh --uninstall autoupdate</code> turns the daily check off. Every target has a matching <code>--uninstall</code>.</p>

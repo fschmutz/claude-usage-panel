@@ -1,7 +1,9 @@
 # Installation
 
-One line - it fetches the repo into `~/.local/share/claude-usage-panel` and
-auto-detects your OS to install the sensible set:
+One line - it fetches the repo into `~/.local/share/claude-usage-panel`, puts
+it on the newest released `vX.Y.Z` tag (never the tip of main; a re-run
+fast-forwards to a newer tag) and auto-detects your OS to install the sensible
+set:
 
 ```bash
 curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash
@@ -17,7 +19,7 @@ Or from a clone: one `install.sh` at the repo root installs, updates, and
 uninstalls every client.
 
 | Command | Does |
-|---|---|
+| --- | --- |
 | `./install.sh` | auto-detect OS → the sensible set |
 | `./install.sh gnome` | GNOME Shell extension |
 | `./install.sh statusline` | Claude Code status line |
@@ -27,16 +29,17 @@ uninstalls every client.
 | `./install.sh sessionping [HH:MM …] [--days=…]` | scheduled `claude` pings that open the 5h session window (opt-in) |
 | `./install.sh update [target…]` | reinstall what's already installed (upgrade) |
 | `./install.sh update --pull` | `git pull` first, then upgrade |
-| `./install.sh --uninstall [target…]` | reverse an install |
+| `./install.sh --uninstall [target…]` | reverse an install (default: everything installed, sessionping included) |
 | `./install.sh --dry-run [target…]` | print the actions without doing them |
 | `./install.sh --list` | show detected + installed targets |
 
 Each target guards its own dependencies and is skipped with a clear message if
-they're missing, rather than failing the whole run. Re-running is safe.
+they're missing. A target that fails hard does not stop the others: the rest
+still run, and the run exits 1 naming every failed target. Re-running is safe.
 
 ## GNOME (Linux)
 
-Requirements: GNOME Shell 45–50, an active Claude Code login.
+Requirements: GNOME Shell 45–51, an active Claude Code login.
 
 The `gnome` target copies the extension, compiles its GSettings schema, clears the
 global `disable-user-extensions` switch if set, and enables the extension for every
@@ -68,6 +71,14 @@ and opens it. On first run it **registers itself to start at login** (toggle in
 Settings ▸ Start at login). Just want to run it without installing?
 `cd macos && swift run`. See [[macOS]] for login-item and Keychain details.
 
+No checkout? The release workflow publishes a Homebrew cask to
+`fschmutz/homebrew-tap`:
+
+```bash
+brew install --cask fschmutz/tap/claude-usage-panel
+brew upgrade --cask claude-usage-panel
+```
+
 ## MCP tool - no clone needed
 
 The `get_usage` tool also installs without touching the repo:
@@ -77,7 +88,7 @@ The `get_usage` tool also installs without touching the repo:
 /plugin marketplace add fschmutz/claude-usage-panel
 /plugin install claude-usage@claude-usage-panel
 
-# or one CLI line
+# or one CLI line (the unpinned spec tracks main; append #vX.Y.Z for one release)
 claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel
 
 # Cursor: click "Add to Cursor" on the landing page
@@ -114,7 +125,7 @@ reinstall, or an install that could not reach `node`; comparing the checkout
 made all of those read as "up to date" while the clients stayed behind.
 
 | | |
-|---|---|
+| --- | --- |
 | Linux | systemd user timer `claude-usage-panel-update.timer` (`OnCalendar=daily`, `Persistent=true`, so a missed day runs at next login) |
 | macOS | launchd agent `io.github.fschmutz.claude-usage-panel.update`, daily at 11:17 and at login |
 | Neither | a `cron` line tagged `# claude-usage-panel auto-update` |
@@ -189,14 +200,15 @@ dropdowns show `Session pings: last 05:30 · next 10:35`, the macOS Settings
 window has a *Last ping* row, the status line renders `ping 05:30` (silent
 until you schedule pings), and the MCP `get_usage` tool returns a `lastPing`
 field. The source is the stamp `scripts/session-ping.sh` writes to
-`~/.local/state/claude-usage-panel/last-ping`.
+`${XDG_STATE_HOME:-~/.local/state}/claude-usage-panel/last-ping`, read from
+that same path on every platform, macOS included.
 
 The ping goes through the `claude` CLI (which refreshes the OAuth token if it
 expired overnight - the panel's clients never write the token themselves), from
 an empty working directory so none of your project context is loaded.
 
 | | |
-|---|---|
+| --- | --- |
 | Linux | systemd user timer `claude-usage-panel-sessionping.timer` (one `OnCalendar` per time, `Persistent=false`) |
 | macOS | launchd agent `io.github.fschmutz.claude-usage-panel.sessionping` (one `StartCalendarInterval` per time) |
 | Neither | `cron` lines tagged `# claude-usage-panel session-ping` |

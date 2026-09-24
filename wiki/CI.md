@@ -14,10 +14,18 @@ reported `success`.
 lint (pre-commit) ─┐
 js ────────────────┤
 screenshots ───────┤
+i18n ──────────────┤
 swift-core ────────┼──▶ ci-gate ──▶ the only context the ruleset requires
 macos-app ─────────┤
-bash32 ────────────┘
+bash32 ────────────┤
+plugin-validate ───┘
 ```
+
+`i18n` runs `scripts/update-po.sh --check` (every `_()` string of the GNOME
+extension reached the template and every catalog) and compiles each catalog
+with `msgfmt --check`; pre-commit's `i18n-catalogs` hook runs the same check
+locally but skips it when gettext is missing, so this job is the one that
+cannot be skipped.
 
 `bash32` runs `scripts/bash32-smoke.sh` inside a `bash:3.2` container - the
 version macOS still ships as `/bin/bash`, and the one the launchd agents
@@ -56,17 +64,29 @@ ever find yourself editing the ruleset's required checks, something is wrong.
   version in a trailing comment. A tag is mutable: whoever controls the
   upstream repo can repoint `v7` at new code that runs with your token.
   Dependabot rewrites both the SHA and the comment, so this costs no upkeep.
+- **Everything else is pinned too, and Dependabot bumps it.** Pre-commit hook
+  revs are frozen to a commit SHA with the tag in a `# frozen: vX` comment
+  (Dependabot's pre-commit ecosystem). The pre-commit the `lint` job installs
+  is pinned in `.github/pre-commit/requirements.txt` (pip ecosystem: a version
+  inside a `run:` line is invisible to every ecosystem). The bash 3.2 image of
+  the `bash32` job is pinned by digest in `.github/bash32/Dockerfile` (docker
+  ecosystem, held to 3.2).
+  The Claude Code CLI the `plugin-validate` job runs is pinned in
+  `.github/claude-cli/package-lock.json` (npm ecosystem).
 - **Dependabot waits 7 days** (`cooldown`) before proposing a new release. A
   compromised upstream is normally caught and yanked inside that window.
-- **`permissions:` is least-privilege**, declared at the *job* level where a
-  write is genuinely needed and `{}` at the workflow level. `ci.yml` never
-  writes anything.
+- **`permissions:` is least-privilege.** The workflow level grants no write
+  scope: `{}` (`release.yml`, `wiki.yml`) or read-only scopes every job
+  inherits (`ci.yml`'s `contents: read` - it never writes anything). A write
+  scope is declared only on the job that needs it. zizmor does not catch a
+  workflow-level write (it reports a workflow-level `contents: write` as no
+  finding), so `tests/docs.test.js` gates this one.
 - **`persist-credentials: false` on every checkout.** By default
   `actions/checkout` leaves a usable token in `.git/config`, which any later
   step - or any script it runs - can read.
-- **Two linters enforce the above.** `actionlint` checks the workflow is
-  *valid*; `zizmor` checks it is *safe* (unpinned actions, over-broad
-  permissions, credential persistence, template injection). Both run in
+- **Two linters enforce the rest.** `actionlint` checks the workflow is
+  *valid*; `zizmor` checks it is *safe* (unpinned actions, a workflow with no
+  `permissions:`, credential persistence, template injection). Both run in
   `pre-commit`, so they run locally and in the `lint` job.
 
 ```bash

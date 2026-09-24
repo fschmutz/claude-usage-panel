@@ -28,7 +28,7 @@ Quick toggles (Cost, Alerts, Refresh) live in the dropdown; a full **Settings** 
 ## Options
 
 | Option | What it does |
-|---|---|
+| --- | --- |
 | **Refresh interval** | Minutes between polls (default 10). It is a floor, not a fixed rate: after three polls in which nothing moved the clients back off to at most 15 minutes, a poll is always pulled forward to just after the nearest reset, and both panels also refresh on wake from sleep and when the network comes back. |
 | **Top bar shows** (GNOME) | Worst limit, or the current session. |
 | **Limit-crossing alerts** | Notify when a limit reaches 90% / 100%. |

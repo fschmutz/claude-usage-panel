@@ -19,7 +19,12 @@ source of truth the macOS bundle reads - never hardcode a version anywhere.
 the GNOME `.shell-extension.zip`, extracts that version's `CHANGELOG.md` section
 as the release notes, and creates the GitHub Release with the zip attached. No
 manual `gh release create` needed. To (re)release an existing tag, run the
-**release** workflow from the Actions tab with the tag as input. The macOS
+**release** workflow from the Actions tab with the tag as input: a
+`workflow_dispatch` re-run builds the tag itself, never the dispatching branch.
+The workflow refuses a tag that does not match `package.json`
+(`scripts/check-versions.sh --tag`). `plugin/.mcp.json` pins the npx spec to the
+release tag, so push the tag right behind the bump commit: until it exists the
+plugin names a release nobody can fetch. The macOS
 `.app` is built and attached too (`ClaudeUsagePanel-macos.zip`), signed with a
 Developer ID and notarized if the secrets below are configured, ad-hoc signed
 otherwise - see below.
@@ -33,15 +38,22 @@ release is live for humans and for the daily updater alike.
 ## GNOME - extensions.gnome.org (EGO)
 
 A packaged zip is attached to each GitHub release
-(`claude-usage-panel@fschmutz.github.io.shell-extension.zip`), or rebuild it:
+(`claude-usage-panel@fschmutz.github.io.shell-extension.zip`), or rebuild it from
+the repository root:
 
 ```bash
-cd claude-usage-panel@fschmutz.github.io
-gnome-extensions pack . \
-  --extra-source=lib --extra-source=icons \
-  --schema=schemas/org.gnome.shell.extensions.claude-usage-panel.gschema.xml \
-  --force -o ..
+uuid=claude-usage-panel@fschmutz.github.io
+zip_out="$PWD/$uuid.shell-extension.zip"
+tmp=$(mktemp -d)
+scripts/pack-gnome.sh "$tmp/$uuid"
+(cd "$tmp/$uuid" && zip -rq "$zip_out" .)
 ```
+
+This is the exact sequence `release.yml` runs. Do not rebuild it with a bare
+`gnome-extensions pack`: that packs neither the compiled `locale/` nor the
+`scripts/` the extension runs itself (`auto-update.sh` behind the Updates row,
+`session-ping.sh` behind session pings), so the zip installs with "Cannot
+self-update" and no ping runner.
 
 Submit:
 
@@ -83,7 +95,7 @@ Actions) and it takes over automatically; leave any of them unset and the
 release stays ad-hoc signed as before:
 
 | Secret | Value |
-|---|---|
+| --- | --- |
 | `MACOS_CERTIFICATE_P12_BASE64` | `base64 -i YourCert.p12 \| pbcopy` - the exported Developer ID Application cert |
 | `MACOS_CERTIFICATE_PASSWORD` | that `.p12`'s export password |
 | `MACOS_SIGNING_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` |
@@ -111,11 +123,15 @@ xcrun stapler staple ClaudeUsagePanel.app
 
 The cask lives in the repo at `Casks/claude-usage-panel.rb`, and the release
 workflow attaches it to every release next to the zip, with `sha256` pinned to
-that zip (`scripts/make-cask.sh`, run right after the upload). No tap is
-needed:
+that zip (`scripts/make-cask.sh`, run right after the upload). Its
+`homebrew-tap` job then publishes that pinned cask to `fschmutz/homebrew-tap`
+(`scripts/publish-cask.sh`), with the `HOMEBREW_TAP_TOKEN` secret: a
+fine-grained token with `contents: write` on that repo only. Without it the
+job fails, since a release brew users never see is not a success; it re-runs
+alone, without rebuilding the app.
 
 ```bash
-brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb
+brew install --cask fschmutz/tap/claude-usage-panel
 brew upgrade --cask claude-usage-panel
 ```
 
@@ -128,8 +144,9 @@ scripts/make-cask.sh v2.1.2                  # downloads that release's zip
 scripts/make-cask.sh v2.1.2 /path/to/zip     # or checksums a local one
 ```
 
-For a tap instead (`brew install --cask <tap>/claude-usage-panel`), copy the
-same file into `homebrew-<tap>/Casks/`. Without the Developer ID secrets above
+The pinned asset also installs with no tap:
+`brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb`.
+Without the Developer ID secrets above
 the app is only ad-hoc signed, so Gatekeeper still warns on first launch and
 the cask says so in its caveats - a cask cannot notarize anything; notarizing
 first is what makes it install cleanly.

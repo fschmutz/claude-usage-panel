@@ -18,12 +18,18 @@ click **Always Allow**.
 Builds `ClaudeUsagePanel.app` (`LSUIElement`, no Dock icon), ad-hoc signs it, copies
 it to `/Applications`, and opens it. Version comes from `package.json`.
 
-No checkout? Every release ships the built app and a Homebrew cask pinned to it:
+No checkout? Every release ships the built app, and the release workflow
+publishes a Homebrew cask pinned to it to `fschmutz/homebrew-tap`:
 
 ```bash
-brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb
+brew install --cask fschmutz/tap/claude-usage-panel
 brew upgrade --cask claude-usage-panel
 ```
+
+The cask declares macOS 13+; `brew uninstall --cask` quits the app and unloads
+its session-ping launchd agent. `--zap` also removes the agent plist, the ping
+state files and the app's preferences, caches and Application Support folder -
+saved accounts included.
 
 The build is ad-hoc signed, not notarized, so the first launch needs
 right-click ▸ **Open** (or `xattr -d com.apple.quarantine`). Installed that

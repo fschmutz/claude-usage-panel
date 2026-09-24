@@ -20,7 +20,8 @@
 
 ## Cost shows "unavailable"
 
-Install Node/`npx` (or a global `ccusage`). Cost is computed by `ccusage`, not the API.
+Install `ccusage` on your PATH (`npm install -g ccusage`). The panels run only an
+installed copy and never download one. Cost is computed by `ccusage`, not the API.
 
 ## Cursor section errors
 

@@ -19,12 +19,185 @@ semantic versioning.
   autosave never runs AppleScript (no surprise Automation prompt), and tmux,
   kitty and WezTerm are found in the Homebrew and system bin directories when
   the scheduler's PATH lacks them.
+- **GNOME Shell 51** is supported (45-51).
+- **A Homebrew tap.** The release workflow publishes the cask pinned to each
+  release to `fschmutz/homebrew-tap`:
+  `brew install --cask fschmutz/tap/claude-usage-panel`, then
+  `brew upgrade --cask claude-usage-panel`.
+
+### Changed
+
+- The macOS package is on Swift tools-version 6.0 in Swift 6 language mode
+  (concurrency violations are errors), and the Linux CI gate runs Swift 6.4
+  from the official image pinned by digest (`.github/swift/Dockerfile`,
+  bumped by Dependabot).
+- CI validates both plugin manifests with a pinned Claude Code CLI
+  (`claude plugin validate`), and a weekly job fails when GNOME ships a
+  Shell major newer than `metadata.json` lists.
+- The macOS pace-alert latch moved into `ClaudeUsageCore` and is pinned
+  with the GNOME one by `tests/fixtures/alerts.json`.
+- **Node 22 is now the minimum** (18 and 20 are end of life); CI tests 22 and
+  24.
+- The MCP server supports protocol revision `2025-11-25` (and still accepts
+  `2025-06-18`, `2025-03-26`, `2024-11-05`).
+- The plugin marketplace manifest carries its own description, and
+  `claude plugin validate .` is warning-free.
+- All CI and pre-commit tools are pinned by SHA or digest and kept current by
+  Dependabot; a new file-size gate holds every file to 700 lines, with named
+  exemptions.
+- GNOME: usage and Cursor errors are translated, and session and member
+  counts use plural forms.
 
 ### Fixed
 
+- **Accounts: a switch interrupted between its two writes can no longer copy
+  one account's tokens into another's profile** - in the GNOME and macOS
+  panels (the live access token now decides which profile is live, before the
+  account block), or in any port once Claude Code rotates the old token (a
+  `.switch-pending.json` marker stops every snapshot until the switch is
+  finished). `claudectl account list` shows an unfinished switch and
+  re-running `claudectl account use NAME` completes it.
+- Accounts: syncBack no longer erases a saved profile's identity when
+  `~/.claude.json` has no `oauthAccount`, which also let one account be saved
+  under two names.
+- Accounts: a name that differs from a saved one only by case is refused
+  instead of overwriting it on case-insensitive macOS volumes, and an unsaved
+  login whose email starts with `_` can be switched away from.
+- Accounts: with `CLAUDE_CONFIG_DIR` set on macOS, the CLI, the MCP server and
+  the app read and write that config dir's own Keychain item instead of the
+  default login's.
+- macOS account rows omit a missing session/weekly figure like the GNOME panel
+  instead of printing `S - · W -`, and Swift rejects profile names with a
+  trailing newline.
+- `claudectl account refresh` refreshes every account even when one fails,
+  and exits 1; its help shows the accounts directory actually in use.
+- **The forecast reads the same in every port.** Margin rounding is identical
+  on macOS and GNOME at half-tenth ties (the exhaustion alert no longer
+  differs by port); the lead time never prints `1d24h` or `0h before reset`;
+  the status line / MCP reset countdown floors like the panels; malformed
+  usage payloads read the same in every port.
+- A malformed shared history file no longer kills the status line, and the
+  forecast history no longer spans an account switch.
+- **Status line:** the token total is cached per transcript and read
+  incrementally, so parallel sessions no longer evict each other and a long
+  transcript is not re-parsed on every refresh.
+- Status line: the account segment no longer reads the OAuth token (no
+  Keychain fork per refresh on macOS).
+- macOS: the MCP server and the status line now see the last session ping
+  (they looked in Application Support; the ping script writes
+  `~/.local/state`).
+- Next-ping, "yesterday" labels and the session index's day pruning no longer
+  skip or repeat a day across a DST change, in every port (GNOME, status
+  line, MCP, macOS); a Europe/Paris fixture pins both 2026 transitions.
+- The status line and MCP file pace history under the live login, so a
+  switch to another account never forecasts from the other pool. One
+  segment that fails no longer blanks the whole status line.
+- The session-ping unit the GNOME preferences write quotes a checkout path
+  with spaces, quotes, `%` or `&`, and reads the quoted form back.
+- A resumed session saved under a minute ago says "moments ago", not
+  "0m ago".
+- An inverted or empty work day (e.g. 18:00-09:00) now plans against
+  09:00-18:00 on both GNOME and macOS, instead of a bogus 04:00 ping (GNOME)
+  or a crash (macOS planner); macOS parses work-day times as strictly as
+  GNOME (`9:5`, `+9:00`, `009:00` rejected).
+- The session index follows `CLAUDE_CONFIG_DIR` in the GNOME extension and
+  the macOS app, like the Node ports.
+- The shared session index is no longer rewritten by each client after the
+  other (mtime stored at whole seconds in every port), is written atomically
+  by the MCP server, and the macOS app no longer discards an index the MCP
+  server wrote.
+- A renamed session shows its latest title, and a transcript line over 1 MiB
+  no longer stalls the MCP session index.
+- macOS no longer crashes on a transcript timestamp with an offset past
+  ±18 h.
+- `claudectl session`: reopened tabs no longer inherit `GIT_EDITOR=true` /
+  `AI_AGENT` from a Claude shell; `--resume=ID`, a flag after `-r` and an
+  npm-installed `claude` are parsed correctly; `--exclude-self` and the `list`
+  `*` marker work on macOS (`CLAUDE_PID`); an all-digit label resolves to
+  itself before an index.
+- MCP server: a `null` JSON line on stdin no longer makes it exit, and a
+  non-object request gets a `-32600 Invalid Request` reply.
+- MCP `get_usage` answers with usage even when the account store is not
+  writable, any internal failure is a tool error instead of a JSON-RPC
+  `-32603`, and on a saved live login a 401 keeps the "Run any Claude Code
+  command to refresh it" hint.
+- GNOME: a failed usage poll (expired or missing login) still refreshes the
+  accounts, sessions, Cursor and cost sections, so the account switcher is
+  reachable when it is the fix.
+- GNOME: child processes are killed after 60 s and every dropdown section has
+  a deadline, so one hung child no longer stops polling.
+- GNOME and macOS: the header plan label shows the live login's plan (e.g.
+  Max 20x); the usage endpoint never sent one.
+- GNOME: no keyring lookup while the Cursor section is disabled (no journal
+  warning per poll without a Secret Service).
+- macOS: the release check for cask and release-zip installs reads GitHub's
+  ref advertisement over HTTPS instead of running `/usr/bin/git`, so Macs
+  without the Command Line Tools no longer get the "install developer tools"
+  dialog every hour.
+- macOS: Cursor cycle spend, Today and top spender keep fractional cents
+  (Cursor Admin API since 2026-06-04) instead of truncating each row, matching
+  GNOME; `tests/fixtures/cursor.json` now pins the Cursor contract.
+- The Homebrew cask declares macOS 13+, quits the app and unloads its
+  session-ping launchd agent on uninstall, and zaps the agent plist and the
+  ping state files.
+- **The curl | bash one-liner installs the newest released `vX.Y.Z` tag**
+  instead of the tip of main, and a re-run fast-forwards to a newer tag.
+- A failed `swift build` now fails `install.sh macos` (including
+  `--build-only` in the release workflow) instead of reporting "built" for a
+  bundle with no binary.
+- Reinstalling the GNOME extension packs into a staging dir and swaps it in,
+  so a failed pack (e.g. no `cpio`) no longer leaves an empty extension
+  directory.
+- One target failing hard no longer aborts `install.sh`: the remaining
+  targets still run, and the run exits 1 naming every failed target.
+- A bare `install.sh --uninstall` removes what is installed (sessionping
+  included), not what is detected.
+- Uninstalling the status line or the MCP server without node on PATH reports
+  the manual step instead of crashing or claiming success.
+- The autoupdate and sessionping systemd units and cron lines quote a
+  checkout path that contains spaces, `&`, quotes or `%`.
+- `auto-update.sh --status` and `session-ping.sh --status` no longer create
+  the state directory.
+- `install.sh statusline` / `mcp` edit a symlinked `~/.claude/settings.json`
+  or `~/.cursor/mcp.json` through the link and keep the file's mode (new files
+  are `0600`), instead of replacing the link with a umask-mode regular file.
+- **Releases:** re-running the release workflow for an existing tag builds
+  that tag, not main; a release tag that does not match `package.json` is
+  refused; the Claude Code plugin runs the release it names instead of main's
+  tip.
+- `scripts/token-attribution.mjs` counts each assistant message once per
+  `message.id` (it overcounted about 1.6x), matches project dirs whose path
+  contains `.` or other non-alphanumerics, and follows `CLAUDE_CONFIG_DIR`.
+- `linux/usage-bar` labels a per-model weekly cap with its model (`W·Fable`)
+  instead of printing a second bare `W`.
+- Docs match the code: README, PUBLISHING, SECURITY, CONTRIBUTING,
+  `docs/GNOME.md` and the wiki (GNOME zip rebuilt via `scripts/pack-gnome.sh`,
+  the i18n gate in the CI diagram, the GNOME-only translations, the shipped
+  Homebrew cask, the terminal autodetect order, the real normalizer copies),
+  and `tests/docs.test.js` pins each of these claims against the tree. The
+  `claude-code/README.md` manual install now uses the whole `claude-code/`
+  tree (a lone `statusline.mjs` copy failed with `ERR_MODULE_NOT_FOUND`).
 - The test helper resolves `bash` / `git` from a constant list of system
-  directories instead of letting the child's `PATH` - which the tests build
-  from `process.execPath` - decide what runs.
+  directories instead of letting the child's `PATH` decide what runs.
+
+### Security
+
+- **Cost runs only an installed `ccusage`.** The `npx ccusage@latest`
+  fallback is removed: it fetched and ran the newest unpinned npm release on
+  every poll, inside the session that holds the Claude OAuth token.
+- Accounts: switching on macOS no longer passes the OAuth credentials
+  (refresh token included) on the `/usr/bin/security` command line. The app
+  writes the Keychain item through the Security framework; the CLI and MCP
+  server send it hex-encoded on stdin and refuse, before touching the live
+  login, a blob too large for one `security -i` line. Every write is verified
+  by reading the item back.
+- macOS: notification text is passed to `osascript` as run-handler arguments,
+  never spliced into AppleScript source (a backslash in a model name or
+  account email could end the string literal and run script).
+- xterm / x-terminal-emulator resume quotes the working directory (spaces
+  broke resume, shell metacharacters ran).
+- The status line's forecast history and token cache moved out of the shared
+  `/tmp` to a per-user directory.
 
 ## [2.2.0] - 2026-09-24
 

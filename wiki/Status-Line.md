@@ -21,8 +21,10 @@ extension, the macOS app, and the [[MCP Tool]] - never here.
 When your recent pace puts a limit on track to run out **before** its reset,
 the gauge grows a compact amber marker - `Week █▌░░ 52% 2d14h ⚠full Sat21:24` -
 and stays silent otherwise, so the line only lengthens when something is worth
-knowing. Samples are recorded to a local tmp file shared with the MCP server
-(`$TMPDIR/claude-usage-history.json`); still no credentials and no network.
+knowing. Samples are recorded to a per-user scratch file shared with the MCP
+server (`claude-usage-history.json` in `$XDG_RUNTIME_DIR`, else `~/.claude`;
+the per-user `$TMPDIR` on macOS; never the shared `/tmp`), kept per account;
+still no credentials and no network.
 
 ## Install
 
@@ -53,14 +55,18 @@ command; re-run to change):
   (nothing until a login is saved, see [[Accounts]]). When this session is at the
   auto-switch threshold and the panels' last snapshot says another saved
   account has room, it turns yellow: `[PRO ⇢ PERSO]`. A hint only - the status
-  line has no credentials and never switches.
+  line has no credentials and never switches. The account segment matches
+  `~/.claude.json` `oauthAccount` against the saved profiles and never reads
+  an access token (no Keychain lookup on macOS).
 - `--tokens` - `all` (include cache reads: the true throughput) or `fresh`
   (only new tokens).
 
 ## Behavior
 
-- The token sums are cached on disk keyed by the transcript's size + mtime, so a
-  multi-MB transcript isn't re-read on every prompt refresh.
+- The token sums are cached on disk per transcript (the 16 most recently used,
+  so parallel sessions keep their own entry) with the byte offset of the last
+  complete line: an unchanged transcript is not read at all and a grown one is
+  read only past that offset.
 - Session/Week appear after the session's first API response (Claude Code only
   provides `rate_limits` from then on); before that you see the Context gauge.
 - Renders on its own row above Claude Code's mode badges; indent with the

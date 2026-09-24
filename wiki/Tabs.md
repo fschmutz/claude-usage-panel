@@ -36,7 +36,7 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 ## Commands
 
 | `claudectl session …` | What it does |
-|---|---|
+| --- | --- |
 | `list [--json]` | Running sessions: name, session id, state, directory |
 | `save [LABEL] [--exclude-self]` | Snapshot the running sessions |
 | `store [--json]` | Saved snapshots, newest first, numbered |
@@ -47,6 +47,10 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 
 `SNAP` is a label, a unique prefix of one, or its number in `store`; without
 one, the newest snapshot is used.
+
+`--exclude-self` (and the `*` marker in `list`) finds the session the command
+runs in from `CLAUDE_PID`, which Claude Code sets for every command it runs,
+and otherwise walks the parent process chain - the same on every platform.
 
 ## What `open` does
 
@@ -100,7 +104,7 @@ Placement - which window, which tab - is read at save time from each
 session's controlling tty (kitty: its pid), most exact source first:
 
 | Source | How | Notes |
-|---|---|---|
+| --- | --- | --- |
 | tmux | `tmux list-panes -a` | tmux session = window, tmux window = tab, whatever terminal shows it |
 | kitty | `kitty @ ls` | only from inside kitty or with `$KITTY_LISTEN_ON`; needs `allow_remote_control` |
 | WezTerm | `wezterm cli --no-auto-start list` | never starts a WezTerm server |

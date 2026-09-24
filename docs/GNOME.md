@@ -10,7 +10,7 @@ Per-model cards read "Share of the weekly all-models limit" under the
 countdown: that usage draws from the weekly pool (on Max, up to 50% of the
 weekly allowance may go to Fable) rather than adding a pool of its own.
 
-Requires GNOME Shell 45–50.
+Requires GNOME Shell 45–51.
 
 ## Install
 
@@ -52,11 +52,14 @@ gnome-extensions prefs claude-usage-panel@fschmutz.github.io
 - **Top bar shows** - worst limit or current session.
 - **Limit-crossing alerts** - notify at 90% / 100%.
 - **Show session cost** - optional local [`ccusage`](https://github.com/ryoppippi/ccusage)
-  cost (needs Node.js / `npx`).
+  cost (needs `ccusage` installed on your PATH, e.g. `npm install -g ccusage`;
+  the panel never downloads it for you).
 - **Today's sessions** - toggle the dropdown list of today's sessions (biggest
   token spender first, click to resume one in a terminal), plus the **Terminal**
-  to open. Empty means autodetect: `$TERMINAL`, then ghostty, kitty, wezterm,
-  alacritty, foot, gnome-terminal, konsole, tilix, xfce4-terminal, xterm.
+  to open. Empty means autodetect: `$TERMINAL`, then the desktop's default
+  terminal (`xdg-terminal-exec`, then `x-terminal-emulator`), then the first
+  installed of ghostty, kitty, wezterm, alacritty, foot, gnome-terminal,
+  konsole, tilix, xfce4-terminal, xterm.
 - **Session pings** - schedule the one-turn `claude` ping that opens the 5-hour
   window (on/off, times, weekdays, working day, **Suggest times**, coverage,
   last ping). It writes the same systemd user units as

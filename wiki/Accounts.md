@@ -36,8 +36,8 @@ turn on *Enable named accounts* in the GNOME preferences or the macOS Settings
 A Claude Code login is exactly two things:
 
 | What | Where (Linux) | Where (macOS) |
-|---|---|---|
-| The OAuth tokens | `~/.claude/.credentials.json` | login Keychain item `Claude Code-credentials` |
+| --- | --- | --- |
+| The OAuth tokens | `~/.claude/.credentials.json` | login Keychain item `Claude Code-credentials` (`Claude Code-credentials-<hash>` when `CLAUDE_CONFIG_DIR` is set, as Claude Code names it) |
 | Who the account is (`oauthAccount`: email, organization, tier) | `~/.claude.json` | `~/.claude.json` |
 
 `use NAME` swaps those two and nothing else - settings, hooks, plugins, MCP
@@ -52,6 +52,18 @@ it is set. In order:
    refresh that fails leaves your current login untouched.
 3. The target's tokens and `oauthAccount` block are installed.
 
+**An interrupted switch** (a crash or a kill between the two writes) is marked
+in the store, so no client takes the half-installed login for either account.
+`claudectl account list` shows it (`the switch to NAME did not finish`), and
+re-running `claudectl account use NAME` finishes it.
+
+On macOS the tokens never go on a command line. The menu-bar app writes the
+Keychain item through the Security framework; the CLI and the MCP server send
+it on stdin to `security -i`, which reads one command of under 4096 bytes. A
+login whose credentials blob is too large for that (about 2 KB of JSON, which
+MCP OAuth entries can reach) is refused before anything is touched; switch to
+it from the menu-bar app, which has no such limit.
+
 **Claude Code sessions already running keep the old login** until they restart;
 `use` tells you how many there are. New sessions, the panels and the MCP tool
 see the new account immediately.
@@ -64,7 +76,9 @@ One file per account, mode `0600`, in a `0700` directory:
 - macOS: `~/Library/Application Support/claude-usage-panel/accounts/NAME.json`
 
 Names are one path segment: letters, digits, `.` `_` `-`, up to 32 characters,
-no leading dot or dash. `remove NAME` forgets one; `--uninstall accounts` keeps
+no leading dot or dash. Names are case-insensitive: `pro` and `PRO` are the
+same account (the macOS disk is), so a name differing from a saved one only by
+case is refused. `remove NAME` forgets one; `--uninstall accounts` keeps
 them (delete the folder yourself).
 
 ## Token refresh - the one thing written outside `~/.claude`
@@ -112,7 +126,9 @@ claudectl account refresh [NAME]                  refresh the stored token(s) no
 `save` refuses a name that already belongs to a different account, and refuses
 to save an account that is already saved under another name; `--force`
 overrides both. `list --usage` reads every account's limits (refreshing where
-needed) and writes the snapshot the status line reads.
+needed) and writes the snapshot the status line reads. `refresh` without a
+name goes through every saved account even when one fails, and exits 1 if any
+did.
 
 ## Where the same logic lives
 

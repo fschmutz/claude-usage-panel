@@ -41,7 +41,7 @@ pre-commit run zizmor --all-files   # workflow security audit (actionlint = vali
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
 ./install.sh update [target...]        # reinstall installed targets (upgrade); --pull to git pull first
-./install.sh --uninstall [target...]   # reverse it   |   --list (detected + installed)   |   -h
+./install.sh --uninstall [target...]   # reverse it (default: all installed)   |   --list (detected + installed)   |   -h
 ./install.sh --dry-run [target...]     # print actions without touching anything
 
 # Screenshots are GENERATED - after any UI-visible contract change:
@@ -65,7 +65,9 @@ only reaches users once the tag is pushed** - bumping `package.json` on main is
 not enough. It only ever `merge --ff-only`s, **to that tag** and not to the
 branch tip, and skips a dirty, diverged or detached checkout rather than
 touching it; `tests/autoupdate.test.js` asserts each of those guards against a
-throwaway local bare remote (offline).
+throwaway local bare remote (offline). `docs/install` (the curl one-liner)
+lands on the newest `vX.Y.Z` tag with the branch placed on it, never on main;
+`tests/install-bootstrap.test.js` pins it.
 
 **Every update decision reads the DEPLOYED version, never the checkout's
 `package.json`.** Four files under `<state dir>/claude-usage-panel` carry it,
@@ -107,10 +109,27 @@ Shell changes are gated on **bash 3.2** (`bash32` job, `scripts/bash32-smoke.sh`
 in a container) because that is what macOS ships as `/bin/bash`; ubuntu's bash 5
 hides real traps, notably `"${arr[@]}"` on an empty array under `set -u`.
 
-Workflow rules, enforced by `zizmor` in pre-commit (it will fail the build):
-actions pinned to a full commit SHA with the version in a trailing comment
-(Dependabot maintains both), `persist-credentials: false` on every checkout,
-`permissions:` at job level with `{}` at workflow level.
+The `plugin-validate` job runs `claude plugin validate` on the marketplace
+and on `plugin/` with the CLI pinned in `.github/claude-cli` (Dependabot's npm
+ecosystem), and fails on any warning.
+
+The `js` job runs a Node matrix of the `package.json` engines floor (22) and
+the active LTS (24); `tests/ci-release.test.js` fails if the floor is not in
+the matrix.
+
+Workflow rules. `zizmor` in pre-commit fails the build on the first two and
+on a workflow with no `permissions:` at all: actions pinned to a full commit
+SHA with the version in a trailing comment (Dependabot maintains both), and
+`persist-credentials: false` on every checkout. The third rule zizmor does NOT
+catch (a workflow-level `contents: write` passes it), so `tests/docs.test.js`
+gates it: the workflow-level `permissions:` grants no write scope (`{}`, or
+read-only scopes like `ci.yml`'s `contents: read`, which every job there
+inherits), and a write scope is declared only on the job that needs it
+(`release.yml`, `wiki.yml`). Pre-commit hook revs are frozen to a SHA with a
+`# frozen: vX` comment. The CI pre-commit version lives in
+`.github/pre-commit/requirements.txt` and the bash32 image in
+`.github/bash32/Dockerfile`, pinned by digest. Dependabot bumps all of them
+(github-actions, pre-commit, pip, docker and npm ecosystems).
 
 CodeQL runs via **default setup**, not a workflow file - do not create one, it
 would be auto-disabled and become a dead file. Its PR check is neutral by
@@ -134,9 +153,13 @@ pure part + `lib/accounts.js` I/O + `lib/accountsSection.js` controller) and
 the macOS app (`ClaudeUsageCore/Accounts.swift` + `AccountStore.swift` +
 `Accounts.swift`) mirror it; `tests/fixtures/accounts.json` pins what they
 must agree on: profile validity + names, which saved profile the live login is
-(uuid, then email), `tokenState` (valid / stale within 5 min of expiry /
+(the live access token first, then the account block: uuid, then email),
+`tokenState` (valid / stale within 5 min of expiry /
 expired once the refresh token is gone), and `autoSwitchTarget` (threshold 90,
-margin 15, cooldown 5 min, most headroom wins, ties by code-point name order).
+margin 15, cooldown 5 min, most headroom wins, ties by code-point name order),
+`liveLogin`, `syncBack` (torn / pending / no account block), `sameName`,
+`parkName`, `formatUsage`, the Keychain services and the `keychainWrite` stdin
+line (with its 4096-byte limit).
 
 A profile is `{version, name, savedAt, account: <oauthAccount block of
 ~/.claude.json>, credentials: <the .credentials.json blob>}`, one `0600` file
@@ -152,7 +175,18 @@ set). The panels/MCP write `<accounts dir>/.usage-cache.json` (`{at, accounts:
 status line can hint at a freer account, and every `switchTo` writes
 `<accounts dir>/.last-switch.json` (`{at, from, to}`) - the auto-switch
 cooldown is store state, so a switch made by the CLI, the MCP tool or the
-other panel counts for everyone. The panels gate all of it behind
+other panel counts for everyone. Every `switchTo` also writes
+`<accounts dir>/.switch-pending.json` (`{at, from, to}`) before touching the
+live login and removes it once both halves are in. While it stands, no port
+snapshots the live login (`syncBackPlan`), and re-running the switch finishes
+it. Everything the credentials write needs is resolved before the mark, so a
+write that cannot happen leaves the login untouched. Profile names collide
+ignoring case (APFS). On macOS the Keychain item follows Claude Code:
+`Claude Code-credentials-<sha256(NFC CLAUDE_CONFIG_DIR)[0:8]>` when
+`CLAUDE_CONFIG_DIR` is set (`CLAUDE_SECURESTORAGE_CONFIG_DIR` wins). The
+credentials never go in argv: the app writes through `SecItemUpdate` /
+`SecItemAdd`, the Node CLI/MCP through `security -i` on stdin, which refuses a
+command line of 4096 bytes or more. Both read the item back. The panels gate all of it behind
 `accounts-enabled` (GSettings) / `accountsEnabled` (UserDefaults), **off by
 default**; the status line segment is opt-in. The CLI + MCP tools are always on.
 
@@ -165,12 +199,17 @@ summarization, you must change it in **every** port and keep them matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
-  sessions,accounts}.js`. No `gi`/GJS imports anywhere under `pure/`, so it all
-  runs under plain `node` for tests. This is the reference implementation, and
+  sessions,accounts,snapshots,layout}.js` (`layout.js`, the dropdown
+  geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
+  imports anywhere under `pure/`, so it all runs under plain `node` for tests. This is the reference implementation, and
   every importer keeps importing `lib/pure.js`.
 - **`macos/Sources/ClaudeUsageCore/`** - Foundation-only mirror of `pure.js`
   (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Warehouse.swift`,
-  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`).
+  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
+  `Snapshots.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
+  `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
+  `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
+  `PlanLabel.swift`).
   No networking/SwiftUI, so it unit-tests on Linux CI. The files say "Mirrors
   the GNOME extension's lib/pure.js" - keep it that way.
 - **`claude-code/`** - the Node port, one concern per file: `normalize.js`
@@ -193,8 +232,8 @@ summarization, you must change it in **every** port and keep them matching.
   `claudectl.js` only dispatches `account …` to `account-cli.js` and
   `session …` to `session-cli.js`; a new command group is a new
   `<group>-cli.js` exporting `main(argv, io)` + `HELP`, never a new binary.
-- **`mcp/`** - the MCP server: `server.js` is transport + `get_usage` only
-  (~175 lines), `tools.js` the tool schemas / renderers / account tool calls,
+- **`mcp/`** - the MCP server: `server.js` is transport + `get_usage` only,
+  `tools.js` the tool schemas / renderers / account tool calls,
   `sessions.js` the session + ping index, `warehouse.js` the 90-day history
   reader. `server.js` carries the exported `VERSION` const, bumped by
   `scripts/bump-version.sh` and guarded by `scripts/check-versions.sh` - both
@@ -205,7 +244,9 @@ summarization, you must change it in **every** port and keep them matching.
   package.json) so the relative imports resolve exactly as in the checkout;
   the status line command, the MCP registration and the `claudectl` shim
   point into it. Pre-1.11 loose `.mjs` copies are removed on update.
-- **No file in the repo is over 700 lines.** The 1k flag is the ceiling, not
+- **No file in the repo is over 700 lines**, except the ones named with a
+  reason in `scripts/check-file-size.sh` (`CHANGELOG.md`, `po/*.po`). The
+  file-size pre-commit hook enforces it, and a stale exemption fails too. The 1k flag is the ceiling, not
   the target: when a file approaches it, split by concern (that is how
   `install.sh` became `scripts/install/*.sh`, `pure.js` a barrel, and
   `ClaudeUsagePanelApp.swift` four files).
@@ -215,11 +256,17 @@ raw payloads + expected core output; `tests/parity.test.js` runs it through both
 JS ports and the Swift `NormalizeParityTests` runs it through `UsageNormalizer`.
 Change any normalizer and update the fixture - a drifting port goes red. Labels
 are intentionally per-port (compact in the terminal) and are *not* asserted.
+Cursor summarization parity is pinned the same way by
+`tests/fixtures/cursor.json` (`tests/cursor.test.js` + `CursorParityTests.swift`).
 
 The normalization contract (must stay identical across ports):
 
 - Prefer the modern `limits[]` array; fall back to legacy `five_hour`/`seven_day`
   utilization fields only when `limits[]` is absent/empty.
+- Fields are read strictly by JSON type in every port: a non-number
+  percent/utilization is absent, a missing kind is `"unknown"`, an unknown
+  severity is normal, and a `limits[]` with a non-object entry falls back to
+  legacy.
 - `KIND_ORDER` / `kindOrder` defines card sort order; per-model limits get a
   `label · <model display_name>` suffix and a `kind:model` composite key.
 - Every card carries `group` (from the payload's `group`, else derived from the
@@ -233,19 +280,37 @@ The normalization contract (must stay identical across ports):
   returns the "share of the weekly all-models limit" sub-line the UIs render.
 - `clampPercent` → 0..100 int; `severity` comes straight from the API
   (normal/warning/critical) and also drives the top-bar glyph color.
-- `alertThreshold` buckets to 0/90/100 for limit-crossing notifications.
+- `alertThreshold` buckets to 0/90/100 for limit-crossing notifications. The
+  notification latches (fire once at 90/100, re-arm below 85; pace fires at
+  margin ≤ −1 h, re-arms at ≥ +2 h) are pure in `lib/pure/events.js`
+  (`latchCrossings`, `latchPaceAlerts`; Swift `AlertLatch` / `PaceAlertLatch`)
+  and pinned by `tests/fixtures/alerts.json`.
 - `forecast(samples, resetsAt, now)` - burn-rate projection from timestamped
   [epochMs, percent] samples: weighted regression over the last 6 h, pruned at
   window resets, silent unless ≥3 samples span ≥30 min and pace ≥0.2%/h.
   Returns {pctPerHour, projectedFullAt, exhaustsBeforeReset, marginHours};
-  `tests/fixtures/forecast.json` pins all four ports (values chosen away from
-  rounding boundaries so double math agrees across JS and Swift - keep new
-  cases that way). Drives the card sub-line, the predictive top-bar tint, a
+  `tests/fixtures/forecast.json` pins all three copies (`lib/pure/pace.js`,
+  `claude-code/pace.js`, Swift `Model.swift`). `marginHours` is rounded half
+  toward +infinity (`roundHalfUp` = `floor(x*k+0.5)/k`) in every port, and the
+  fixture includes exact half-tenth ties on purpose. Drives the card sub-line, the predictive top-bar tint, a
   once-per-window exhaustion alert (fires at margin ≤ −1 h, re-arms at ≥ +2 h),
   the status line's "⚠full …" marker, and the MCP `pace` field. The status
-  line + MCP share `$TMPDIR/claude-usage-history.json`; GNOME/macOS persist
-  pair-form history in GSettings/UserDefaults (bare-percent entries from old
-  versions migrate as [0, p] and are ignored by the forecast).
+  line + MCP share `claude-usage-history.json` in a per-user scratch dir
+  (`paths.js` `scratchDir`: `$XDG_RUNTIME_DIR`, else `~/.claude` /
+  `CLAUDE_CONFIG_DIR`; per-user `$TMPDIR` on macOS; never the shared /tmp),
+  keyed `"<account>|<card key>"` when the caller passes the live account;
+  entries that are not `[finite t, finite p]` pairs are dropped on read.
+  GNOME/macOS persist pair-form history in GSettings/UserDefaults
+  (bare-percent entries from old versions migrate as [0, p] and are ignored by
+  the forecast).
+- Reset countdown: whole seconds floored, two most significant units, pinned
+  for pure `formatResets`, `claude-code/stamps.js` `resetHint` and Swift
+  `ResetCountdown` by `tests/fixtures/resets.json`. Sparkline: newest 12
+  samples, half-steps round up, pinned by `tests/fixtures/sparkline.json`
+  (pure `sparkline` + Swift `Sparkline`).
+- Session pings: `lastPing` is read from
+  `${XDG_STATE_HOME:-~/.local/state}/claude-usage-panel/last-ping` on every
+  platform, macOS included (the path `session-ping.sh` writes).
 
 ### Platform layer (thin, wraps the pure core)
 
@@ -266,7 +331,8 @@ GET https://api.anthropic.com/api/oauth/usage
 Token location: `~/.claude/.credentials.json` on Linux; the **login Keychain** on
 macOS (read via `security find-generic-password`). Clients **never write the
 token** - on expiry they tell the user to run any Claude Code command to refresh.
-Cost (optional) shells out to `ccusage`; Cursor (optional) calls `api.cursor.com`
+Cost (optional) runs an installed `ccusage` only (no `npx ccusage@latest`
+fallback); Cursor (optional) calls `api.cursor.com`
 with the user's Admin API key.
 
 ## Conventions

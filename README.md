@@ -9,9 +9,9 @@ Session, weekly, and **per-model** limits (Fable, Opus…) - the same numbers as
 `/usage`, always visible, auto-refreshing. Plus an optional **Cursor**
 team-spend section.
 
-![GNOME Shell 45–50](https://img.shields.io/badge/GNOME%20Shell-45--50-4A86CF?logo=gnome&logoColor=white)
+![GNOME Shell 45–51](https://img.shields.io/badge/GNOME%20Shell-45--51-4A86CF?logo=gnome&logoColor=white)
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white)
-![Swift 6.1](https://img.shields.io/badge/Swift-6.1-F05138?logo=swift&logoColor=white)
+![Swift 6.4](https://img.shields.io/badge/Swift-6.4-F05138?logo=swift&logoColor=white)
 ![MCP: Claude Code + Cursor](docs/badge-mcp.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-3DA639)
 ![Read-only](https://img.shields.io/badge/credentials-read--only-2ea44f)
@@ -37,9 +37,9 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 `./install.sh <target…>` from a clone):
 
 | Target | What you get | Details |
-|---|---|---|
-| `gnome` | Top-bar panel + dropdown, alerts, sparklines (GNOME Shell 45–50) | [docs/GNOME.md](docs/GNOME.md) |
-| `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+); also installable without a checkout: `brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb` | [macos/README.md](macos/README.md) |
+| --- | --- | --- |
+| `gnome` | Top-bar panel + dropdown, alerts, sparklines (GNOME Shell 45–51) | [docs/GNOME.md](docs/GNOME.md) |
+| `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+); also installable without a checkout: `brew install --cask fschmutz/tap/claude-usage-panel` (upgrade: `brew upgrade --cask claude-usage-panel`) | [macos/README.md](macos/README.md) |
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
 | `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
 | `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) |
@@ -82,7 +82,8 @@ Context ▌░░░░░ 8%  Session █▌░░░░ 26% 59m  Week █▌�
 otherwise.)
 
 Everything is reversible and idempotent: `update --pull` upgrades what you
-have, `--uninstall [target…]` reverses it, `--dry-run` previews, `--list`
+have, `--uninstall [target…]` reverses it (default: everything installed),
+`--dry-run` previews, `--list`
 shows what's detected and installed.
 
 **It keeps itself current.** On a git checkout the `autoupdate` target is part
@@ -97,7 +98,9 @@ waits. `scripts/auto-update.sh --status` shows where you stand;
 The MCP tool also installs without any clone - as a Claude Code plugin
 (`/plugin marketplace add fschmutz/claude-usage-panel`, then
 `/plugin install claude-usage@claude-usage-panel`) or one CLI line
-(`claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel`).
+(`claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel`;
+that unpinned spec tracks main, append `#vX.Y.Z` to run one release as the
+plugin does).
 
 ## Why this one
 
@@ -117,7 +120,7 @@ others miss - on both Linux and macOS, with native UI on each (no Electron),
 plus terminal and in-conversation projections.
 
 | | |
-|---|---|
+| --- | --- |
 | 📊 **All plan limits** | Session, weekly, per-model - one card each, severity colors + reset timers from the API |
 | 📈 **Burn-rate forecast** | "↗ 4%/h - full ~Sat 21:24, 3d7h before reset": each limit is projected from your recent pace, the top bar turns amber the moment a limit is *on track* to run dry before its reset, and a notification fires once - trouble visible at 50%, not at 90% |
 | ⏱ **Against the clock** | A caret under each bar marks how much of the *window* has gone, so 60% used with 20% of the window left reads as trouble at a glance - the reading a burn rate alone cannot give |
@@ -130,13 +133,13 @@ plus terminal and in-conversation projections.
 | 🗓 **90 days of history** | Every poll that moved is kept locally, so each card can say "peak 71% this week · 84% last" long after Claude's own 30-day cleanup |
 | 💤 **Polls when it matters** | Idle windows back off to 15 min, a poll always lands just after a reset, and both panels refresh on wake from sleep and when the network returns |
 | 💲 **Optional extras** | Local [`ccusage`](https://github.com/ryoppippi/ccusage) session cost · Cursor team spend via Admin API |
-| 🌍 **Seven languages** | English, French, German, Spanish, Italian, Portuguese, Japanese, Simplified Chinese - catalogs gated in CI |
+| 🌍 **Translated GNOME extension** | English + 7 translations (French, German, Spanish, Italian, Portuguese, Japanese, Simplified Chinese), catalogs gated in CI. The macOS app, status line and MCP server are English-only |
 | 🔒 **Read-only & private** | Uses your existing local token and never writes it - the one exception is a switch you ask for, which installs another login you saved. No telemetry, talks only to official APIs |
 
 ## Screenshots
 
 | Dropdown | Settings |
-|---|---|
+| --- | --- |
 | <img src="docs/screenshot.svg" alt="Dropdown" width="360"> | <img src="docs/settings.png" alt="Settings" width="360"> |
 
 ## How it works
@@ -159,14 +162,15 @@ click in a panel) installs the tokens you saved for that account and updates
 `oauthAccount` in `~/.claude.json`, nothing else. An idle saved account's token
 is refreshed with its own refresh token when it is needed, into the panel's
 store only. The status line is even cheaper: it renders purely from what
-Claude Code pipes on stdin, no credentials or network at all. The optional extras stay just as private: cost runs `ccusage` locally
+Claude Code pipes on stdin, no credentials or network at all. The optional extras stay just as private: cost runs only a `ccusage` you
+installed yourself (never a downloaded `npx ccusage@latest`), locally
 against `~/.claude/projects/*.jsonl`, and Cursor spend calls `api.cursor.com`
 with your own admin key.
 
 ## Documentation
 
 | Doc | Covers |
-|---|---|
+| --- | --- |
 | [docs/GNOME.md](docs/GNOME.md) | GNOME install, Wayland relog, settings, nested-shell testing |
 | [macos/README.md](macos/README.md) | macOS build, release, notarization, Homebrew cask |
 | [claude-code/README.md](claude-code/README.md) | Status line segments, token modes, manual setup |
@@ -180,7 +184,8 @@ with your own admin key.
 ## Roadmap
 
 - [ ] extensions.gnome.org listing *(needs a GNOME store account - [PUBLISHING.md](PUBLISHING.md))*
-- [ ] Notarized macOS `.app` + Homebrew cask *(needs an Apple Developer signing cert)*
+- [x] Homebrew cask *(shipped in v2.2.0, pinned to each release)*
+- [ ] Notarized macOS `.app` *(`scripts/notarize-macos.sh` runs in the release; needs the Developer ID secrets configured on the repo)*
 
 ## License
 
