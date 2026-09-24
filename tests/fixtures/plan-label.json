@@ -1,0 +1,15 @@
+{
+  "_comment": "planLabel(oauth): the header plan from the claudeAiOauth block of the credentials. Asserted by tests/plan-label.test.js (lib/pure/usage.js) and PlanLabelTests.swift (ClaudeUsageCore/PlanLabel.swift).",
+  "cases": [
+    {"name": "max 20x", "oauth": {"subscriptionType": "max", "rateLimitTier": "default_claude_max_20x"}, "expected": "Max 20x"},
+    {"name": "max 5x", "oauth": {"subscriptionType": "max", "rateLimitTier": "default_claude_max_5x"}, "expected": "Max 5x"},
+    {"name": "a tier with no multiplier", "oauth": {"subscriptionType": "pro", "rateLimitTier": "default_claude_ai"}, "expected": "Pro"},
+    {"name": "no tier at all", "oauth": {"subscriptionType": "team"}, "expected": "Team"},
+    {"name": "empty type", "oauth": {"subscriptionType": ""}, "expected": ""},
+    {"name": "blank type", "oauth": {"subscriptionType": "  "}, "expected": ""},
+    {"name": "no type", "oauth": {}, "expected": ""},
+    {"name": "no credentials", "oauth": null, "expected": ""},
+    {"name": "a multiplier needs digits", "oauth": {"subscriptionType": "max", "rateLimitTier": "max_x"}, "expected": "Max"},
+    {"name": "a multiplier needs a leading underscore", "oauth": {"subscriptionType": "max", "rateLimitTier": "20x"}, "expected": "Max"}
+  ]
+}

@@ -4,7 +4,8 @@ import Foundation
 /// usage endpoint names no plan. `subscriptionType` is the plan ("max" ->
 /// "Max"), and a `rateLimitTier` ending in a multiplier
 /// ("default_claude_max_20x") says which tier of it ("Max 20x"). Empty when
-/// the login does not say. Mirrors the GNOME lib/claudeUsage.js planLabel().
+/// the login does not say. Mirrors the GNOME lib/pure/usage.js planLabel();
+/// pinned by tests/fixtures/plan-label.json.
 public enum PlanLabel {
     /// - Parameter oauth: the `claudeAiOauth` block of the credentials.
     public static func label(oauth: [String: Any]?) -> String {

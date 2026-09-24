@@ -324,3 +324,24 @@ export function httpFailure(status, body = null) {
         message: detail ? `HTTP ${status} ${detail}` : `HTTP ${status}`,
     };
 }
+
+// ── Plan label ──────────────────────────────────────────────────────────────
+// Twin in Swift (ClaudeUsageCore/PlanLabel.swift); pinned by
+// tests/fixtures/plan-label.json.
+
+/**
+ * The plan the header shows, from the login's own credentials: the usage
+ * endpoint names no plan. `subscriptionType` is the plan ("max" -> "Max"),
+ * and a `rateLimitTier` ending in a multiplier ("default_claude_max_20x")
+ * says which tier of it ("Max 20x"). '' when the login does not say.
+ * @param {?object} oauth the `claudeAiOauth` block of .credentials.json
+ */
+export function planLabel(oauth) {
+    const type = typeof oauth?.subscriptionType === 'string' ? oauth.subscriptionType.trim() : '';
+    if (!type)
+        return '';
+    const plan = type.charAt(0).toUpperCase() + type.slice(1);
+    const tier = typeof oauth.rateLimitTier === 'string'
+        ? /_(\d+x)$/.exec(oauth.rateLimitTier)?.[1] : null;
+    return tier ? `${plan} ${tier}` : plan;
+}

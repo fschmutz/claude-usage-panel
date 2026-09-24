@@ -18,7 +18,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension, gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {fetchUsage, planLabel} from './lib/claudeUsage.js';
+import {fetchUsage} from './lib/claudeUsage.js';
 import {readLiveAccount, readLiveCredentials} from './lib/claudeFiles.js';
 import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
@@ -38,7 +38,7 @@ import {
     severityClass, formatResets, latchCrossings, latchPaceAlerts, refreshSections,
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
-    warehouseAccount, warehouseEntry, weekOverWeek,
+    warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
     formatLastPing, nextPing, compactTokens, formatClock, panelText, popupWidth,
 } from './lib/pure.js';
 
