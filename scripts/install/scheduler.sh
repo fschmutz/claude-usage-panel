@@ -71,6 +71,12 @@ _sched_installed() { # UNIT LABEL TAG
 
 # Install the schedule on whatever this machine offers. Returns 1 when there is
 # no scheduler at all; the caller says what that means for its target.
+# Set by a target whose own scheduled job is the one running this install (the
+# daily update reinstalls the autoupdate target from inside the job). Only the
+# launchd branch cares: see the comment there.
+# shellcheck disable=SC2034  # set by scripts/install/autoupdate.sh
+SCHED_NO_RELOAD=false
+
 _sched_install() { # UNIT LABEL TAG WHEN SERVICE TIMER PLIST CRON
     local unit="$1" label="$2" tag="$3" when="$4"
     local service="$5" timer="$6" plist_body="$7" cron_body="$8" dir plist line
@@ -85,9 +91,26 @@ _sched_install() { # UNIT LABEL TAG WHEN SERVICE TIMER PLIST CRON
             ;;
         launchd)
             plist="$(_sched_plist "$label")"
+            local loaded=false unchanged=false
+            launchctl list "$label" >/dev/null 2>&1 && loaded=true
+            if [ -f "$plist" ] && [ "$(cat "$plist" 2>/dev/null)" = "$plist_body" ]; then
+                unchanged=true
+            fi
             _sched_write "$plist" "$plist_body"
             if $DRY; then
                 echo "  would: launchctl bootstrap gui/$(id -u) $plist"
+            elif $loaded && $unchanged; then
+                # Nothing to reload, and reloading is not free: see below.
+                ok "launchd agent already loaded, unchanged ($when)"
+            elif $loaded && ${SCHED_NO_RELOAD:-false}; then
+                # This code is running INSIDE that agent's job. `launchctl
+                # bootout` on it SIGTERMs the job's own process group, so the
+                # bootstrap on the next line never runs, the agent stays
+                # unloaded until the next login, and everything after this
+                # point in the update - the remaining targets, the version
+                # stamp, the notification - never happens either. The new
+                # plist is on disk; launchd reads it when the job next loads.
+                ok "launchd agent rewritten - the new schedule applies at the next login ($when)"
             else
                 launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
                 launchctl bootstrap "gui/$(id -u)" "$plist" >/dev/null 2>&1 ||

@@ -13,7 +13,7 @@ _au_installed() { _sched_installed "$AU_UNIT" "$AU_LABEL" "$AU_CRON_TAG"; }
 install_autoupdate() {
     info "Daily auto-update"
     if ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        skip "autoupdate: $ROOT is not a git checkout - nothing to update from"
+        skip_fatal "autoupdate: $ROOT is not a git checkout - nothing to update from"
         return 0
     fi
     local runner="$ROOT/scripts/auto-update.sh"
@@ -52,16 +52,26 @@ WantedBy=timers.target"
   </array>
   <key>StartCalendarInterval</key>
   <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>17</integer></dict>
-  <key>RunAtLoad</key><false/>
+  <!-- A laptop that is asleep or off at 11:17 misses that slot entirely, which
+       on a machine that is rarely awake at a fixed hour means no check for
+       weeks. Running at load too turns every login into a candidate; the
+       worker's own freshness window (CUP_MIN_CHECK_HOURS) keeps that to one
+       real check a day. Same reason systemd gets Persistent=true. -->
+  <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Background</string>
   <key>LowPriorityIO</key><true/>
 </dict>
 </plist>"
     local sched_cron="17 11 * * * $runner --quiet  $AU_CRON_TAG"
 
+    # scripts/auto-update.sh sets CUP_UPDATE_RUN when it is the one running
+    # `install.sh update` - i.e. this target's own scheduled job is the caller.
+    SCHED_NO_RELOAD=false
+    # shellcheck disable=SC2034  # read by _sched_install in scheduler.sh
+    [ "${CUP_UPDATE_RUN:-}" = 1 ] && SCHED_NO_RELOAD=true
     if ! _sched_install "$AU_UNIT" "$AU_LABEL" "$AU_CRON_TAG" "daily at 11:17" \
         "$sched_service" "$sched_timer" "$sched_plist" "$sched_cron"; then
-        skip "autoupdate: no systemd, launchd or cron found to schedule it"
+        skip_fatal "autoupdate: no systemd, launchd or cron found to schedule it"
         return 0
     fi
     if $DRY; then
