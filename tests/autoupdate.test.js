@@ -74,11 +74,15 @@ function makeCheckout(t, {localVersion, tags}) {
         fs.copyFileSync(SCRIPT, path.join(root, 'scripts', 'auto-update.sh'));
         fs.copyFileSync(LIB, path.join(root, 'scripts', 'lib.sh'));
         fs.chmodSync(path.join(root, 'scripts', 'auto-update.sh'), 0o755);
-        // Stand-in for the real installer: records that it ran. The log lives
-        // outside the checkout, so running it can't dirty the worktree.
+        // Stand-in for the real installer: records that it ran, and fails when
+        // $HOME/install-exit says so (a partial install - no node on the
+        // scheduler's PATH, /Applications not writable). Both the log and the
+        // switch live outside the checkout, so neither can dirty the worktree,
+        // which the worker would then refuse to touch.
         fs.writeFileSync(
             path.join(root, 'install.sh'),
-            '#!/usr/bin/env bash\necho "install.sh $*" >>"$HOME/install-calls.log"\n',
+            '#!/usr/bin/env bash\necho "install.sh $*" >>"$HOME/install-calls.log"\n'
+                + 'exit "$(cat "$HOME/install-exit" 2>/dev/null || echo 0)"\n',
         );
         fs.chmodSync(path.join(root, 'install.sh'), 0o755);
     };
@@ -362,6 +366,126 @@ test('--status --json reports why a dirty checkout is skipped', (t) => {
     const st = JSON.parse(runScript(c, ['--status', '--json']).stdout);
     assert.equal(st.blocked, true);
     assert.match(st.blockedReason, /local changes/);
+});
+
+// ── Deciding on the DEPLOYED version, not the checkout ──────────────────────────
+// The blocker behind "the update never works": the run compared the checkout
+// with the latest tag. Every path that leaves the clients behind the checkout -
+// a manual pull, an install.sh that failed after the fast-forward, a partial
+// install - therefore looked "up to date" forever, and the reinstall that
+// would have fixed it was never attempted again.
+
+/** The stamp that says what the CLIENTS run. */
+const stampPath = (c) => path.join(c.dir, 'state', 'claude-usage-panel', 'installed-version');
+const writeStamp = (c, v) => {
+    fs.mkdirSync(path.dirname(stampPath(c)), {recursive: true});
+    fs.writeFileSync(stampPath(c), `${v}\n`);
+};
+const installCalls = (c) => {
+    try {
+        return fs.readFileSync(path.join(c.dir, 'install-calls.log'), 'utf8').trim().split('\n');
+    } catch {
+        return [];
+    }
+};
+/** Make the stub installer fail, the way a partial install does. */
+const breakInstaller = (c) => fs.writeFileSync(path.join(c.dir, 'install-exit'), '1\n');
+
+test('clients behind the checkout are reinstalled, with no fast-forward to do', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.6.0', tags: ['v1.6.0']});
+    writeStamp(c, '1.5.0');
+    const r = runScript(c, []);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /already holds v1\.6\.0 - reinstalling the clients \(on v1\.5\.0\)/);
+    assert.match(r.stdout, /updated to v1\.6\.0/);
+    assert.deepEqual(installCalls(c), ['install.sh update']);
+    assert.equal(fs.readFileSync(stampPath(c), 'utf8').trim(), '1.6.0');
+});
+
+test('a reinstall that failed is retried on the next run, not declared done', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0']});
+    const pkg = path.join(c.seed, 'package.json');
+    fs.writeFileSync(pkg, fs.readFileSync(pkg, 'utf8').replace('1.5.0', '1.6.0'));
+    c.git(c.seed, 'commit', '-qam', 'chore(release): v1.6.0');
+    c.git(c.seed, 'tag', 'v1.6.0');
+    c.git(c.seed, 'push', '-q', 'origin', 'main', '--tags');
+    breakInstaller(c);
+
+    const first = runScript(c, []);
+    assert.equal(first.status, 1);
+    assert.match(first.stdout, /install\.sh update failed at v1\.6\.0/);
+    assert.equal(fs.existsSync(stampPath(c)), false, 'a failed install is never stamped');
+
+    // The checkout is now at 1.6.0, which is exactly the state that used to
+    // read as "up to date" and strand the clients on 1.5.0 forever.
+    const second = runScript(c, []);
+    assert.equal(second.status, 1);
+    assert.equal(installCalls(c).length, 2, 'it tries again');
+});
+
+test('the update installs the release tag, not whatever main has since grown', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0']});
+    const pkg = path.join(c.seed, 'package.json');
+    fs.writeFileSync(pkg, fs.readFileSync(pkg, 'utf8').replace('1.5.0', '1.6.0'));
+    c.git(c.seed, 'commit', '-qam', 'chore(release): v1.6.0');
+    c.git(c.seed, 'tag', 'v1.6.0');
+    // Unreleased work lands on main after the tag.
+    fs.writeFileSync(path.join(c.seed, 'unreleased.txt'), 'not in any release\n');
+    c.git(c.seed, 'add', '-A');
+    c.git(c.seed, 'commit', '-qm', 'feat: after the release');
+    c.git(c.seed, 'push', '-q', 'origin', 'main', '--tags');
+
+    assert.equal(runScript(c, []).status, 0);
+    assert.equal(
+        c.git(c.work, 'rev-parse', 'HEAD').trim(),
+        c.git(c.seed, 'rev-parse', 'v1.6.0^{}').trim(),
+        'the checkout sits on the tag',
+    );
+    assert.equal(fs.existsSync(path.join(c.work, 'unreleased.txt')), false);
+});
+
+test('a git failure is reported as itself, and is not counted as a check', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.6.0']});
+    c.git(c.work, 'remote', 'set-url', 'origin', path.join(c.dir, 'gone.git'));
+    const r = run('bash', [path.join(c.work, 'scripts', 'auto-update.sh')], {
+        env: {...env(c.dir), CUP_RETRY_TRIES: '1'},
+        cwd: c.work,
+    });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /skip: .*(does not appear to be a git repository|not a git repository|Could not read)/i);
+    assert.doesNotMatch(r.stdout, /offline/);
+    assert.equal(
+        fs.existsSync(path.join(c.dir, 'state', 'claude-usage-panel', 'last-check')),
+        false,
+        'a failed lookup is not a check - otherwise the freshness window swallows the next real one',
+    );
+});
+
+test('a reachable remote with no release tag says so', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: []});
+    const r = run('bash', [path.join(c.work, 'scripts', 'auto-update.sh')], {
+        env: {...env(c.dir), CUP_RETRY_TRIES: '1'},
+        cwd: c.work,
+    });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /no vX\.Y\.Z release tag/);
+});
+
+// Scheduled runs are allowed to fire often (at load, at resume, daily) because
+// of this window; without it, RunAtLoad would check on every login.
+test('a scheduled run inside the freshness window is a no-op; a manual one is not', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.6.0', tags: ['v1.6.0']});
+    assert.equal(runScript(c, ['--quiet']).status, 0);
+    const log = path.join(c.dir, 'state', 'claude-usage-panel', 'auto-update.log');
+    const after = (mark) => fs.readFileSync(log, 'utf8').split(mark).pop();
+
+    assert.equal(runScript(c, ['--quiet']).status, 0);
+    assert.match(fs.readFileSync(log, 'utf8'), /skip: checked \d+ min ago/);
+
+    // Not quiet: the user asked, so it checks whatever the window says.
+    const manual = runScript(c, []);
+    assert.match(manual.stdout, /up to date/);
+    assert.equal(after('') !== null, true);
 });
 
 test('an unknown flag exits 2 with usage', (t) => {
