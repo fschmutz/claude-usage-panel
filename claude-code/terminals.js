@@ -175,11 +175,17 @@ export function tabsArgv(terminal, rows, prompt = '') {
   ]));
 }
 
+/** A value tmux takes as a format (-n, -c) made literal: `#(cmd)` in a
+ *  window name or start directory would otherwise run through /bin/sh, and a
+ *  snapshot's cwd is whatever directory the session ran in. `##` is tmux's
+ *  literal `#`. */
+export const tmuxLiteral = (s) => String(s ?? '').replace(/#/g, '##');
+
 /** tmux calls building one detached session, one window per row. */
 export function tmuxCalls(rows, session = TMUX_SESSION, prompt = '') {
   return rows.map((r, i) => [
     ...(i ? ['new-window', '-t', session] : ['new-session', '-d', '-s', session]),
-    '-n', r.name, '-c', r.cwd, `bash -lc ${shellQuote(sessionCommand(r, prompt))}`,
+    '-n', tmuxLiteral(r.name), '-c', tmuxLiteral(r.cwd), `bash -lc ${shellQuote(sessionCommand(r, prompt))}`,
   ]);
 }
 

@@ -260,6 +260,20 @@ test('plan skips running sessions (unless forced) and ones that cannot resume', 
     assert.deepEqual(tabs.plan(snap, {force: true, skip: ['API', 'GONE', 'NOLOG']}).open.map((r) => r.name), ['WEB']);
 });
 
+test('plan never reopens a name or directory holding a control character', (t) => {
+    // iTerm / Terminal.app type the command into the tab: ^C or a newline
+    // would act before the shell sees any quoting.
+    const io = world(t, [A]);
+    const tabs = openTabs(io);
+    const [row] = tabs.save('x').sessions;
+    for (const bad of [{...row, name: 'a\u0003b'}, {...row, cwd: `${row.cwd}\n`}, {...row, name: 'x\u007f'}]) {
+        const {open, skipped} = tabs.plan({sessions: [bad]}, {force: true});
+        assert.equal(open.length, 0);
+        assert.equal(skipped[0].why, 'control character in name or directory');
+    }
+    assert.equal(tabs.plan({sessions: [row]}, {force: true}).open.length, 1);
+});
+
 test('plan also counts an unregistered `claude --resume <id>` process as running', (t) => {
     const io = world(t, [A, B]);
     const tabs = openTabs(io);

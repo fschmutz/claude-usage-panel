@@ -201,6 +201,13 @@ test('tmux windows: named, in their cwd, the command quoted for the shell', () =
     assert.equal(second[7], `bash -lc 'claude --name '\\''it'\\''\\'\\'''\\''s'\\'' --resume '\\''id-b'\\''; exec "$SHELL" -i'`);
 });
 
+test('tmux takes -n and -c as formats: a # in a name or directory stays literal', () => {
+    // `#(cmd)` in a start directory runs through /bin/sh (tmux 3.6, checked
+    // live); `##` is tmux's literal #.
+    const [call] = tmuxCalls([{name: '#{pane_pid}', cwd: '/tmp/#(touch x)', session_id: 'id'}], 'S');
+    assert.deepEqual(call.slice(4, 8), ['-n', '##{pane_pid}', '-c', '/tmp/##(touch x)']);
+});
+
 test('macOS iTerm: one window, then a tab per further session', () => {
     const {how, steps} = launchSteps(rows, 'iterm', {platform: 'darwin', hasTmux: true});
     assert.equal(how, 'tabs');

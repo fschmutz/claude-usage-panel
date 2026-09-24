@@ -331,7 +331,11 @@ export function openTabs(io = {}) {
 
   /** Why a stored row cannot be resumed here, or null when it can. */
   function blocker(row) {
-    if (!fs.existsSync(row.cwd)) return `cwd gone: ${row.cwd}`;
+    // iTerm and Terminal.app TYPE the command line into the new tab, where a
+    // control character (^C, ^D, a newline) acts before the shell ever sees
+    // the quoting: a name or directory holding one is never reopened.
+    if (/[\u0000-\u001f\u007f]/.test(`${row.name}${row.cwd}`)) return 'control character in name or directory';
+    if (!fs.existsSync(row.cwd)) return `cwd gone: ${JSON.stringify(row.cwd)}`;
     if (!fs.existsSync(transcriptPath(projectsDir(io), row.cwd, row.session_id))) return 'transcript missing';
     return null;
   }
