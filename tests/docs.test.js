@@ -175,6 +175,8 @@ test('CLAUDE.md names every pure/ module and every ClaudeUsageCore file', () => 
         assert.ok(md.includes(`\`${f}\``), `CLAUDE.md misses ClaudeUsageCore/${f}`);
 });
 
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 test('wiki/Architecture.md tree names every source file of every port', () => {
     const tree = read('wiki/Architecture.md').match(/```text\n([\s\S]*?)```/)[1];
     const dirs = [
@@ -184,7 +186,7 @@ test('wiki/Architecture.md tree names every source file of every port', () => {
     ];
     for (const [dir, ext] of dirs) {
         for (const f of list(dir, ext))
-            assert.match(tree, new RegExp(`(^|[\\s/])${f.replace(/\./g, '\\.')}\\b`), `Architecture tree misses ${dir}/${f}`);
+            assert.match(tree, new RegExp(`(^|[\\s/])${escapeRegExp(f)}\\b`), `Architecture tree misses ${dir}/${f}`);
     }
     assert.doesNotMatch(tree, /~\d+ lines/, 'line-count estimates go stale; drop them');
 });

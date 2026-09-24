@@ -89,6 +89,9 @@ const NAMED = {
     'resource:///org/gnome/shell/ui/panelMenu.js': ['Button'],
 };
 
+const SPECIFIERS = [];
+stub.specifiers = SPECIFIERS;
+
 function stubSource(specifier) {
     if (specifier === 'gettext') {
         return `export default {domain: d => (globalThis.gjsStub.domain = d, {
@@ -101,7 +104,11 @@ function stubSource(specifier) {
             export const ngettext = (a, b, n) => globalThis.gjsStub.ngettext(a, b, n);
             export const Extension = class {};`;
     }
-    const ns = `globalThis.gjsStub.namespace(${JSON.stringify(specifier)})`;
+    // The generated source names the namespace by an index into SPECIFIERS,
+    // never by the specifier text: no import string ever becomes code.
+    let idx = SPECIFIERS.indexOf(specifier);
+    if (idx < 0) idx = SPECIFIERS.push(specifier) - 1;
+    const ns = `globalThis.gjsStub.namespace(globalThis.gjsStub.specifiers[${idx}])`;
     // Functions forward at call time, so a test can swap Main.notify after load.
     const named = (NAMED[specifier] ?? []).map(n => (n === 'notify'
         ? `export const notify = (...a) => ${ns}.notify(...a);`
