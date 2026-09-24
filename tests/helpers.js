@@ -29,7 +29,9 @@ export function run(cmd, args, opts = {}) {
 export function sandboxHome(t, {prefix = 'cup-'} = {}) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
     if (t) t.after(() => fs.rmSync(home, {recursive: true, force: true}));
-    return {home, homedir: home, env: {}, platform: 'linux', tmpdir: home};
+    // procDir: an empty /proc of its own, so nothing reads the machine's real
+    // processes (a live Claude session would otherwise show up in a test).
+    return {home, homedir: home, env: {}, platform: 'linux', tmpdir: home, procDir: path.join(home, 'proc')};
 }
 
 /** Write a live Claude Code login into a sandbox HOME. */

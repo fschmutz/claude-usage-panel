@@ -91,6 +91,7 @@ export async function main(argv, io = {}) {
         return 0;
       }
       table(out, live, {mark: tabs.selfPid(live), state: (r) => tabs.blocker(r) ?? r.status});
+      for (const m of tabs.unaccounted()) out(`  ?  claude pid ${m.pid} in ${m.cwd ?? '?'} - no session id, cannot be saved\n`);
       return 0;
     }
     case 'save': {
@@ -187,7 +188,10 @@ export async function main(argv, io = {}) {
       const r = tabs.autosave({keep});
       out(`${r.saved ? `saved ${r.saved.label}` : 'no new snapshot'} (${r.reason})` +
         `${r.pruned.length ? `, pruned ${r.pruned.length}` : ''}\n`);
-      return 0;
+      // A session that cannot be saved is a failure, not a footnote: the
+      // scheduled run goes red instead of reporting "unchanged".
+      for (const m of r.missed) out(`NOT SAVED: claude pid ${m.pid} in ${m.cwd ?? '?'} - no session id (not registered, not started with --resume)\n`);
+      return r.missed.length ? 1 : 0;
     }
     default:
       throw new Error(`unknown command ${cmd}\n${HELP}`);

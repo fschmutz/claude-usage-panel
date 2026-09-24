@@ -200,6 +200,45 @@ test('plan also counts an unregistered `claude --resume <id>` process as running
     assert.deepEqual(skipped.map((s) => [s.row.name, s.why]), [['API', 'already running']]);
 });
 
+// A claude process the registry never heard of: /proc cmdline, cwd, and a
+// terminal (tty_nr, field 7) unless `tty: false`.
+function addProcess(io, {pid, argv, cwd, tty = true}) {
+    const dir = path.join(io.procDir, String(pid));
+    fs.mkdirSync(dir, {recursive: true});
+    fs.writeFileSync(path.join(dir, 'cmdline'), `${argv.join('\0')}\0`);
+    const fields = Array.from({length: 50}, () => '0');
+    fields[0] = 'S';
+    fields[4] = tty ? '34819' : '0';
+    fs.writeFileSync(path.join(dir, 'stat'), `${pid} (claude) ${fields.join(' ')}`);
+    if (cwd) fs.symlinkSync(cwd, path.join(dir, 'cwd'));
+}
+
+test('unregistered `claude --resume` sessions are listed and autosaved', (t) => {
+    const io = world(t, [A]);
+    const cwd = path.join(io.home, 'repos', 'WEB');
+    fs.mkdirSync(cwd, {recursive: true});
+    addProcess(io, {pid: 900, argv: ['claude', '--name', 'WEB', '--resume', B.id, 'first message'], cwd});
+    // not sessions: no terminal (a helper), or not claude at all
+    addProcess(io, {pid: 901, argv: ['/x/claude', '--chrome-native-host'], cwd, tty: false});
+    addProcess(io, {pid: 902, argv: ['vim', '--resume', 'x'], cwd});
+    const live = openTabs(io).liveSessions();
+    assert.deepEqual(live.map((r) => [r.name, r.session_id, r.status]),
+        [['API', A.id, 'idle'], ['WEB', B.id, 'unregistered']]);
+    const r = openTabs(io).autosave();
+    assert.deepEqual(r.saved.sessions.map((s) => s.name), ['API', 'WEB']);
+    assert.deepEqual(r.missed, []);
+});
+
+test('autosave FAILS on a terminal claude it cannot identify, and says which', async (t) => {
+    const io = world(t, [A]);
+    addProcess(io, {pid: 903, argv: ['claude', '--name', 'X'], cwd: io.home});
+    const r = await cli(io, 'autosave');
+    assert.equal(r.code, 1);
+    assert.match(r.text, /^saved auto-/m);
+    assert.match(r.text, /^NOT SAVED: claude pid 903 in .* - no session id/m);
+    assert.match((await cli(io, 'list')).text, /\?\s+claude pid 903 .* cannot be saved/);
+});
+
 test('launch runs the resolved steps: terminals detached, tmux in order', (t) => {
     const io = world(t, [A, B]);
     const bin = path.join(io.home, 'bin');

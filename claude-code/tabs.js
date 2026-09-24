@@ -150,8 +150,25 @@ export function openTabs(io = {}) {
     }
   }
 
-  /** Running interactive sessions, oldest first. */
+  /** Running interactive sessions, oldest first: the registry, plus the
+   *  terminal-attached `claude --resume <id>` processes it does not know
+   *  (status "unregistered", after the registered ones). */
   function liveSessions() {
+    const rows = registeredSessions();
+    const known = new Set(rows.map((r) => r.session_id));
+    const pids = new Set(rows.map((r) => r.pid));
+    for (const p of claudeProcesses()) {
+      if (!p.tty || !p.resumeId || !p.cwd || known.has(p.resumeId) || pids.has(p.pid)) continue;
+      known.add(p.resumeId);
+      rows.push({
+        name: p.name || path.basename(p.cwd), cwd: p.cwd, session_id: p.resumeId, pid: p.pid,
+        status: 'unregistered', startedAt: Number.MAX_SAFE_INTEGER,
+      });
+    }
+    return rows;
+  }
+
+  function registeredSessions() {
     let files;
     try {
       files = fs.readdirSync(sessionRegistryDir(io)).filter((f) => f.endsWith('.json'));
@@ -175,31 +192,56 @@ export function openTabs(io = {}) {
     return rows.sort((a, b) => a.startedAt - b.startedAt);
   }
 
-  /** Session ids a live `claude --resume <id>` process holds, whether or not
-   *  it registered (Linux: /proc/<pid>/cmdline). A session that never wrote
-   *  its registry file - a child of another session, a startup still at a
-   *  prompt - is running all the same, and must not be resumed twice. */
-  function resumedIds() {
-    const ids = new Set();
-    if (platform() !== 'linux') return ids;
+  /** Every live `claude` process (Linux: /proc): its resumed session id
+   *  (--resume/-r), --name, cwd, and whether it has a terminal. The registry
+   *  is not the whole truth: a session launched as another session's child,
+   *  or still at a startup prompt, never writes its registry file, and
+   *  autosave went on reporting "unchanged" with eight of them open. */
+  function claudeProcesses() {
+    if (platform() !== 'linux') return [];
     let pids;
     try {
       pids = fs.readdirSync(procDir()).filter((d) => /^\d+$/.test(d));
     } catch {
-      return ids;
+      return [];
     }
+    const out = [];
     for (const pid of pids) {
+      const dir = path.join(procDir(), pid);
       let argv;
       try {
-        argv = fs.readFileSync(path.join(procDir(), pid, 'cmdline'), 'utf8').split('\0');
+        argv = fs.readFileSync(path.join(dir, 'cmdline'), 'utf8').split('\0');
       } catch {
         continue;
       }
       if (path.basename(argv[0] ?? '') !== 'claude') continue;
-      const i = argv.findIndex((a) => a === '--resume' || a === '-r');
-      if (i >= 0 && argv[i + 1]) ids.add(argv[i + 1]);
+      const arg = (...flags) => {
+        const i = argv.findIndex((a) => flags.includes(a));
+        return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
+      };
+      let cwd = null;
+      try {
+        cwd = fs.readlinkSync(path.join(dir, 'cwd'));
+      } catch {
+        cwd = null;
+      }
+      let tty = false;
+      try {
+        const stat = fs.readFileSync(path.join(dir, 'stat'), 'utf8');
+        tty = Number(stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[4]) !== 0;
+      } catch {
+        tty = false;
+      }
+      out.push({pid: Number(pid), resumeId: arg('--resume', '-r'), name: arg('--name', '-n'), cwd, tty});
     }
-    return ids;
+    return out;
+  }
+
+  /** Terminal-attached claude processes that are neither registered nor
+   *  resumed from a known id: running, but impossible to snapshot. */
+  function unaccounted() {
+    const registered = new Set(registeredSessions().map((r) => r.pid));
+    return claudeProcesses().filter((p) => p.tty && !p.resumeId && !registered.has(p.pid));
   }
 
   /** The live session this process runs under (walks the parent chain), or
@@ -299,7 +341,7 @@ export function openTabs(io = {}) {
     }
     const pruned = snapshots().filter((s) => s.label.startsWith(AUTO_PREFIX)).slice(keep);
     for (const s of pruned) fs.rmSync(s.file, {force: true});
-    return {saved, reason, pruned: pruned.map((s) => s.label)};
+    return {saved, reason, pruned: pruned.map((s) => s.label), missed: unaccounted()};
   }
 
   function purge(list) {
@@ -311,7 +353,11 @@ export function openTabs(io = {}) {
    *  already running is skipped unless `force` - Claude Code refuses to
    *  resume a live session in a second process anyway. */
   function plan(snap, {only = [], skip = [], force = false} = {}) {
-    const running = new Set([...liveSessions().map((r) => r.session_id), ...resumedIds()]);
+    // any claude holding the id counts, terminal or not: never resume twice
+    const running = new Set([
+      ...liveSessions().map((r) => r.session_id),
+      ...claudeProcesses().map((p) => p.resumeId).filter(Boolean),
+    ]);
     const open = [];
     const skipped = [];
     for (const row of snap.sessions) {
@@ -359,5 +405,5 @@ export function openTabs(io = {}) {
     return result;
   }
 
-  return {liveSessions, selfPid, blocker, snapshots, resolve, save, autosave, purge, plan, launch};
+  return {liveSessions, unaccounted, selfPid, blocker, snapshots, resolve, save, autosave, purge, plan, launch};
 }

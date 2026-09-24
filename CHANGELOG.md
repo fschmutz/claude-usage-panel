@@ -6,6 +6,18 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Autosave skipped sessions that never registered.** It read only
+  `~/.claude/sessions`, so sessions running as another session's child (or
+  still at a startup prompt) were invisible: it reported "unchanged" with
+  eight of them open. `list` and `autosave` now also take live
+  `claude --resume <id>` processes with a terminal (status
+  `unregistered`), and a terminal `claude` that cannot be identified at all
+  makes autosave exit 1 with `NOT SAVED: …`, so the scheduled run shows
+  failed instead of passing. Tests no longer read the machine's own
+  `/proc`.
+
 ## [2.1.1] - 2026-09-24
 
 ### Fixed
