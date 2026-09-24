@@ -1,0 +1,232 @@
+{
+  "_comment": "Cursor team-spend summarization contract. Asserted by tests/cursor.test.js (GNOME lib/pure/cursor.js) and CursorParityTests.swift (ClaudeUsageCore CursorMath). Cents are fractional since the 2026-06-04 Admin API change (spendCents 2450.125487, chargedCents 21.36232), so every port sums them as doubles. Dollar values are compared within 1e-9.",
+  "spend": [
+    {
+      "name": "fractional cents keep their fraction, limit gives a gauge",
+      "rows": [
+        {
+          "email": "a@x",
+          "overallSpendCents": 2450.125487,
+          "monthlyLimitDollars": 100
+        },
+        {
+          "email": "b@x",
+          "spendCents": 1234.5,
+          "monthlyLimitDollars": 100
+        },
+        {
+          "name": "c",
+          "overallSpendCents": 0.4
+        }
+      ],
+      "expected": {
+        "cycleUSD": 36.85025487,
+        "limitUSD": 200,
+        "percent": 18,
+        "members": 3,
+        "top": {
+          "email": "a@x",
+          "usd": 24.50125487
+        }
+      }
+    },
+    {
+      "name": "sub-cent difference decides the top spender",
+      "rows": [
+        {
+          "email": "a@x",
+          "overallSpendCents": 150.2
+        },
+        {
+          "email": "b@x",
+          "overallSpendCents": 150.9
+        }
+      ],
+      "expected": {
+        "cycleUSD": 3.011,
+        "limitUSD": 0,
+        "percent": null,
+        "members": 2,
+        "top": {
+          "email": "b@x",
+          "usd": 1.509
+        }
+      }
+    },
+    {
+      "name": "exact tie keeps the first row",
+      "rows": [
+        {
+          "email": "a@x",
+          "overallSpendCents": 100
+        },
+        {
+          "email": "b@x",
+          "overallSpendCents": 100
+        }
+      ],
+      "expected": {
+        "cycleUSD": 2,
+        "limitUSD": 0,
+        "percent": null,
+        "members": 2,
+        "top": {
+          "email": "a@x",
+          "usd": 1
+        }
+      }
+    },
+    {
+      "name": "null overallSpendCents falls back to spendCents, null email to name",
+      "rows": [
+        {
+          "email": null,
+          "name": "Bob",
+          "overallSpendCents": null,
+          "spendCents": 42.75
+        }
+      ],
+      "expected": {
+        "cycleUSD": 0.4275,
+        "limitUSD": 0,
+        "percent": null,
+        "members": 1,
+        "top": {
+          "email": "Bob",
+          "usd": 0.4275
+        }
+      }
+    },
+    {
+      "name": "no identity at all shows a question mark",
+      "rows": [
+        {
+          "overallSpendCents": 7
+        }
+      ],
+      "expected": {
+        "cycleUSD": 0.07,
+        "limitUSD": 0,
+        "percent": null,
+        "members": 1,
+        "top": {
+          "email": "?",
+          "usd": 0.07
+        }
+      }
+    },
+    {
+      "name": "a zero limit shows no gauge",
+      "rows": [
+        {
+          "email": "a@x",
+          "overallSpendCents": 5000,
+          "monthlyLimitDollars": 0
+        }
+      ],
+      "expected": {
+        "cycleUSD": 50,
+        "limitUSD": 0,
+        "percent": null,
+        "members": 1,
+        "top": {
+          "email": "a@x",
+          "usd": 50
+        }
+      }
+    },
+    {
+      "name": "spend over the limit caps the gauge at 100",
+      "rows": [
+        {
+          "email": "a@x",
+          "overallSpendCents": 15000.5,
+          "monthlyLimitDollars": 100
+        }
+      ],
+      "expected": {
+        "cycleUSD": 150.005,
+        "limitUSD": 100,
+        "percent": 100,
+        "members": 1,
+        "top": {
+          "email": "a@x",
+          "usd": 150.005
+        }
+      }
+    },
+    {
+      "name": "no rows",
+      "rows": [],
+      "expected": {
+        "cycleUSD": 0,
+        "limitUSD": 0,
+        "percent": null,
+        "members": 0,
+        "top": null
+      }
+    }
+  ],
+  "today": [
+    {
+      "name": "fractional charged cents add up",
+      "events": [
+        {
+          "chargedCents": 21.36232
+        },
+        {
+          "chargedCents": 0.4
+        },
+        {
+          "chargedCents": 0.4
+        }
+      ],
+      "expectedUSD": 0.2216232
+    },
+    {
+      "name": "sub-cent events are not dropped",
+      "events": [
+        {
+          "chargedCents": 0.4
+        },
+        {
+          "chargedCents": 0.4
+        },
+        {
+          "chargedCents": 0.4
+        }
+      ],
+      "expectedUSD": 0.012
+    },
+    {
+      "name": "integer cents",
+      "events": [
+        {
+          "chargedCents": 150
+        },
+        {
+          "chargedCents": 89
+        }
+      ],
+      "expectedUSD": 2.39
+    },
+    {
+      "name": "missing chargedCents counts as zero",
+      "events": [
+        {},
+        {
+          "chargedCents": null
+        },
+        {
+          "chargedCents": 10
+        }
+      ],
+      "expectedUSD": 0.1
+    },
+    {
+      "name": "no events",
+      "events": [],
+      "expectedUSD": 0
+    }
+  ]
+}

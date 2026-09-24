@@ -38,21 +38,19 @@ public enum CursorMath {
     public static func summarizeSpend(_ rows: [[String: Any]], todayUSD: Double? = nil)
         -> CursorSummary
     {
-        var cycleCents = 0
+        var cycleCents = 0.0
         var limitUSD = 0.0
         var top: CursorTop?
         for r in rows {
-            let cents =
-                (r["overallSpendCents"] as? NSNumber)?.intValue
-                ?? (r["spendCents"] as? NSNumber)?.intValue ?? 0
+            let cents = centsValue(r["overallSpendCents"]) ?? centsValue(r["spendCents"]) ?? 0
             cycleCents += cents
             limitUSD += (r["monthlyLimitDollars"] as? NSNumber)?.doubleValue ?? 0
-            if top == nil || Double(cents) / 100 > top!.usd {
+            if top == nil || cents / 100 > top!.usd {
                 let who = (r["email"] as? String) ?? (r["name"] as? String) ?? "?"
-                top = CursorTop(email: who, usd: Double(cents) / 100)
+                top = CursorTop(email: who, usd: cents / 100)
             }
         }
-        let cycleUSD = Double(cycleCents) / 100
+        let cycleUSD = cycleCents / 100
         return CursorSummary(
             cycleUSD: cycleUSD,
             limitUSD: limitUSD,
@@ -64,6 +62,14 @@ public enum CursorMath {
 
     /// Sum `chargedCents` across usage events → dollars.
     public static func summarizeToday(_ events: [[String: Any]]) -> Double {
-        Double(events.reduce(0) { $0 + (($1["chargedCents"] as? NSNumber)?.intValue ?? 0) }) / 100
+        events.reduce(0.0) { $0 + (centsValue($1["chargedCents"]) ?? 0) } / 100
+    }
+
+    /// A cents field as the API sends it. Cursor's cents have been fractional
+    /// since 2026-06-04 (`"chargedCents": 21.36232`), so they are read as
+    /// Double: an Int read dropped up to 0.99c per row or event and moved both
+    /// totals and the top spender away from the GNOME port on the same data.
+    static func centsValue(_ raw: Any?) -> Double? {
+        (raw as? NSNumber)?.doubleValue
     }
 }

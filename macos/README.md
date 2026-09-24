@@ -30,7 +30,8 @@ lives in the launchd agent it shares with `./install.sh sessionping`.
 - macOS 13 Ventura or later
 - Xcode 15+ **or** the Swift toolchain (`swift --version`)
 - An active Claude Code login (`~/.claude/.credentials.json` present)
-- Optional, for cost: Node.js / `npx` (or a global `ccusage`)
+- Optional, for cost: an installed `ccusage` (e.g. `npm install -g ccusage`); the
+  app never downloads one
 
 ## Build & run
 
@@ -73,7 +74,7 @@ Login Items ▸ **+**.)
 ## Layout
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `Sources/ClaudeUsagePanel/Usage.swift` | token read + endpoint fetch + `limits[]` normalization |
 | `Sources/ClaudeUsagePanel/Cost.swift` | optional `ccusage` cost via `Process` |
 | `Sources/ClaudeUsagePanel/ClaudeUsagePanelApp.swift` | `MenuBarExtra` app, view model, designed cards, Quit |

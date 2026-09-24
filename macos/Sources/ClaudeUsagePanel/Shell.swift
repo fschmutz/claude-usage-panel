@@ -15,8 +15,11 @@ enum Shell {
     /// Run `exe args…` to completion. `env` replaces the child's environment
     /// when given; `mergeStderr` folds stderr into `out` for callers that show
     /// the child's complaint to the user.
+    /// `stdin`, when given, is written to the child and closed: the way a
+    /// secret reaches `security -i` without appearing in any argv.
     static func run(
-        _ exe: String, _ args: [String], env: [String: String]? = nil, mergeStderr: Bool = false
+        _ exe: String, _ args: [String], env: [String: String]? = nil, mergeStderr: Bool = false,
+        stdin: Data? = nil
     ) -> Result {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: exe)
@@ -25,10 +28,16 @@ enum Shell {
         let out = Pipe()
         proc.standardOutput = out
         proc.standardError = mergeStderr ? out : FileHandle.nullDevice
+        let input = stdin.map { _ in Pipe() }
+        proc.standardInput = input ?? FileHandle.nullDevice
         do {
             try proc.run()
         } catch {
             return Result(status: -1, out: "")
+        }
+        if let input, let stdin {
+            try? input.fileHandleForWriting.write(contentsOf: stdin)
+            try? input.fileHandleForWriting.close()
         }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()

@@ -10,6 +10,8 @@ struct UsageResult {
     /// Prepaid credits charged beyond the plan; nil unless the account has
     /// extra usage enabled. Money, so it is not one of the cards.
     let extraUsage: ExtraUsage?
+    /// The live login's plan ("Max 20x"), from its credentials: the usage
+    /// endpoint names none. Nil for a saved account's token.
     let planLabel: String?
 }
 
@@ -40,18 +42,20 @@ enum ClaudeUsage {
     private static let endpoint = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let betaHeader = "oauth-2025-04-20"
 
-    /// The live login's access token - the credentials file under the Claude
-    /// config dir, else the login Keychain item, exactly as the account store
-    /// reads them.
-    static func readAccessToken() -> String? {
-        let oauth = AccountStore.readLiveCredentials()?["claudeAiOauth"] as? [String: Any]
-        return oauth?["accessToken"] as? String
+    /// The live login's OAuth block (access token, plan) - the credentials
+    /// file under the Claude config dir, else the login Keychain item, exactly
+    /// as the account store reads them.
+    static func readLiveOAuth() -> [String: Any]? {
+        AccountStore.readLiveCredentials()?["claudeAiOauth"] as? [String: Any]
     }
 
     /// Fetch usage from the endpoint - for the live login by default, or for
     /// any saved account when its token is passed (AccountStore.accessTokenFor).
     static func fetch(token explicit: String? = nil) async throws -> UsageResult {
-        guard let token = explicit ?? readAccessToken() else { throw UsageError.noToken }
+        let live = explicit == nil ? readLiveOAuth() : nil
+        guard let token = explicit ?? live?["accessToken"] as? String else {
+            throw UsageError.noToken
+        }
 
         var req = URLRequest(url: endpoint)
         req.httpMethod = "GET"
@@ -72,6 +76,6 @@ enum ClaudeUsage {
         return UsageResult(
             cards: UsageNormalizer.normalize(payload),
             extraUsage: ExtraUsage.normalize(payload),
-            planLabel: payload["plan_label"] as? String)
+            planLabel: live.map { PlanLabel.label(oauth: $0) })
     }
 }

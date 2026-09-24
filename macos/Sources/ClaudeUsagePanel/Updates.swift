@@ -65,23 +65,34 @@ enum Updates {
 
     /// Highest released vX.Y.Z tag on the public remote, or nil. Mirrors
     /// latest_remote_version in scripts/auto-update.sh, including "released
-    /// tags only".
+    /// tags only". Reads the ref advertisement over HTTPS rather than running
+    /// `git ls-remote`: this only runs in the shapes with no checkout, where
+    /// /usr/bin/git may be the xcode-select shim that prompts to install the
+    /// Command Line Tools. Blocking; callers run it off the main actor.
     static func latestPublishedVersion() -> String? {
-        let r = Shell.run(
-            "/usr/bin/git", ["ls-remote", "--tags", "--refs", releasesURL + ".git", "v*"])
-        guard r.ok else { return nil }
-        let versions = r.out.split(separator: "\n").compactMap { line -> String? in
-            guard
-                let tag = line.split(separator: "\t").last?
-                    .replacingOccurrences(of: "refs/tags/v", with: "")
-            else { return nil }
-            let parts = tag.split(separator: ".")
-            guard parts.count == 3, parts.allSatisfy({ $0.allSatisfy(\.isNumber) }) else {
-                return nil
+        guard let url = URL(string: releasesURL + ".git/info/refs?service=git-upload-pack")
+        else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.setValue("git/2.0 claude-usage-panel", forHTTPHeaderField: "User-Agent")
+        let box = ResponseBox()
+        let done = DispatchSemaphore(value: 0)
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            if (response as? HTTPURLResponse)?.statusCode == 200, let data {
+                box.set(String(decoding: data, as: UTF8.self))
             }
-            return tag
-        }
-        return versions.max { UpdateStatus.isOlder($0, than: $1) }
+            done.signal()
+        }.resume()
+        done.wait()
+        return box.get().flatMap(ReleaseTags.latest(inAdvertisement:))
+    }
+
+    /// Hands the response body from URLSession's delegate queue to the waiting
+    /// caller.
+    private final class ResponseBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var body: String?
+        func set(_ value: String) { lock.withLock { body = value } }
+        func get() -> String? { lock.withLock { body } }
     }
 
     /// Current status, or nil when there is no checkout to inspect.

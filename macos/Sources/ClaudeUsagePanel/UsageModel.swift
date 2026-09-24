@@ -122,7 +122,7 @@ final class UsageModel: ObservableObject {
     /// poll rather than per view render.
     @Published private(set) var trends: [String: WeekOverWeek] = [:]
     private var alerts = AlertLatch()
-    private var paceAlerted: Set<String> = []
+    private var paceAlerts = PaceAlertLatch()
     /// Enough for the forecast's 6 h window; ~15 h at the 10-minute default.
     private static let historyMax = 90
 
@@ -400,37 +400,16 @@ final class UsageModel: ObservableObject {
         for (card, threshold) in alerts.crossings(cards) {
             notify("Claude usage", "\(card.label) reached \(threshold)%")
         }
-        for c in cards {
-            // Re-arm only when the projection clears by 2 h (or goes away) so
-            // an edge-hovering pace can't ping-pong notifications.
-            switch forecasts[c.id] {
-            case let fc? where fc.exhaustsBeforeReset && (fc.marginHours ?? 0) <= -1:
-                guard !paceAlerted.contains(c.id) else { continue }
-                paceAlerted.insert(c.id)
-                notify(
-                    "Claude usage",
-                    "\(c.label) is on pace to run out before it resets - "
-                        + UsageForecast.format(fc))
-            case let fc? where fc.exhaustsBeforeReset || (fc.marginHours ?? 99) < 2:
-                continue
-            default:
-                paceAlerted.remove(c.id)
-            }
+        for (card, fc) in paceAlerts.alerts(cards, forecasts: forecasts) {
+            notify(
+                "Claude usage",
+                "\(card.label) is on pace to run out before it resets - "
+                    + UsageForecast.format(fc))
         }
     }
 
     func notify(_ title: String, _ body: String) {
-        let esc = { (s: String) in s.replacingOccurrences(of: "\"", with: "\\\"") }
-        Shell.launch(
-            "/usr/bin/osascript",
-            ["-e", "display notification \"\(esc(body))\" with title \"\(esc(title))\""])
-    }
-
-    func spark(for id: String) -> String {
-        let h = (history[id] ?? []).suffix(12).compactMap { $0.count == 2 ? $0[1] : nil }
-        guard h.count >= 2 else { return "" }
-        let blocks = Array(" ▁▂▃▄▅▆▇█")
-        return String(h.map { blocks[max(0, min(8, Int(($0 / 100 * 8).rounded())))] })
+        Shell.launch("/usr/bin/osascript", NotifyScript.arguments(title: title, body: body))
     }
 
     /// Severity dot for the menu-bar title (renders in color as an emoji).
