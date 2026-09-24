@@ -23,6 +23,15 @@ public struct UpdateStatus: Equatable, Sendable {
     public var blocked: Bool
     /// Why it would decline - empty when not blocked.
     public var blockedReason: String
+    /// Why the remote lookup found no release - empty when it did. An auth,
+    /// DNS or URL failure is not "offline", and reporting every one of them as
+    /// "could not reach the remote" hid a permanently broken remote for weeks.
+    public var remoteError: String
+    /// What the running GNOME Shell loaded. Always empty on macOS, where the
+    /// app is replaced and relaunched by the installer.
+    public var loadedVersion: String
+    /// Installed, but the running process is older - log out and back in.
+    public var reloadNeeded: Bool
     /// ISO-8601, or "never".
     public var lastCheck: String
     public var log: String
@@ -30,7 +39,8 @@ public struct UpdateStatus: Equatable, Sendable {
     public init(
         checkout: String, installed: String, latest: String, updateAvailable: Bool,
         blocked: Bool, blockedReason: String, lastCheck: String, log: String,
-        checkoutVersion: String = "", clientsStale: Bool = false
+        checkoutVersion: String = "", clientsStale: Bool = false,
+        remoteError: String = "", loadedVersion: String = "", reloadNeeded: Bool = false
     ) {
         self.checkout = checkout
         self.installed = installed
@@ -40,6 +50,9 @@ public struct UpdateStatus: Equatable, Sendable {
         self.updateAvailable = updateAvailable
         self.blocked = blocked
         self.blockedReason = blockedReason
+        self.remoteError = remoteError
+        self.loadedVersion = loadedVersion
+        self.reloadNeeded = reloadNeeded
         self.lastCheck = lastCheck
         self.log = log
     }
@@ -61,9 +74,29 @@ public struct UpdateStatus: Equatable, Sendable {
             lastCheck: o["lastCheck"] as? String ?? "never",
             log: o["log"] as? String ?? "",
             checkoutVersion: o["checkout_version"] as? String ?? "",
-            clientsStale: o["clientsStale"] as? Bool ?? false
+            clientsStale: o["clientsStale"] as? Bool ?? false,
+            remoteError: o["remoteError"] as? String ?? "",
+            loadedVersion: o["loadedVersion"] as? String ?? "",
+            reloadNeeded: o["reloadNeeded"] as? Bool ?? false
         )
     }
+
+    /// Dotted-version ordering, the rule version_compare() uses in
+    /// scripts/auto-update.sh: numeric per component, a leading "v" and any
+    /// -prerelease suffix ignored, a missing component read as 0.
+    public static func compare(_ a: String, _ b: String) -> Int {
+        func parts(_ v: String) -> [Int] {
+            let core = v.hasPrefix("v") ? String(v.dropFirst()) : v
+            let released = core.split(whereSeparator: { $0 == "-" || $0 == "+" }).first ?? ""
+            let n = released.split(separator: ".").map { Int($0.filter(\.isNumber)) ?? 0 }
+            return (0..<3).map { $0 < n.count ? n[$0] : 0 }
+        }
+        let (x, y) = (parts(a), parts(b))
+        for i in 0..<3 where x[i] != y[i] { return x[i] < y[i] ? -1 : 1 }
+        return 0
+    }
+
+    public static func isOlder(_ a: String, than b: String) -> Bool { compare(a, b) < 0 }
 
     /// One line for the Settings row and the dropdown.
     public var summary: String {
@@ -71,14 +104,22 @@ public struct UpdateStatus: Equatable, Sendable {
         // Stale clients outrank a pause: the pause explains why the daily run
         // is idle, but the actionable fact is that the panel is running old code.
         if clientsStale {
-            return "Installed \(installed), checkout \(checkoutVersion) - run ./install.sh update"
+            return "Installed \(installed), checkout \(checkoutVersion) - reinstall the clients"
+        }
+        if reloadNeeded {
+            return "Installed \(installed), running \(loadedVersion) - log out and back in"
         }
         if blocked { return "Paused: \(blockedReason)" }
-        if latest.isEmpty { return "\(installed) (could not reach the remote)" }
+        if latest.isEmpty {
+            return remoteError.isEmpty
+                ? "\(installed) (could not reach the remote)" : "\(installed) - \(remoteError)"
+        }
         return "Up to date (\(installed))"
     }
 
     /// Whether the user should be nudged - an available update, or a checkout
     /// auto-update has quietly stopped touching.
-    public var needsAttention: Bool { updateAvailable || blocked || clientsStale }
+    public var needsAttention: Bool {
+        updateAvailable || blocked || clientsStale || reloadNeeded
+    }
 }

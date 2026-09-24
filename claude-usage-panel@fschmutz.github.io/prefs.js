@@ -445,13 +445,14 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
 
         const scriptPath = GLib.build_filenamev([this.path, 'scripts', 'auto-update.sh']);
 
-        // Async, cancelled with the window: a git fetch must never freeze the
-        // prefs window, nor write into it after it is gone.
-        const runUpdateScript = async args => {
-            const {ok, stdout} = await run(['bash', scriptPath, ...args],
-                {cancellable: this._cancellable});
-            return ok ? stdout : null;
-        };
+        // Async so a git fetch never freezes the prefs window. The STATUS read
+        // is cancelled with the window; APPLYING is not. Cancelling kills the
+        // script, and closing the window mid-update used to do exactly that
+        // between the fast-forward and the reinstall - which leaves the
+        // clients on the old release with no run left to fix them.
+        const runUpdateScript = async (args, {cancel = true} = {}) =>
+            run(['bash', scriptPath, ...args],
+                {cancellable: cancel ? this._cancellable : null});
 
         const renderUpdate = (stdout) => {
             updateBtn.sensitive = true;
@@ -470,12 +471,19 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
                 return;
             }
             if (st.clientsStale && !st.updateAvailable) {
-                // The code is here but was never installed - the daily run only
-                // reinstalls after a fast-forward it performed itself, so a
-                // manual `git pull` leaves the clients behind indefinitely.
+                // The code is here but was never installed - a manual `git
+                // pull`, or a reinstall that failed. "Update now" reinstalls
+                // it: the run decides on the DEPLOYED version, not the
+                // checkout's, so this is no longer a button that does nothing.
                 updateRow.title = _('Installed %s, checkout %s').format(st.installed, st.checkout_version);
-                updateRow.subtitle = _('Run ./install.sh update to install the newer code.');
+                updateRow.subtitle = _('The clients are behind the code - reinstall them.');
                 updateBtn.label = _('Update now');
+            } else if (st.reloadNeeded) {
+                // Installed, but not running: GNOME Shell keeps the extension
+                // it loaded until the session restarts.
+                updateRow.title = _('Installed %s, running %s').format(st.installed, st.loadedVersion);
+                updateRow.subtitle = _('Log out and back in to load it.');
+                updateBtn.label = _('Check now');
             } else if (st.blocked) {
                 updateRow.title = _('Paused: %s').format(st.blockedReason);
                 updateRow.subtitle = _(
@@ -487,33 +495,50 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
                 updateRow.title = _('Update available: %s → %s').format(st.installed, st.latest);
                 updateRow.subtitle = _('Last checked %s').format(st.lastCheck);
                 updateBtn.label = _('Update now');
-            } else {
-                updateRow.title = st.latest
-                    ? _('Up to date (%s)').format(st.installed)
-                    : _('%s (could not reach the remote)').format(st.installed);
+            } else if (st.latest) {
+                updateRow.title = _('Up to date (%s)').format(st.installed);
                 updateRow.subtitle = _('Last checked %s').format(st.lastCheck);
+                updateBtn.label = _('Check now');
+            } else {
+                // Not "up to date": the lookup failed, and remoteError says
+                // which failure - an auth, DNS or URL problem is not offline
+                // and will not fix itself by waiting.
+                updateRow.title = _('%s (could not check)').format(st.installed);
+                updateRow.subtitle = st.remoteError || _('Last checked %s').format(st.lastCheck);
                 updateBtn.label = _('Check now');
             }
         };
 
         const refreshUpdate = async () => {
             updateBtn.sensitive = false;
-            const out = await runUpdateScript(['--status', '--json']);
+            const {ok, stdout} = await runUpdateScript(['--status', '--json']);
             if (!this._closed())
-                renderUpdate(out);
+                renderUpdate(ok ? stdout : null);
         };
 
         updateBtn.connect('clicked', async () => {
             updateBtn.sensitive = false;
             const applying = updateBtn.label === _('Update now');
             updateRow.subtitle = applying ? _('Updating…') : _('Checking…');
-            const out = await runUpdateScript(applying ? [] : ['--status', '--json']);
+            const {ok, stdout, stderr} = await runUpdateScript(
+                applying ? [] : ['--status', '--json'], {cancel: !applying});
             if (this._closed())
                 return;
-            if (applying)
+            if (!applying) {
+                renderUpdate(ok ? stdout : null);
+                return;
+            }
+            if (ok) {
                 refreshUpdate();
-            else
-                renderUpdate(out);
+                return;
+            }
+            // An update that failed said why, on one of the two pipes. Showing
+            // "Up to date" over it - which is what discarding the status did -
+            // is how a broken install stayed invisible.
+            updateBtn.sensitive = true;
+            updateRow.title = _('The update failed');
+            const lines = `${stdout}${stderr}`.trim().split('\n');
+            updateRow.subtitle = lines[lines.length - 1] || _('See the log for details.');
         });
         refreshUpdate();
         return updates;

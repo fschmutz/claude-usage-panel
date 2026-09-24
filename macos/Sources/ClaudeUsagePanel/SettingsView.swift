@@ -1,3 +1,4 @@
+import AppKit
 import ClaudeUsageCore
 import SwiftUI
 
@@ -259,6 +260,11 @@ private struct UpdatesSection: View {
                     Spacer()
                     if updates.busy {
                         ProgressView().controlSize(.small)
+                    } else if updates.downloadable != nil {
+                        Button("Download") {
+                            NSWorkspace.shared.open(
+                                URL(string: Updates.releasesURL + "/releases/latest")!)
+                        }
                     } else {
                         Button("Check now") { Task { await updates.reload() } }
                     }

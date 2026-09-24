@@ -30,6 +30,10 @@ import {UsageCard} from './lib/usageCard.js';
 import {HeaderBar} from './lib/headerBar.js';
 import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
 import {vbox} from './lib/widgets.js';
+import {writeText} from './lib/fs.js';
+import {run} from './lib/proc.js';
+import {stateDir} from './lib/paths.js';
+import {readSnapshots, claudectlPath} from './lib/snapshots.js';
 import {
     severityClass, formatResets, alertThreshold,
     forecast, formatForecast, normalizeHistory,
@@ -101,10 +105,12 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // three).
         this._menuWidth = 0;
         this.menu.connectObject('open-state-changed', (_menu, open) => {
-            if (open)
+            if (open) {
                 this._applyWidth();
-            else
+                this._syncReopen();
+            } else {
                 hideTooltip();
+            }
         }, this);
         Main.layoutManager.connectObject(
             'monitors-changed', () => this._applyWidth(), this);
@@ -148,6 +154,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             // Refresh is a plain button, not a menu item, so the poll happens
             // in place WITHOUT closing the popup.
             onRefresh: () => this.refresh(),
+            onReopen: () => this._reopenSessions(),
             onSettings: () => {
                 this.menu.close();
                 this._extension.openPreferences();
@@ -198,6 +205,40 @@ class ClaudeUsageButton extends PanelMenu.Button {
             refreshSoon: () => this._refreshSoon(),
             onActiveChanged: () => this._renderPanel(),
             syncAutoSwitch: state => this._header.syncAutoSwitch(state),
+        });
+    }
+
+    // The reopen button offers exactly one thing - the newest snapshot - and
+    // only when there is one. The store is written by `claudectl session` and
+    // by the 30-minute autosave, both outside this process, so it is re-read
+    // every time the menu opens rather than cached.
+    _syncReopen() {
+        const {newest} = readSnapshots();
+        const visible = Boolean(claudectlPath() && newest);
+        this._header.syncReopen({
+            visible,
+            title: visible
+                ? _('Reopen %s (%d sessions)').format(newest.label, newest.sessions.length)
+                : '',
+        });
+    }
+
+    // `claudectl session open` with no argument: the newest snapshot, one tab
+    // per session. It skips a session that is still running, so pressing this
+    // after a crash reopens what died and leaves what survived alone.
+    _reopenSessions() {
+        const cli = claudectlPath();
+        if (!cli)
+            return;
+        this.menu.close();
+        run([cli, 'session', 'open']).then(({ok, stdout, stderr}) => {
+            if (this._destroyed)
+                return;
+            // The CLI's last line says what it opened, or why it opened nothing.
+            const lines = `${stdout}${stderr}`.trim().split('\n');
+            Main.notify(
+                ok ? _('Reopened your sessions') : _('Could not reopen the sessions'),
+                lines[lines.length - 1] || '');
         });
     }
 
@@ -602,6 +643,22 @@ export default class ClaudeUsagePanelExtension extends Extension {
     enable() {
         this._button = new ClaudeUsageButton(this);
         Main.panel.addToStatusArea(this.uuid, this._button, 0, 'right');
+        this._stampLoadedVersion();
+    }
+
+    // What the RUNNING shell loaded, as opposed to what is on disk. An update
+    // replaces the extension directory, but GNOME Shell keeps the code it
+    // already loaded until the next login - so every surface reported the new
+    // version as installed while the old one was still running. This is the
+    // only place that knows the difference; auto-update.sh --status compares
+    // it with the installed version and reports reloadNeeded.
+    _stampLoadedVersion() {
+        try {
+            writeText(GLib.build_filenamev([stateDir(), 'loaded-version']),
+                `${this.metadata['version-name'] ?? ''}\n`);
+        } catch {
+            // a read-only state dir is not a reason to fail the enable
+        }
     }
 
     disable() {
