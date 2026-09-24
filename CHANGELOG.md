@@ -6,6 +6,12 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- The test helper resolves `bash` / `git` from a constant list of system
+  directories instead of letting the child's `PATH` - which the tests build
+  from `process.execPath` - decide what runs.
+
 ## [2.2.0] - 2026-09-24
 
 ### Fixed

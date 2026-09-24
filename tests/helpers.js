@@ -6,15 +6,26 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// The only executables the suite may spawn. Everything under test is a shell
-// script, a Node module or a git command, so the program is always one of
-// these three literals and never a path built from the environment: the
-// sandbox HOMEs come from $TMPDIR, and passing one of those paths as the
-// program turns $TMPDIR into a way to choose what runs
-// (CodeQL js/shell-command-injection-from-environment). A script that lives in
-// a sandbox is run as an ARGUMENT of bash instead - execFileSync takes no
-// shell, so arguments cannot inject.
-const TOOLS = ['bash', 'git', 'node'];
+// The only executables the suite may spawn, and the only directories it looks
+// for them in - all constants. Everything under test is a shell script or a
+// git command, so the program is resolved HERE and never decided by the
+// environment: the sandbox HOMEs come from $TMPDIR and the test PATHs are
+// built from process.execPath, so letting either pick the program is a real
+// injection path (CodeQL js/shell-command-injection-from-environment, "this
+// shell command depends on an uncontrolled absolute path" - the child's PATH
+// is what resolves a bare program name). A script that lives in a sandbox is
+// run as an ARGUMENT of bash instead: execFileSync takes no shell, so
+// arguments cannot inject.
+const TOOLS = ['bash', 'git'];
+const TOOL_DIRS = ['/usr/bin', '/bin', '/usr/local/bin', '/opt/homebrew/bin'];
+
+function toolPath(name) {
+    for (const dir of TOOL_DIRS) {
+        const candidate = `${dir}/${name}`;
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    throw new Error(`tests/helpers.js: no ${name} in ${TOOL_DIRS.join(', ')}`);
+}
 
 /** {status, stdout, stderr} for any exit code; stderr is captured, not leaked
  *  into the runner's own output. */
@@ -27,7 +38,7 @@ export function run(cmd, args, opts = {}) {
         );
     }
     try {
-        const stdout = execFileSync(tool, args, {
+        const stdout = execFileSync(toolPath(tool), args, {
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
             ...opts,
