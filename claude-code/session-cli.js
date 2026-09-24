@@ -6,10 +6,9 @@
 import os from 'node:os';
 
 import {AUTO_KEEP, AUTO_PREFIX, openTabs, resumePrompt, stampLabel} from './tabs.js';
-import {TMUX_SESSION} from './terminals.js';
 import {tabsDir} from './paths.js';
 
-export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as tabs
+export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as laid out
 
   claudectl session list [--json]            running sessions (* = the one you are in)
   claudectl session save [LABEL] [--exclude-self]
@@ -19,7 +18,7 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
   claudectl session open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run]
                          [--terminal=BIN|iterm|terminal|tmux] [--windows|--tmux]
                          [--prompt=TEXT|--no-prompt]
-                                             reopen a snapshot, one tab per session
+                                             reopen a snapshot, same windows and tabs
   claudectl session purge SNAP... | --keep=N | --auto | --all [--yes]
                                              delete snapshots
   claudectl session autosave [--keep=N]      what the schedule runs: save only when
@@ -29,9 +28,11 @@ SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
 skips a session that is still running (--force to try anyway) and one whose
 directory or transcript is gone. It opens the terminal the panels use (GNOME
 preference \`terminal-command\`, then $TERMINAL, then the first one installed;
-macOS: the app's Terminal/iTerm choice). gnome-terminal and iTerm get native
-tabs; any other terminal gets one window on a tmux session with a window per
-Claude session (--windows: one terminal window each). Each resumed session
+macOS: the app's Terminal/iTerm choice), laid out as saved: the same
+windows, the same tabs in order. iTerm, gnome-terminal and xfce4-terminal get
+native tabs; any other terminal gets one tmux session per saved window
+(claudectl, claudectl-2, ...), each in a window of its own, or without tmux
+one window per session (--windows forces that). Each resumed session
 gets a first message telling it it was restarted: re-read where it stopped,
 re-check git / CI / jobs, re-arm its watchers, report, then carry on
 (--prompt=TEXT replaces it, --no-prompt sends none). \`./install.sh cli\` also schedules
@@ -155,11 +156,15 @@ export async function main(argv, io = {}) {
         for (const st of r.steps) out(`${st.cmd} ${st.args.map((x) => JSON.stringify(x)).join(' ')}\n`);
       }
       const n = open.length;
+      const w = r.windows === 1 ? 'one' : String(r.windows);
+      const ws = r.windows === 1 ? 'window' : 'windows';
+      const sessions = r.tmuxSessions.join(', ');
       out({
-        'tabs': `${n} tabs in one ${r.terminal} window\n`,
-        'tmux': `${n} tmux windows (session ${TMUX_SESSION}) in one ${r.terminal} window\n`,
+        'tabs': `${n} tabs in ${w} ${r.terminal} ${ws}\n`,
+        'tmux': `${n} tmux windows (session ${sessions}) in ${w} ${r.terminal} ${ws}\n`,
         'windows': `${n} ${r.terminal} windows\n`,
-        'tmux-only': `${n} windows in tmux session ${TMUX_SESSION} - tmux attach -t ${TMUX_SESSION}\n`,
+        'tmux-only': `${n} windows in tmux session ${sessions} - ` +
+          `${r.tmuxSessions.map((s) => `tmux attach -t ${s}`).join(' / ')}\n`,
       }[r.how]);
       return 0;
     }

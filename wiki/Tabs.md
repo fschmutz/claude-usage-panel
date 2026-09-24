@@ -4,14 +4,15 @@ Nine Claude Code sessions across nine repos, and the desktop session dies, the
 machine reboots, or a terminal window is closed by mistake. Getting them back
 means finding each session id, `cd`-ing into the right directory and running
 `claude --resume` nine times. `claudectl session` snapshots the running
-sessions and reopens a snapshot as tabs of one terminal window, each tab in its
-own directory resuming its own session:
+sessions and reopens a snapshot the way it was laid out - the same windows,
+the same tabs in the same order - each tab in its own directory resuming its
+own session:
 
 ```bash
 claudectl session list    # what is running now (* = the session you type this in)
 claudectl session save    # snapshot it (label = the time, or give one: save before-reboot)
 claudectl session store   # saved snapshots, newest first
-claudectl session open    # reopen the newest one: one window, one tab per session
+claudectl session open    # reopen the newest one: same windows, one tab per session
 ```
 
 Both panels put the same thing one click away: the **Reopen** icon in the
@@ -56,13 +57,18 @@ one, the newest snapshot is used.
   the first installed of Ghostty, kitty, WezTerm, Alacritty, foot,
   gnome-terminal, Konsole, Tilix, xfce4-terminal, xterm; on macOS the app's *Open in* setting (Terminal or
   iTerm). `--terminal=BIN` (or `iterm` / `terminal`) overrides it for one run.
-- **One window.** gnome-terminal and iTerm open one window with a native tab
-  per session. Every other terminal opens ONE window on a tmux session
-  `claudectl` holding a window per session (tmux's own tabs); `--windows`
-  opens one terminal window per session instead, and is what happens when
-  tmux is not installed. `--tmux` forces the tmux layout everywhere;
-  `--terminal=tmux` builds the tmux session without opening a terminal (over
-  ssh, say).
+- **Same windows, same tabs.** Sessions come back grouped in the windows
+  they were saved from, tabs in their saved order. iTerm, gnome-terminal and
+  xfce4-terminal open those windows with native tabs. Every other terminal
+  gets one tmux session per saved window (`claudectl`, `claudectl-2`, …),
+  each attached in a window of its own, with a tmux window per Claude
+  session; without tmux, one terminal window per session (Alacritty, foot
+  and xterm have no tabs to open). Terminal.app has no scriptable tabs:
+  tmux when installed, else a window per session. `--windows` forces a
+  window per session, `--tmux` the tmux layout everywhere, and
+  `--terminal=tmux` builds the tmux sessions without opening a terminal
+  (over ssh, say). A snapshot saved before placement existed, or from a
+  terminal that cannot be placed, reopens in one window.
 - **The right directory.** Each tab starts in the directory the session ran
   in and runs `claude --name <name> --resume <id>` through a login shell, the
   same command a panel click runs. When claude exits, the tab stays open on
@@ -90,8 +96,29 @@ Linux the kernel start time of the pid must match the one Claude Code
 recorded, which also rejects a pid reused by another process; on macOS the pid
 must be alive and running `claude`.
 
-Snapshots store only the name, the directory and the session id, one `0600`
-JSON file per label:
+Placement - which window, which tab - is read at save time from each
+session's controlling tty (kitty: its pid), most exact source first:
+
+| Source | How | Notes |
+|---|---|---|
+| tmux | `tmux list-panes -a` | tmux session = window, tmux window = tab, whatever terminal shows it |
+| kitty | `kitty @ ls` | only from inside kitty or with `$KITTY_LISTEN_ON`; needs `allow_remote_control` |
+| WezTerm | `wezterm cli --no-auto-start list` | never starts a WezTerm server |
+| iTerm, Terminal.app | AppleScript over windows ▸ tabs | exact after tabs were dragged; macOS asks once for the Automation permission, so only a `save` you type asks, never the scheduled autosave, and only an app already running |
+| iTerm | `ITERM_SESSION_ID` of the process | no permission; set when the tab opens and never updated, so a moved tab is placed where it was born |
+
+tmux, kitty and WezTerm are looked up on `PATH` and in `/opt/homebrew/bin`,
+`/usr/local/bin`, `/usr/bin`, `/bin`: the scheduled autosave and the macOS
+app run with a PATH that lacks Homebrew. gnome-terminal cannot list its tabs:
+those sessions are saved unplaced. Only Claude sessions are restored - a tab
+running a plain shell is not.
+
+A window saved from tmux reopens as a tmux session of the same name
+(`work`) when the server does not already run one; otherwise, and for every
+other window, the first free of `claudectl`, `claudectl-2`, …
+
+Snapshots store the name, the directory, the session id and, when known,
+`window` and `tab`, one `0600` JSON file per label:
 
 - Linux: `${XDG_STATE_HOME:-~/.local/state}/claude-usage-panel/tabs/`
 - macOS: `~/Library/Application Support/claude-usage-panel/tabs/`

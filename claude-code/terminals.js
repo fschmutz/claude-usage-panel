@@ -15,12 +15,12 @@
 // in tests/terminals.test.js), so a session opened from the CLI starts exactly
 // like one clicked in the panel.
 //
-// The "how": few terminals can open N tabs with N commands from one command
-// line. gnome-terminal (--window --tab ...) and iTerm (AppleScript) can, and
-// get native tabs. Every other terminal gets ONE window of that terminal
-// attached to a tmux session holding one window per Claude session - still
-// one window, tabs as tmux windows - or, with --windows or without tmux, one
-// window per session.
+// The "how": few terminals can open N windows of tabs with N commands from
+// one command line. gnome-terminal / xfce4-terminal (--window --tab ...) and
+// iTerm (AppleScript) can, and get native tabs, one window per saved window
+// (windowGroups). Every other terminal gets one tmux session per saved
+// window, each attached in a window of that terminal - tabs as tmux windows -
+// or, with --windows or without tmux, one window per session.
 //
 // launchSteps() is pure: it turns rows + a resolved terminal into the exact
 // processes to start. openTabs(io).launch() runs them.
@@ -34,6 +34,17 @@ export const TMUX_SESSION = 'claudectl';
 export const MAC_DEFAULTS_DOMAIN = 'io.github.fschmutz.claude-usage-panel';
 /** The GNOME extension's GSettings path, as dconf sees it. */
 export const GNOME_TERMINAL_KEY = '/org/gnome/shell/extensions/claude-usage-panel/terminal-command';
+
+/** Where tmux, wezterm and kitty live when a scheduler's PATH (launchd,
+ *  systemd, the macOS app) does not list them: Homebrew first. */
+export const TOOL_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
+
+/** PATH with every TOOL_DIRS entry it lacks appended: what the session
+ *  commands look their tools up in. */
+export function toolPath(envPath = '', dirs = TOOL_DIRS) {
+  const have = String(envPath ?? '').split(':').filter(Boolean);
+  return [...have, ...dirs.filter((d) => !have.includes(d))].join(':');
+}
 
 export const shellQuote = (s) => `'${String(s ?? '').replace(/'/g, `'\\''`)}'`;
 
@@ -107,18 +118,82 @@ export function sessionCommand(row, prompt = '') {
 
 const base = (bin) => path.basename(String(bin ?? ''));
 
-/** gnome-terminal argv: one new window, one tab per row. `--command` is the
- *  only per-tab command form (a trailing `--` is one command for the whole
- *  invocation); still honoured, with a deprecation note on stderr. */
-export function gnomeTabsArgv(rows, prompt = '') {
-  const argv = ['--window'];
-  rows.forEach((r, i) => {
-    if (i) argv.push('--tab');
-    argv.push('--title', r.name, '--working-directory', r.cwd,
-      '--command', `bash -lc ${shellQuote(sessionCommand(r, prompt))}`);
+/**
+ * Rows split into the terminal windows they came from: rows sharing a
+ * `window` (claude-code/layout.js) form one group, in order of first
+ * appearance. Rows without one - an old snapshot, a terminal that cannot be
+ * located - share one window of their own, as before placement existed.
+ */
+export function windowGroups(rows) {
+  const groups = new Map();
+  for (const r of rows) {
+    const key = r.window === undefined || r.window === null ? '\0unplaced' : `w:${r.window}`;
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
+  return [...groups.values()];
+}
+
+/** The i-th fallback tmux session name: claudectl, claudectl-2, … */
+export const tmuxSessionName = (i) => (i ? `${TMUX_SESSION}-${i + 1}` : TMUX_SESSION);
+
+// What a saved tmux name must look like to be reused: it reaches a shell
+// line (`tmux attach -t NAME`), and a snapshot is a file anyone can edit.
+const TMUX_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * One tmux session name per window group. A group saved from tmux gets its
+ * own session name back (`tmux:work` -> work) unless `taken` (the sessions
+ * the server already runs) holds it; every other group gets the first free
+ * claudectl, claudectl-2, …
+ */
+export function tmuxSessionNames(groups, taken = []) {
+  const used = new Set(taken);
+  const saved = groups.map((g) => {
+    const w = String(g[0].window ?? '');
+    const name = w.startsWith('tmux:') ? w.slice(5) : '';
+    if (!TMUX_NAME_RE.test(name) || used.has(name)) return null;
+    used.add(name);
+    return name;
   });
+  let n = 0;
+  return saved.map((name) => {
+    if (name) return name;
+    while (used.has(tmuxSessionName(n))) n++;
+    const pick = tmuxSessionName(n);
+    used.add(pick);
+    return pick;
+  });
+}
+
+/** gnome-terminal argv: one new window per group, one tab per row.
+ *  `--command` is the only per-tab command form (a trailing `--` is one
+ *  command for the whole invocation); still honoured, with a deprecation
+ *  note on stderr. */
+export function gnomeTabsArgv(rows, prompt = '') {
+  const argv = [];
+  for (const group of windowGroups(rows)) {
+    group.forEach((r, i) => {
+      argv.push(i ? '--tab' : '--window', '--title', r.name, '--working-directory', r.cwd,
+        '--command', `bash -lc ${shellQuote(sessionCommand(r, prompt))}`);
+    });
+  }
   return argv;
 }
+
+/** xfce4-terminal argv, same shape: `-e` takes one command string per tab. */
+export function xfceTabsArgv(rows, prompt = '') {
+  const argv = [];
+  for (const group of windowGroups(rows)) {
+    group.forEach((r, i) => {
+      argv.push(i ? '--tab' : '--window', '-T', r.name, `--working-directory=${r.cwd}`,
+        '-e', `bash -lc ${shellQuote(sessionCommand(r, prompt))}`);
+    });
+  }
+  return argv;
+}
+
+/** Terminals that open several windows of native tabs from one command line. */
+const TAB_ARGV = {'gnome-terminal': gnomeTabsArgv, 'xfce4-terminal': xfceTabsArgv};
 
 /** tmux calls building one detached session, one window per row. */
 export function tmuxCalls(rows, session = TMUX_SESSION, prompt = '') {
@@ -132,52 +207,57 @@ export function tmuxCalls(rows, session = TMUX_SESSION, prompt = '') {
 const asString = (s) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 const macLine = (r, prompt) => `cd ${shellQuote(r.cwd)} && ${sessionCommand(r, prompt)}`;
 
-/** AppleScript for macOS. iTerm: one window, the first row in it, a tab per
- *  further row (`tabs`), or a window per row. Terminal.app has no tab verb
- *  outside UI scripting, so each `do script` is its own window. `lines`
- *  overrides the per-row shell lines (the tmux attach). */
+/** AppleScript for macOS. iTerm: a window per window group, a tab per
+ *  further row of it (`tabs`), or a window per row. Terminal.app has no tab
+ *  verb outside UI scripting, so each `do script` is its own window. `lines`
+ *  overrides the per-row shell lines, one window each (the tmux attaches). */
 export function appleScript(app, rows, {tabs = true, lines, prompt = ''} = {}) {
-  const cmds = lines ?? rows.map((r) => macLine(r, prompt));
+  const windows = lines ? lines.map((l) => [l])
+    : (tabs ? windowGroups(rows) : rows.map((r) => [r])).map((g) => g.map((r) => macLine(r, prompt)));
   if (app === 'iterm') {
-    const body = cmds.map((c, i) => (i && tabs
+    const body = windows.flatMap((cmds) => cmds.map((c, i) => (i
       ? `  tell w to create tab with default profile\n  tell current session of w to write text ${asString(c)}`
-      : `  set w to (create window with default profile)\n  tell current session of w to write text ${asString(c)}`));
+      : `  set w to (create window with default profile)\n  tell current session of w to write text ${asString(c)}`)));
     return `tell application "iTerm"\n  activate\n${body.join('\n')}\nend tell`;
   }
-  const body = cmds.map((c) => `  do script ${asString(c)}`);
+  const body = windows.flat().map((c) => `  do script ${asString(c)}`);
   return `tell application "Terminal"\n  activate\n${body.join('\n')}\nend tell`;
 }
 
 /**
- * The processes that open `rows`. Pure.
+ * The processes that open `rows`, window group by window group. Pure.
  * @param terminal a Linux terminal binary, 'iterm' / 'terminal' on macOS, or
- *   'tmux' (a detached tmux session only - over ssh, say)
+ *   'tmux' (detached tmux sessions only - over ssh, say)
  * @param opts.hasTmux tmux is installed; opts.windows forces a window per
- *   session; opts.tmux forces the tmux layout even where native tabs exist
- * @returns {{how: 'tabs'|'tmux'|'windows'|'tmux-only', steps: {cmd, args, detach}[]}}
+ *   session; opts.tmux forces the tmux layout even where native tabs exist;
+ *   opts.tmuxTaken the tmux sessions that already exist (tmuxSessionNames)
+ * @returns {{how: 'tabs'|'tmux'|'windows'|'tmux-only', windows: number,
+ *   tmuxSessions: string[], steps: {cmd, args, detach}[]}}
  */
 export function launchSteps(rows, terminal, {
-  platform = 'linux', hasTmux = false, windows = false, tmux = false, prompt = '',
+  platform = 'linux', hasTmux = false, windows = false, tmux = false, prompt = '', tmuxTaken = [],
 } = {}) {
-  const tmuxSteps = tmuxCalls(rows, TMUX_SESSION, prompt).map((args) => ({cmd: 'tmux', args, detach: false}));
-  const attach = `tmux attach -t ${TMUX_SESSION}`;
-  if (terminal === 'tmux') return {how: 'tmux-only', steps: tmuxSteps};
+  const groups = windowGroups(rows);
+  const tmuxSessions = tmuxSessionNames(groups, tmuxTaken);
+  const tmuxSteps = groups.flatMap((g, i) => tmuxCalls(g, tmuxSessions[i], prompt))
+    .map((args) => ({cmd: 'tmux', args, detach: false}));
+  const attach = (name) => `tmux attach -t ${name}`;
+  const viaTmux = (extra) => ({how: 'tmux', windows: groups.length, tmuxSessions, steps: [...tmuxSteps, ...extra]});
+  const done = (how, steps, n = groups.length) => ({how, windows: n, tmuxSessions: [], steps});
+  if (terminal === 'tmux') return {...viaTmux([]), how: 'tmux-only'};
   const useTmux = !windows && hasTmux;
   if (platform === 'darwin') {
     const app = terminal === 'iterm' ? 'iterm' : 'terminal';
     const osa = (script) => ({cmd: 'osascript', args: ['-e', script], detach: false});
-    if (app === 'iterm' && !windows && !tmux) return {how: 'tabs', steps: [osa(appleScript('iterm', rows, {prompt}))]};
-    if (useTmux) return {how: 'tmux', steps: [...tmuxSteps, osa(appleScript(app, [], {lines: [attach]}))]};
-    return {how: 'windows', steps: [osa(appleScript(app, rows, {tabs: false, prompt}))]};
+    if (app === 'iterm' && !windows && !tmux) return done('tabs', [osa(appleScript('iterm', rows, {prompt}))]);
+    if (useTmux) return viaTmux([osa(appleScript(app, [], {lines: tmuxSessions.map(attach)}))]);
+    return done('windows', [osa(appleScript(app, rows, {tabs: false, prompt}))], rows.length);
   }
-  if (base(terminal) === 'gnome-terminal' && !windows && !tmux) {
-    return {how: 'tabs', steps: [{cmd: terminal, args: gnomeTabsArgv(rows, prompt), detach: true}]};
-  }
+  const tabArgv = TAB_ARGV[base(terminal)];
+  if (tabArgv && !windows && !tmux) return done('tabs', [{cmd: terminal, args: tabArgv(rows, prompt), detach: true}]);
   const spawn = (argv) => ({cmd: argv[0], args: argv.slice(1), detach: true});
-  if (useTmux) {
-    return {how: 'tmux', steps: [...tmuxSteps, spawn(terminalArgv(terminal, rows[0].cwd, attach))]};
-  }
-  return {how: 'windows', steps: rows.map((r) => spawn(terminalArgv(terminal, r.cwd, sessionCommand(r, prompt))))};
+  if (useTmux) return viaTmux(groups.map((g, i) => spawn(terminalArgv(terminal, g[0].cwd, attach(tmuxSessions[i])))));
+  return done('windows', rows.map((r) => spawn(terminalArgv(terminal, r.cwd, sessionCommand(r, prompt)))), rows.length);
 }
 
 // What Claude Code sets in the environment of the commands a session runs,

@@ -12,7 +12,7 @@ import * as gnome from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessio
 import {
     GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TERMINALS, TMUX_SESSION, appleScript, gnomeTabsArgv,
     launchSteps, onPath, pickTerminal, resolveTerminal, sessionCommand, sessionFreeEnv, terminalArgv,
-    terminalForAlternative, terminalForDesktopId, tmuxCalls,
+    terminalForAlternative, terminalForDesktopId, tmuxCalls, tmuxSessionNames, toolPath, windowGroups, xfceTabsArgv,
 } from '../claude-code/terminals.js';
 import {sandboxHome} from './helpers.js';
 
@@ -206,6 +206,74 @@ test('macOS Terminal.app: tmux in one window when installed, else a window each'
     assert.equal(win.how, 'windows');
     assert.equal((win.steps[0].args[1].match(/do script/g) ?? []).length, 2);
     assert.equal(appleScript('iterm', rows, {tabs: false}).match(/create window/g).length, 2);
+});
+
+// ── Several windows ─────────────────────────────────────────────────────────────
+
+const placed = [
+    {name: 'A', cwd: '/r/a', session_id: 'id-a', window: 'iterm:7', tab: 1},
+    {name: 'B', cwd: '/r/b', session_id: 'id-b', window: 'iterm:7', tab: 2},
+    {name: 'C', cwd: '/r/c', session_id: 'id-c', window: 'iterm:9', tab: 1},
+    {name: 'D', cwd: '/r/d', session_id: 'id-d'},
+];
+
+test('windowGroups: one group per saved window, first-seen order; unplaced share one', () => {
+    assert.deepEqual(windowGroups(placed).map((g) => g.map((r) => r.name)), [['A', 'B'], ['C'], ['D']]);
+    // an old snapshot, no placement at all: one window, as before
+    assert.deepEqual(windowGroups(rows).map((g) => g.length), [rows.length]);
+});
+
+test('macOS iTerm: a window per saved window, its tabs inside', () => {
+    const {how, windows, steps} = launchSteps(placed, 'iterm', {platform: 'darwin'});
+    assert.equal(how, 'tabs');
+    assert.equal(windows, 3);
+    const script = steps[0].args[1];
+    assert.equal((script.match(/create window with default profile/g) ?? []).length, 3);
+    assert.equal((script.match(/create tab with default profile/g) ?? []).length, 1);
+    // B lands in A's window, C opens the next one
+    assert.ok(script.indexOf("'id-a'") < script.indexOf('create tab') && script.indexOf('create tab') < script.indexOf("'id-b'"));
+});
+
+test('gnome-terminal and xfce4-terminal: a --window per saved window, a --tab per further session', () => {
+    for (const [bin, argv] of [['gnome-terminal', gnomeTabsArgv], ['xfce4-terminal', xfceTabsArgv]]) {
+        const {how, windows, steps} = launchSteps(placed, bin, {hasTmux: false});
+        assert.equal(how, 'tabs', bin);
+        assert.equal(windows, 3);
+        assert.deepEqual(steps[0].args, argv(placed));
+        assert.deepEqual(steps[0].args.filter((a) => a === '--window' || a === '--tab'),
+            ['--window', '--tab', '--window', '--window']);
+    }
+    assert.deepEqual(xfceTabsArgv(rows).slice(0, 5), ['--window', '-T', 'API', '--working-directory=/r/api', '-e']);
+});
+
+test('tmux: one tmux session per saved window, each attached in its own terminal window', () => {
+    const {how, tmuxSessions, steps} = launchSteps(placed, 'ghostty', {hasTmux: true});
+    assert.equal(how, 'tmux');
+    assert.deepEqual(tmuxSessions, [TMUX_SESSION, `${TMUX_SESSION}-2`, `${TMUX_SESSION}-3`]);
+    assert.deepEqual(steps.filter((s) => s.cmd === 'tmux').map((s) => s.args.slice(0, 4)), [
+        ['new-session', '-d', '-s', TMUX_SESSION], ['new-window', '-t', TMUX_SESSION, '-n'],
+        ['new-session', '-d', '-s', `${TMUX_SESSION}-2`], ['new-session', '-d', '-s', `${TMUX_SESSION}-3`],
+    ]);
+    assert.deepEqual(steps.filter((s) => s.cmd === 'ghostty').map((s) => s.args.at(-1)),
+        tmuxSessions.map((n) => `tmux attach -t ${n}`));
+    const mac = launchSteps(placed, 'terminal', {platform: 'darwin', hasTmux: true});
+    assert.equal((mac.steps.at(-1).args[1].match(/do script "tmux attach/g) ?? []).length, 3);
+});
+
+test('tmuxSessionNames: saved tmux names come back, the rest take the first free claudectl-N', () => {
+    const g = (window) => [{name: 'x', cwd: '/', session_id: 'x', window}];
+    assert.deepEqual(tmuxSessionNames([g('tmux:work'), g('iterm:7'), g(undefined)]), ['work', TMUX_SESSION, `${TMUX_SESSION}-2`]);
+    // a name the server already runs is not reused, nor is one a shell would split
+    assert.deepEqual(tmuxSessionNames([g('tmux:work'), g('tmux:a b'), g('iterm:1')], ['work', TMUX_SESSION]),
+        [`${TMUX_SESSION}-2`, `${TMUX_SESSION}-3`, `${TMUX_SESSION}-4`]);
+    // a saved claudectl-2 is kept, and the fallback steps around it
+    assert.deepEqual(tmuxSessionNames([g('iterm:1'), g(`tmux:${TMUX_SESSION}-2`), g('iterm:2')]),
+        [TMUX_SESSION, `${TMUX_SESSION}-2`, `${TMUX_SESSION}-3`]);
+});
+
+test('toolPath appends only the tool dirs PATH lacks, PATH order first', () => {
+    assert.equal(toolPath('/usr/bin:/home/u/bin', ['/opt/homebrew/bin', '/usr/bin']), '/usr/bin:/home/u/bin:/opt/homebrew/bin');
+    assert.equal(toolPath(undefined, ['/bin']), '/bin');
 });
 
 // ── The first message of a restored session ─────────────────────────────────────
