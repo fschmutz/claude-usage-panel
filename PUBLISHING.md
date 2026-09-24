@@ -107,32 +107,29 @@ xcrun notarytool submit ClaudeUsagePanel.zip \
 xcrun stapler staple ClaudeUsagePanel.app
 ```
 
-## macOS - Homebrew cask (optional)
+## macOS - Homebrew cask
 
-Once a signed `.app` (or zip) is attached to a GitHub release, a cask can install
-it. Template - put it in a tap (`homebrew-tap/Casks/claude-usage-panel.rb`) and
-fill in the sha256 (the URL and version below already match what
-`macos-asset` uploads and what `bump-version.sh` keeps current):
+The cask lives in the repo at `Casks/claude-usage-panel.rb`, and the release
+workflow attaches it to every release next to the zip, with `sha256` pinned to
+that zip (`scripts/make-cask.sh`, run right after the upload). No tap is
+needed:
 
-```ruby
-cask "claude-usage-panel" do
-  version "2.1.2"
-  sha256 "REPLACE_WITH_SHA256"
-
-  url "https://github.com/fschmutz/claude-usage-panel/releases/download/v#{version}/ClaudeUsagePanel-macos.zip"
-  name "Claude Usage Panel"
-  desc "Menu-bar panel for Claude Code plan usage"
-  homepage "https://github.com/fschmutz/claude-usage-panel"
-
-  app "ClaudeUsagePanel.app"
-
-  zap trash: [
-    "~/Library/Preferences/io.github.fschmutz.claude-usage-panel.plist",
-  ]
-end
+```bash
+brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb
+brew upgrade --cask claude-usage-panel
 ```
 
-Install: `brew install --cask <yourtap>/claude-usage-panel`. Without the
-Developer ID secrets above, the app is only ad-hoc signed and Gatekeeper will
-still warn on first launch (a cask cannot remove that on its own) - notarizing
-first is what makes the cask install cleanly.
+`bump-version.sh` owns the `version` line (scripts/version-sites.sh) and
+`check-versions.sh` fails if it drifts or if the URL stops matching the asset
+name. To regenerate by hand:
+
+```bash
+scripts/make-cask.sh v2.1.2                  # downloads that release's zip
+scripts/make-cask.sh v2.1.2 /path/to/zip     # or checksums a local one
+```
+
+For a tap instead (`brew install --cask <tap>/claude-usage-panel`), copy the
+same file into `homebrew-<tap>/Casks/`. Without the Developer ID secrets above
+the app is only ad-hoc signed, so Gatekeeper still warns on first launch and
+the cask says so in its caveats - a cask cannot notarize anything; notarizing
+first is what makes it install cleanly.

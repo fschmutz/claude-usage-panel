@@ -121,3 +121,12 @@ jobs:
         run: |
           ditto -c -k --keepParent "macos/ClaudeUsagePanel.app" "ClaudeUsagePanel-macos.zip"
           gh release upload "$TAG" "ClaudeUsagePanel-macos.zip" --clobber
+      # The cask is only useful pinned to the zip that was just built, so it is
+      # generated here rather than committed with a stale checksum.
+      - name: Attach the Homebrew cask, pinned to that zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          ./scripts/make-cask.sh "$TAG" "ClaudeUsagePanel-macos.zip"
+          gh release upload "$TAG" "Casks/claude-usage-panel.rb" --clobber

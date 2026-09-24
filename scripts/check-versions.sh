@@ -28,6 +28,10 @@ for site in "${VERSION_SITES[@]}"; do
     [ "$have" = "$want" ] || note "$file $key is '$have', expected '$want'"
 done
 
+# The cask carries a URL as well as a version: a renamed release asset would
+# leave a cask that installs nothing.
+"$ROOT/scripts/make-cask.sh" --check || fail=1
+
 # The marketplace entry repeats plugin.json's metadata (the fallback when a
 # field is omitted is not documented, so both carry it). Repeated means it can
 # drift, so it is checked rather than trusted.

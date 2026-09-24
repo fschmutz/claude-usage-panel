@@ -39,7 +39,7 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | Target | What you get | Details |
 |---|---|---|
 | `gnome` | Top-bar panel + dropdown, alerts, sparklines (GNOME Shell 45–50) | [docs/GNOME.md](docs/GNOME.md) |
-| `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+) | [macos/README.md](macos/README.md) |
+| `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+); also installable without a checkout: `brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb` | [macos/README.md](macos/README.md) |
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
 | `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
 | `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) |

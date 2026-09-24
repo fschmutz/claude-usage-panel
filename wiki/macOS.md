@@ -12,11 +12,25 @@ click **Always Allow**.
 ## Install
 
 ```bash
-./install.sh macos          # build, install to /Applications, launch
+./install.sh macos          # from a checkout: build, install to /Applications, launch
 ```
 
 Builds `ClaudeUsagePanel.app` (`LSUIElement`, no Dock icon), ad-hoc signs it, copies
 it to `/Applications`, and opens it. Version comes from `package.json`.
+
+No checkout? Every release ships the built app and a Homebrew cask pinned to it:
+
+```bash
+brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb
+brew upgrade --cask claude-usage-panel
+```
+
+The build is ad-hoc signed, not notarized, so the first launch needs
+right-click ▸ **Open** (or `xattr -d com.apple.quarantine`). Installed that
+way the app has no checkout to update from: Settings ▸ Updates says to run
+`brew upgrade`, and tells you when a newer release exists. Unzipping
+`ClaudeUsagePanel-macos.zip` by hand works too - the same row then offers a
+**Download** button, since nothing else can update that copy.
 
 ## Start at login
 
@@ -42,4 +56,5 @@ removes it; `./install.sh --uninstall autoupdate` stops the daily check.
 ## Signing / notarization
 
 See [PUBLISHING.md](https://github.com/fschmutz/claude-usage-panel/blob/main/PUBLISHING.md)
-for Developer ID signing, `notarytool`, and a Homebrew cask template.
+for Developer ID signing, `notarytool`, and how the cask
+(`Casks/claude-usage-panel.rb`) is pinned to each release.

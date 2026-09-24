@@ -47,6 +47,17 @@ final class UpdateState: ObservableObject {
         // No checkout: ask the public remote directly, so the row can say
         // "2.3.0 is out" instead of only "this build cannot self-update".
         let mine = Self.bundleVersion
+        if Updates.caskRoot != nil {
+            let latest = await Task.detached(priority: .utility) {
+                Updates.latestPublishedVersion()
+            }.value
+            downloadable = nil
+            error =
+                (latest.map { UpdateStatus.isOlder(mine, than: $0) } ?? false)
+                ? "Version \(latest ?? "") is available - brew upgrade --cask claude-usage-panel"
+                : "Installed with Homebrew - brew upgrade --cask claude-usage-panel keeps it current."
+            return
+        }
         let latest = await Task.detached(priority: .utility) { Updates.latestPublishedVersion() }
             .value
         downloadable =

@@ -7,7 +7,7 @@
 # Entry format: FILE|KIND|KEY
 #   json     "KEY": "x.y.z"            (first such key in the file)
 #   jsconst  export const KEY = 'x.y.z';
-#   cask       version "x.y.z"         (the Homebrew cask example, 2-space indent)
+#   cask       version "x.y.z"         (the Homebrew cask, 2-space indent)
 
 # shellcheck disable=SC2034  # read by bump-version.sh and check-versions.sh, which source this
 VERSION_SITES=(
@@ -16,7 +16,7 @@ VERSION_SITES=(
     "plugin/.claude-plugin/plugin.json|json|version"
     ".claude-plugin/marketplace.json|json|version"
     "mcp/server.js|jsconst|VERSION"
-    "PUBLISHING.md|cask|version"
+    "Casks/claude-usage-panel.rb|cask|version"
 )
 
 # Print the version at one site (empty when the pattern is not found).
