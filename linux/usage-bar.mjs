@@ -6,6 +6,7 @@
 //   node linux/usage-bar.mjs --format waybar JSON for waybar's custom module
 //   node linux/usage-bar.mjs --format tmux   with #[fg=colour] severity tags
 //   node linux/usage-bar.mjs --limit weekly  pick which limit to show
+//                                            (a per-model cap shows as W·<model>)
 //
 // GNOME gets an extension and macOS a menu-bar app; everyone else on Linux had
 // nothing. This reads the live login through the same account store the MCP
@@ -41,7 +42,15 @@ const pick = (cards) => {
     return cards.filter((c) => c.group === want);
 };
 
-const short = (c) => (c.group === 'weekly' ? 'W' : 'S');
+// A per-model (scoped) limit shares its group with the pooled one, so the group
+// letter alone printed two indistinguishable "W" entries. It carries its model:
+// "W 35% · W·Fable 0%". The model is the key's suffix (`weekly_scoped:Fable`).
+const short = (c) => {
+    const letter = c.group === 'weekly' ? 'W' : 'S';
+    if (!c.scoped) return letter;
+    const model = String(c.key ?? '').split(':').slice(1).join(':');
+    return model ? `${letter}·${model}` : `${letter}·model`;
+};
 
 // A status bar must never show a stack trace, and must never block the bar's
 // render loop on a network hiccup. Any failure degrades to a quiet marker.

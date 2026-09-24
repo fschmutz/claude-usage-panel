@@ -65,3 +65,21 @@ test('no matching limit degrades quietly too', () => {
     const empty = JSON.stringify({ok: true, cards: []});
     assert.equal(run([], empty), '--');
 });
+
+// A per-model limit shares the weekly group with weekly_all. Labelled by group
+// alone it printed "W 35% · W 0%": two weekly numbers, no way to tell which.
+const SCOPED = JSON.stringify({
+    ok: true,
+    cards: [
+        {key: 'session', label: 'Current session', group: 'session', scoped: false, percent: 61, severity: 'normal', resetsAt: null, active: true},
+        {key: 'weekly_all', label: 'Weekly · all models', group: 'weekly', scoped: false, percent: 35, severity: 'normal', resetsAt: null, active: false},
+        {key: 'weekly_scoped:Fable', label: 'Weekly · Fable', group: 'weekly', scoped: true, percent: 0, severity: 'normal', resetsAt: null, active: false},
+    ],
+});
+
+test('a scoped weekly card is labelled with its model, never a second bare W', () => {
+    assert.equal(run(['--limit', 'weekly'], SCOPED), 'W 35% · W·Fable 0%');
+    assert.equal(run(['--limit', 'all'], SCOPED), 'S 61% · W 35% · W·Fable 0%');
+    assert.equal(JSON.parse(run(['--format', 'waybar', '--limit', 'weekly'], SCOPED)).text, 'W 35% · W·Fable 0%');
+    assert.match(run(['--format', 'tmux', '--limit', 'weekly'], SCOPED), /\]W·Fable 0%#\[default\]/);
+});

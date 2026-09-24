@@ -42,11 +42,40 @@ function load() {
   return obj;
 }
 
+// The file the edit really lands in. A dotfile manager (stow, chezmoi, a
+// dotfiles repo) makes ~/.claude/settings.json a symlink; renaming over the
+// link would replace it with a detached regular file. Follows a chain, and a
+// dangling link to the file it would create.
+function realTarget(p) {
+  for (let hops = 0; hops < 40; hops++) {
+    let st;
+    try {
+      st = fs.lstatSync(p);
+    } catch (e) {
+      if (e.code === 'ENOENT') return p;
+      throw e;
+    }
+    if (!st.isSymbolicLink()) return p;
+    p = path.resolve(path.dirname(p), fs.readlinkSync(p));
+  }
+  fail(`${file}: too many levels of symbolic links`);
+}
+
 function save(obj) {
-  fs.mkdirSync(path.dirname(file), {recursive: true});
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  const target = realTarget(file);
+  fs.mkdirSync(path.dirname(target), {recursive: true});
+  // Keep the mode the file had (settings may be 0600 on purpose); a new file
+  // is private by default rather than whatever the umask allows.
+  let mode = 0o600;
+  try {
+    mode = fs.statSync(target).mode & 0o777;
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e;
+  }
+  const tmp = `${target}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`, {mode});
+  fs.chmodSync(tmp, mode); // writeFileSync's mode is masked by the umask
+  fs.renameSync(tmp, target);
 }
 
 const keys = () => keyPath.split('.').filter(Boolean);

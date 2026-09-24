@@ -9,9 +9,14 @@ node linux/usage-bar.mjs --limit weekly   # W 26%
 node linux/usage-bar.mjs --limit all      # S 16% · W 26%
 ```
 
-It reuses `mcp/server.js` wholesale: same endpoint, same normalization, the
-same official `limits[]` numbers as every other client here. There is no second
-copy of the contract to drift.
+A per-model weekly cap (Fable on Max) is a share of the weekly pool, not a pool
+of its own. When the endpoint reports one it is labelled with its model, so it
+never reads as a second weekly limit: `W 26% · W·Fable 4%`.
+
+It reads the live login through `claude-code/accounts.js`, the same account
+store the MCP server and `claudectl` use: same endpoint, same normalization
+(`claude-code/normalize.js`), the same official `limits[]` numbers as every
+other client here. There is no second copy of the contract to drift.
 
 It never fails loudly. A network error, an expired token or an HTTP 429 prints
 `--` and exits 0, because a status bar that prints a stack trace is worse than

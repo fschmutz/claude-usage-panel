@@ -20,10 +20,10 @@
 // not reported by Anthropic. The panel's limit percentages are the official
 // ones; these are not, and the output says so.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
+import {projectsDir} from '../claude-code/paths.js';
 import {turnTokens} from '../mcp/sessions.js';
 import {flag as argvFlag} from './lib/argv.mjs';
 
@@ -43,8 +43,14 @@ export const BUCKETS = [
 ];
 
 // turnTokens (cache reads excluded - charged at a fraction, they would inflate
-// long sessions into meaninglessness) is the MCP server's, so both reports
-// count a turn the same way.
+// long sessions into meaninglessness) is the MCP server's, and a message is
+// counted once per message.id as mcp/sessions.js foldSessionLine does, so both
+// reports count a turn the same way.
+
+/** The directory name Claude Code gives a project under projects/: every
+ *  character that is not an ASCII letter or digit becomes '-', so
+ *  `/home/me/.local/x` is `-home-me--local-x`, not `-home-me-.local-x`. */
+export const projectSlug = (p) => p.replace(/[^A-Za-z0-9]/g, '-');
 
 /** Classify one assistant turn. `state` carries what earlier turns did, which
  *  is what makes rework and correction detectable at all. */
@@ -74,6 +80,10 @@ export function classifyTurn(tools, state) {
  */
 export function attributeSession(lines, totals) {
     const state = {editedFiles: new Set(), lastTurnErrored: false};
+    // Claude Code repeats the same message.id and the FULL usage on every
+    // content-block line of one message; summing each line overcounted real
+    // sessions about 1.6x, and tool-heavy turns (more blocks) the most.
+    const seenIds = new Set();
     let pendingTools = [];
     let pendingTokens = 0;
     let pendingOpen = false;
@@ -113,7 +123,9 @@ export function attributeSession(lines, totals) {
         if (e.type !== 'assistant') continue;
 
         pendingOpen = true;
-        pendingTokens += turnTokens(e.message?.usage);
+        const id = e.message?.id;
+        if (!id || !seenIds.has(id)) pendingTokens += turnTokens(e.message?.usage);
+        if (id) seenIds.add(id);
         const content = Array.isArray(e.message?.content) ? e.message.content : [];
         for (const c of content) if (c.type === 'tool_use') pendingTools.push(c);
     }
@@ -143,15 +155,15 @@ function main() {
         process.exit(2);
     }
 
-    const root = path.join(os.homedir(), '.claude', 'projects');
+    // Follows CLAUDE_CONFIG_DIR, like every other reader of Claude Code's files.
+    const root = projectsDir();
     if (!fs.existsSync(root)) {
         process.stderr.write(`token-attribution: no session logs at ${root}\n`);
         process.exit(1);
     }
-    const slug = (p) => p.replace(/\//g, '-');
     const wanted = argv.includes('--all')
         ? null
-        : slug(flag('--project', process.cwd()));
+        : projectSlug(path.resolve(flag('--project', process.cwd())));
 
     // A dangling symlink or a vanishing file under ~/.claude/projects must not
     // sink the report - the same rule as the per-session read below.
