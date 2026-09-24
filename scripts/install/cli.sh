@@ -34,7 +34,7 @@ _cli_drop_legacy() {
 install_cli() {
     info "claudectl CLI (account + session, autosave every 30 min)"
     if ! command -v node >/dev/null; then
-        skip "cli: Node.js not found on PATH"
+        skip_fatal "cli: Node.js not found on PATH"
         return 0
     fi
     _install_node_tree
@@ -97,7 +97,7 @@ WantedBy=timers.target"
 
     if ! _sched_install "$CLI_UNIT" "$CLI_LABEL" "$CLI_CRON_TAG" "every 30 min" \
         "$sched_service" "$sched_timer" "$sched_plist" "$sched_cron"; then
-        skip "cli: no systemd, launchd or cron found - autosave is not scheduled (claudectl session save by hand)"
+        skip_fatal "cli: no systemd, launchd or cron found - autosave is not scheduled (claudectl session save by hand)"
     fi
     if $DRY; then
         ok "dry-run: no changes written"

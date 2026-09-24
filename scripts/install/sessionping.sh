@@ -136,7 +136,7 @@ ${intervals}  </array>
 
     if ! _sched_install "$SP_UNIT" "$SP_LABEL" "$SP_CRON_TAG" "at ${times[*]}" \
         "$sched_service" "$sched_timer" "$sched_plist" "$sched_cron"; then
-        skip "sessionping: no systemd, launchd or cron found to schedule it"
+        skip_fatal "sessionping: no systemd, launchd or cron found to schedule it"
         return 0
     fi
     if $DRY; then

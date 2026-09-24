@@ -46,20 +46,44 @@ _prune_node_tree() {
     act rm -rf "$NODE_TREE"
 }
 
+# Both of these answer "is this target on this machine", and both are asked by
+# `update` to build its target set - which is why neither may depend on node or
+# on the claude CLI being on the caller's PATH. Under a scheduler's PATH they
+# used to answer "not installed" for clients that were installed, so the update
+# quietly skipped them and then recorded itself as complete. A grep of the file
+# the installer writes says the same thing without any tool at all.
 _statusline_installed() {
-    command -v node >/dev/null && [ -f "$CLAUDE_SETTINGS" ] &&
-        _json get "$CLAUDE_SETTINGS" statusLine.command 2>/dev/null | grep -Eq "$SL_OURS_RE"
+    [ -f "$CLAUDE_SETTINGS" ] && grep -Eq "$SL_OURS_RE" "$CLAUDE_SETTINGS"
 }
 
 _mcp_installed() {
-    command -v claude >/dev/null && claude mcp get claude-usage >/dev/null 2>&1
+    command -v claude >/dev/null && claude mcp get claude-usage >/dev/null 2>&1 && return 0
+    # The registration the `claude` CLI writes, read directly. Same for Cursor.
+    local f
+    for f in "$HOME/.claude.json" "$CURSOR_MCP"; do
+        [ -f "$f" ] || continue
+        grep -q '"claude-usage"' "$f" && return 0
+    done
+    return 1
+}
+
+# The value of --segments= / --tokens= in the status line already installed, or
+# $2 when there is none. Read with grep, not the JSON editor: this runs where
+# node may not be on PATH (see _statusline_installed).
+_sl_installed_flag() { # NAME DEFAULT
+    local found=""
+    if [ -f "$CLAUDE_SETTINGS" ] && grep -Eq "$SL_OURS_RE" "$CLAUDE_SETTINGS"; then
+        found="$(grep -o -- "--$1=[A-Za-z,]*" "$CLAUDE_SETTINGS" | head -1)"
+        found="${found#--"$1"=}"
+    fi
+    printf '%s' "${found:-$2}"
 }
 
 # ── Claude Code status line ─────────────────────────────────────────────────────
 install_statusline() {
     info "Claude Code status line"
     if ! command -v node >/dev/null; then
-        skip "statusline: Node.js not found on PATH"
+        skip_fatal "statusline: Node.js not found on PATH"
         return 0
     fi
     local dest="$SL_DEST"
@@ -69,6 +93,10 @@ install_statusline() {
     # Which segments to render and the token-total mode are baked into the
     # installed command from --segments= / --tokens= (defaults in ui.sh). Kept
     # non-interactive by design: pipe-safe, re-runnable, no tty handling.
+    # Flags this run did not set are inherited from the installed command, so a
+    # reinstall - which is what every update is - keeps the user's choice.
+    $SL_SEGMENTS_SET || SL_SEGMENTS="$(_sl_installed_flag segments "$SL_SEGMENTS")"
+    $SL_TOKENS_SET || SL_TOKENS="$(_sl_installed_flag tokens "$SL_TOKENS")"
     local command="node \"$dest\" --segments=$SL_SEGMENTS --tokens=$SL_TOKENS"
 
     if $DRY; then
@@ -120,7 +148,7 @@ uninstall_statusline() {
 install_mcp() {
     info "MCP server (get_usage tool for Claude Code + Cursor)"
     if ! command -v node >/dev/null; then
-        skip "mcp: Node.js not found on PATH"
+        skip_fatal "mcp: Node.js not found on PATH"
         return 0
     fi
     local dest="$MCP_DEST"

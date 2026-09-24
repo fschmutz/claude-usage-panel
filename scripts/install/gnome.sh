@@ -4,7 +4,7 @@
 install_gnome() {
     info "GNOME extension"
     if ! command -v glib-compile-schemas >/dev/null; then
-        skip "gnome: glib-compile-schemas not found (not a GNOME desktop?)"
+        skip_fatal "gnome: glib-compile-schemas not found (not a GNOME desktop?)"
         return 0
     fi
     local dest="$HOME/.local/share/gnome-shell/extensions/$UUID"

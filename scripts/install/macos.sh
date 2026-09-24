@@ -4,15 +4,16 @@
 install_macos() {
     info "macOS app"
     if [ "$(uname -s)" != "Darwin" ]; then
-        skip "macos: only builds on macOS (uname is $(uname -s))"
+        skip_fatal "macos: only builds on macOS (uname is $(uname -s))"
         return 0
     fi
     if ! command -v swift >/dev/null; then
-        skip "macos: Swift toolchain not found"
+        skip_fatal "macos: Swift toolchain not found"
         return 0
     fi
     local app="ClaudeUsagePanel"
     local bundle="$ROOT/macos/$app.app"
+    local installed_note="the app already installed keeps running"
     local ver
     ver="$(version)"
     if $DRY; then
@@ -21,7 +22,7 @@ install_macos() {
         ok "dry-run: no build performed"
         return 0
     fi
-    (
+    if ! (
         cd "$ROOT/macos" || exit 1
         swift build -c release
         local bin
@@ -50,7 +51,10 @@ install_macos() {
 </dict>
 </plist>
 PLIST
-    )
+    ); then
+        skip_fatal "macos: the build failed - $installed_note"
+        return 1
+    fi
     # Ad-hoc sign so "Start at login" (SMAppService) and Gatekeeper accept the
     # bundle for personal use; a Developer ID is only needed to distribute it
     # (see PUBLISHING.md). The signature is preserved by the copy below.
@@ -74,8 +78,12 @@ PLIST
         ok "installed to $installed and launched"
         echo "  Starts at login by default - toggle it in Settings ▸ Start at login."
     else
-        echo "  Could not write /Applications (needs admin). Install it yourself:"
-        echo "    sudo cp -R '$bundle' '$installed' && open '$installed'"
+        # Not a skip and not an "ok": the old binary is still what runs. Saying
+        # so with a zero exit is what let an update stamp itself as installed
+        # while /Applications kept the previous release, indefinitely.
+        skip_fatal "macos: could not replace $installed (needs admin) - $installed_note"
+        echo "  Install it yourself:  sudo cp -R '$bundle' '$installed' && open '$installed'"
+        return 1
     fi
 }
 
