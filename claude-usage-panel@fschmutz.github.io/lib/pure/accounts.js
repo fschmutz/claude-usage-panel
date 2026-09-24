@@ -107,6 +107,68 @@ export function activeAccountName(profiles, live) {
     return null;
 }
 
+/**
+ * Which saved profile the live login is. The credentials decide first: when
+ * the live access token is exactly one a profile holds, that profile is live
+ * whatever the account block says (a switch that failed between its two
+ * writes leaves them disagreeing). Otherwise Claude Code has rotated the
+ * token, and the account block is the identity.
+ */
+export function liveProfileName(profiles, token, account) {
+    const byToken = typeof token === 'string' && token
+        ? profiles.find(p => p.credentials?.claudeAiOauth?.accessToken === token) : null;
+    return byToken?.name ?? activeAccountName(profiles, account);
+}
+
+/**
+ * What syncBack may do with the live login `{token, account}`, given the
+ * switch-in-progress marker `pending` ({from, to} or null).
+ *   name        - the saved profile the live login is (liveProfileName)
+ *   snapshot    - write the live login into that profile. Never when the two
+ *                 halves disagree (the account block names another profile),
+ *                 never without an account block (the profile would lose its
+ *                 identity), and never while a switch is unfinished: its
+ *                 credentials may still be the previous login's, rotated past
+ *                 any token match.
+ *   pendingDone - the marker names a switch that did complete (the target's
+ *                 token and account block are both live): clear it.
+ */
+export function syncBackPlan(profiles, {token = null, account = null} = {}, pending = null) {
+    const name = liveProfileName(profiles, token, account);
+    if (!name)
+        return {name: null, snapshot: false, pendingDone: false};
+    const byAccount = activeAccountName(profiles, account);
+    const torn = byAccount !== null && byAccount !== name;
+    const target = pending ? profiles.find(p => p.name === pending.to) : null;
+    const pendingDone = Boolean(target && target.name === name && byAccount === name &&
+        target.credentials.claudeAiOauth.accessToken === token);
+    const snapshot = account !== null && typeof account === 'object' && !torn &&
+        (!pending || pendingDone);
+    return {name, snapshot, pendingDone};
+}
+
+/** Two profile names that would land on one file on a case-insensitive disk
+ *  (APFS, the macOS default). Names are ASCII (NAME_RE), so lowercasing is exact. */
+export function sameName(a, b) {
+    return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+}
+
+/**
+ * The name an unsaved live login is parked under before a switch: the local
+ * part of its email made a valid profile name ("admin", then "admin-2" ...),
+ * free of every taken name ignoring case. One code point = one character.
+ */
+export function parkName(email, taken = []) {
+    const local = typeof email === 'string' ? email.split('@')[0] : '';
+    const base = local.replace(/[^A-Za-z0-9._-]/gu, '-').replace(/^[^A-Za-z0-9]+/, '')
+        .slice(0, 28) || 'account';
+    const used = new Set(taken.map(n => String(n).toLowerCase()));
+    let name = base;
+    for (let n = 2; used.has(name.toLowerCase()); n++)
+        name = `${base}-${n}`;
+    return name;
+}
+
 /** The fullest limit of a set of cards. */
 export function worstPercent(cards) {
     let worst = null;

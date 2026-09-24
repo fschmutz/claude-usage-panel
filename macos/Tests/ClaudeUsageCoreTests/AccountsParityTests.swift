@@ -100,6 +100,88 @@ final class AccountsParityTests: XCTestCase {
         }
     }
 
+    func testLiveProfileName() throws {
+        let fix = try fixture()
+        let ps = profiles(fix)
+        for c in fix["liveLogin"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.liveProfileName(
+                    profiles: ps, token: c["token"] as? String,
+                    account: c["account"] as? [String: Any]),
+                c["expected"] as? String, c["name"] as! String)
+        }
+    }
+
+    func testSyncBackPlan() throws {
+        let fix = try fixture()
+        let ps = profiles(fix)
+        for c in fix["syncBack"] as! [[String: Any]] {
+            let e = c["expected"] as! [String: Any]
+            XCTAssertEqual(
+                Accounts.syncBackPlan(
+                    profiles: ps, token: c["token"] as? String,
+                    account: c["account"] as? [String: Any],
+                    pendingTo: (c["pending"] as? [String: Any])?["to"] as? String),
+                SyncBackPlan(
+                    name: e["name"] as? String, snapshot: e["snapshot"] as! Bool,
+                    pendingDone: e["pendingDone"] as! Bool), c["name"] as! String)
+        }
+    }
+
+    func testSameAndParkName() throws {
+        let fix = try fixture()
+        for pair in fix["sameName"] as! [[Any]] {
+            let a = pair[0] as! String
+            let b = pair[1] as! String
+            XCTAssertEqual(Accounts.sameName(a, b), pair[2] as! Bool, "\(a)/\(b)")
+        }
+        for c in fix["parkName"] as! [[String: Any]] {
+            let got = Accounts.parkName(
+                email: c["email"] as? String, taken: c["taken"] as! [String])
+            XCTAssertEqual(got, c["expected"] as? String, c["name"] as! String)
+            XCTAssertTrue(Accounts.isValidName(got), got)
+        }
+    }
+
+    func testFormatUsage() throws {
+        let fix = try fixture()
+        for c in fix["formatUsage"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.formatUsage(cards(c["cards"] as! [[String: Any]])),
+                c["expected"] as? String, c["name"] as! String)
+        }
+    }
+
+    func testKeychainServices() throws {
+        let fix = try fixture()
+        let keychain = fix["keychain"] as! [String: Any]
+        // No hash library on Linux: the fixture's digests stand in (the JS
+        // test checks them against a real sha256), keyed by the NFC input.
+        let digests = keychain["sha256"] as! [String: String]
+        for c in keychain["cases"] as! [[String: Any]] {
+            let got = Accounts.keychainServices(env: c["env"] as! [String: String]) { text in
+                digests[text] ?? "missing digest for \(text)"
+            }
+            XCTAssertEqual(got, c["expected"] as! [String], c["name"] as! String)
+        }
+    }
+
+    func testKeychainWriteLine() throws {
+        let fix = try fixture()
+        for c in fix["keychainWrite"] as! [[String: Any]] {
+            let secret = String(
+                repeating: c["secret"] as! String, count: c["repeat"] as? Int ?? 1)
+            let got = Accounts.keychainWriteLine(
+                account: c["account"] as! String, service: c["service"] as! String,
+                secret: secret)
+            if let bytes = c["expectedBytes"] as? Int {
+                XCTAssertEqual(got?.utf8.count, bytes, c["name"] as! String)
+            } else {
+                XCTAssertEqual(got, c["expected"] as? String, c["name"] as! String)
+            }
+        }
+    }
+
     func testSortAndFormat() {
         let mk = { (n: String) in
             AccountProfile(
@@ -113,7 +195,6 @@ final class AccountsParityTests: XCTestCase {
             Accounts.formatUsage(
                 cards([["key": "session", "percent": 42], ["key": "weekly_all", "percent": 12]])),
             "S 42% · W 12%")
-        XCTAssertEqual(Accounts.formatUsage([]), "S - · W -")
         // The row already names the account, so the store's prefix goes.
         XCTAssertEqual(
             Accounts.rowError(name: "PRO", message: "PRO: token refresh rejected (HTTP 400)"),

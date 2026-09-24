@@ -1,5 +1,5 @@
 {
-  "_comment": "Named-account contract, pinned across lib/pure.js (GNOME), claude-code/accounts.js (CLI + MCP + status line) and ClaudeUsageCore/Accounts.swift (macOS). A profile is one saved Claude Code login: the credentials blob plus the oauthAccount block of ~/.claude.json. tokenState decides whether a stored login can be used as is (valid), needs its refresh token exchanged first (stale), or must be logged in again (expired). autoSwitch picks the account to move to when the active one crosses the threshold - the candidate with the most headroom, only if it sits at least `margin` points under the threshold, never twice within `cooldownMs` of the last switch. That last switch is store state, not process state: every port's switchTo writes <accounts dir>/.last-switch.json = {at: <epochMs>, from: <name or null>, to: <name>} and every autoSwitch caller reads `at` from it, so a switch made by the CLI, the MCP tool or the other panel counts.",
+  "_comment": "Named-account contract, pinned across lib/pure.js (GNOME), claude-code/accounts.js (CLI + MCP + status line) and ClaudeUsageCore/Accounts.swift (macOS). A profile is one saved Claude Code login: the credentials blob plus the oauthAccount block of ~/.claude.json. tokenState decides whether a stored login can be used as is (valid), needs its refresh token exchanged first (stale), or must be logged in again (expired). autoSwitch picks the account to move to when the active one crosses the threshold - the candidate with the most headroom, only if it sits at least `margin` points under the threshold, never twice within `cooldownMs` of the last switch. That last switch is store state, not process state: every port's switchTo writes <accounts dir>/.last-switch.json = {at: <epochMs>, from: <name or null>, to: <name>} and every autoSwitch caller reads `at` from it, so a switch made by the CLI, the MCP tool or the other panel counts. A switch in progress is store state too: switchTo writes <accounts dir>/.switch-pending.json = {at, from, to} before it touches the live login and removes it once both halves are in; syncBackPlan never snapshots while it stands (a torn login whose old token Claude Code rotated matches no profile by token), and clears it once the target's token and account block are both live. liveLogin: the live access token names the profile first, the account block second. sameName: names collide ignoring case (APFS). parkName: an unsaved login parked before a switch. keychain: the macOS Keychain items to read, Claude Code's per-config-dir suffix included; `sha256` maps each NFC hash input to its digest so a port without a hash library can still check the rule. keychainWrite: the `security -i` stdin line that stores the credentials, so the tokens never sit in argv where ps shows them; null means the write is refused, which a caller finds out before it touches the live login. `security -i` reads one command into a 4096-byte buffer, so a line of 4096 bytes or more (newline included) is refused; `repeat` repeats `secret` that many times and `expectedBytes` pins the UTF-8 length of the line instead of spelling it out.",
   "now": 1789300000000,
   "refreshLeadMs": 300000,
   "threshold": 90,
@@ -128,7 +128,7 @@
     {"name": "../etc", "credentials": {"claudeAiOauth": {"accessToken": "a"}}}
   ],
   "validNames": ["PRO", "perso", "team-2", "a.b_c", "X"],
-  "invalidNames": ["", " ", "bad name", "../x", "-lead", ".hidden", "way-too-long-name-for-an-account-profile-x", "a/b"],
+  "invalidNames": ["", " ", "bad name", "../x", "-lead", ".hidden", "way-too-long-name-for-an-account-profile-x", "a/b", "PRO\n", "PRO\r\n", "_ops"],
   "active": [
     {"name": "uuid wins", "live": {"accountUuid": "u-perso", "emailAddress": "pro@example.com"}, "expected": "PERSO"},
     {"name": "email fallback", "live": {"emailAddress": "PRO@example.com"}, "expected": "PRO"},
@@ -186,5 +186,75 @@
       "active": "PRO", "worst": {"PRO": null, "PERSO": 10}, "lastSwitchMs": null,
       "expected": null
     }
+  ],
+  "liveLogin": [
+    {"name": "installed token wins over the account block", "token": "at-pro", "account": {"accountUuid": "u-perso"}, "expected": "PRO"},
+    {"name": "rotated token - the account block decides", "token": "at-pro-rotated", "account": {"accountUuid": "u-perso"}, "expected": "PERSO"},
+    {"name": "no token - the account block decides", "token": null, "account": {"emailAddress": "OLD@example.com"}, "expected": "OLD"},
+    {"name": "unknown token, no account block", "token": "at-x", "account": null, "expected": null}
+  ],
+  "syncBack": [
+    {"name": "clean live login is snapshotted", "token": "at-pro", "account": {"accountUuid": "u-pro"}, "pending": null,
+     "expected": {"name": "PRO", "snapshot": true, "pendingDone": false}},
+    {"name": "rotated live login is snapshotted", "token": "at-pro-rotated", "account": {"accountUuid": "u-pro"}, "pending": null,
+     "expected": {"name": "PRO", "snapshot": true, "pendingDone": false}},
+    {"name": "torn: account block ahead of the credentials", "token": "at-pro", "account": {"accountUuid": "u-perso"}, "pending": null,
+     "expected": {"name": "PRO", "snapshot": false, "pendingDone": false}},
+    {"name": "torn: credentials ahead of the account block", "token": "at-perso", "account": {"accountUuid": "u-pro"}, "pending": null,
+     "expected": {"name": "PERSO", "snapshot": false, "pendingDone": false}},
+    {"name": "torn, then the old token rotated: the pending mark still refuses", "token": "at-pro-rotated", "account": {"accountUuid": "u-perso"}, "pending": {"from": "PRO", "to": "PERSO"},
+     "expected": {"name": "PERSO", "snapshot": false, "pendingDone": false}},
+    {"name": "marked but nothing written yet", "token": "at-pro", "account": {"accountUuid": "u-pro"}, "pending": {"from": "PRO", "to": "PERSO"},
+     "expected": {"name": "PRO", "snapshot": false, "pendingDone": false}},
+    {"name": "marked switch that did complete: clear the mark, snapshot", "token": "at-perso", "account": {"accountUuid": "u-perso"}, "pending": {"from": "PRO", "to": "PERSO"},
+     "expected": {"name": "PERSO", "snapshot": true, "pendingDone": true}},
+    {"name": "no account block: never erase the profile's identity", "token": "at-pro", "account": null, "pending": null,
+     "expected": {"name": "PRO", "snapshot": false, "pendingDone": false}},
+    {"name": "an unsaved login", "token": "at-x", "account": {"accountUuid": "u-x"}, "pending": null,
+     "expected": {"name": null, "snapshot": false, "pendingDone": false}}
+  ],
+  "sameName": [
+    ["PRO", "PRO", true], ["PRO", "Pro", true], ["pro", "PRO", true], ["PRO", "PRO2", false], ["team-2", "TEAM-2", true]
+  ],
+  "parkName": [
+    {"name": "local part", "email": "admin@example.com", "taken": [], "expected": "admin"},
+    {"name": "next free suffix", "email": "admin@example.com", "taken": ["admin", "admin-2"], "expected": "admin-3"},
+    {"name": "taken ignores case", "email": "pro@example.com", "taken": ["PRO"], "expected": "pro-2"},
+    {"name": "leading underscore is stripped", "email": "_ops@example.com", "taken": [], "expected": "ops"},
+    {"name": "leading dots and dashes are stripped", "email": ".-_x.y@example.com", "taken": [], "expected": "x.y"},
+    {"name": "one dash per code point", "email": "aé😀b@example.com", "taken": [], "expected": "a--b"},
+    {"name": "empty local part", "email": "@example.com", "taken": [], "expected": "account"},
+    {"name": "nothing usable", "email": "___@example.com", "taken": ["account"], "expected": "account-2"},
+    {"name": "no email", "email": null, "taken": [], "expected": "account"},
+    {"name": "capped at 28", "email": "abcdefghijklmnopqrstuvwxyz0123456789@example.com", "taken": [], "expected": "abcdefghijklmnopqrstuvwxyz01"}
+  ],
+  "formatUsage": [
+    {"name": "both", "cards": [{"key": "session", "percent": 42}, {"key": "weekly_all", "percent": 12}], "expected": "S 42% · W 12%"},
+    {"name": "weekly only, clamped", "cards": [{"key": "weekly_all", "percent": 140}], "expected": "W 100%"},
+    {"name": "session only", "cards": [{"key": "session", "percent": 7}, {"key": "weekly_opus", "percent": 90}], "expected": "S 7%"},
+    {"name": "no cards", "cards": [], "expected": ""}
+  ],
+  "keychain": {
+    "sha256": {"/Users/me/.claude-work": "1e91dd845eaa497cc6f4de9c38e36103910382b1800bad32fc8f1c776eb86106", "/Users/me/secure": "8fb5187b7403dabae414bc8c4d191a26469e137186d122075634b329573a88d5", "/Users/me/café": "12e72a4872f0069ca0bb5bcefe78909dc9d8a0169bc224d910dab9e98471d60a"},
+    "cases": [
+      {"name": "default config dir", "env": {}, "expected": ["Claude Code-credentials", "Claude Code", "claude"]},
+      {"name": "empty CLAUDE_CONFIG_DIR is unset", "env": {"CLAUDE_CONFIG_DIR": ""}, "expected": ["Claude Code-credentials", "Claude Code", "claude"]},
+      {"name": "CLAUDE_CONFIG_DIR suffixes the item", "env": {"CLAUDE_CONFIG_DIR": "/Users/me/.claude-work"}, "expected": ["Claude Code-credentials-1e91dd84"]},
+      {"name": "NFC before hashing", "env": {"CLAUDE_CONFIG_DIR": "/Users/me/café"}, "expected": ["Claude Code-credentials-12e72a48"]},
+      {"name": "secure-storage dir wins", "env": {"CLAUDE_CONFIG_DIR": "/Users/me/.claude-work", "CLAUDE_SECURESTORAGE_CONFIG_DIR": "/Users/me/secure"}, "expected": ["Claude Code-credentials-8fb5187b"]},
+      {"name": "empty secure-storage dir forces the plain name", "env": {"CLAUDE_CONFIG_DIR": "/Users/me/.claude-work", "CLAUDE_SECURESTORAGE_CONFIG_DIR": ""}, "expected": ["Claude Code-credentials", "Claude Code", "claude"]}
+    ]
+  },
+  "keychainWrite": [
+    {"name": "tokens hex-encoded on stdin", "account": "me", "service": "Claude Code-credentials", "secret": "{\"claudeAiOauth\":{\"accessToken\":\"at-x\"}}",
+     "expected": "add-generic-password -U -a \"me\" -s \"Claude Code-credentials\" -X 7b22636c6175646541694f61757468223a7b22616363657373546f6b656e223a2261742d78227d7d\n"},
+    {"name": "UTF-8 bytes, not code points", "account": "jean pierre", "service": "Claude Code-credentials-1e91dd84", "secret": "é😀 !~'()*%",
+     "expected": "add-generic-password -U -a \"jean pierre\" -s \"Claude Code-credentials-1e91dd84\" -X c3a9f09f988020217e2728292a25\n"},
+    {"name": "a quote in the account", "account": "me\"x", "service": "Claude Code-credentials", "secret": "s", "expected": null},
+    {"name": "a backslash in the account", "account": "me\\x", "service": "Claude Code-credentials", "secret": "s", "expected": null},
+    {"name": "a newline in the service", "account": "me", "service": "a\nb", "secret": "s", "expected": null},
+    {"name": "an empty account", "account": "", "service": "Claude Code-credentials", "secret": "s", "expected": null},
+    {"name": "4095 bytes with its newline: the longest command security -i reads whole", "account": "me", "service": "Claude Code-credentials", "secret": "a", "repeat": 2015, "expectedBytes": 4095},
+    {"name": "4096 bytes: security -i would truncate it", "account": "mex", "service": "Claude Code-credentials", "secret": "a", "repeat": 2015, "expected": null}
   ]
 }

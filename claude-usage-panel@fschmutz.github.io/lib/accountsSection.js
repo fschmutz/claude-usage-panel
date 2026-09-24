@@ -11,7 +11,7 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {
     listProfiles, liveAccountName, readLastSwitchMs, switchTo, syncBack, usageFor,
@@ -281,8 +281,10 @@ export class AccountsController {
                     r.from ?? '?', r.to, r.from ?? '?', auto.activePercent)
                 : _('Switched %s → %s').format(r.from ?? '?', r.to);
             if (r.running > 0) {
-                body += _(' - %d running session(s) keep the old login until restarted')
-                    .format(r.running);
+                body += ngettext(
+                    ' - %d running session keeps the old login until restarted',
+                    ' - %d running sessions keep the old login until restarted',
+                    r.running).format(r.running);
             }
             this._notify(_('Claude usage'), body);
             this._refreshSoon();

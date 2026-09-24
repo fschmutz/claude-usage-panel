@@ -21,7 +21,8 @@ import {jsonMessage, parseBody, send} from './http.js';
 import {claudeConfigPath, credentialsPath, stateDir} from './paths.js';
 import {run} from './proc.js';
 import {
-    PROFILE_VERSION, activeAccountName, isValidName, parseProfile, tokenState, worstPercent,
+    PROFILE_VERSION, activeAccountName, isValidName, liveProfileName, parkName, parseProfile,
+    sameName, syncBackPlan, tokenState, worstPercent,
 } from './pure.js';
 
 export {readLiveAccount, readLiveCredentials};
@@ -35,6 +36,10 @@ export const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 // counts everywhere.
 const USAGE_CACHE_FILE = '.usage-cache.json';
 const LAST_SWITCH_FILE = '.last-switch.json';
+// A switch in progress: {at, from, to}, written before the live login is
+// touched and removed once both halves are installed. While it is there no
+// client snapshots the live login (see syncBackPlan in lib/pure.js).
+const SWITCH_PENDING_FILE = '.switch-pending.json';
 
 // ── Paths ───────────────────────────────────────────────────────────────────────
 
@@ -53,6 +58,10 @@ export function usageCachePath() {
 
 export function lastSwitchPath() {
     return GLib.build_filenamev([accountsDir(), LAST_SWITCH_FILE]);
+}
+
+function pendingSwitchPath() {
+    return GLib.build_filenamev([accountsDir(), SWITCH_PENDING_FILE]);
 }
 
 // Everything in the store is a secret: created 0600, never world-readable.
@@ -110,9 +119,33 @@ export function removeProfile(name) {
 
 // ── The live login ──────────────────────────────────────────────────────────────
 
-/** The saved name of the live login, or null when it was never saved. */
+/** The saved name of the live login (token first, then the account block),
+ *  or null when it was never saved. */
 export function liveAccountName() {
-    return activeAccountName(listProfiles(), readLiveAccount());
+    return liveProfileName(
+        listProfiles(), readLiveCredentials()?.claudeAiOauth.accessToken ?? null, readLiveAccount());
+}
+
+// True when the live account block names a saved profile other than `name`:
+// the two halves of the login disagree.
+function liveIsTorn(name) {
+    const byAccount = activeAccountName(listProfiles(), readLiveAccount());
+    return byAccount !== null && byAccount !== name;
+}
+
+/** The unfinished switch ({at, from, to}), or null. */
+export function readPendingSwitch() {
+    const p = readJSON(pendingSwitchPath());
+    return p && typeof p === 'object' && isValidName(p.to) ? p : null;
+}
+
+function clearPendingSwitch() {
+    try {
+        Gio.File.new_for_path(pendingSwitchPath()).delete(null);
+    } catch (e) {
+        if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
+            throw e;
+    }
 }
 
 // A profile from what Claude Code holds right now.
@@ -126,22 +159,28 @@ function snapshotLive(name) {
 /**
  * Write the live login back into its own profile, so the tokens Claude Code
  * rotated since the last switch are the ones we keep. Returns the profile
- * name, or null when the live login is not a saved one.
+ * name, or null when the live login is not a saved one. A torn login, one
+ * without an account block, or one an unfinished switch left behind is named
+ * but never written (syncBackPlan).
  */
 export function syncBack() {
     const creds = readLiveCredentials();
+    if (!creds)
+        return null;
     const account = readLiveAccount();
-    if (!creds || !account)
-        return null;
-    const name = activeAccountName(listProfiles(), account);
-    if (!name)
-        return null;
-    const stored = readProfile(name);
+    const profiles = listProfiles();
+    const plan = syncBackPlan(profiles, {token: creds.claudeAiOauth.accessToken, account},
+        readPendingSwitch());
+    if (plan.pendingDone)
+        clearPendingSwitch();
+    if (!plan.name || !plan.snapshot)
+        return plan.name;
+    const stored = profiles.find(p => p.name === plan.name);
     const same = stored && JSON.stringify(stored.credentials) === JSON.stringify(creds) &&
         JSON.stringify(stored.account) === JSON.stringify(account);
     if (!same)
-        snapshotLive(name);
-    return name;
+        snapshotLive(plan.name);
+    return plan.name;
 }
 
 /** Save the live login as `name`. `force` overrules a name that already holds
@@ -158,6 +197,10 @@ export function saveCurrent(name, {force = false} = {}) {
         throw new Error('no Claude Code login to save - run `claude auth login` first');
     const account = readLiveAccount() ?? {};
     const profiles = listProfiles();
+    // A name differing only in case is the same file on APFS: never a new profile.
+    const variant = profiles.find(p => p.name !== name && sameName(p.name, name));
+    if (variant)
+        throw new Error(`${variant.name} already exists - names ignore case, use ${variant.name}`);
     const existing = profiles.find(p => p.name === name);
     if (existing && !force && account.accountUuid &&
         existing.account?.accountUuid && existing.account.accountUuid !== account.accountUuid) {
@@ -181,13 +224,7 @@ function parkUnsavedLogin() {
     const account = readLiveAccount();
     if (!readLiveCredentials() || !account)
         return null;
-    const taken = new Set(listProfiles().map(p => p.name));
-    const base = String(account.emailAddress ?? 'account').split('@')[0]
-        .replace(/[^A-Za-z0-9._-]/g, '-').replace(/^[.-]+/, '').slice(0, 28) || 'account';
-    let name = base;
-    for (let n = 2; taken.has(name); n++)
-        name = `${base}-${n}`;
-    return snapshotLive(name).name;
+    return snapshotLive(parkName(account.emailAddress, listProfiles().map(p => p.name))).name;
 }
 
 /** Claude Code processes alive right now - they keep the old token. */
@@ -270,19 +307,22 @@ export async function accessTokenFor(session, name) {
 // ── Switch ──────────────────────────────────────────────────────────────────────
 
 // Install a profile as the live login. ~/.claude.json is read and validated
-// BEFORE anything is written, and the account block goes first: if the
-// credentials write then fails, the account block names the target while the
-// credentials are still the old login's - a state syncBack() refuses to
-// snapshot (the live credentials are unchanged), so no profile is overwritten
-// with the wrong tokens. The reverse order would do exactly that.
-function installLogin(profile) {
+// BEFORE anything is written; then the switch is marked pending, the account
+// block goes in, the credentials, and the mark is cleared. If a write fails in
+// between, the mark stays and syncBack() refuses to snapshot the live login -
+// even after Claude Code rotates the old token past any match - until a
+// switch finishes the job, so no profile is overwritten with the wrong tokens.
+function installLogin(profile, from) {
     const configPath = claudeConfigPath();
     const cfg = readJSON(configPath) ?? {};
     if (typeof cfg !== 'object' || Array.isArray(cfg))
         throw new Error(`${configPath} is not a JSON object`);
     cfg.oauthAccount = profile.account;
+    writePrivate(pendingSwitchPath(),
+        JSON.stringify({at: Date.now(), from: from ?? null, to: profile.name}));
     writePrivate(configPath, `${JSON.stringify(cfg, null, 2)}\n`);
     writePrivate(credentialsPath(), JSON.stringify(profile.credentials));
+    clearPendingSwitch();
 }
 
 /**
@@ -295,10 +335,17 @@ export async function switchTo(session, name) {
     let target = readProfile(name);
     if (!target)
         throw new Error(`no saved account named ${name}`);
-    const from = syncBack() ?? parkUnsavedLogin();
+    const synced = syncBack();
+    // An unfinished switch: the live login is of unknown ownership, so it is
+    // neither synced nor parked - the next install replaces it.
+    const pending = readPendingSwitch();
+    const from = pending ? (pending.from ?? null) : (synced ?? parkUnsavedLogin());
     const email = target.account.emailAddress ?? null;
-    if (from === name)
+    if (!pending && from === name) {
+        if (liveIsTorn(name))
+            installLogin(target, from); // finish an interrupted switch
         return {from, to: name, changed: false, running: await runningClaudeCount(), email};
+    }
     const state = tokenState(target);
     if (state === 'expired') {
         throw new Error(
@@ -306,7 +353,7 @@ export async function switchTo(session, name) {
     }
     if (state === 'stale')
         target = await refreshProfile(session, target);
-    installLogin(target);
+    installLogin(target, from);
     writeLastSwitch({from, to: name});
     return {from, to: name, changed: true, running: await runningClaudeCount(), email};
 }

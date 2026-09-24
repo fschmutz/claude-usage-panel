@@ -4,7 +4,6 @@
 
 import {openStore} from './accounts.js';
 import {tokenState} from './accounts-contract.js';
-import {accountsDir} from './paths.js';
 
 export const HELP = `claudectl account - named Claude Code accounts, switch without a browser
 
@@ -15,9 +14,12 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
   claudectl account remove NAME               forget a saved account
   claudectl account refresh [NAME]            refresh the stored token(s) now
 
-Names: letters, digits, . _ - (e.g. PRO, PERSO). Running Claude Code sessions
-keep their old login until restarted. Saved logins are kept, mode 0600, under
-${accountsDir()}`;
+Names: letters, digits, . _ - (e.g. PRO, PERSO), case-insensitive. Running
+Claude Code sessions keep their old login until restarted. Saved logins are
+kept, mode 0600, in the accounts directory below.`;
+
+// The store's directory is the caller's (io), so it is added at print time.
+const helpText = (store) => `${HELP}\n  ${store.dir}`;
 
 // "S 42%  W 12%" from normalized cards; "-" for a window the account lacks.
 function fmtUsage(cards) {
@@ -39,10 +41,10 @@ export async function main(argv, io = {}) {
     case undefined:
     case 'help':
     case '-h':
-      out(`${HELP}\n`);
+      out(`${helpText(store)}\n`);
       return 0;
     case 'list': {
-      const {active, accounts, live} = await store.listAccounts({usage: flags.has('--usage')});
+      const {active, accounts, live, pendingSwitch} = await store.listAccounts({usage: flags.has('--usage')});
       if (json) {
         out(`${JSON.stringify({active, accounts}, null, 2)}\n`);
         return 0;
@@ -57,6 +59,10 @@ export async function main(argv, io = {}) {
           `${(a.plan ?? '?').padEnd(5)} ${a.tokenState}${tail}\n`);
       }
       if (!active && live?.emailAddress) out(`  (current login ${live.emailAddress} is not saved yet)\n`);
+      if (pendingSwitch) {
+        out(`  (the switch to ${pendingSwitch.to} did not finish - \`claudectl account use ${pendingSwitch.to}\` ` +
+          'completes it)\n');
+      }
       return 0;
     }
     case 'current': {
@@ -99,19 +105,28 @@ export async function main(argv, io = {}) {
       const targets = name ? [store.readProfile(name)].filter(Boolean) : store.listProfiles();
       if (name && !targets.length) throw new Error(`no saved account named ${name}`);
       const active = store.liveAccountName();
+      // One dead login must not keep the others from being refreshed.
+      let failed = 0;
       for (const p of targets) {
         if (p.name === active) {
           out(`${p.name}: active login, Claude Code refreshes it itself\n`);
           continue;
         }
-        const fresh = await store.refreshProfile(p);
+        let fresh;
+        try {
+          fresh = await store.refreshProfile(p);
+        } catch (e) {
+          failed++;
+          out(`${e.message.startsWith(`${p.name}: `) ? e.message : `${p.name}: ${e.message}`}\n`);
+          continue;
+        }
         const until = fresh.credentials.claudeAiOauth.expiresAt;
         out(`${p.name}: refreshed, ${Number.isFinite(until)
           ? `valid until ${new Date(until).toISOString()}` : tokenState(fresh)}\n`);
       }
-      return 0;
+      return failed ? 1 : 0;
     }
     default:
-      throw new Error(`unknown command ${cmd}\n${HELP}`);
+      throw new Error(`unknown command ${cmd}\n${helpText(store)}`);
   }
 }

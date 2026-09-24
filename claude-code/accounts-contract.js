@@ -15,6 +15,16 @@ export const AUTO_SWITCH = {threshold: 90, margin: 15, cooldownMs: 5 * 60_000};
 /** Profile names are file names: one path segment, no leading dot or dash. */
 export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/;
 export const PROFILE_VERSION = 1;
+
+/** The identity a login's usage is filed under - pace history, the peak
+ *  warehouse: its oauthAccount uuid, else its email, else null. Read from
+ *  the account block only, never a token. */
+export function accountKey(live) {
+  if (!live || typeof live !== 'object') return null;
+  if (typeof live.accountUuid === 'string' && live.accountUuid) return live.accountUuid;
+  if (typeof live.emailAddress === 'string' && live.emailAddress) return live.emailAddress;
+  return null;
+}
 /** Colour thresholds for usage figures that carry no API severity (a stdin
  *  rate limit, an account row's "S 42% · W 12%"). */
 export const USAGE_SEVERITY_THRESHOLDS = {warning: 70, critical: 90};
@@ -90,6 +100,115 @@ export function activeAccountName(profiles, live) {
     if (hit) return hit.name;
   }
   return null;
+}
+
+/**
+ * Which saved profile the live login is. The credentials decide first: when
+ * the live access token is exactly one a profile holds, that profile is live
+ * whatever the account block says (a switch that failed between its two
+ * writes leaves them disagreeing). Otherwise Claude Code has rotated the
+ * token, and the account block is the identity.
+ */
+export function liveProfileName(profiles, token, account) {
+  const byToken = typeof token === 'string' && token
+    ? profiles.find((p) => p.credentials?.claudeAiOauth?.accessToken === token) : null;
+  return byToken?.name ?? activeAccountName(profiles, account);
+}
+
+/**
+ * What syncBack may do with the live login `{token, account}`, given the
+ * switch-in-progress marker `pending` ({from, to} or null).
+ *   name        - the saved profile the live login is (liveProfileName)
+ *   snapshot    - write the live login into that profile. Never when the two
+ *                 halves disagree (the account block names another profile),
+ *                 never without an account block (the profile would lose its
+ *                 identity), and never while a switch is unfinished: its
+ *                 credentials may still be the previous login's, rotated past
+ *                 any token match.
+ *   pendingDone - the marker names a switch that did complete (the target's
+ *                 token and account block are both live): clear it.
+ */
+export function syncBackPlan(profiles, {token = null, account = null} = {}, pending = null) {
+  const name = liveProfileName(profiles, token, account);
+  if (!name) return {name: null, snapshot: false, pendingDone: false};
+  const byAccount = activeAccountName(profiles, account);
+  const torn = byAccount !== null && byAccount !== name;
+  const target = pending ? profiles.find((p) => p.name === pending.to) : null;
+  const pendingDone = Boolean(target && target.name === name && byAccount === name &&
+    target.credentials.claudeAiOauth.accessToken === token);
+  const snapshot = account !== null && typeof account === 'object' && !torn && (!pending || pendingDone);
+  return {name, snapshot, pendingDone};
+}
+
+/** Two profile names that would land on one file on a case-insensitive disk
+ *  (APFS, the macOS default). Names are ASCII (NAME_RE), so lowercasing is exact. */
+export function sameName(a, b) {
+  return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+}
+
+/**
+ * The name an unsaved live login is parked under before a switch: the local
+ * part of its email made a valid profile name ("admin", then "admin-2" ...),
+ * free of every taken name ignoring case. One code point = one character.
+ */
+export function parkName(email, taken = []) {
+  const local = typeof email === 'string' ? email.split('@')[0] : '';
+  const base = local.replace(/[^A-Za-z0-9._-]/gu, '-').replace(/^[^A-Za-z0-9]+/, '').slice(0, 28) ||
+    'account';
+  const used = new Set(taken.map((n) => String(n).toLowerCase()));
+  let name = base;
+  for (let n = 2; used.has(name.toLowerCase()); n++) name = `${base}-${n}`;
+  return name;
+}
+
+/** Claude Code's macOS Keychain item for its credentials, by default. */
+export const KEYCHAIN_SERVICE = 'Claude Code-credentials';
+/** Names older Claude Code releases used for the default item. */
+export const LEGACY_KEYCHAIN_SERVICES = ['Claude Code', 'claude'];
+
+/**
+ * The Keychain items to read, current first; writes go to the first. Claude
+ * Code suffixes its item with the first 8 hex digits of sha256(NFC config
+ * dir) whenever CLAUDE_CONFIG_DIR is set, so each config dir holds its own
+ * login; CLAUDE_SECURESTORAGE_CONFIG_DIR overrides the hashed dir, and set
+ * but empty it forces the plain name. A suffixed item has no legacy names.
+ * `sha256Hex` is the port's hash (text -> lowercase hex).
+ */
+export function keychainServices(env, sha256Hex) {
+  const secure = env?.CLAUDE_SECURESTORAGE_CONFIG_DIR;
+  const dir = typeof secure === 'string' ? secure : env?.CLAUDE_CONFIG_DIR;
+  if (!dir) return [KEYCHAIN_SERVICE, ...LEGACY_KEYCHAIN_SERVICES];
+  return [`${KEYCHAIN_SERVICE}-${sha256Hex(dir.normalize('NFC')).slice(0, 8)}`];
+}
+
+/** security(1)'s MAX_LINE_LEN: one `security -i` command, newline included, must be shorter. */
+export const KEYCHAIN_LINE_MAX = 4096;
+
+// UTF-8 bytes of `text` as lowercase hex, built-in free: encodeURIComponent
+// already spells every non-ASCII byte as %XX; the rest is one byte each.
+const utf8Hex = (text) => encodeURIComponent(text).replace(/%([0-9A-F]{2})|[^%]/g,
+  (m, h) => (h ? h.toLowerCase() : m.charCodeAt(0).toString(16).padStart(2, '0')));
+
+/**
+ * The line fed to `security -i` on stdin that stores `secret` in the Keychain
+ * item (account, service). The secret never goes on the command line, where
+ * `ps` shows it: it travels hex-encoded (-X) on stdin. Account and service are
+ * double-quoted; one that cannot be quoted plainly (a quote, a backslash, a
+ * control character, or empty) gives null, and the caller refuses the write.
+ * So does a line of KEYCHAIN_LINE_MAX bytes or more: `security -i` reads each
+ * command into a buffer of that size and would run a truncated one.
+ */
+export function keychainWriteLine(account, service, secret) {
+  const plain = (s) => typeof s === 'string' && s !== '' && !/["\\\p{Cc}]/u.test(s);
+  if (!plain(account) || !plain(service) || typeof secret !== 'string') return null;
+  let hex;
+  try {
+    hex = utf8Hex(secret);
+  } catch {
+    return null; // a lone surrogate: not text a Keychain item can hold
+  }
+  const line = `add-generic-password -U -a "${account}" -s "${service}" -X ${hex}\n`;
+  return utf8Hex(line).length / 2 < KEYCHAIN_LINE_MAX ? line : null; // bytes, not code units
 }
 
 /** The fullest limit of a set of normalized cards; null without cards. */

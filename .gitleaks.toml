@@ -1,0 +1,10 @@
+# gitleaks: the default rules, plus exemptions named by exact value with the
+# reason each one is not a secret. Never a path or a rule switched off: a new
+# credential anywhere, even in these files, still fails.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Claude Code's public OAuth client id (a PKCE public client, shipped in the CLI itself); the accounts ports refresh a login with it"
+regexTarget = "secret"
+regexes = ['''^9d1c250a-e61b-44d9-88ed-5944d1962f5e$''']

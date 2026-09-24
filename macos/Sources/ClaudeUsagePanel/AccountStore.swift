@@ -1,4 +1,5 @@
 import ClaudeUsageCore
+import CryptoKit
 import Foundation
 
 // Named accounts - the I/O half. Mirrors claude-code/accounts.js: the same
@@ -35,12 +36,21 @@ enum AccountStore {
     static let tokenEndpoint = URL(string: "https://platform.claude.com/v1/oauth/token")!
     /// Claude Code's public OAuth client - the same id the CLI refreshes with.
     static let clientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-    /// Where Claude Code has kept its credentials item over time, newest name
-    /// first. Read tries each; write updates the one that exists, else creates
-    /// the first. The same list as the Node port's KEYCHAIN_SERVICES.
-    static let keychainServices = ["Claude Code-credentials", "Claude Code", "claude"]
+    /// Claude Code's credentials item for THIS config dir, then (for the
+    /// default dir only) the names older releases used. Read tries each; write
+    /// updates the one that exists, else creates the first. The same rule as
+    /// the Node port (Accounts.keychainServices, pinned by the fixture).
+    static var keychainServices: [String] {
+        Accounts.keychainServices(env: ProcessInfo.processInfo.environment) { text in
+            SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+        }
+    }
     private static let usageCacheFile = ".usage-cache.json"
     private static let lastSwitchFile = ".last-switch.json"
+    // A switch in progress: {at, from, to}, written before the live login is
+    // touched and removed once both halves are installed. While it is there no
+    // client snapshots the live login (Accounts.syncBackPlan).
+    private static let switchPendingFile = ".switch-pending.json"
 
     // MARK: paths
 
@@ -168,7 +178,8 @@ enum AccountStore {
     /// reads). Nil when no item exists under any known name.
     private static func keychainItem() -> (service: String, account: String)? {
         let acct = try? NSRegularExpression(pattern: #""acct"<blob>="([^"]*)""#)
-        for service in keychainServices {
+        let services = keychainServices
+        for service in services {
             let r = security(["find-generic-password", "-s", service])
             guard r.ok else { continue }
             let range = NSRange(r.out.startIndex..., in: r.out)
@@ -193,22 +204,47 @@ enum AccountStore {
         return parseCredentials(Data(r.out.trimmingCharacters(in: .whitespacesAndNewlines).utf8))
     }
 
-    private static func writeLiveCredentials(_ credentials: [String: Any], encoded data: Data)
-        throws
-    {
-        if FileManager.default.fileExists(atPath: credentialsURL.path) {
-            try writePrivate(data, to: credentialsURL)
-            return
-        }
-        // -U updates the existing item in place, so Claude Code's ACL on it stays.
+    /// Where the live credentials go: the credentials file when it exists,
+    /// else Claude Code's Keychain item (or a new one under the first name),
+    /// with the `security -i` line that writes it already built.
+    private enum CredentialsTarget {
+        case file
+        case keychain(service: String, line: String)
+    }
+
+    /// Resolved BEFORE the first live write, so everything the credentials
+    /// write depends on is known - and refused - while the login is whole.
+    private static func credentialsTarget(for secret: Data) throws -> CredentialsTarget {
+        if FileManager.default.fileExists(atPath: credentialsURL.path) { return .file }
         let item = keychainItem() ?? (keychainServices[0], NSUserName())
-        let r = security([
-            "add-generic-password", "-U", "-a", item.account, "-s", item.service,
-            "-w", String(decoding: data, as: UTF8.self),
-        ])
-        guard r.ok else {
+        guard
+            let line = Accounts.keychainWriteLine(
+                account: item.account, service: item.service,
+                secret: String(decoding: secret, as: UTF8.self))
+        else {
             throw AccountError.message(
-                "could not write the Keychain item (security exit \(r.status))")
+                "cannot write the Keychain item \(item.service): its account name cannot be quoted, "
+                    + "or the credentials are too large for `security -i`")
+        }
+        return .keychain(service: item.service, line: line)
+    }
+
+    /// The Keychain write goes through /usr/bin/security, like every other
+    /// access to this item: Claude Code created it with security(1), so the
+    /// item's ACL trusts that tool, and an in-process SecItemUpdate from this
+    /// (ad-hoc signed, rebuilt on every install) app would prompt on each
+    /// switch. The tokens travel hex-encoded on stdin, never in argv.
+    private static func writeLiveCredentials(_ data: Data, to target: CredentialsTarget) throws {
+        switch target {
+        case .file: try writePrivate(data, to: credentialsURL)
+        case .keychain(let service, let line):
+            _ = Shell.run("/usr/bin/security", ["-i"], stdin: Data(line.utf8))
+            // `security -i` exits 0 even when its command fails: read back.
+            let back = security(["find-generic-password", "-s", service, "-w"])
+            let text = String(decoding: data, as: UTF8.self)
+            guard back.ok, back.out.trimmingCharacters(in: .whitespacesAndNewlines) == text else {
+                throw AccountError.message("could not write the Keychain item \(service)")
+            }
         }
     }
 
@@ -231,9 +267,37 @@ enum AccountStore {
         return cfg
     }
 
-    /// The saved name of the live login, or nil when it was never saved.
+    private static func liveToken(_ creds: [String: Any]?) -> String? {
+        (creds?["claudeAiOauth"] as? [String: Any])?["accessToken"] as? String
+    }
+
+    /// The saved name of the live login (token first, then the account
+    /// block), or nil when it was never saved.
     static func liveAccountName() -> String? {
-        Accounts.activeName(profiles: list(), live: readLiveAccount())
+        Accounts.liveProfileName(
+            profiles: list(), token: liveToken(readLiveCredentials()), account: readLiveAccount())
+    }
+
+    // True when the live account block names a saved profile other than
+    // `name`: the two halves of the login disagree.
+    private static func liveIsTorn(_ name: String) -> Bool {
+        guard let byAccount = Accounts.activeName(profiles: list(), live: readLiveAccount())
+        else { return false }
+        return byAccount != name
+    }
+
+    static var pendingSwitchURL: URL { directory.appendingPathComponent(switchPendingFile) }
+
+    /// The unfinished switch: its source (nil when unknown) and target.
+    static func readPendingSwitch() -> (from: String?, to: String)? {
+        guard let obj = readJSON(pendingSwitchURL) as? [String: Any],
+            let to = obj["to"] as? String, Accounts.isValidName(to)
+        else { return nil }
+        return (obj["from"] as? String, to)
+    }
+
+    private static func clearPendingSwitch() {
+        try? FileManager.default.removeItem(at: pendingSwitchURL)
     }
 
     private static func sameJSON(_ a: [String: Any], _ b: [String: Any]) -> Bool {
@@ -244,14 +308,21 @@ enum AccountStore {
     }
 
     /// Write the live login back into its own profile, so the tokens Claude
-    /// Code rotated since the last switch are the ones we keep.
+    /// Code rotated since the last switch are the ones we keep. A torn login,
+    /// one without an account block, or one an unfinished switch left behind
+    /// is named but never written (Accounts.syncBackPlan).
     @discardableResult
     static func syncBack() throws -> String? {
-        guard let creds = readLiveCredentials(), let account = readLiveAccount(),
-            let name = Accounts.activeName(profiles: list(), live: account)
-        else { return nil }
-        if let stored = read(name), sameJSON(stored.credentials, creds),
-            sameJSON(stored.account, account)
+        guard let creds = readLiveCredentials() else { return nil }
+        let account = readLiveAccount()
+        let profiles = list()
+        let plan = Accounts.syncBackPlan(
+            profiles: profiles, token: liveToken(creds), account: account,
+            pendingTo: readPendingSwitch()?.to)
+        if plan.pendingDone { clearPendingSwitch() }
+        guard let name = plan.name, plan.snapshot, let account else { return plan.name }
+        if let stored = profiles.first(where: { $0.name == name }),
+            sameJSON(stored.credentials, creds), sameJSON(stored.account, account)
         {
             return name
         }
@@ -277,6 +348,13 @@ enum AccountStore {
         }
         let account = readLiveAccount() ?? [:]
         let profiles = list()
+        // A name differing only in case is the same file on APFS: never a new profile.
+        if let variant = profiles.first(where: {
+            $0.name != name && Accounts.sameName($0.name, name)
+        }) {
+            throw AccountError.message(
+                "\(variant.name) already exists - names ignore case, use \(variant.name)")
+        }
         if let existing = profiles.first(where: { $0.name == name }), !force,
             let liveUuid = account["accountUuid"] as? String,
             let storedUuid = existing.accountUuid, storedUuid != liveUuid
@@ -301,22 +379,8 @@ enum AccountStore {
     /// under a name derived from its email ("admin", then "admin-2" ...).
     private static func parkUnsavedLogin() throws -> String? {
         guard let creds = readLiveCredentials(), let account = readLiveAccount() else { return nil }
-        let taken = Set(list().map(\.name))
-        let local = (account["emailAddress"] as? String ?? "account").split(separator: "@").first
-        var base = String(local ?? "account").unicodeScalars.map { scalar -> Character in
-            let ok =
-                CharacterSet.alphanumerics.contains(scalar) || "._-".unicodeScalars.contains(scalar)
-            return ok && scalar.isASCII ? Character(scalar) : "-"
-        }
-        while let first = base.first, first == "." || first == "-" { base.removeFirst() }
-        var name = String(base.prefix(28))
-        if name.isEmpty { name = "account" }
-        let root = name
-        var n = 2
-        while taken.contains(name) {
-            name = "\(root)-\(n)"
-            n += 1
-        }
+        let name = Accounts.parkName(
+            email: account["emailAddress"] as? String, taken: list().map(\.name))
         return try write(
             AccountProfile(name: name, savedAt: stamp(), account: account, credentials: creds)
         ).name
@@ -388,9 +452,7 @@ enum AccountStore {
         guard let profile = read(name) else {
             throw AccountError.message("no saved account named \(name)")
         }
-        if liveAccountName() == name, let live = readLiveCredentials(),
-            let token = (live["claudeAiOauth"] as? [String: Any])?["accessToken"] as? String
-        {
+        if liveAccountName() == name, let token = liveToken(readLiveCredentials()) {
             return token
         }
         switch profile.tokenState(nowMs: nowMs()) {
@@ -404,19 +466,41 @@ enum AccountStore {
 
     // MARK: switch
 
+    /// Install `target` as the live login: the config is validated and the
+    /// credentials write resolved BEFORE the first write, then the switch is marked pending, the account block
+    /// goes in, the credentials, and the mark is cleared. If a write fails in
+    /// between, the mark stays and no client's syncBack snapshots the live
+    /// login - even after Claude Code rotates the old token past any match -
+    /// until a switch finishes the job.
+    private static func installLogin(_ target: AccountProfile, from: String?) throws {
+        let config = try configWithAccount(target.account)
+        let credentials = try JSONSerialization.data(withJSONObject: target.credentials)
+        let destination = try credentialsTarget(for: credentials)
+        let mark: [String: Any] = [
+            "at": nowMs(), "from": from as Any? ?? NSNull(), "to": target.name,
+        ]
+        try writePrivate(JSONSerialization.data(withJSONObject: mark), to: pendingSwitchURL)
+        try writePrivate(pretty(config), to: claudeConfigURL)
+        try writeLiveCredentials(credentials, to: destination)
+        clearPendingSwitch()
+    }
+
     /// Make `name` the live login. Order matters: the live login is synced
     /// back (or parked under a new name if it was never saved) BEFORE anything
     /// is overwritten; the target is refreshed and the config validated BEFORE
-    /// anything is installed, so a failure leaves the current login untouched;
-    /// and the account block goes in BEFORE the credentials - if the second
-    /// write still failed, the live pair would name the old account with its
-    /// old tokens, which a later syncBack leaves alone.
+    /// anything is installed, so a failure leaves the current login untouched.
+    /// Re-running after an interrupted switch finishes it.
     static func switchTo(_ name: String) async throws -> SwitchResult {
         guard var target = read(name) else {
             throw AccountError.message("no saved account named \(name)")
         }
-        let from = try syncBack() ?? parkUnsavedLogin()
-        if from == name {
+        let synced = try syncBack()
+        // An unfinished switch: the live login is of unknown ownership, so it
+        // is neither synced nor parked - the install below replaces it.
+        let pending = readPendingSwitch()
+        let from = try pending.map { $0.from } ?? (synced ?? parkUnsavedLogin())
+        if pending == nil, from == name {
+            if liveIsTorn(name) { try installLogin(target, from: from) }
             return SwitchResult(
                 from: from, to: name, changed: false, running: runningClaudeCount(),
                 email: target.email)
@@ -428,10 +512,7 @@ enum AccountStore {
         case .stale: target = try await refresh(target)
         case .valid: break
         }
-        let config = try configWithAccount(target.account)
-        let credentials = try JSONSerialization.data(withJSONObject: target.credentials)
-        try writePrivate(pretty(config), to: claudeConfigURL)
-        try writeLiveCredentials(target.credentials, encoded: credentials)
+        try installLogin(target, from: from)
         writeLastSwitch(from: from, to: name)
         return SwitchResult(
             from: from, to: name, changed: true, running: runningClaudeCount(), email: target.email)

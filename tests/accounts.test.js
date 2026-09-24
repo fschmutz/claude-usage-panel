@@ -1,20 +1,64 @@
 // Named accounts: the store / switch / refresh I/O (openStore bound to a
 // throwaway HOME) and the CLI (account-cli.js's main, dispatched by claudectl). No network: fetch is
-// faked. The pure contract is pinned in parity.test.js against the fixture.
+// faked. The pure contract is pinned in parity.test.js against the fixture;
+// the sections of it parity.test.js does not walk are walked here, for both
+// JS ports (the Swift twin is AccountsParityTests).
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {openStore} from '../claude-code/accounts.js';
-import {autoSwitchTarget, worstFromCache, worstPercent} from '../claude-code/accounts-contract.js';
+import * as contract from '../claude-code/accounts-contract.js';
 import {main} from '../claude-code/account-cli.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from '../claude-code/paths.js';
+import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
+const {autoSwitchTarget, worstFromCache, worstPercent} = contract;
 const here = path.dirname(fileURLToPath(import.meta.url));
-const NOW = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'accounts.json'), 'utf8')).now;
+const FIX = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'accounts.json'), 'utf8'));
+const NOW = FIX.now;
+const sha256Hex = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+
+// ── Shared fixture: the sections both JS ports must agree on ────────────────────
+
+for (const [portName, port] of [['accounts-contract.js', contract], ['pure.js', pure]]) {
+    const profiles = FIX.profiles.map(port.parseProfile);
+    test(`${portName} liveProfileName: the token first, then the account block`, () => {
+        for (const c of FIX.liveLogin)
+            assert.equal(port.liveProfileName(profiles, c.token, c.account), c.expected, c.name);
+    });
+    test(`${portName} syncBackPlan: never snapshots a torn, identity-less or unfinished switch`, () => {
+        for (const c of FIX.syncBack) {
+            assert.deepEqual(port.syncBackPlan(profiles, {token: c.token, account: c.account}, c.pending),
+                c.expected, c.name);
+        }
+    });
+    test(`${portName} sameName ignores case`, () => {
+        for (const [a, b, expected] of FIX.sameName) assert.equal(port.sameName(a, b), expected, `${a}/${b}`);
+    });
+    test(`${portName} parkName: a valid, free name from the email`, () => {
+        for (const c of FIX.parkName) {
+            const got = port.parkName(c.email, c.taken);
+            assert.equal(got, c.expected, c.name);
+            assert.ok(port.isValidName(got), `${c.name}: ${got} is a valid name`);
+        }
+    });
+}
+
+test('pure.js formatAccountUsage matches the shared fixture', () => {
+    for (const c of FIX.formatUsage) assert.equal(pure.formatAccountUsage(c.cards), c.expected, c.name);
+});
+
+test('keychainServices: Claude Code\'s per-config-dir item name', () => {
+    for (const [input, hex] of Object.entries(FIX.keychain.sha256)) assert.equal(sha256Hex(input), hex, input);
+    for (const c of FIX.keychain.cases)
+        assert.deepEqual(contract.keychainServices(c.env, sha256Hex), c.expected, c.name);
+});
 
 // ── Paths and helpers ───────────────────────────────────────────────────────────
 
@@ -417,6 +461,154 @@ test('CLAUDE_CONFIG_DIR moves both the credentials and .claude.json', () => {
     assert.equal(s.readLiveAccount().emailAddress, 'alt@example.com');
 });
 
+// /usr/bin/security as the store drives it: reads on argv, the write as a
+// `security -i` stdin line. Like the real tool, -i exits 0 even when its
+// command fails. Every argv is recorded, to prove no token ever sits in one.
+function fakeSecurity(keychain, {denied = () => false, acct = 'me'} = {}) {
+    const argvs = [];
+    const exec = (cmd, args, opts = {}) => {
+        if (cmd !== '/usr/bin/security') return '';
+        argvs.push(args.join(' '));
+        if (args[0] === '-i') {
+            const m = /^add-generic-password -U -a "([^"]*)" -s "([^"]*)" -X ([0-9a-f]+)\n$/.exec(opts.input ?? '');
+            if (m && !denied()) keychain.set(m[2], Buffer.from(m[3], 'hex').toString('utf8'));
+            return '';
+        }
+        const service = args[args.indexOf('-s') + 1];
+        if (!keychain.has(service)) throw new Error('not found');
+        return args.includes('-w') ? `${keychain.get(service)}\n` : `"acct"<blob>="${acct}"\n`;
+    };
+    return {exec, argvs};
+}
+
+test('keychainWriteLine: the tokens go hex-encoded on stdin, quoted names only', () => {
+    for (const c of FIX.keychainWrite) {
+        const got = contract.keychainWriteLine(c.account, c.service, c.secret.repeat(c.repeat ?? 1));
+        if ('expectedBytes' in c) assert.equal(Buffer.byteLength(got ?? ''), c.expectedBytes, c.name);
+        else assert.equal(got, c.expected, c.name);
+    }
+});
+
+test('a switch whose credentials write fails leaves a pending mark; a rotation cannot corrupt PERSO', async () => {
+    // macOS without a credentials file: the Keychain holds the live login.
+    const {home, io} = world();
+    fs.rmSync(path.join(home, '.claude', '.credentials.json'));
+    const keychain = new Map([['Claude Code-credentials', JSON.stringify(creds('pro'))]]);
+    let failWrites = true;
+    io.platform = 'darwin';
+    const sec = fakeSecurity(keychain, {denied: () => failWrites});
+    io.exec = sec.exec;
+    const store = openStore(io);
+    store.saveCurrent('PRO');
+    store.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    // `security -i` exits 0 on the denied write; the read-back catches it.
+    await assert.rejects(store.switchTo('PERSO'), /could not write the Keychain item Claude Code-credentials/);
+    assert.equal(store.readLiveAccount().emailAddress, 'perso@example.com', 'account block went in');
+    assert.equal(store.liveAccessToken(), 'at-pro', 'credentials did not');
+    assert.deepEqual(store.readPendingSwitch(), {at: NOW, from: 'PRO', to: 'PERSO'});
+    // A running Claude Code refreshes PRO's token: no profile holds it now.
+    keychain.set('Claude Code-credentials', JSON.stringify(creds('pro', {accessToken: 'at-pro-rot', refreshToken: 'rt-pro-rot'})));
+    assert.equal(store.syncBack(), 'PERSO');
+    const perso = store.readProfile('PERSO').credentials.claudeAiOauth;
+    assert.equal(perso.refreshToken, 'rt-perso', "PERSO keeps its own refresh token");
+    assert.equal((await store.listAccounts()).pendingSwitch.to, 'PERSO');
+    // Re-running the switch finishes it and clears the mark.
+    failWrites = false;
+    const r = await store.switchTo('PERSO');
+    assert.deepEqual([r.from, r.to, r.changed], ['PRO', 'PERSO', true]);
+    assert.equal(store.liveAccessToken(), 'at-perso');
+    assert.equal(store.readPendingSwitch(), null);
+    assert.deepEqual(sec.argvs.filter((a) => /at-|rt-/.test(a)), [], 'no token ever sits in an argv');
+});
+
+test('a Keychain write security -i cannot take is refused before the live login is touched', async () => {
+    const big = {...creds('perso'), mcpOAuth: {server: {accessToken: 'x'.repeat(2100)}}};
+    for (const [what, acct, credentials] of [
+        ['an unquotable account name', 'me\\x', creds('perso')],
+        ['a blob over the 4096-byte command line', 'me', big],
+    ]) {
+        const {home, io} = world();
+        fs.rmSync(path.join(home, '.claude', '.credentials.json'));
+        const keychain = new Map([['Claude Code-credentials', JSON.stringify(creds('pro'))]]);
+        io.platform = 'darwin';
+        const sec = fakeSecurity(keychain, {acct});
+        io.exec = sec.exec;
+        const store = openStore(io);
+        store.saveCurrent('PRO');
+        store.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials});
+        const config = fs.readFileSync(path.join(home, '.claude.json'), 'utf8');
+        await assert.rejects(store.switchTo('PERSO'), /cannot write the Keychain item Claude Code-credentials/, what);
+        assert.equal(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'), config, `${what}: account block untouched`);
+        assert.equal(store.liveAccessToken(), 'at-pro', `${what}: credentials untouched`);
+        assert.equal(store.readPendingSwitch(), null, `${what}: no pending mark`);
+        assert.deepEqual(sec.argvs.filter((a) => a.startsWith('-i')), [], `${what}: security -i never ran`);
+    }
+});
+
+test('a pending mark left by a switch that did complete clears itself', () => {
+    const {s} = world();
+    s.saveCurrent('PRO');
+    fs.writeFileSync(path.join(s.dir, '.switch-pending.json'), JSON.stringify({at: NOW, from: 'X', to: 'PRO'}));
+    assert.equal(s.syncBack(), 'PRO');
+    assert.equal(s.readPendingSwitch(), null);
+});
+
+test('syncBack keeps a profile\'s identity when ~/.claude.json has no oauthAccount', () => {
+    const {home, s} = world();
+    s.saveCurrent('PRO');
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({numStartups: 1}));
+    assert.equal(s.syncBack(), 'PRO');
+    assert.deepEqual(s.readProfile('PRO').account, account('pro'));
+    // ... so the twin guard still sees PRO when the same account logs in again.
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify(creds('pro', {accessToken: 'at-new'})));
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({oauthAccount: account('pro')}));
+    assert.throws(() => s.saveCurrent('WORK'), /already saved as PRO/);
+});
+
+test('saveCurrent refuses a name that differs from a saved one only by case', () => {
+    const {home, s} = world();
+    s.saveCurrent('PRO');
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify(creds('perso')));
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({oauthAccount: account('perso')}));
+    assert.throws(() => s.saveCurrent('Pro'), /PRO already exists - names ignore case/);
+    assert.throws(() => s.saveCurrent('pro', {force: true}), /PRO already exists/);
+    assert.deepEqual(fs.readdirSync(s.dir).sort(), ['PRO.json']);
+});
+
+test('switchTo parks an unsaved login whose email starts with an underscore', async () => {
+    const {home, s} = world({live: null});
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify(creds('ops')));
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({oauthAccount: {accountUuid: 'u-ops', emailAddress: '_ops@x.com'}}));
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    const r = await s.switchTo('PERSO');
+    assert.equal(r.from, 'ops');
+    assert.equal(s.readProfile('ops').credentials.claudeAiOauth.accessToken, 'at-ops');
+});
+
+test('CLAUDE_CONFIG_DIR on macOS reads and writes that dir\'s own Keychain item', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-accounts-'));
+    const cfg = path.join(home, 'work');
+    fs.mkdirSync(cfg);
+    fs.writeFileSync(path.join(cfg, '.claude.json'), JSON.stringify({oauthAccount: account('work')}));
+    const [service] = contract.keychainServices({CLAUDE_CONFIG_DIR: cfg}, sha256Hex);
+    const keychain = new Map([
+        ['Claude Code-credentials', JSON.stringify(creds('default'))],
+        [service, JSON.stringify(creds('work'))],
+    ]);
+    const io = {
+        homedir: home, platform: 'darwin', env: {CLAUDE_CONFIG_DIR: cfg}, nowMs: NOW,
+        exec: fakeSecurity(keychain).exec,
+    };
+    const s = openStore(io);
+    assert.equal(s.liveAccessToken(), 'at-work');
+    s.saveCurrent('WORK');
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    await s.switchTo('PERSO');
+    assert.equal(JSON.parse(keychain.get(service)).claudeAiOauth.accessToken, 'at-perso');
+    assert.equal(JSON.parse(keychain.get('Claude Code-credentials')).claudeAiOauth.accessToken, 'at-default',
+        'the default dir\'s login is untouched');
+});
+
 // ── CLI ─────────────────────────────────────────────────────────────────────────
 
 async function run(argv, io) {
@@ -467,6 +659,33 @@ test('CLI: use warns about running sessions; list --usage shows percents and fil
     const list = await run(['list', '--usage'], io);
     assert.match(list.text, /PERSO.*S 12% {2}W 34%/);
     assert.deepEqual(worstFromCache(s.readUsageCache()), {PERSO: 34, PRO: 34});
+});
+
+test('CLI: refresh goes on past a dead login and exits 1', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({version: 1, name: 'A', account: account('a'), credentials: {claudeAiOauth: {accessToken: 'at-a'}}});
+    s.writeProfile({version: 1, name: 'B', account: account('b'), credentials: creds('b')});
+    const r = await run(['refresh'], io);
+    assert.equal(r.code, 1);
+    assert.match(r.text, /^A: no refresh token/m);
+    assert.match(r.text, /^B: refreshed, valid until /m);
+    assert.match(r.text, /^PRO: active login/m);
+    assert.equal(s.readProfile('B').credentials.claudeAiOauth.accessToken, 'at-fresh');
+});
+
+test('CLI: help names the accounts directory of the io it was given', async () => {
+    const {io, s} = world();
+    const r = await run(['help'], io);
+    assert.ok(r.text.includes(s.dir), r.text);
+    assert.ok(!r.text.includes(accountsDir({})), 'not the real process dir');
+});
+
+test('CLI: list points at an unfinished switch', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    fs.writeFileSync(path.join(s.dir, '.switch-pending.json'), JSON.stringify({at: NOW, from: 'PRO', to: 'PERSO'}));
+    assert.match((await run(['list'], io)).text, /switch to PERSO did not finish - `claudectl account use PERSO`/);
 });
 
 test('CLI: current reports an unsaved login with exit 1', async () => {
