@@ -13,6 +13,7 @@ import {
   formatClock, formatLastPing, localDay, parseStamp, shiftLocalDay,
 } from '../claude-code/stamps.js';
 import {lastPingPath, projectsDir, sessionIndexPath} from '../claude-code/paths.js';
+import {turnTokens} from '../claude-code/transcript-tokens.js';
 
 const INDEX_VERSION = 1;
 const SESSION_BUDGET_BYTES = 16 << 20; // per call: a cold index warms over a few
@@ -24,12 +25,8 @@ const SESSION_LIMIT = 5;
 
 /** Tokens billed for one assistant turn - cache READS excluded, they bill at a
  *  fraction and would rank every long session first. */
-export function turnTokens(usage) {
-  if (!usage) return 0;
-  return (Number(usage.input_tokens) || 0) +
-    (Number(usage.output_tokens) || 0) +
-    (Number(usage.cache_creation_input_tokens) || 0);
-}
+// One per-turn token rule for every Node reader (claude-code/transcript-tokens.js).
+export {turnTokens};
 
 export function newSessionAcc() {
   return {sessionId: null, cwd: null, title: null, lastMs: 0, byDay: {}, ids: []};

@@ -6,7 +6,8 @@
 //
 // This file is the transport and the get_usage assembly. Everything else has
 // an owner: claude-code/accounts.js reads the live login and fetches usage
-// (the one reader for every Node client), claude-code/normalize.js /
+// (the one reader for every Node client), claude-code/login-usage.js picks
+// which login's usage and how its failure is labelled, claude-code/normalize.js /
 // pace.js / stamps.js are the Node port of the shared contract, tools.js the
 // tool schemas + renderers + account tool calls, sessions.js the session/ping
 // index, warehouse.js the 90-day history read.
@@ -15,6 +16,7 @@ import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 import {openStore} from '../claude-code/accounts.js';
+import {liveLoginUsage} from '../claude-code/login-usage.js';
 import {withPace} from '../claude-code/pace.js';
 import {historyPath, warehousePath} from '../claude-code/paths.js';
 import {readLastPing, refreshSessions, renderPing, renderSessions} from './sessions.js';
@@ -46,7 +48,7 @@ export async function getUsage(io = {}) {
   } catch {
     // the profile stays as it was; the next call retries
   }
-  const result = await fetchForLiveLogin(store);
+  const result = await liveLoginUsage(store);
   if (!result.ok) return result;
   const nowMs = io.nowMs ?? Date.now();
   // Pace history and warehouse trend are both filed under the live login (uuid,
@@ -71,24 +73,6 @@ export async function getUsage(io = {}) {
     }],
     structuredContent: {account, limits: cards, extraUsage, lastPing, sessions},
   };
-}
-
-/**
- * Usage for the live login. A saved live login fetches with the live token
- * (accessTokenFor's source 'live'), so its auth failure is the live one and
- * keeps the "run any Claude Code command" hint; only a stored or refreshed
- * token is labelled with the profile name.
- */
-async function fetchForLiveLogin(store) {
-  const name = store.liveAccountName();
-  if (!name) return store.fetchLiveUsage();
-  let access;
-  try {
-    access = await store.accessTokenFor(name);
-  } catch (e) {
-    return {ok: false, code: 'no_token', message: e.message};
-  }
-  return store.fetchUsageWith(access.token, {label: access.source === 'live' ? null : name});
 }
 
 /**

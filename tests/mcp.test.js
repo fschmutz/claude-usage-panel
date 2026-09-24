@@ -3,7 +3,7 @@
 // trend attachments, the account tools, plus one end-to-end stdio round-trip
 // that spawns the real server binary. Normalization parity with the other
 // ports is asserted in parity.test.js against the shared fixture; the live
-// login and the usage fetch are the store's (accounts.test.js).
+// login and the usage fetch are the store's (accounts-store.test.js).
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -171,6 +171,17 @@ test('get_usage - a saved live login keeps the live refresh hint on a 401', asyn
     assert.equal(r.isError, true);
     assert.equal(r.content[0].text,
         'auth_expired: Claude session expired. Run any Claude Code command to refresh it.');
+});
+
+test('get_usage - a stored token for the live login is refused under the profile name', async (t) => {
+    const io = world(t, {fetchImpl: okFetch({}, 401)});
+    openStore(io).saveCurrent('PRO');
+    // The account block still names PRO, but Claude Code holds no token: the
+    // fetch uses the profile's stored copy, so the failure is the profile's.
+    fs.rmSync(path.join(io.home, '.claude', '.credentials.json'));
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    assert.equal(r.isError, true);
+    assert.equal(r.content[0].text, 'auth_expired: PRO: usage endpoint refused the token');
 });
 
 test('get_usage - a store it cannot write still answers with the usage', async (t) => {
@@ -435,7 +446,7 @@ test('get_usage reads the trend from the warehouse under the io state dir', asyn
 
 // ── Named accounts ──────────────────────────────────────────────────────────────
 // The tools sit on the store bound to the same io (the store's own behavior is
-// covered in accounts.test.js).
+// covered in accounts-store.test.js).
 
 test('save_account / list_accounts / switch_account round-trip through the server', async (t) => {
     const io = world(t, {fetchImpl: async (url, init) => ({ok: true, status: 200, json: async () => ({limits: [
