@@ -1,0 +1,4 @@
+# The pre-commit the CI lint job installs. A file of its own so Dependabot's
+# pip ecosystem bumps it (a version inside a workflow `run:` line is invisible
+# to every ecosystem).
+pre-commit==4.6.2

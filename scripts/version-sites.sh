@@ -8,6 +8,9 @@
 #   json     "KEY": "x.y.z"            (first such key in the file)
 #   jsconst  export const KEY = 'x.y.z';
 #   cask       version "x.y.z"         (the Homebrew cask, 2-space indent)
+#   npxref   "KEY#vx.y.z"              (an npx package spec pinned to the release
+#                                      tag, so the plugin runs the release its
+#                                      manifest names and never main's tip)
 
 # shellcheck disable=SC2034  # read by bump-version.sh and check-versions.sh, which source this
 VERSION_SITES=(
@@ -17,6 +20,7 @@ VERSION_SITES=(
     ".claude-plugin/marketplace.json|json|version"
     "mcp/server.js|jsconst|VERSION"
     "Casks/claude-usage-panel.rb|cask|version"
+    "plugin/.mcp.json|npxref|github:fschmutz/claude-usage-panel"
 )
 
 # Print the version at one site (empty when the pattern is not found).
@@ -25,6 +29,7 @@ version_site_read() { # FILE KIND KEY
         json) sed -nE 's/.*"'"$3"'": *"([^"]+)".*/\1/p' "$1" | head -1 ;;
         jsconst) sed -nE "s/^export const $3 = '([^']+)';.*/\1/p" "$1" | head -1 ;;
         cask) sed -nE 's/^  '"$3"' "([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' "$1" | head -1 ;;
+        npxref) K="$3" perl -ne 'if (/"\Q$ENV{K}\E#v(\d+\.\d+\.\d+)"/) { print "$1\n"; exit }' "$1" ;;
     esac
 }
 
@@ -34,5 +39,6 @@ version_site_write() { # FILE KIND KEY NEW
         json) V="$4" perl -pi -e 's/("'"$3"'"\s*:\s*")\d+\.\d+\.\d+(")/${1}$ENV{V}${2}/' "$1" ;;
         jsconst) V="$4" perl -pi -e "s/(^export const $3 = ')\\d+\\.\\d+\\.\\d+(';)/\${1}\$ENV{V}\${2}/" "$1" ;;
         cask) V="$4" perl -pi -e 's/^(  '"$3"' ")\d+\.\d+\.\d+(")/${1}$ENV{V}${2}/' "$1" ;;
+        npxref) K="$3" V="$4" perl -pi -e 's/("\Q$ENV{K}\E)(?:#v\d+\.\d+\.\d+)?(")/${1}#v$ENV{V}${2}/' "$1" ;;
     esac
 }

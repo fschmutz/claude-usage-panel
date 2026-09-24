@@ -4,7 +4,8 @@ name: release
 #   scripts/bump-version.sh X.Y.Z  →  commit  →  git tag vX.Y.Z && push --tags
 # and this workflow does the rest: build the GNOME extension zip, pull the notes
 # for that version out of CHANGELOG.md, and publish the Release with the zip
-# attached. Re-runnable for an existing tag via "Run workflow".
+# attached. Re-runnable for an existing tag via "Run workflow": both jobs check
+# out that tag, whatever branch the run was dispatched from.
 on:
   push:
     tags: ["v*"]
@@ -15,7 +16,9 @@ on:
         required: true
 
 # Least privilege: nothing at the workflow level; each job asks for exactly
-# what it writes (both publish release assets, so both need contents: write).
+# what it writes (release and macos-asset publish release assets, so they need
+# contents: write; homebrew-tap only reads here and writes to the tap with its
+# own token).
 permissions: {}
 
 jobs:
@@ -26,24 +29,44 @@ jobs:
     outputs:
       tag: ${{ steps.t.outputs.tag }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
+      # Resolved BEFORE the checkout, because the checkout must be the tag.
+      # On a tag push GITHUB_REF_NAME is the tag; on workflow_dispatch the ref
+      # is a branch (e.g. main), so the explicit `tag` input must win.
       - name: Resolve tag
         id: t
-        # On a tag push GITHUB_REF_NAME is the tag; on workflow_dispatch the ref
-        # is a branch (e.g. main), so the explicit `tag` input must win. Guard
-        # that the resolved value looks like a version tag.
         env:
           INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
           tag="${INPUT_TAG:-$GITHUB_REF_NAME}"
-          case "$tag" in
-            v[0-9]*) ;;
-            *) echo "Refusing to release non-version tag: '$tag'" >&2; exit 1 ;;
-          esac
+          if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Refusing to release non-version tag: '$tag'" >&2
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Build from the tag, never from the dispatching branch: a re-run for an
+      # old tag that checked out main would upload main's code under that tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ steps.t.outputs.tag }}
+          persist-credentials: false
+
+      # The tree is the tag, and the tag is the version every site carries.
+      # A tag cut before bump-version.sh would ship a release whose installed
+      # version never reaches the tag, so auto-update would reinstall it daily.
+      - name: Verify the checkout is the tag and matches every version site
+        env:
+          TAG: ${{ steps.t.outputs.tag }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$TAG^{commit}")"
+          # Compared here as well as in the script: the script is the tag's
+          # own copy, and tags older than its --tag flag ignore the argument.
+          ver="$(node -p 'require("./package.json").version')"
+          if [ "v$ver" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match package.json $ver" >&2
+            exit 1
+          fi
+          scripts/check-versions.sh --tag "$TAG"
 
       # Build the installable GNOME zip: metadata.json at the root, the compiled
       # GSettings schema, compiled translations, the worker scripts - the exact
@@ -100,9 +123,15 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Same tag as the release job, never the dispatching branch.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/tags/${{ needs.release.outputs.tag }}
           persist-credentials: false
+      - name: Verify the checkout is the tag
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$TAG^{commit}")"
       - name: Build the .app (no /Applications install)
         run: ./install.sh macos --build-only
       - name: Sign with Developer ID and notarize (no-op without the secrets)
@@ -130,3 +159,33 @@ jobs:
         run: |
           ./scripts/make-cask.sh "$TAG" "ClaudeUsagePanel-macos.zip"
           gh release upload "$TAG" "Casks/claude-usage-panel.rb" --clobber
+
+  # Push the pinned cask to the tap, so `brew install --cask
+  # fschmutz/tap/claude-usage-panel` and `brew upgrade` follow the releases.
+  # A job of its own, fed by the release asset rather than a file passed
+  # between jobs: a failed tap push re-runs alone, without rebuilding or
+  # re-notarizing the app. HOMEBREW_TAP_TOKEN (repo Settings > Secrets) is a
+  # fine-grained token with contents:write on fschmutz/homebrew-tap and
+  # nothing else; this repo's own token cannot write there. Without it the job
+  # fails: a release that brew users never see is not a success.
+  homebrew-tap:
+    needs: [release, macos-asset]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.release.outputs.tag }}
+          persist-credentials: false
+      - name: Download the cask pinned to this release's zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh release download "$TAG" --pattern claude-usage-panel.rb --dir "$RUNNER_TEMP/cask"
+      - name: Publish it to fschmutz/homebrew-tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: ./scripts/publish-cask.sh "$TAG" "$RUNNER_TEMP/cask/claude-usage-panel.rb"

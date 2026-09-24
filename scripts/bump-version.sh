@@ -2,7 +2,8 @@
 # Bump the project version in every place that carries it, from a single source
 # of truth, so they can never drift. The places are listed once, in
 # scripts/version-sites.sh (package.json, the GNOME metadata, the plugin and
-# marketplace manifests, the MCP server's VERSION const, the Homebrew cask);
+# marketplace manifests, the MCP server's VERSION const, the Homebrew cask,
+# the plugin's npx spec pinned to the release tag);
 # CHANGELOG.md gets a dated section above a fresh [Unreleased].
 #
 # Usage:  scripts/bump-version.sh 1.4.0
@@ -37,6 +38,8 @@ echo "  CHANGELOG.md → ## [$V] - $DATE (with a fresh [Unreleased])"
 
 echo
 echo "Bumped to $V. Review the diff, then commit + tag (the tag push triggers"
-echo "the release workflow, which builds the zip and creates the GitHub Release):"
+echo "the release workflow, which builds the zip and creates the GitHub Release)."
+echo "Push the tag right behind the commit: plugin/.mcp.json now names v$V, and"
+echo "the plugin cannot install until that tag exists on origin:"
 echo "  git -C \"$ROOT\" add -A && git -C \"$ROOT\" commit -m \"chore(release): v$V\""
 echo "  git -C \"$ROOT\" tag v$V && git -C \"$ROOT\" push-confirm && git -C \"$ROOT\" push-confirm --tags"

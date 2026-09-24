@@ -1,0 +1,8 @@
+{
+  "name": "claude-usage-panel-ci-claude-cli",
+  "private": true,
+  "description": "The Claude Code CLI the plugin-validate CI job runs, pinned to one exact version. Dependabot's npm ecosystem bumps it, so a CLI release that adds a validation warning arrives as a reviewed PR, never as a surprise red gate.",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.281"
+  }
+}

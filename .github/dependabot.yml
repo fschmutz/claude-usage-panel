@@ -19,3 +19,63 @@ updates:
         update-types: [minor, patch]
     labels: [dependencies]
     open-pull-requests-limit: 5
+
+  # The hook revs in .pre-commit-config.yaml, frozen to a commit SHA with the
+  # tag in a `# frozen:` comment. Without this entry nothing ever bumped them.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      hooks-minor:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    open-pull-requests-limit: 5
+
+  # The pre-commit the CI lint job installs (.github/pre-commit/requirements.txt).
+  - package-ecosystem: pip
+    directory: /.github/pre-commit
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    open-pull-requests-limit: 2
+
+  # The bash32 job's image (.github/bash32/Dockerfile), pinned by digest. Held
+  # to 3.2: that job exists to run the bash macOS ships, not the newest one.
+  - package-ecosystem: docker
+    directory: /.github/bash32
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: bash
+        versions: [">= 3.3"]
+    labels: [dependencies]
+    open-pull-requests-limit: 2
+
+  # The swift-core job's toolchain (.github/swift/Dockerfile), pinned by digest.
+  - package-ecosystem: docker
+    directory: /.github/swift
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    open-pull-requests-limit: 2
+
+  # The Claude Code CLI the plugin-validate CI job runs
+  # (.github/claude-cli/package-lock.json), pinned to one exact version. A
+  # bump whose validator finds a new warning goes red on its own PR.
+  - package-ecosystem: npm
+    directory: /.github/claude-cli
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    open-pull-requests-limit: 2

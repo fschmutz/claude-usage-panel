@@ -20,10 +20,10 @@ on:
   pull_request:
   merge_group: # so the same gate guards a merge queue if one is ever enabled
 
-# Least privilege: every job only reads the checkout
-# (CodeQL: actions/missing-workflow-permissions).
-permissions:
-  contents: read
+# Least privilege: nothing at the workflow level, and every job asks for
+# exactly what it uses - here, reading the checkout (zizmor
+# excessive-permissions; CodeQL actions/missing-workflow-permissions).
+permissions: {}
 
 # One run per PR: a force-push supersedes the previous run instead of racing it.
 # Never cancel a push to main or a merge-queue run - those results are recorded.
@@ -35,6 +35,8 @@ jobs:
   lint:
     name: pre-commit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,23 +47,41 @@ jobs:
           python-version: "3.12"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22"
-      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+          node-version: "24"
+      # Inline rather than pre-commit/action: that composite resolves
+      # actions/cache by a mutable tag and pip-installs an unpinned pre-commit,
+      # both invisible to zizmor and Dependabot. Here the cache is SHA-pinned
+      # and the pre-commit version is .github/pre-commit/requirements.txt,
+      # which Dependabot's pip ecosystem bumps.
+      - run: python -m pip install --disable-pip-version-check -r .github/pre-commit/requirements.txt
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-3-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml', '.github/pre-commit/requirements.txt') }}
+      - run: pre-commit run --all-files --show-diff-on-failure --color=always
         env:
           # swift-format needs the Swift toolchain, which isn't on this runner;
           # the swift-core job runs it. All other hooks run here.
           SKIP: swift-format
 
+  # Every Node the package claims: the engines floor in package.json and the
+  # active LTS. A floor nothing runs is a floor nobody knows still works.
   js:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node }}
       - run: node --test "tests/*.test.js"
 
   # The screenshots in docs/ are GENERATED from scripts/screenshots/data.json by
@@ -70,6 +90,8 @@ jobs:
   #   node scripts/screenshots/render.mjs
   screenshots:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,7 +99,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22"
+          node-version: "24"
       - run: node scripts/screenshots/render.mjs --check
 
   # Translations are hand-written but the template and the merges are not: this
@@ -86,6 +108,8 @@ jobs:
   # the usual way that happens).
   i18n:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,27 +126,36 @@ jobs:
   # Linux: fast parity gate - builds/tests only the Foundation-only core.
   swift-core:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
-        with:
-          swift-version: "6.1"
+      # The toolchain is .github/swift/Dockerfile: the official swift image
+      # pinned by digest, bumped by Dependabot's docker ecosystem.
+      - run: docker build --quiet --tag cup-swift .github/swift
       # Warnings are errors: a green build whose log carried two unread
-      # warnings for weeks is how this flag got here.
-      - run: swift test -Xswiftc -warnings-as-errors
-        working-directory: macos
+      # warnings for weeks is how this flag got here. The package is in Swift 6
+      # language mode, so a concurrency violation is an error too.
+      - run: >-
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp
+          -v "$PWD:/repo" -w /repo/macos cup-swift
+          swift test -Xswiftc -warnings-as-errors
       # The toolchain is here, so the Swift formatter gate runs here too (the
       # pre-commit job skips it: no Swift on that runner).
-      - run: swift format lint --strict --recursive Sources Tests
-        working-directory: macos
+      - run: >-
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp
+          -v "$PWD:/repo" -w /repo/macos cup-swift
+          swift format lint --strict --recursive Sources Tests
 
   # macOS: compile the real SwiftUI menu-bar app (macOS-only target) so type
   # errors in the app layer are caught in CI, not only when a Mac user builds it.
   macos-app:
     runs-on: macos-latest
+    permissions:
+      contents: read
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -143,12 +176,61 @@ jobs:
   bash32:
     name: bash32
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: docker run --rm -v "$PWD:/repo:ro" -e HOME=/tmp bash:3.2 bash /repo/scripts/bash32-smoke.sh
+      # The image is .github/bash32/Dockerfile: pinned by digest, bumped by
+      # Dependabot's docker ecosystem. Never a bare `bash:3.2` tag here.
+      - run: docker build --quiet --tag cup-bash32 .github/bash32
+      - run: docker run --rm -v "$PWD:/repo:ro" -e HOME=/tmp cup-bash32 bash /repo/scripts/bash32-smoke.sh
+
+  # The marketplace (.claude-plugin/marketplace.json) and the plugin (plugin/)
+  # as Claude Code itself reads them. `--strict` turns every warning into exit
+  # 1, and the output is checked as well, so a warning cannot pass as green.
+  # The CLI is .github/claude-cli/package-lock.json, one exact version bumped
+  # by Dependabot: a new CLI that adds a warning shows up as a red Dependabot
+  # PR to fix, never as an unrelated PR turning red overnight.
+  plugin-validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+        working-directory: .github/claude-cli
+      - name: claude plugin validate --strict (marketplace, then plugin)
+        env:
+          # A throwaway config dir: the validator must not depend on, or
+          # write to, any login or settings.
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
+          DISABLE_AUTOUPDATER: "1"
+          DISABLE_TELEMETRY: "1"
+        run: |
+          cli=.github/claude-cli/node_modules/.bin/claude
+          "$cli" --version
+          for target in . plugin; do
+            rc=0
+            out="$("$cli" plugin validate --strict "$target" 2>&1)" || rc=$?
+            printf '%s\n' "$out"
+            if [ "$rc" -ne 0 ]; then
+              echo "::error::claude plugin validate $target failed (exit $rc)"
+              exit 1
+            fi
+            if printf '%s\n' "$out" | grep -qi 'warning'; then
+              echo "::error::claude plugin validate $target reported a warning"
+              exit 1
+            fi
+          done
 
   # ── The one required check ──────────────────────────────────────────────────
   # Requires every job above to have actually SUCCEEDED. `if: always()` is what
@@ -159,8 +241,9 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [lint, js, screenshots, i18n, swift-core, macos-app, bash32]
+    needs: [lint, js, screenshots, i18n, swift-core, macos-app, bash32, plugin-validate]
     runs-on: ubuntu-latest
+    permissions: {} # reads only the needs context, never the repo
     timeout-minutes: 5
     steps:
       - name: Require every job to have succeeded

@@ -3,7 +3,30 @@
 # must carry the version package.json does (the single source of truth), and
 # no build path may hardcode a version literal. Runs in pre-commit and CI. A
 # site bump-version.sh writes is a site this script checks - same list.
+#
+#   scripts/check-versions.sh               every site matches package.json
+#   scripts/check-versions.sh --tag vX.Y.Z  ...and package.json matches the tag
+#
+# The release workflow runs the --tag form. A tag cut before bump-version.sh
+# would publish a release whose installed version never reaches the tag, and
+# auto-update would reinstall it every day for ever.
 set -euo pipefail
+
+tag=""
+case "${1:-}" in
+    "") ;;
+    --tag)
+        tag="${2:-}"
+        if [ -z "$tag" ]; then
+            echo "Usage: scripts/check-versions.sh [--tag vX.Y.Z]" >&2
+            exit 2
+        fi
+        ;;
+    *)
+        echo "Usage: scripts/check-versions.sh [--tag vX.Y.Z]" >&2
+        exit 2
+        ;;
+esac
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -20,6 +43,10 @@ want="$(version_site_read package.json json version)"
 if [ -z "$want" ]; then
     echo "check-versions: could not read version from package.json" >&2
     exit 2
+fi
+
+if [ -n "$tag" ] && [ "$tag" != "v$want" ]; then
+    note "tag $tag does not match package.json $want - run scripts/bump-version.sh ${tag#v} and tag that commit"
 fi
 
 for site in "${VERSION_SITES[@]}"; do

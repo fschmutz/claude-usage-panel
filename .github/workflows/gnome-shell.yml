@@ -1,0 +1,51 @@
+name: gnome-shell
+
+# GNOME Shell loads an extension only when metadata.json's `shell-version`
+# names the running major, so every GNOME release silently disables the panel
+# for users who upgrade until the number is added. This compares the highest
+# listed major with the newest stable gnome-shell tag upstream and fails when
+# a newer one is out (scripts/check-gnome-shell-version.sh).
+#
+# Deliberately NOT a ci.yml job and NOT behind ci-gate: its verdict depends on
+# GNOME's release calendar, not on the change under review. Inside ci-gate, a
+# GNOME release would turn every open PR red at once, docs typos included,
+# with nothing in any of them to fix. So it runs where the answer can change:
+#   - weekly, because upstream moves without any commit here (a failed
+#     scheduled run notifies the maintainer),
+#   - on a PR or push that edits metadata.json or the check itself, so the
+#     change that is supposed to fix it shows green before it lands,
+#   - on demand.
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  pull_request:
+    paths:
+      - "claude-usage-panel@fschmutz.github.io/metadata.json"
+      - "scripts/check-gnome-shell-version.sh"
+      - ".github/workflows/gnome-shell.yml"
+  push:
+    branches: [main]
+    paths:
+      - "claude-usage-panel@fschmutz.github.io/metadata.json"
+      - "scripts/check-gnome-shell-version.sh"
+      - ".github/workflows/gnome-shell.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  shell-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: metadata.json covers the newest stable GNOME Shell
+        env:
+          # Read-only public API call; the token only lifts the anonymous
+          # rate limit. gh reads it from the environment, never from argv.
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/check-gnome-shell-version.sh
