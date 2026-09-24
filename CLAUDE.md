@@ -218,7 +218,11 @@ summarization, you must change it in **every** port and keep them matching.
   (every state/cache/config path derived from one `io`, nothing at module
   load), `accounts-contract.js` (the pure account rules, mirroring
   `lib/pure/accounts.js` 1:1), `accounts.js` (`openStore(io)`),
-  `statusline.js` (renders from Claude Code's stdin), `tabs.js`
+  `login-usage.js` (which login's usage and its auth-failure label: a live
+  token keeps the refresh hint, a stored one names the profile),
+  `statusline.js` (renders from Claude Code's stdin, nothing else),
+  `transcript-tokens.js` (the per-turn `turnTokens` rule, a transcript's
+  token totals and their incremental on-disk cache), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
   registry, checked against `/proc` start time; the snapshot store;
   autosave; Node-only, no port to mirror), `terminals.js` (which terminal

@@ -27,6 +27,11 @@ semantic versioning.
 
 ### Changed
 
+- The account store rules (save refusal, refresh merge, torn login, switch
+  plan) live in the shared contract of all three ports, pinned by
+  `tests/fixtures/accounts.json`; the plan label is pure and pinned by
+  `tests/fixtures/plan-label.json`; transcript token counting has one Node
+  implementation (`claude-code/transcript-tokens.js`).
 - The macOS package is on Swift tools-version 6.0 in Swift 6 language mode
   (concurrency violations are errors), and the Linux CI gate runs Swift 6.4
   from the official image pinned by digest (`.github/swift/Dockerfile`,
@@ -50,6 +55,11 @@ semantic versioning.
 
 ### Fixed
 
+- Accounts: a token refresh whose `expires_in` is null, a string, zero or
+  negative keeps the old expiry in every port (JS stamped "now" for null,
+  forcing a refresh on every use); the syncBack no-op check ignores key order.
+- `claudectl account list --usage` and `list_accounts` keep the "run any
+  Claude Code command" hint when the live login's token is refused.
 - **Accounts: a switch interrupted between its two writes can no longer copy
   one account's tokens into another's profile** - in the GNOME and macOS
   panels (the live access token now decides which profile is live, before the
@@ -182,6 +192,14 @@ semantic versioning.
 
 ### Security
 
+- `claudectl session open` escapes `#` in the tmux window name and start
+  directory: tmux reads both as formats, so a directory named `#(cmd)` ran
+  that command on reopen.
+- A saved session whose name or directory holds a control character is never
+  reopened: iTerm and Terminal.app type the command into the tab, where ^C or
+  a newline acts before the shell sees any quoting.
+- macOS notifications pass a fixed first argument to osascript, so a body
+  starting with `-` cannot be read as an osascript option.
 - **Cost runs only an installed `ccusage`.** The `npx ccusage@latest`
   fallback is removed: it fetched and ran the newest unpinned npm release on
   every poll, inside the session that holds the Claude OAuth token.

@@ -62,7 +62,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── cursor.js   # Cursor team-spend summary
     │   ├── warehouse.js# the 90-day history rules
     │   ├── events.js   # event-hook detection + command expansion
-    │   ├── poll.js     # adaptive polling
+    │   ├── poll.js     # adaptive polling + section refresh orchestration
     │   ├── pings.js    # session-window planner
     │   ├── sessions.js # ping stamps, transcript fold, ranking, resume command, terminals
     │   ├── accounts.js # named-account rules (mirrors claude-code/accounts-contract.js)
@@ -111,7 +111,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── ReleaseTags.swift         # newest released tag from the smart-HTTP ref list
     │   ├── NotifyScript.swift        # the osascript argv for one notification
     │   ├── Countdown.swift           # the "Resets in 3h 05m" countdown + sparkline
-    │   └── PlanLabel.swift           # header plan label from the credentials (twin of claudeUsage.js planLabel)
+    │   └── PlanLabel.swift           # header plan label from the credentials (twin of pure/usage.js planLabel, pinned by tests/fixtures/plan-label.json)
     └── ClaudeUsagePanel/
         ├── ClaudeUsagePanelApp.swift # the App + MenuBarExtra scene, palette
         ├── UsageModel.swift          # the view model
@@ -136,12 +136,14 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
 
 claude-code/            # the Node clients (installed together under ~/.claude/claude-usage-panel/)
 ├── statusline.js       # status line: renders from Claude Code's stdin - no network
+├── transcript-tokens.js# a transcript's token totals + their incremental on-disk cache
 ├── normalize.js        # the Node copy of the normalizer (shared by mcp + accounts)
 ├── pace.js             # clock pace + burn-rate forecast + the shared sample history
 ├── stamps.js           # timestamp parsing and the "3h06m" / "yesterday 05:30" formats
 ├── paths.js            # every state/cache/config path, derived from one `io`
 ├── accounts-contract.js# the pure account rules (mirrors lib/pure/accounts.js 1:1)
 ├── accounts.js         # openStore(io): the account store - save, switch, refresh, usage
+├── login-usage.js      # which login's usage, and how its auth failure is labelled
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
 ├── layout.js           # which window and tab each session sits in (tmux, kitty, WezTerm, iTerm, Terminal.app)
