@@ -39,12 +39,21 @@ systemctl --user list-timers | grep claude-usage-panel   # Linux
 launchctl list | grep claude-usage-panel                 # macOS
 ```
 
-The log says why. Common reasons, all deliberate: the checkout has **local
-changes** or a **diverged / detached branch** (it never touches your work), there
-is **no newer released tag** yet (a `main` commit is not a release), the machine
-was **offline**, or the daily check was never installed -
+The log says why, in its own words: the checkout has **local changes** or a
+**diverged / detached branch** (it never touches your work), there is **no
+newer released tag** yet (a `main` commit is not a release), the machine was
+**offline**, the remote lookup failed for a named reason (`fatal: Repository
+not found`, `Permission denied (publickey)`), the reinstall failed and is owed
+(`update-pending` in the state dir - it retries), or the daily check was never
+installed -
 `./install.sh autoupdate` adds it, `./install.sh --list` shows whether it's
-there. Run `scripts/auto-update.sh` by hand any time to force a check.
+there. Run `scripts/auto-update.sh` by hand any time to force a check
+(`--force` re-runs the install even when nothing is newer).
+
+If `--status` says **"Installed X, running Y"**, the update landed and GNOME
+Shell is still running the code it loaded at login: log out and back in. If it
+says **"Installed X, checkout Y"**, the code is there but the clients are not -
+press Update now, or run `./install.sh update`.
 
 ## Logs (GNOME)
 

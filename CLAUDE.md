@@ -62,9 +62,29 @@ node scripts/screenshots/render.mjs --check  # what CI runs; exits 1 on drift
 
 Auto-update reads the highest released `vX.Y.Z` tag on `origin`, so **a release
 only reaches users once the tag is pushed** - bumping `package.json` on main is
-not enough. It only ever `merge --ff-only`s, and skips a dirty, diverged or
-detached checkout rather than touching it; `tests/autoupdate.test.js` asserts
-each of those guards against a throwaway local bare remote (offline).
+not enough. It only ever `merge --ff-only`s, **to that tag** and not to the
+branch tip, and skips a dirty, diverged or detached checkout rather than
+touching it; `tests/autoupdate.test.js` asserts each of those guards against a
+throwaway local bare remote (offline).
+
+**Every update decision reads the DEPLOYED version, never the checkout's
+`package.json`.** Four files under `<state dir>/claude-usage-panel` carry it,
+and `install.sh` writes the first three on every successful run - not only the
+daily job: `installed-version` (what the clients run), `checkout-path` (so the
+extension's copy of the worker and the macOS app find the checkout without a
+scheduled job), `update-pending` (a reinstall that was owed and did not finish;
+retried until it does) and `loaded-version` (written by the GNOME extension at
+enable(), so a shell still running the old code is reported instead of being
+called up to date). Comparing the checkout instead is what made a manual pull,
+a failed reinstall or a dropped target read as "up to date" forever.
+
+**A target that could not be reinstalled fails `install.sh update`** (`skip_fatal`
+in `scripts/install/ui.sh`), so nothing is stamped and the next run retries. The
+scheduler's PATH has no node on it: `installed_targets` must therefore never
+need node or the `claude` CLI to answer, and the worker puts a version-manager
+node back on PATH before installing. `tests/install-shape.test.js` pins all of
+it in the shape an update actually runs in - a stubbed installer cannot see any
+of these failures.
 
 There is **no build step for the GNOME extension or the status line** - they run
 the source files directly. `npm` is only a test runner; there are no runtime deps.

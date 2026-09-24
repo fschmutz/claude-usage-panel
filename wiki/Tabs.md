@@ -14,6 +14,11 @@ claudectl session store   # saved snapshots, newest first
 claudectl session open    # reopen the newest one: one window, one tab per session
 ```
 
+Both panels put the same thing one click away: the **Reopen** icon in the
+dropdown's header (and the button in Settings ▸ Saved sessions) runs
+`claudectl session open` on the newest snapshot. It appears only when there is
+one - no claudectl, no snapshot, no button.
+
 ## Install
 
 `./install.sh cli` puts `claudectl` on your PATH (`~/.local/bin`) and

@@ -87,9 +87,11 @@ shows what's detected and installed.
 
 **It keeps itself current.** On a git checkout the `autoupdate` target is part
 of the default set: once a day it looks for a newer released tag and, if there
-is one, fast-forwards and reinstalls exactly the clients you have. It never
-touches a checkout with local changes or a diverged branch - it logs the reason
-and waits. `scripts/auto-update.sh --status` shows where you stand;
+is one, fast-forwards to it and reinstalls exactly the clients you have -
+comparing what those clients actually run, so a half-finished or hand-made
+update is picked up rather than mistaken for being current. It never touches a
+checkout with local changes or a diverged branch - it logs the reason and
+waits. `scripts/auto-update.sh --status` shows where you stand;
 `./install.sh --uninstall autoupdate` turns it off.
 
 The MCP tool also installs without any clone - as a Claude Code plugin

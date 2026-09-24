@@ -106,11 +106,22 @@ scripts/version-sites.sh# every place the version is written, read by bump + che
 
 `scripts/auto-update.sh` is the daily worker; the `autoupdate` install target only
 schedules it (systemd user timer · launchd agent · cron). It compares the highest
-released `vX.Y.Z` tag on `origin` against `package.json`, and on a newer one does
-`merge --ff-only` + `install.sh update` - which reinstalls only the targets already
+released `vX.Y.Z` tag on `origin` against the **deployed** version (the
+`installed-version` stamp every successful `install.sh` writes, never the
+checkout's `package.json`), and on a newer one does `merge --ff-only` **to that
+tag** + `install.sh update` - which reinstalls only the targets already
 installed. Every other situation (dirty worktree, diverged or detached branch, no
 remote, offline, lock held) is a logged skip, never a modification. So **a release
 reaches users when its tag is pushed**, not when `main` moves.
+
+Three state files under `<state dir>/claude-usage-panel` carry that decision
+between runs, and all three are written by `install.sh`, not only by the daily
+job: `installed-version` (what the clients run), `checkout-path` (where the
+checkout is, so the extension's copy of the worker and the macOS app can find
+it without a scheduled job) and `update-pending` (a reinstall that was owed and
+did not finish - retried until it does). The GNOME extension adds
+`loaded-version` at enable(), which is how `--status` can say "installed 2.2.0,
+running 2.1.0 - log out and back in" instead of "up to date".
 
 ## Data source
 

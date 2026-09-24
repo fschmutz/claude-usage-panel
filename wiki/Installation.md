@@ -102,15 +102,27 @@ The panels and the MCP server need no extra step. See [[Accounts]] and [[Tabs]].
 
 Installing from a git checkout also schedules a **daily update check** - the
 `autoupdate` target. Once a day it reads the highest released `vX.Y.Z` tag on
-`origin`; if that's newer than your `package.json` version it fast-forwards the
-checkout and runs `install.sh update`, so every client you have moves to the new
-release without you doing anything. A desktop notification says when it lands.
+`origin`; if that's newer than the version your clients are **running** it
+fast-forwards the checkout to that tag and runs `install.sh update`, so every
+client you have moves to the new release without you doing anything. A desktop
+notification says when it lands.
+
+What it compares is the deployed version - `~/.local/state/claude-usage-panel/installed-version`,
+written by every successful `install.sh` run - and not the checkout's
+`package.json`. The two drift apart after a manual `git pull`, an interrupted
+reinstall, or an install that could not reach `node`; comparing the checkout
+made all of those read as "up to date" while the clients stayed behind.
 
 | | |
 |---|---|
 | Linux | systemd user timer `claude-usage-panel-update.timer` (`OnCalendar=daily`, `Persistent=true`, so a missed day runs at next login) |
-| macOS | launchd agent `io.github.fschmutz.claude-usage-panel.update`, daily at 11:17 |
+| macOS | launchd agent `io.github.fschmutz.claude-usage-panel.update`, daily at 11:17 and at login |
 | Neither | a `cron` line tagged `# claude-usage-panel auto-update` |
+
+A run that fires at login or on resume and finds the network still down retries
+inside the run rather than waiting a day, and a scheduled run that already
+checked less than 20 hours ago does nothing - which is what keeps "also at
+login" from meaning "on every login".
 
 ```bash
 scripts/auto-update.sh --status     # installed vs latest, and when it last looked
@@ -120,11 +132,17 @@ scripts/auto-update.sh              # look now, and install it if there is one
 ```
 
 It is deliberately timid about your checkout: it **only ever fast-forwards**
-(no merge, rebase, reset or stash), and it skips - logging the reason, changing
-nothing - when the worktree is dirty, the branch is diverged or detached, there
-is no `origin`, or the network is down. It also reinstalls **only** the targets
-already installed, so it never adds a client you didn't want. The rolling log
-is `~/.local/state/claude-usage-panel/auto-update.log`.
+(no merge, rebase, reset or stash), to the release tag rather than to the branch
+tip, and it skips - logging the reason, changing nothing - when the worktree is
+dirty, the branch is diverged or detached, there is no `origin`, or the network
+is down. A lookup that failed for some other reason (auth, DNS, a dead remote
+URL) is reported as that failure, not as "offline". It also reinstalls **only**
+the targets already installed, so it never adds a client you didn't want.
+
+If the reinstall itself fails - no `node` on the scheduler's `PATH`, or
+`/Applications` not writable on macOS - the run exits non-zero, records nothing
+as installed, and tries again next time. The rolling log is
+`~/.local/state/claude-usage-panel/auto-update.log`.
 
 ### By hand
 
