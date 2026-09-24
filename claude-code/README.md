@@ -70,17 +70,30 @@ its `statusLine` entry, leaving any other settings alone).
 
 ### Manual install
 
-If you'd rather wire it up yourself, point `statusLine` at the script from
-wherever you keep it. Save it with a `.mjs` extension (it's an ES module) so
-Node treats it as ESM regardless of any nearby `package.json`:
+If you'd rather wire it up yourself, point `statusLine` at `statusline.js`
+**inside a complete `claude-code/` directory**. The script is an ES module that
+imports its sibling modules (`accounts.js`, `normalize.js`, `pace.js`,
+`paths.js`, `stamps.js`, ...), so a lone copy of the file fails with
+`ERR_MODULE_NOT_FOUND`. Either use the repo checkout directly (its root
+`package.json` declares `"type": "module"`):
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "node \"/absolute/path/to/statusline.mjs\" --segments=context,limits,tokens,ping --tokens=all"
+    "command": "node \"/absolute/path/to/claude-usage-panel/claude-code/statusline.js\" --segments=context,limits,tokens,ping --tokens=all"
   }
 }
+```
+
+or copy the whole directory next to a one-line `package.json`, which is the
+layout `./install.sh statusline` builds under `~/.claude/claude-usage-panel/`:
+
+```sh
+mkdir -p ~/.claude/claude-usage-panel
+cp -R claude-code ~/.claude/claude-usage-panel/
+printf '{"type":"module"}\n' > ~/.claude/claude-usage-panel/package.json
+# then point statusLine at ~/.claude/claude-usage-panel/claude-code/statusline.js
 ```
 
 The `--segments` / `--tokens` flags are optional - omitting them shows the
@@ -91,11 +104,16 @@ statusline` bakes in for you.
 
 Everything comes from what Claude Code gives the command locally - the session
 JSON piped on stdin, plus the local transcript file it points to - with **no
-credentials, no network, no cache, no other host**:
+credentials, no network, no other host**. The only files it writes are two
+small hint caches in a per-user scratch dir (`$XDG_RUNTIME_DIR`, else
+`~/.claude`; the per-user `$TMPDIR` on macOS; never the shared `/tmp`): the
+limits' sample history for the burn-rate forecast, and the per-transcript
+token totals:
 
 - **[PRO]** (the `account` segment, opt-in: `--segments=account,…`) from
   `~/.claude.json`'s `oauthAccount` matched against the logins saved with
-  `claudectl account`; blank until one is saved. `[PRO ⇢ PERSO]` in yellow means this session is at the
+  `claudectl account`; blank until one is saved. It never reads an access
+  token (no Keychain lookup on macOS). `[PRO ⇢ PERSO]` in yellow means this session is at the
   auto-switch threshold and the panels' last snapshot says PERSO has room - a
   hint, never a switch. See the
   [Accounts wiki page](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts).
@@ -116,9 +134,11 @@ never exposes them; they come only from the OAuth usage endpoint, which the
 GNOME extension and macOS app read. The terminal line is deliberately the cheap
 stdin-only projection. Nothing is hidden from the **Week** gauge by that:
 per-model usage draws from the same weekly pool, so Fable tokens are already
-counted in it. The token sums are cached on disk (keyed by the
-transcript's size + modification time), so a long, multi-megabyte transcript
-isn't re-read on every prompt refresh.
+counted in it. The token sums are cached on disk per transcript (the 16 most
+recently used, so parallel sessions keep their own entry), with the byte offset
+of the last complete line: an unchanged transcript is not read at all, and a
+grown one is read only from that offset, so a long, multi-megabyte transcript
+is never re-parsed on a prompt refresh.
 
 ## Requirements
 

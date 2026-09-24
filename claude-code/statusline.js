@@ -3,7 +3,9 @@
 // rendered just under the prompt input. It reads ONLY what Claude Code pipes on
 // stdin - the context window, the account Session (5 h) / Week (7 d) rate limits,
 // and the session transcript for a token total - so it needs no credentials and
-// no network. This is deliberately the cheap terminal projection: per-model
+// no network (the opt-in account segment reads ~/.claude.json and the saved
+// profiles, never a token; the only writes are small caches under the tmp
+// dir). This is deliberately the cheap terminal projection: per-model
 // (e.g. Fable) weekly limits and API severity are API-only and shown only by the
 // GNOME extension and the macOS app, never here. Output is left-aligned (Claude
 // Code anchors the line to the left; use the settings `padding` field to indent).
@@ -12,11 +14,12 @@
 // (pace.js), the ping stamps (stamps.js), the account rule (accounts-contract.js)
 // - are the same modules the MCP server uses; this file is only the rendering.
 
+import {Buffer} from 'node:buffer';
 import fs from 'node:fs';
 import {fileURLToPath} from 'node:url';
 
 import {openStore} from './accounts.js';
-import {autoSwitchTarget, usageSeverity, worstFromCache, worstPercent} from './accounts-contract.js';
+import {accountKey, activeAccountName, autoSwitchTarget, usageSeverity, worstFromCache, worstPercent} from './accounts-contract.js';
 import {clampPercent} from './normalize.js';
 import {clockPace, forecastMap} from './pace.js';
 import {lastPingPath, sessionIndexPath, tokensCachePath} from './paths.js';
@@ -106,8 +109,8 @@ export function cardsFromStdin(stdinText) {
   return cards;
 }
 
-// "⚠full Sun03:40" appended to the gauge of the worst limit projected to run
-// out before its reset. Silent in the good case - the line stays short.
+// "⚠full Sun03:40" appended to the gauge of every limit projected to run out
+// before its reset. Silent in the good case - the line stays short.
 export function exhaustionMarker(fc) {
   if (!fc?.exhaustsBeforeReset) return '';
   const d = new Date(fc.projectedFullAt);
@@ -158,6 +161,34 @@ export function formatTokens(n) {
   return String(n);
 }
 
+// Fold the complete JSONL lines of `text` into `acc` ({all, fresh, ids}),
+// deduping by message id against `ids` (mutated). Unparseable lines (a partial
+// last line while Claude Code is writing) are skipped.
+function foldTokens(text, acc) {
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let o;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const u = o?.message?.usage;
+    if (!u) continue;
+    const id = o.message?.id;
+    if (id) {
+      if (acc.ids.has(id)) continue;
+      acc.ids.add(id);
+    }
+    const turn = (Number(u.input_tokens) || 0) +
+      (Number(u.output_tokens) || 0) +
+      (Number(u.cache_creation_input_tokens) || 0);
+    acc.fresh += turn;
+    acc.all += turn + (Number(u.cache_read_input_tokens) || 0);
+  }
+  return acc;
+}
+
 /**
  * Every token each assistant turn consumed, in one pass over the session
  * transcript (a JSONL, one message per line): `all` counts prompt, cache
@@ -166,30 +197,7 @@ export function formatTokens(n) {
  * dominate a long session, so `all` is the true throughput.
  */
 export function transcriptTokens(jsonlText) {
-  let all = 0;
-  let fresh = 0;
-  const seen = new Set();
-  for (const line of jsonlText.split('\n')) {
-    if (!line) continue;
-    let o;
-    try {
-      o = JSON.parse(line);
-    } catch {
-      continue; // a partial last line while Claude Code is writing - skip it
-    }
-    const u = o?.message?.usage;
-    if (!u) continue;
-    const id = o.message?.id;
-    if (id) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-    }
-    const turn = (Number(u.input_tokens) || 0) +
-      (Number(u.output_tokens) || 0) +
-      (Number(u.cache_creation_input_tokens) || 0);
-    fresh += turn;
-    all += turn + (Number(u.cache_read_input_tokens) || 0);
-  }
+  const {all, fresh} = foldTokens(jsonlText, {all: 0, fresh: 0, ids: new Set()});
   return {all, fresh};
 }
 
@@ -199,42 +207,112 @@ export function sumTranscriptTokens(jsonlText, includeCacheRead = true) {
   return includeCacheRead ? t.all : t.fresh;
 }
 
-// {all, fresh} token totals for a transcript, cached on disk keyed by the file's
-// path+mtime+size. Claude Code re-invokes this command on every refresh and a
-// long transcript is tens of MB, so without this each refresh would re-read and
-// re-parse the whole JSONL. Returns null when the transcript isn't on disk yet.
-// stat/read/cachePath are injectable for tests.
+// How many transcripts the token cache remembers (parallel sessions each keep
+// their own entry), and how many trailing message ids each entry keeps for
+// dedupe across an incremental read. Claude Code writes the lines of one
+// message back to back, so a short tail catches every replay.
+const TOKENS_CACHE_ENTRIES = 16;
+const TOKENS_SEEN_TAIL = 64;
+const TOKENS_CACHE_VERSION = 2;
+
+function readBytes(p, start, end) {
+  const fd = fs.openSync(p, 'r');
+  try {
+    const buf = Buffer.alloc(Math.max(0, end - start));
+    let got = 0;
+    while (got < buf.length) {
+      const n = fs.readSync(fd, buf, got, buf.length - got, start + got);
+      if (!n) break;
+      got += n;
+    }
+    return buf.subarray(0, got);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function readTokensCache(cachePath) {
+  try {
+    const c = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    if (c?.version === TOKENS_CACHE_VERSION && c.entries && typeof c.entries === 'object') return c.entries;
+  } catch {
+    // no cache, unreadable, or the pre-v2 single-slot shape - start empty.
+  }
+  return {};
+}
+
+function writeTokensCache(cachePath, entries) {
+  const keep = Object.entries(entries)
+    .sort((a, b) => (b[1].usedAt ?? 0) - (a[1].usedAt ?? 0))
+    .slice(0, TOKENS_CACHE_ENTRIES);
+  const tmp = `${cachePath}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify({version: TOKENS_CACHE_VERSION, entries: Object.fromEntries(keep)}),
+      {mode: 0o600});
+    fs.renameSync(tmp, cachePath); // atomic: a parallel session never reads half a file
+  } catch {
+    // A read-only tmp dir just means no cache; not fatal.
+    try {
+      fs.rmSync(tmp, {force: true});
+    } catch {
+      // nothing to clean up
+    }
+  }
+}
+
+// {all, fresh} token totals for a transcript. Claude Code re-invokes this
+// command on every refresh and a long transcript is tens of MB, so the totals
+// are cached on disk per transcript path (the last TOKENS_CACHE_ENTRIES
+// transcripts, so parallel sessions do not evict each other) together with the
+// byte offset of the last complete line folded in. An unchanged file is served
+// without a read; a grown one is read only past that offset; a shrunk or
+// replaced one (size below the offset, other inode) is folded from scratch. A
+// trailing line without its newline yet is counted in the result but not in the
+// cached state, so it is re-read, not double-counted, once it completes.
+// Returns null when the transcript isn't on disk yet. statFile/readFrom/
+// cachePath/nowMs are injectable for tests.
 export function transcriptTotals(p, {
   statFile = fs.statSync,
-  readFile = (f) => fs.readFileSync(f, 'utf8'),
+  readFrom = readBytes,
   cachePath = tokensCachePath(),
+  nowMs = Date.now(),
 } = {}) {
-  let sig;
+  let st;
   try {
-    const st = statFile(p);
-    sig = `${p}:${st.mtimeMs}:${st.size}`;
+    st = statFile(p);
   } catch {
     return null; // transcript not on disk yet, or not readable
   }
-  try {
-    const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-    if (cached && cached.sig === sig) return cached;
-  } catch {
-    // no cache, unreadable, or a different transcript - recompute below.
+  const size = Number(st.size) || 0;
+  const ino = st.ino ?? null;
+  const entries = readTokensCache(cachePath);
+  let e = entries[p];
+  if (e && e.size === size && e.mtimeMs === st.mtimeMs && e.ino === ino) {
+    // Refresh the LRU stamp at most once a minute: a hit stays read-only.
+    if (nowMs - (e.usedAt ?? 0) > 60_000) {
+      e.usedAt = nowMs;
+      writeTokensCache(cachePath, entries);
+    }
+    return {all: e.all + e.tailAll, fresh: e.fresh + e.tailFresh};
   }
-  let text;
+  if (!e || e.ino !== ino || size < e.offset) e = {offset: 0, all: 0, fresh: 0, ids: []};
+  let chunk;
   try {
-    text = readFile(p);
+    chunk = readFrom(p, e.offset, size);
   } catch {
     return null;
   }
-  const totals = {sig, ...transcriptTokens(text)};
-  try {
-    fs.writeFileSync(cachePath, JSON.stringify(totals), {mode: 0o600});
-  } catch {
-    // A read-only tmp dir just means no cache; not fatal.
-  }
-  return totals;
+  const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+  const cut = buf.lastIndexOf(0x0a) + 1; // bytes up to and including the last newline
+  const acc = foldTokens(buf.subarray(0, cut).toString('utf8'), {all: e.all, fresh: e.fresh, ids: new Set(e.ids)});
+  const tail = foldTokens(buf.subarray(cut).toString('utf8'), {all: 0, fresh: 0, ids: new Set(acc.ids)});
+  entries[p] = {
+    size, mtimeMs: st.mtimeMs, ino, offset: e.offset + cut,
+    all: acc.all, fresh: acc.fresh, tailAll: tail.all, tailFresh: tail.fresh,
+    ids: [...acc.ids].slice(-TOKENS_SEEN_TAIL), usedAt: nowMs,
+  };
+  writeTokensCache(cachePath, entries);
+  return {all: acc.all + tail.all, fresh: acc.fresh + tail.fresh};
 }
 
 // The "∑ N tok" card: cumulative tokens this window has consumed, from the
@@ -243,7 +321,7 @@ export function transcriptTotals(p, {
 export function tokensSegment(stdinText, {
   includeCacheRead = true,
   statFile,
-  readFile,
+  readFrom,
   cachePath,
 } = {}) {
   let p;
@@ -253,7 +331,7 @@ export function tokensSegment(stdinText, {
     return '';
   }
   if (!p) return '';
-  const totals = transcriptTotals(p, {statFile, readFile, cachePath});
+  const totals = transcriptTotals(p, {statFile, readFrom, cachePath});
   if (!totals) return '';
   const total = includeCacheRead ? totals.all : totals.fresh;
   if (!total) return '';
@@ -309,12 +387,17 @@ export function sessionsSegment({
 // auto-switch threshold, "[PRO ⇢ PERSO]" in yellow. No network and no token
 // here: the name comes from ~/.claude.json against the saved profiles, the
 // other accounts' usage from the cache the panels / MCP server keep, and this
-// session's own usage from the stdin rate limits. Never throws: a status line
-// must render whatever the store looks like.
+// session's own usage from the stdin rate limits. Deliberately NOT
+// store.liveAccountName(): that reads the live access token first, which on
+// macOS forks `security` against the Keychain on every refresh and pulls the
+// bearer token into this process. The account block alone names the login; it
+// can only lag during a switch torn between its two writes, which the next
+// switch or sync repairs. Never throws: a status line must render whatever the
+// store looks like.
 export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
   try {
     const store = openStore({...io, nowMs});
-    const active = store.liveAccountName();
+    const active = activeAccountName(store.listProfiles(), store.readLiveAccount());
     if (!active) return '';
     const worst = worstFromCache(store.readUsageCache());
     // This session's own numbers are fresher than any cache entry.
@@ -331,10 +414,26 @@ export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
 // The limits segment: record this refresh's samples and project each limit's
 // burn rate; the render appends a "⚠full …" marker only when one is on pace
 // to run out before its reset, so the line stays short in the good case.
-export function limitsSegment(stdinText, {nowMs = Date.now(), historyPath} = {}) {
+//
+// The samples are filed under the live login (its oauthAccount uuid, else its
+// email - the MCP server files under the same key): two logins are two quota
+// pools, and one series across a switch reads a 10 % -> 60 % jump as a burn.
+// Like accountSegment this reads only the account block, never a token.
+export function limitsSegment(stdinText, {nowMs = Date.now(), historyPath, io = {}} = {}) {
   const cards = cardsFromStdin(stdinText);
-  const forecasts = forecastMap(cards, {nowMs, ...(historyPath ? {historyPath} : {})});
+  const forecasts = forecastMap(cards, {
+    nowMs, account: liveAccountKey(io), ...(historyPath ? {historyPath} : {}),
+  });
   return render(cards, {forecasts, nowMs});
+}
+
+/** The live login's history key (accountKey), or null without one. */
+export function liveAccountKey(io = {}) {
+  try {
+    return accountKey(openStore(io).readLiveAccount());
+  } catch {
+    return null;
+  }
 }
 
 // The segments the line can show, keyed by the name used in --segments. Each
@@ -355,7 +454,8 @@ const DEFAULT_SEGMENTS = ['context', 'limits', 'tokens', 'ping'];
 // Configure the line from the command's argv (install.sh bakes these into the
 // settings.json command): `--segments=a,b,c` picks which segments to show and in
 // what order; `--tokens=fresh` sums only new tokens (excludes cache reads).
-// Unknown segment names are dropped; an empty/missing list falls back to all.
+// Unknown segment names are dropped; an empty/missing list falls back to
+// DEFAULT_SEGMENTS (so `account` and `sessions` stay opt-in).
 export function parseConfig(argv) {
   const cfg = {segments: DEFAULT_SEGMENTS, includeCacheRead: true};
   for (const arg of argv) {
@@ -380,14 +480,26 @@ function readStdin() {
   }
 }
 
+// The whole line: the chosen segments in order, left-aligned (Claude Code
+// left-anchors the status line; indent via the settings `padding` field).
+// Each segment is rendered on its own: one that throws - a corrupt file, an
+// unexpected stdin shape - drops only itself, never the rest of the line.
+export function renderLine(stdin, cfg, segments = SEGMENTS) {
+  const parts = [];
+  for (const key of cfg.segments) {
+    try {
+      const text = segments[key]?.(stdin, cfg);
+      if (text) parts.push(text);
+    } catch {
+      // this segment stays blank; the others still render
+    }
+  }
+  return parts.join('  ');
+}
+
 function main() {
   const cfg = parseConfig(process.argv.slice(2));
-  const stdin = readStdin();
-  // Claude Code left-anchors the status line (indent via the settings `padding`
-  // field), so we emit the chosen segments in order, left-aligned. Context is
-  // always available; Session/Week appear once Claude Code provides rate_limits.
-  const parts = cfg.segments.map((key) => SEGMENTS[key](stdin, cfg)).filter(Boolean);
-  process.stdout.write(parts.join('  '));
+  process.stdout.write(renderLine(readStdin(), cfg));
 }
 
 // Only render when run directly; importing (e.g. from tests) is side-effect free.
