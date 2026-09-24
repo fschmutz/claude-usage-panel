@@ -6,6 +6,16 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`claudectl session open` puts sessions back where they were.** A snapshot
+  now records which window and which tab each session was in (tmux panes,
+  iTerm by AppleScript, else `$ITERM_SESSION_ID`), and `open` recreates the
+  same windows with the same tabs in the same order: native tabs in iTerm,
+  gnome-terminal and the newly supported xfce4-terminal, one tmux session per
+  window elsewhere. Snapshots without placement reopen in one window, as
+  before.
+
 ### Fixed
 
 - The test helper resolves `bash` / `git` from a constant list of system

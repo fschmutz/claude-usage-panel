@@ -1,6 +1,6 @@
 // The session snapshots `claudectl session` keeps (claude-code/tabs.js), as
 // the preferences window shows them. The CLI owns the store - one JSON file
-// per label, {version, savedAt, sessions: [{name, cwd, session_id}]} - and
+// per label, {version, savedAt, sessions: [{name, cwd, session_id, window?, tab?}]} - and
 // this only reads it, ordered the same way the CLI's `store` lists it.
 
 /** Autosaves are the ones the 30-minute schedule writes. */

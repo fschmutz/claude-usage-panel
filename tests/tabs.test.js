@@ -77,6 +77,9 @@ test('sameSessions ignores order, not content', () => {
     assert.ok(sameSessions([r('1'), r('2')], [r('2'), r('1')]));
     assert.ok(!sameSessions([r('1')], [r('1'), r('2')]));
     assert.ok(!sameSessions([r('1', 'X')], [r('1', 'Y')]));
+    // a session moved to another window or tab is a new layout to save
+    assert.ok(!sameSessions([{...r('1'), window: 'a', tab: 1}], [{...r('1'), window: 'b', tab: 1}]));
+    assert.ok(!sameSessions([{...r('1'), window: 'a', tab: 1}], [{...r('1'), window: 'a', tab: 2}]));
 });
 
 // ── Live sessions ───────────────────────────────────────────────────────────────
@@ -119,6 +122,27 @@ test('save writes a 0600 snapshot of name, cwd and id only', (t) => {
     assert.equal(fs.statSync(file).mode & 0o777, 0o600);
     const stored = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.deepEqual(Object.keys(stored.sessions[0]).sort(), ['cwd', 'name', 'session_id']);
+    assert.equal(snap.sessions.length, 2);
+});
+
+test('save records the window and tab of each session tmux can place', (t) => {
+    const io = world(t, [A, B]);
+    const bin = path.join(io.home, 'bin');
+    fs.mkdirSync(bin);
+    for (const b of ['tmux', 'ps']) {
+        fs.writeFileSync(path.join(bin, b), '#!/bin/sh\n');
+        fs.chmodSync(path.join(bin, b), 0o755);
+    }
+    io.env = {PATH: bin};
+    // B sits in tmux window 0, A in window 2 of the same session
+    io.exec = (cmd, args) => {
+        if (cmd === 'ps') return {101: 'pts/1\n', 202: 'pts/2\n'}[args.at(-1)];
+        if (cmd === 'tmux') return '/dev/pts/2\twork\t0\n/dev/pts/9\tother\t0\n/dev/pts/1\twork\t2\n';
+        return '';
+    };
+    const snap = openTabs(io).save('laid-out');
+    const stored = JSON.parse(fs.readFileSync(path.join(tabsDir(io), 'laid-out.json'), 'utf8'));
+    assert.deepEqual(stored.sessions.map((r) => [r.name, r.window, r.tab]), [['WEB', 'tmux:work', 0], ['API', 'tmux:work', 2]]);
     assert.equal(snap.sessions.length, 2);
 });
 
@@ -276,7 +300,8 @@ test('launch runs the resolved steps: terminals detached, tmux in order', (t) =>
     const launched = envs.filter(Boolean);
     assert.equal(launched.length, 3);
     for (const e of launched) assert.deepEqual(e, {PATH: io.env.PATH, LANG: 'C'});
-    assert.deepEqual(execd, [['tmux', 'has-session'], ['tmux', 'new-session'], ['tmux', 'new-window']]);
+    // list-panes: save placing the sessions; then the launch itself
+    assert.deepEqual(execd, [['tmux', 'list-panes'], ['tmux', 'has-session'], ['tmux', 'new-session'], ['tmux', 'new-window']]);
     assert.deepEqual(spawned.map((s) => [s.cmd, s.opts.detached]), [['ghostty', true]]);
 });
 

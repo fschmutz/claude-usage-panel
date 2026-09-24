@@ -25,7 +25,7 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 - [[Status Line]] - condensed usage under the Claude Code prompt
 - [[MCP Tool]] - ask Claude or Cursor for your usage in-conversation
 - [[Accounts]] - save each Claude login under a name (PRO, PERSO) and switch without a browser
-- [[Tabs]] - snapshot the running Claude Code sessions, reopen them as tabs of one window
+- [[Tabs]] - snapshot the running Claude Code sessions, reopen them in the same windows and tabs
 - [[Troubleshooting]] - common issues and fixes
 - [[Architecture]] - how the code is laid out
 - [[CI]] - what gates a merge, and the workflow supply-chain rules

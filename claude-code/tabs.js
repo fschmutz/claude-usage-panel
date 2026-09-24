@@ -1,7 +1,7 @@
 // `claudectl session`, the I/O half: snapshot every running Claude Code session (its
-// name, working directory and session id) and reopen a snapshot later as
-// tabs of ONE terminal window - each tab in its own directory, resuming its
-// own session. The use case is a reboot, a crashed desktop session or a
+// name, working directory, session id and where it sat on screen) and reopen
+// a snapshot later in the same windows and tabs - each tab in its own
+// directory, resuming its own session. The use case is a reboot, a crashed desktop session or a
 // terminal closed by mistake: nine sessions across nine repos come back with
 // one command instead of nine `cd … && claude --resume …`.
 //
@@ -19,8 +19,9 @@
 // set of sessions changed since the last one, and keeps the newest N autos so
 // the store stays bounded. Manual saves are never pruned by autosave.
 //
-// Which terminal opens them, and how it gets a tab per session, is
-// terminals.js: the one the panels are configured to use.
+// Where each session sits (window, tab) is layout.js. Which terminal opens
+// them, and how it gets a tab per session, is terminals.js: the one the
+// panels are configured to use.
 //
 // `openTabs(io)` binds all of it to one home dir, platform, clock, exec,
 // spawn and /proc root (every one overridable, read at call time), the same
@@ -32,7 +33,8 @@ import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
 import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
-import {TMUX_SESSION, launchSteps, onPath, resolveTerminal, sessionFreeEnv} from './terminals.js';
+import {launchSteps, onPath, resolveTerminal, sessionFreeEnv} from './terminals.js';
+import {captureLayout} from './layout.js';
 import {formatClock, resetHint} from './stamps.js';
 
 export const AUTO_PREFIX = 'auto-';
@@ -48,9 +50,11 @@ export function transcriptPath(projects, cwd, sessionId) {
   return path.join(projects, cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sessionId}.jsonl`);
 }
 
-/** Two session lists describe the same set (order-insensitive). */
+/** Two session lists describe the same set, laid out the same way
+ *  (order-insensitive). */
 export function sameSessions(a, b) {
-  const key = (rows) => rows.map((r) => `${r.session_id}\t${r.cwd}\t${r.name}`).sort().join('\n');
+  const key = (rows) => rows.map((r) => `${r.session_id}\t${r.cwd}\t${r.name}\t${r.window ?? ''}\t${r.tab ?? ''}`)
+    .sort().join('\n');
   return key(a) === key(b);
 }
 
@@ -304,7 +308,8 @@ export function openTabs(io = {}) {
     const snap = {
       version: 1,
       savedAt: now(),
-      sessions: sessions.map(({name, cwd, session_id}) => ({name, cwd, session_id})),
+      sessions: sessions.map(({name, cwd, session_id, window, tab}) => (
+        window === undefined ? {name, cwd, session_id} : {name, cwd, session_id, window, tab})),
     };
     const file = path.join(store(), `${label}.json`);
     fs.mkdirSync(store(), {recursive: true, mode: 0o700});
@@ -321,13 +326,13 @@ export function openTabs(io = {}) {
       live = live.filter((r) => r.pid !== me);
     }
     if (!live.length) throw new Error('no running Claude Code session to save');
-    return write(label ?? stampLabel(now()), live);
+    return write(label ?? stampLabel(now()), captureLayout(live, io));
   }
 
   /** The scheduled job: a new auto snapshot only when the set changed, then
    *  prune autos beyond `keep`. Returns {saved, reason, pruned}. */
   function autosave({keep = AUTO_KEEP} = {}) {
-    const live = liveSessions();
+    const live = captureLayout(liveSessions(), io);
     let saved = null;
     let reason;
     const lastAuto = snapshots().find((s) => s.label.startsWith(AUTO_PREFIX));
@@ -379,19 +384,20 @@ export function openTabs(io = {}) {
     if (!term && !hasTmux) {
       throw new Error('no terminal found - set one in the panel preferences, $TERMINAL, or --terminal=BIN');
     }
-    const {how, steps} = launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux, prompt});
-    const result = {terminal: term ?? 'tmux', how, steps};
+    const {how, windows: nWindows, tmuxSessions, steps} =
+      launchSteps(rows, term ?? 'tmux', {platform: platform(), hasTmux, windows, tmux, prompt});
+    const result = {terminal: term ?? 'tmux', how, windows: nWindows, tmuxSessions, steps};
     if (dryRun) return result;
-    if (steps.some((s) => s.cmd === 'tmux')) {
+    for (const name of tmuxSessions) {
       let exists = true;
       try {
-        exec('tmux', ['has-session', '-t', TMUX_SESSION], {stdio: 'ignore'});
+        exec('tmux', ['has-session', '-t', name], {stdio: 'ignore'});
       } catch {
         exists = false;
       }
       if (exists) {
-        throw new Error(`tmux session ${TMUX_SESSION} already exists - tmux attach -t ${TMUX_SESSION}, ` +
-          `or tmux kill-session -t ${TMUX_SESSION} first`);
+        throw new Error(`tmux session ${name} already exists - tmux attach -t ${name}, ` +
+          `or tmux kill-session -t ${name} first`);
       }
     }
     // Every launched process - terminal, tmux, osascript - gets the caller's
