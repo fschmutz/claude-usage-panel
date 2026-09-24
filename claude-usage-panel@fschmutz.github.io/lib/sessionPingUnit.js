@@ -10,6 +10,11 @@
 //
 //   OnCalendar=*-*-* 05:30:00
 //   ExecStart=/path/to/session-ping.sh --quiet --days=1,2,3,4,5
+//   ExecStart="/path/with blanks/session-ping.sh" --quiet --days=1,2,3,4,5
+//
+// The runner is quoted exactly like scripts/install/scheduler.sh
+// _sched_systemd_word, and read back the way scripts/auto-update.sh
+// runner_in() does, so either writer's unit parses in every reader.
 
 export const SP_UNIT = 'claude-usage-panel-sessionping';
 
@@ -34,6 +39,47 @@ export function daysArg(days) {
     return (list.length ? list : DEFAULT_DAYS).join(',');
 }
 
+/**
+ * One ExecStart= word for systemd. A plain path stays bare (the shape every
+ * existing unit has); anything else is double-quoted with \\ and \" escaped,
+ * and % / $ doubled, since systemd expands specifiers and variables even
+ * inside quotes. Mirrors scripts/install/scheduler.sh _sched_systemd_word.
+ */
+export function systemdWord(word) {
+    const s = String(word);
+    if (!/[^A-Za-z0-9_./+,:@=-]/.test(s))
+        return s;
+    return `"${s.replace(/[\\"%$]/g, c => (c === '%' || c === '$' ? c + c : `\\${c}`))}"`;
+}
+
+/**
+ * The first word of an ExecStart= value and what follows it: {word, rest}.
+ * A double-quoted word is unescaped (\x -> x, %% -> %, $$ -> $); a bare one
+ * ends at the first blank. Null when there is no word at all.
+ */
+export function splitExecWord(value) {
+    const v = String(value ?? '');
+    if (!v.startsWith('"')) {
+        const m = /^(\S+)(.*)$/s.exec(v);
+        return m ? {word: m[1], rest: m[2]} : null;
+    }
+    let word = '';
+    for (let i = 1; i < v.length; i++) {
+        const c = v[i];
+        if (c === '"')
+            return {word, rest: v.slice(i + 1)};
+        if (c === '\\' && i + 1 < v.length) {
+            word += v[++i];
+        } else if ((c === '%' || c === '$') && v[i + 1] === c) {
+            word += c;
+            i++;
+        } else {
+            word += c;
+        }
+    }
+    return null; // an unterminated quote is not a runner we can trust
+}
+
 export function serviceText(runner, days) {
     return `[Unit]
 Description=Claude Usage Panel - session-window ping
@@ -41,7 +87,7 @@ Documentation=https://github.com/fschmutz/claude-usage-panel
 
 [Service]
 Type=oneshot
-ExecStart=${runner} --quiet --days=${daysArg(days)}
+ExecStart=${systemdWord(runner)} --quiet --days=${daysArg(days)}
 `;
 }
 
@@ -74,12 +120,14 @@ export function parseTimerTimes(text) {
 
 /** {runner, days} out of a .service file. Either may be missing. */
 export function parseServiceExec(text) {
-    const m = /^ExecStart=(\S+)(.*)$/m.exec(String(text ?? ''));
-    if (!m)
+    // systemd's exec prefixes (-@+!:) come before the path; skip them.
+    const m = /^ExecStart=[-@+!:]*(.*)$/m.exec(String(text ?? ''));
+    const exec = m ? splitExecWord(m[1]) : null;
+    if (!exec)
         return {runner: null, days: null};
-    const daysMatch = /--days=([0-9,]+)/.exec(m[2]);
+    const daysMatch = /--days=([0-9,]+)/.exec(exec.rest);
     const days = daysMatch
         ? daysMatch[1].split(',').map(Number).filter(d => d >= 1 && d <= 7)
         : null;
-    return {runner: m[1], days: days && days.length ? days : null};
+    return {runner: exec.word, days: days && days.length ? days : null};
 }

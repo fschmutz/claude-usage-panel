@@ -6,6 +6,7 @@
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
+import Gettext from 'gettext';
 
 import {readText, writeText} from './fs.js';
 import {stateDir} from './paths.js';
@@ -15,6 +16,11 @@ import {
     SP_UNIT, DEFAULT_DAYS, DEFAULT_TIMES,
     parseServiceExec, parseTimerTimes, serviceText, timerText,
 } from './sessionPingUnit.js';
+
+// This module runs in both the shell (extension.js) and the preferences
+// process (prefs.js), so it cannot import either one's gettext: bind the
+// extension's domain directly, like lib/claudeUsage.js.
+const {gettext: _} = Gettext.domain('claude-usage-panel');
 
 function unitDir() {
     return GLib.build_filenamev([GLib.get_user_config_dir(), 'systemd', 'user']);
@@ -78,7 +84,7 @@ export function resolveRunner(existing, extensionPath) {
 // Resolves to an error line, or null on success.
 async function systemctl(args) {
     const {ok, stderr} = await run(['systemctl', '--user', ...args]);
-    return ok ? null : stderr.trim() || 'systemctl failed';
+    return ok ? null : stderr.trim() || _('systemctl failed');
 }
 
 export function hasSystemd() {
@@ -92,8 +98,7 @@ export function hasSystemd() {
  */
 export async function applySchedule({enabled, times, days, extensionPath}) {
     if (!hasSystemd()) {
-        return 'No systemd user session here - schedule pings with ' +
-            './install.sh sessionping instead.';
+        return _('No systemd user session here - schedule pings with ./install.sh sessionping instead.');
     }
     if (!enabled) {
         await systemctl(['disable', '--now', `${SP_UNIT}.timer`]);
@@ -103,15 +108,15 @@ export async function applySchedule({enabled, times, days, extensionPath}) {
         return null;
     }
     if (!times.length)
-        return 'Add at least one ping time (HH:MM).';
+        return _('Add at least one ping time (HH:MM).');
     const runner = resolveRunner(readSchedule().runner, extensionPath);
     if (!runner)
-        return 'session-ping.sh not found - reinstall with ./install.sh gnome.';
+        return _('session-ping.sh not found - reinstall with ./install.sh gnome.');
     try {
         writeText(unitPath('service'), serviceText(runner, days));
         writeText(unitPath('timer'), timerText(times));
     } catch (e) {
-        return `Could not write the systemd units: ${e.message}`;
+        return _('Could not write the systemd units: %s').replace('%s', () => e.message);
     }
     const reload = await systemctl(['daemon-reload']);
     if (reload)

@@ -14,7 +14,7 @@ import {run, stubbedHome} from './helpers.js';
 
 import {
     DEFAULT_DAYS, daysArg, isValidPingTime, normalizePingTime,
-    parseServiceExec, parseTimerTimes, serviceText, timerText,
+    parseServiceExec, parseTimerTimes, serviceText, splitExecWord, systemdWord, timerText,
 } from '../claude-usage-panel@fschmutz.github.io/lib/sessionPingUnit.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -426,6 +426,54 @@ test('the extension reads back its own units', () => {
     const {runner, days} = parseServiceExec(serviceText('/x/session-ping.sh', [3, 1]));
     assert.equal(runner, '/x/session-ping.sh');
     assert.deepEqual(days, [1, 3]);
+});
+
+// A checkout under "Dev & Ops" (or with a quote, %, $ or a backslash in its
+// path) must survive the unit the preferences write: systemd splits ExecStart=
+// on blanks and expands % and $ even inside quotes. The runner is quoted like
+// scripts/install/scheduler.sh _sched_systemd_word, and read back like
+// scripts/auto-update.sh runner_in().
+const AWKWARD_RUNNERS = [
+    '/home/u/Dev & Ops/scripts/session-ping.sh',
+    "/home/u/it's 100% $HOME/scripts/session-ping.sh",
+    '/home/u/"quoted" dir/session-ping.sh',
+    '/home/u/back\\slash %% $$/session-ping.sh',
+    '/home/u/tab\there/session-ping.sh',
+];
+
+test('an awkward runner path round-trips through the unit the extension writes', () => {
+    for (const runner of AWKWARD_RUNNERS) {
+        const text = serviceText(runner, [1, 5]);
+        const exec = /^ExecStart=(.*)$/m.exec(text)[1];
+        assert.ok(exec.startsWith('"'), `quoted: ${exec}`);
+        assert.ok(exec.endsWith('" --quiet --days=1,5'), exec);
+        assert.doesNotMatch(exec.replace(/%%|\$\$/g, ''), /[%$]/, `every % and $ doubled: ${exec}`);
+        assert.deepEqual(parseServiceExec(text), {runner, days: [1, 5]}, runner);
+    }
+    // A plain path keeps the bare shape every existing unit already has.
+    assert.match(serviceText('/x/session-ping.sh', [1]), /^ExecStart=\/x\/session-ping\.sh --quiet --days=1$/m);
+});
+
+test('the extension quotes the runner byte-for-byte like install.sh', () => {
+    const scheduler = path.join(ROOT, 'scripts', 'install', 'scheduler.sh');
+    for (const runner of [...AWKWARD_RUNNERS, '/x/plain-path_1.2+a,b:c@d=e/session-ping.sh']) {
+        const r = run('bash', ['-c', '. "$0"; _sched_systemd_word "$1"', scheduler, runner],
+            {env: {...process.env, LC_ALL: 'C'}});
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(systemdWord(runner), r.stdout, runner);
+    }
+});
+
+test('units install.sh wrote with a quoted runner are read back by the extension', () => {
+    const shellWritten = 'ExecStart="/home/u/Dev & Ops/it\'s 100%% $$HOME/scripts/session-ping.sh" --quiet --days=2,4\n';
+    assert.deepEqual(parseServiceExec(shellWritten), {
+        runner: "/home/u/Dev & Ops/it's 100% $HOME/scripts/session-ping.sh",
+        days: [2, 4],
+    });
+    // systemd exec prefixes precede the path; an unterminated quote is no runner.
+    assert.equal(parseServiceExec('ExecStart=-"/a b/session-ping.sh" --quiet').runner, '/a b/session-ping.sh');
+    assert.equal(splitExecWord('"/a b/session-ping.sh --quiet'), null);
+    assert.deepEqual(parseServiceExec('ExecStart="/a b/x.sh'), {runner: null, days: null});
 });
 
 test('a schedule with no days falls back to Mon-Fri rather than never firing', () => {

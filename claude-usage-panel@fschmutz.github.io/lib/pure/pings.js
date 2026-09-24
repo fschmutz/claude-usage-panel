@@ -13,6 +13,23 @@
 
 export const WINDOW_MINUTES = 5 * 60;
 
+/** 09:00-18:00, what every port plans against when the given day is unusable. */
+export const DEFAULT_WORK_DAY = Object.freeze({startMinute: 9 * 60, endMinute: 18 * 60});
+
+/**
+ * The day the planner actually works on: `day` when it is a real range inside
+ * one calendar day, else DEFAULT_WORK_DAY. An inverted or empty day (end at or
+ * before start) used to plan a single bogus ping (18:00-09:00 gave 04:00) with
+ * a negative coverage; macOS already fell back to 09:00-18:00, so both ports
+ * now do it here, where every caller goes through.
+ */
+export function effectiveWorkDay(day) {
+    const s = day?.startMinute;
+    const e = day?.endMinute;
+    const ok = Number.isInteger(s) && Number.isInteger(e) && s >= 0 && e <= 1440 && e > s;
+    return ok ? {startMinute: s, endMinute: e} : DEFAULT_WORK_DAY;
+}
+
 export function parseHHMM(s) {
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(s));
     if (!m) return null;
@@ -44,7 +61,8 @@ function summarize(pingTimes, coverage, day) {
  * A ping inside an already-open window is wasted (the window stays anchored to
  * its own first message), so the only real choice is where the FIRST one goes.
  */
-export function planWindows(day, count = 2) {
+export function planWindows(workDay, count = 2) {
+    const day = effectiveWorkDay(workDay);
     const dayLen = day.endMinute - day.startMinute;
     // More windows than the day can use is meaningless: the extras start after
     // the day is over (and used to wrap past midnight). Cap at the number it
@@ -70,7 +88,10 @@ export function planWindows(day, count = 2) {
     const pingTimes = windows.map((w) => formatHHMM(w.openMinute));
     const coveredMinutes = Math.min(covered, dayLen);
     const pct = coveragePercent(coveredMinutes, day);
-    return {pingTimes, windows, coveredMinutes, coveragePercent: pct, summary: summarize(pingTimes, pct, day)};
+    return {
+        pingTimes, windows, coveredMinutes, coveragePercent: pct, workDay: day,
+        summary: summarize(pingTimes, pct, day),
+    };
 }
 
 /**
@@ -78,7 +99,8 @@ export function planWindows(day, count = 2) {
  * "yours covers 56%, this would cover 100%". Overlapping windows are unioned,
  * never summed - a naive sum ranks a redundant schedule above a spread one.
  */
-export function evaluateWindows(pingTimes, day) {
+export function evaluateWindows(pingTimes, workDay) {
+    const day = effectiveWorkDay(workDay);
     const opens = pingTimes
         .map(parseHHMM)
         .filter((v) => v !== null)
@@ -104,7 +126,10 @@ export function evaluateWindows(pingTimes, day) {
     const coveredMinutes = merged.reduce((a, [lo, hi]) => a + (hi - lo), 0);
     const times = opens.map(formatHHMM);
     const pct = coveragePercent(coveredMinutes, day);
-    return {pingTimes: times, windows, coveredMinutes, coveragePercent: pct, summary: summarize(times, pct, day)};
+    return {
+        pingTimes: times, windows, coveredMinutes, coveragePercent: pct, workDay: day,
+        summary: summarize(times, pct, day),
+    };
 }
 
 // ── Session-ping status ─────────────────────────────────────────────────────
@@ -147,6 +172,18 @@ export function localDay(ms) {
         `${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * The local calendar day `offset` days away from the day of `ms`, as a Date at
+ * local noon. Days are stepped on the calendar, never as 86_400_000 ms: a
+ * 23 h or 25 h DST day makes a fixed step skip or repeat a date (Sat 23:30 +
+ * 24 h is Mon 00:30 across spring-forward). Noon keeps clear of every
+ * transition, which all happen at night.
+ */
+export function shiftLocalDay(ms, offset) {
+    const d = new Date(ms);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset, 12);
+}
+
 /** Local wall-clock HH:MM of an instant. */
 export function formatClock(ms) {
     const d = new Date(ms);
@@ -168,7 +205,7 @@ export function formatLastPing(text, nowMs) {
     const day = localDay(at);
     if (day === today)
         return clock;
-    if (day === localDay(nowMs - 86_400_000))
+    if (day === localDay(shiftLocalDay(nowMs, -1).getTime()))
         return `yesterday ${clock}`;
     if (nowMs - at < 6 * 86_400_000)
         return `${DAY_NAMES[(new Date(at).getDay() + 6) % 7]} ${clock}`;
@@ -188,7 +225,7 @@ export function nextPing(times, days, nowMs) {
     const now = new Date(nowMs);
     const nowMin = now.getHours() * 60 + now.getMinutes();
     for (let ahead = 0; ahead < 8; ahead++) {
-        const d = new Date(nowMs + ahead * 86_400_000);
+        const d = shiftLocalDay(nowMs, ahead);
         const weekday = ((d.getDay() + 6) % 7) + 1; // 1 = Monday
         if (!wanted.has(weekday))
             continue;

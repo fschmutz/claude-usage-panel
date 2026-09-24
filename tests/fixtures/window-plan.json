@@ -1,52 +1,332 @@
 {
-  "_comment": "Shared contract for the session-window planner. Asserted by tests/windowplan.test.js (GNOME lib/pure.js) and ClaudeUsageCoreTests/WindowPlannerTests (macOS WindowPlanner.swift). Change a port and this file together, never one alone.",
+  "_comment": "Shared contract for the session-window planner. Asserted by tests/windowplan.test.js (GNOME lib/pure.js) and ClaudeUsageCoreTests/WindowPlannerTests WindowPlanParityTests (macOS WindowPlanner.swift). `workDay` is the day actually planned against (an unusable day falls back to 09:00-18:00); an evaluate case with `none: true` has no coverage to report. Change a port and this file together, never one alone.",
   "plan": [
     {
       "name": "two pings cover a 9h day completely",
-      "day": {"startMinute": 540, "endMinute": 1080},
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
       "count": 2,
-      "pingTimes": ["08:00", "13:00"],
+      "pingTimes": [
+        "08:00",
+        "13:00"
+      ],
       "coveredMinutes": 540,
-      "coveragePercent": 100
+      "coveragePercent": 100,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "08:00 13:00 · 100% of 09:00-18:00 covered"
     },
     {
       "name": "one ping cannot cover a 9h day",
-      "day": {"startMinute": 540, "endMinute": 1080},
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
       "count": 1,
-      "pingTimes": ["09:00"],
+      "pingTimes": [
+        "09:00"
+      ],
       "coveredMinutes": 300,
-      "coveragePercent": 56
+      "coveragePercent": 56,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "09:00 · 56% of 09:00-18:00 covered"
     },
     {
       "name": "asking for more windows than the day can use is capped",
-      "day": {"startMinute": 540, "endMinute": 1080},
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
       "count": 99,
-      "pingTimes": ["08:00", "13:00"],
+      "pingTimes": [
+        "08:00",
+        "13:00"
+      ],
       "coveredMinutes": 540,
-      "coveragePercent": 100
+      "coveragePercent": 100,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "08:00 13:00 · 100% of 09:00-18:00 covered"
+    },
+    {
+      "name": "an inverted work day falls back to 09:00-18:00",
+      "day": {
+        "startMinute": 1080,
+        "endMinute": 540
+      },
+      "count": 2,
+      "pingTimes": [
+        "08:00",
+        "13:00"
+      ],
+      "coveredMinutes": 540,
+      "coveragePercent": 100,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "08:00 13:00 · 100% of 09:00-18:00 covered"
+    },
+    {
+      "name": "an empty work day falls back to 09:00-18:00",
+      "day": {
+        "startMinute": 600,
+        "endMinute": 600
+      },
+      "count": 2,
+      "pingTimes": [
+        "08:00",
+        "13:00"
+      ],
+      "coveredMinutes": 540,
+      "coveragePercent": 100,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "08:00 13:00 · 100% of 09:00-18:00 covered"
+    },
+    {
+      "name": "an early day never schedules before midnight",
+      "day": {
+        "startMinute": 120,
+        "endMinute": 1200
+      },
+      "count": 4,
+      "pingTimes": [
+        "00:00",
+        "05:00",
+        "10:00",
+        "15:00"
+      ],
+      "coveredMinutes": 1080,
+      "coveragePercent": 100,
+      "workDay": {
+        "startMinute": 120,
+        "endMinute": 1200
+      },
+      "summary": "00:00 05:00 10:00 15:00 · 100% of 02:00-20:00 covered"
+    },
+    {
+      "name": "a 16h day is capped at four windows",
+      "day": {
+        "startMinute": 360,
+        "endMinute": 1320
+      },
+      "count": 99,
+      "pingTimes": [
+        "02:00",
+        "07:00",
+        "12:00",
+        "17:00"
+      ],
+      "coveredMinutes": 960,
+      "coveragePercent": 100,
+      "workDay": {
+        "startMinute": 360,
+        "endMinute": 1320
+      },
+      "summary": "02:00 07:00 12:00 17:00 · 100% of 06:00-22:00 covered"
+    },
+    {
+      "name": "zero pings still plans one window",
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "count": 0,
+      "pingTimes": [
+        "09:00"
+      ],
+      "coveredMinutes": 300,
+      "coveragePercent": 56,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "09:00 · 56% of 09:00-18:00 covered"
     }
   ],
   "evaluate": [
     {
       "name": "naive 09:00 start leaves the afternoon uncovered",
-      "day": {"startMinute": 540, "endMinute": 1080},
-      "pingTimes": ["09:00"],
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "pingTimes": [
+        "09:00"
+      ],
       "coveredMinutes": 300,
-      "coveragePercent": 56
+      "coveragePercent": 56,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "09:00 · 56% of 09:00-18:00 covered"
     },
     {
       "name": "overlapping pings are unioned, never summed",
-      "day": {"startMinute": 540, "endMinute": 1080},
-      "pingTimes": ["09:00", "10:00"],
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "pingTimes": [
+        "09:00",
+        "10:00"
+      ],
       "coveredMinutes": 360,
-      "coveragePercent": 67
+      "coveragePercent": 67,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "09:00 10:00 · 67% of 09:00-18:00 covered"
     },
     {
       "name": "a spread schedule beats a redundant one",
-      "day": {"startMinute": 540, "endMinute": 1080},
-      "pingTimes": ["09:00", "14:00"],
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "pingTimes": [
+        "09:00",
+        "14:00"
+      ],
       "coveredMinutes": 540,
-      "coveragePercent": 100
+      "coveragePercent": 100,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "09:00 14:00 · 100% of 09:00-18:00 covered"
+    },
+    {
+      "name": "an inverted work day is evaluated against 09:00-18:00",
+      "day": {
+        "startMinute": 1080,
+        "endMinute": 540
+      },
+      "pingTimes": [
+        "09:00"
+      ],
+      "coveredMinutes": 300,
+      "coveragePercent": 56,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "09:00 · 56% of 09:00-18:00 covered"
+    },
+    {
+      "name": "non-canonical times are ignored, not guessed",
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "pingTimes": [
+        "05:00",
+        "23:30"
+      ],
+      "coveredMinutes": 60,
+      "coveragePercent": 11,
+      "workDay": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "summary": "05:00 23:30 · 11% of 09:00-18:00 covered"
+    },
+    {
+      "name": "an empty schedule has no coverage",
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "pingTimes": [],
+      "none": true
+    },
+    {
+      "name": "a garbage schedule has no coverage",
+      "day": {
+        "startMinute": 540,
+        "endMinute": 1080
+      },
+      "pingTimes": [
+        "nope",
+        "24:00",
+        "9:60"
+      ],
+      "none": true
     }
-  ]
+  ],
+  "parse": {
+    "_comment": "parseHHMM (JS) and WindowPlanner.minutes(from:) (Swift): null = rejected.",
+    "cases": [
+      [
+        "05:30",
+        330
+      ],
+      [
+        "5:30",
+        330
+      ],
+      [
+        "00:00",
+        0
+      ],
+      [
+        "23:59",
+        1439
+      ],
+      [
+        "24:00",
+        null
+      ],
+      [
+        "9:60",
+        null
+      ],
+      [
+        "9:5",
+        null
+      ],
+      [
+        "+9:00",
+        null
+      ],
+      [
+        "009:00",
+        null
+      ],
+      [
+        "09:00 ",
+        null
+      ],
+      [
+        "-1:00",
+        null
+      ],
+      [
+        "nope",
+        null
+      ],
+      [
+        "",
+        null
+      ],
+      [
+        "09:00:00",
+        null
+      ]
+    ]
+  }
 }

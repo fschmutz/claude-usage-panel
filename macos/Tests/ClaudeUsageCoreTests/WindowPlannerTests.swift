@@ -79,6 +79,61 @@ final class WindowPlannerTests: XCTestCase {
     }
 }
 
+/// Planner parity against the fixture pure.js asserts (tests/windowplan.test.js).
+final class WindowPlanParityTests: XCTestCase {
+    private func day(_ o: Any?) -> WorkDay {
+        let d = o as! [String: Any]
+        return WorkDay(
+            startMinute: (d["startMinute"] as! NSNumber).intValue,
+            endMinute: (d["endMinute"] as! NSNumber).intValue)
+    }
+
+    private func check(_ got: WindowPlan, _ c: [String: Any], _ name: String) {
+        XCTAssertEqual(got.pingTimes, c["pingTimes"] as? [String], name)
+        XCTAssertEqual(got.coveredMinutes, (c["coveredMinutes"] as! NSNumber).intValue, name)
+        XCTAssertEqual(got.coveragePercent, (c["coveragePercent"] as! NSNumber).intValue, name)
+        XCTAssertEqual(got.workDay, day(c["workDay"]), name)
+        XCTAssertEqual(got.summary, c["summary"] as? String, name)
+    }
+
+    func testPlanMatchesSharedFixture() throws {
+        let cases = try XCTUnwrap(Fixtures.load("window-plan.json")["plan"] as? [[String: Any]])
+        XCTAssertFalse(cases.isEmpty)
+        for c in cases {
+            let name = c["name"] as? String ?? "?"
+            check(
+                WindowPlanner.plan(day: day(c["day"]), pings: (c["count"] as! NSNumber).intValue),
+                c, name)
+        }
+    }
+
+    func testEvaluateMatchesSharedFixture() throws {
+        let cases = try XCTUnwrap(Fixtures.load("window-plan.json")["evaluate"] as? [[String: Any]])
+        XCTAssertFalse(cases.isEmpty)
+        for c in cases {
+            let name = c["name"] as? String ?? "?"
+            let got = WindowPlanner.evaluate(
+                pingTimes: c["pingTimes"] as! [String], day: day(c["day"]))
+            if c["none"] as? Bool == true {
+                XCTAssertNil(got, name)
+                continue
+            }
+            check(try XCTUnwrap(got, name), c, name)
+        }
+    }
+
+    func testParseMatchesSharedFixture() throws {
+        let parse = try XCTUnwrap(Fixtures.load("window-plan.json")["parse"] as? [String: Any])
+        let cases = try XCTUnwrap(parse["cases"] as? [[Any]])
+        XCTAssertFalse(cases.isEmpty)
+        for c in cases {
+            let text = c[0] as! String
+            XCTAssertEqual(
+                WindowPlanner.minutes(from: text), (c[1] as? NSNumber)?.intValue, "\(text)")
+        }
+    }
+}
+
 /// Adaptive-poll parity against the fixture pure.js asserts (tests/pure.test.js).
 final class PollScheduleParityTests: XCTestCase {
     func testMatchesSharedFixtures() throws {

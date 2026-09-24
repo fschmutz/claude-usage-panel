@@ -1,5 +1,5 @@
 // Session-window planner contract, GNOME side. The macOS twin
-// (ClaudeUsageCoreTests/WindowPlannerTests) asserts the SAME fixture, so a port
+// (ClaudeUsageCoreTests/WindowPlanParityTests) asserts the SAME fixture, so a port
 // that drifts turns this file - or its Swift twin - red.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,26 +23,42 @@ for (const c of fx.plan) {
         assert.deepEqual(got.pingTimes, c.pingTimes);
         assert.equal(got.coveredMinutes, c.coveredMinutes);
         assert.equal(got.coveragePercent, c.coveragePercent);
+        assert.deepEqual(got.workDay, c.workDay);
+        assert.equal(got.summary, c.summary);
     });
 }
 
 for (const c of fx.evaluate) {
     test(`evaluate: ${c.name}`, () => {
         const got = evaluateWindows(c.pingTimes, c.day);
+        if (c.none) {
+            assert.equal(got, null);
+            return;
+        }
+        assert.deepEqual(got.pingTimes, c.pingTimes);
         assert.equal(got.coveredMinutes, c.coveredMinutes);
         assert.equal(got.coveragePercent, c.coveragePercent);
+        assert.deepEqual(got.workDay, c.workDay);
+        assert.equal(got.summary, c.summary);
     });
 }
 
-test('time parsing round-trips and rejects nonsense', () => {
-    assert.equal(parseHHMM('05:30'), 330);
-    assert.equal(formatHHMM(330), '05:30');
-    assert.equal(parseHHMM('24:00'), null);
-    assert.equal(parseHHMM('9:60'), null);
-    assert.equal(parseHHMM('nope'), null);
+test('parse: time strings match the shared fixture', () => {
+    for (const [text, want] of fx.parse.cases)
+        assert.equal(parseHHMM(text), want, JSON.stringify(text));
 });
 
-test('an empty or garbage schedule has no coverage to report', () => {
-    assert.equal(evaluateWindows([], {startMinute: 540, endMinute: 1080}), null);
-    assert.equal(evaluateWindows(['nope'], {startMinute: 540, endMinute: 1080}), null);
+test('time formatting round-trips and wraps', () => {
+    assert.equal(formatHHMM(330), '05:30');
+    assert.equal(formatHHMM(1440 + 330), '05:30');
+    assert.equal(formatHHMM(-30), '23:30');
+});
+
+test('an unusable day object plans against 09:00-18:00, never a negative coverage', () => {
+    for (const day of [undefined, {}, {startMinute: 1.5, endMinute: 600}, {startMinute: -60, endMinute: 600},
+        {startMinute: 540, endMinute: 1500}]) {
+        const got = planWindows(day, 2);
+        assert.deepEqual(got.workDay, {startMinute: 540, endMinute: 1080}, JSON.stringify(day));
+        assert.ok(got.coveredMinutes >= 0);
+    }
 });

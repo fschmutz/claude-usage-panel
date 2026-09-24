@@ -32,6 +32,14 @@ public struct WorkDay: Equatable, Sendable {
 
     public static let `default` = WorkDay(startMinute: 9 * 60, endMinute: 18 * 60)
     public var lengthMinutes: Int { endMinute - startMinute }
+
+    /// A real range inside one calendar day: 0 <= start < end <= 24:00.
+    public var isUsable: Bool { startMinute >= 0 && endMinute <= 1440 && endMinute > startMinute }
+
+    /// The day the planner actually works on: self when usable, else `.default`.
+    /// Twin of pure.js `effectiveWorkDay()`: an inverted day (18:00-09:00) used
+    /// to plan one bogus ping at 04:00 with a negative coverage on GNOME.
+    public var effective: WorkDay { isUsable ? self : .default }
 }
 
 public struct PlannedWindow: Equatable, Sendable {
@@ -70,10 +78,15 @@ public enum WindowPlanner {
     /// Claude's session window length.
     public static let windowMinutes = 5 * 60
 
+    /// "H:MM" or "HH:MM" to minutes from midnight. Same anchored pattern as
+    /// pure.js `parseHHMM()` (pinned by window-plan.json `parse`): a bare
+    /// split + Int() also took "9:5", "+9:00" and "009:00".
     public static func minutes(from hhmm: String) -> Int? {
+        guard hhmm.range(of: #"^[0-9]{1,2}:[0-9]{2}$"#, options: .regularExpression) != nil
+        else { return nil }
         let parts = hhmm.split(separator: ":")
-        guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]),
-            (0...23).contains(h), (0...59).contains(m)
+        guard let h = Int(parts[0]), let m = Int(parts[1]), (0...23).contains(h),
+            (0...59).contains(m)
         else { return nil }
         return h * 60 + m
     }
@@ -93,7 +106,8 @@ public enum WindowPlanner {
     /// The first ping is placed so the last window's end lands as close as
     /// possible to the end of the working day without the chain starting so
     /// early that the first window is mostly burned before work begins.
-    public static func plan(day: WorkDay = .default, pings count: Int = 2) -> WindowPlan {
+    public static func plan(day workDay: WorkDay = .default, pings count: Int = 2) -> WindowPlan {
+        let day = workDay.effective
         // More windows than the day can use is meaningless: the extra ones start
         // after the day is over (and used to wrap past midnight). Cap at the
         // number it takes to blanket the working day.
@@ -126,7 +140,9 @@ public enum WindowPlanner {
 
     /// Coverage of a schedule the user already has - so the UI can say
     /// "yours covers 71%, this would cover 100%".
-    public static func evaluate(pingTimes: [String], day: WorkDay = .default) -> WindowPlan? {
+    public static func evaluate(pingTimes: [String], day workDay: WorkDay = .default) -> WindowPlan?
+    {
+        let day = workDay.effective
         let opens = pingTimes.compactMap(minutes(from:)).sorted()
         guard !opens.isEmpty else { return nil }
 
