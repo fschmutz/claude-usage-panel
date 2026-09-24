@@ -19,13 +19,14 @@ install_autoupdate() {
     local runner="$ROOT/scripts/auto-update.sh"
     act chmod +x "$runner"
 
-    local sched_service="[Unit]
+    local sched_service
+    sched_service="[Unit]
 Description=Claude Usage Panel - daily update check
 Documentation=https://github.com/fschmutz/claude-usage-panel
 
 [Service]
 Type=oneshot
-ExecStart=$runner --quiet"
+ExecStart=$(_sched_systemd_word "$runner") --quiet"
     # Persistent=true runs a missed check on the next login (laptop was off);
     # RandomizedDelaySec spreads the load off a round hour.
     local sched_timer="[Unit]
@@ -62,7 +63,8 @@ WantedBy=timers.target"
   <key>LowPriorityIO</key><true/>
 </dict>
 </plist>"
-    local sched_cron="17 11 * * * $runner --quiet  $AU_CRON_TAG"
+    local sched_cron
+    sched_cron="17 11 * * * $(_sched_cron_word "$runner") --quiet  $AU_CRON_TAG"
 
     # scripts/auto-update.sh sets CUP_UPDATE_RUN when it is the one running
     # `install.sh update` - i.e. this target's own scheduled job is the caller.

@@ -59,6 +59,38 @@ _sched_xml_escape() {
     printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }
 
+# The same path, as one word of a systemd ExecStart= line and of a crontab
+# command. Both split on blanks, so a checkout under "Dev & Ops" used to yield
+# ExecStart=.../Dev (not executable) and a cron line whose & backgrounded a
+# nonexistent command - installed with an "ok", never run once. A path made
+# only of plain characters is printed as is, so every ordinary install writes
+# byte-for-byte what it always has (the GNOME preferences write the same
+# sessionping unit, and read it back with a first-word parser). Anything else
+# is quoted, and scripts/auto-update.sh runner_in() reads both forms back.
+#
+# systemd: double quotes with \\ and \" escaped, and % / $ doubled - systemd
+# expands specifiers (%h) and $VARS in ExecStart= even inside quotes.
+_sched_systemd_word() {
+    case "$1" in
+        *[![:alnum:]_./+,:@=-]*)
+            printf '"%s"' "$(printf '%s' "$1" |
+                sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/%/%%/g' -e 's/\$/$$/g')"
+            ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+# cron: single quotes for /bin/sh (an embedded ' becomes '\''), and \% for
+# cron itself, which turns a bare % into a newline before the shell sees it.
+_sched_cron_word() {
+    case "$1" in
+        *[![:alnum:]_./+,:@=-]*)
+            printf "'%s'" "$(printf '%s' "$1" | sed -e "s/'/'\\\\''/g" -e 's/%/\\%/g')"
+            ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
 # Is a schedule with these names installed, on any of the three schedulers?
 _sched_installed() { # UNIT LABEL TAG
     [ -f "$(_sched_systemd_dir)/$1.timer" ] && return 0

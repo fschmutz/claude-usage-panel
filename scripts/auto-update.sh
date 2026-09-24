@@ -55,12 +55,48 @@ is_checkout() {
         git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
-# First non-flag argument of a systemd ExecStart= line, a launchd
-# ProgramArguments array or a crontab line - i.e. the .sh path in it.
+# The .sh path in one line of an installed schedule: a systemd ExecStart= line,
+# one <string> of a launchd ProgramArguments array, or a crontab line. The
+# installer quotes a path that is not made of plain characters
+# (_sched_systemd_word / _sched_cron_word in scripts/install/scheduler.sh) and
+# XML-escapes it in a plist, so each form is unquoted the way it was written;
+# splitting on blanks, as this once did, lost every checkout under a folder
+# with a space in its name.
 runner_in() {
-    printf '%s' "$1" | tr '[:blank:]' '\n' |
-        sed -e 's@^ExecStart=[-@+!]*@@' -e 's@^<string>@@' -e 's@</string>$@@' |
-        grep -E '^/.*\.sh$' | head -1
+    local line="$1" word
+    case "$line" in
+        *'<string>'*'</string>'*)
+            word="${line#*<string>}"
+            word="${word%%</string>*}"
+            word="$(printf '%s' "$word" | sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g')"
+            ;;
+        ExecStart=*)
+            word="$(printf '%s' "$line" | sed -e 's/^ExecStart=[-@+!:]*//')"
+            if [ "${word#\"}" != "$word" ]; then
+                # sed -E, not \| in a basic regex: BSD sed (macOS) has no \|.
+                word="$(printf '%s' "$word" |
+                    sed -E -e 's/^"(([^"\\]|\\.)*)".*/\1/' \
+                        -e 's/%%/%/g' -e 's/\$\$/$/g' -e 's/\\"/"/g' -e 's/\\\\/\\/g')"
+            else
+                word="${word%%[[:blank:]]*}"
+            fi
+            ;;
+        *)
+            # crontab: the command starts after the five time fields.
+            word="$(printf '%s' "$line" |
+                sed -e 's/^[[:blank:]]*\([^[:blank:]]\{1,\}[[:blank:]]\{1,\}\)\{5\}//')"
+            if [ "${word#\'}" != "$word" ]; then
+                word="$(printf '%s' "$word" |
+                    sed -E -e "s/^'(([^']|'\\\\'')*)'.*/\\1/" \
+                        -e "s/'\\\\''/'/g" -e 's/\\%/%/g')"
+            else
+                word="${word%%[[:blank:]]*}"
+            fi
+            ;;
+    esac
+    case "$word" in
+        /*.sh) printf '%s\n' "$word" ;;
+    esac
 }
 
 # Every place an installed schedule records the path of the real checkout, in
@@ -387,8 +423,6 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-mkdir -p "$STATE_DIR"
-
 # Minimal JSON string escaping - values here are paths and versions.
 json_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
@@ -473,6 +507,11 @@ if [ "$MODE" = status ]; then
     printf 'log:        %s\n' "$LOG"
     exit 0
 fi
+
+# Created only now, past the read-only --status branch above: a status query
+# on a machine that has never run an update must leave its HOME as it found
+# it (see scripts/lib.sh). The lock below is a mkdir inside this directory.
+mkdir -p "$STATE_DIR"
 
 # ── One run at a time ───────────────────────────────────────────────────────────
 # A lock older than 6h is stale - a previous run was killed mid-flight.

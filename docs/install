@@ -4,14 +4,22 @@
 #   curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash
 #   curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash -s -- statusline mcp
 #
-# Clones (or fast-forwards) the repo into ~/.local/share/claude-usage-panel,
-# then hands off to its ./install.sh, forwarding any arguments - so every
-# install.sh target and flag (gnome, statusline, mcp, macos, --dry-run,
-# --uninstall, …) works through the one-liner too. Override the checkout
-# location with CLAUDE_USAGE_PANEL_HOME.
+# Clones the repo into ~/.local/share/claude-usage-panel (or updates the
+# checkout already there) at the newest RELEASED vX.Y.Z tag, then hands off to
+# its ./install.sh, forwarding any arguments - so every install.sh target and
+# flag (gnome, statusline, mcp, macos, --dry-run, --uninstall, …) works
+# through the one-liner too. Override the checkout location with
+# CLAUDE_USAGE_PANEL_HOME.
+#
+# A release reaches users through its tag, never through main: this used to
+# install the default-branch tip, so every new user ran unreleased commits
+# stamped with the previous release's version, and the daily update then
+# called that "up to date". The branch is put ON the tag rather than the tag
+# checked out: scripts/auto-update.sh refuses a detached HEAD, and it keeps
+# fast-forwarding this branch to each later tag.
 set -euo pipefail
 
-REPO="https://github.com/fschmutz/claude-usage-panel.git"
+REPO="${CLAUDE_USAGE_PANEL_REPO:-https://github.com/fschmutz/claude-usage-panel.git}"
 DIR="${CLAUDE_USAGE_PANEL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/claude-usage-panel}"
 
 if ! command -v git >/dev/null; then
@@ -19,13 +27,46 @@ if ! command -v git >/dev/null; then
     exit 1
 fi
 
+# The highest vX.Y.Z tag the checkout knows, numerically (v1.10.0 > v1.9.0);
+# prereleases never qualify. Empty when the repo has cut no release.
+latest_release_tag() {
+    # `|| true`: no match is an answer (no release), not a failure to die on
+    # under pipefail.
+    git -C "$DIR" tag -l 'v*' |
+        { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } |
+        sort -t. -k1.2,1n -k2,2n -k3,3n | tail -1
+}
+
+fresh=false
 if [ -d "$DIR/.git" ]; then
     echo "==> Updating existing checkout: $DIR"
-    git -C "$DIR" pull --ff-only
+    git -C "$DIR" fetch --tags --quiet origin
 else
     echo "==> Cloning into $DIR"
     mkdir -p "$(dirname "$DIR")"
-    git clone "$REPO" "$DIR"
+    git clone --quiet "$REPO" "$DIR"
+    fresh=true
+fi
+
+tag="$(latest_release_tag)"
+if [ -z "$tag" ]; then
+    echo "==> No release tag found - installing the default branch as it is"
+    $fresh || git -C "$DIR" merge --ff-only --quiet '@{u}'
+elif $fresh; then
+    # A fresh clone holds nothing of its own: move its branch onto the tag,
+    # keeping the branch's upstream so the daily update can follow it.
+    git -C "$DIR" checkout --quiet -B "$(git -C "$DIR" symbolic-ref --short HEAD)" "$tag"
+    echo "==> Installing release $tag"
+elif git -C "$DIR" merge-base --is-ancestor HEAD "$tag"; then
+    git -C "$DIR" merge --ff-only --quiet "$tag"
+    echo "==> Installing release $tag"
+elif git -C "$DIR" merge-base --is-ancestor "$tag" HEAD; then
+    # Already at or past it (a checkout that once tracked main). Never moved
+    # backwards: that would throw commits away.
+    echo "==> The checkout is already at or past release $tag - leaving it where it is"
+else
+    echo "the checkout at $DIR has diverged from release $tag - update it by hand" >&2
+    exit 1
 fi
 
 exec "$DIR/install.sh" "$@"

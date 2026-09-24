@@ -16,6 +16,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -159,4 +160,159 @@ test('outside its own job, a changed agent is reloaded as before', (t) => {
     const calls = fs.readFileSync(path.join(home, 'scheduler-calls.log'), 'utf8');
     assert.match(calls, /bootout/);
     assert.match(calls, /bootstrap/);
+});
+
+// ── Failure isolation: one target failing never takes the run down ──────────
+
+/** A stub executable in the sandbox's bin dir. */
+function stub(home, name, body) {
+    fs.writeFileSync(path.join(home, 'bin', name), `#!/bin/sh\n${body}\n`);
+    fs.chmodSync(path.join(home, 'bin', name), 0o755);
+}
+
+/** The `claude` stub answers `mcp get` honestly (not installed). */
+const honestClaude = (home) => stub(home, 'claude', 'case "$1 $2" in "mcp get") exit 1 ;; esac\nexit 0');
+
+/**
+ * A throwaway copy of the installer (install.sh, scripts/, package.json and an
+ * empty macos/) so a build step that writes into $ROOT/macos never touches
+ * the real checkout.
+ */
+function installerCopy(t) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-root-'));
+    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+    fs.copyFileSync(INSTALL, path.join(dir, 'install.sh'));
+    fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(dir, 'package.json'));
+    fs.cpSync(path.join(ROOT, 'scripts'), path.join(dir, 'scripts'), {recursive: true});
+    fs.mkdirSync(path.join(dir, 'macos'));
+    return dir;
+}
+
+/** uname says Darwin and `swift build` fails, as on a Mac with a broken toolchain. */
+function brokenMac(home) {
+    stub(home, 'uname', 'case "$1" in -s|"") echo Darwin ;; *) /bin/uname "$@" ;; esac');
+    stub(home, 'swift', 'echo "error: compile failed" >&2\nexit 1');
+    for (const tool of ['osascript', 'open', 'codesign']) stub(home, tool, 'exit 0');
+}
+
+test('a failed swift build fails the macOS target instead of shipping an empty bundle', (t) => {
+    const home = stubbedHome(t, {prefix: 'cup-mac-'});
+    brokenMac(home);
+    const root = installerCopy(t);
+
+    const r = run('bash', [path.join(root, 'install.sh'), 'macos', '--build-only'], {env: withNode(home)});
+    assert.notEqual(r.status, 0, 'release.yml runs this very command: a zero exit publishes a binary-less zip');
+    assert.match(r.stdout, /macos: the build failed/);
+    assert.doesNotMatch(r.stdout, /ok +built/);
+    assert.equal(fs.existsSync(path.join(root, 'macos', 'ClaudeUsagePanel.app')), false);
+    assert.equal(fs.existsSync(stamp(home)), false, 'a failed build is never stamped');
+});
+
+test('update carries on past a target that failed hard, and says which one', (t) => {
+    const home = installedHome(t);
+    brokenMac(home);
+    fs.rmSync(stamp(home));
+    const settings = path.join(home, '.claude', 'settings.json');
+    fs.writeFileSync(settings, '{}\n');
+
+    const r = run('bash', [INSTALL, 'update', 'macos', 'statusline'], {env: withNode(home)});
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /Claude Code status line/, 'the target after the failed one still ran');
+    assert.match(fs.readFileSync(settings, 'utf8'), /statusline\.js/);
+    assert.match(r.stderr, /could not be reinstalled:[\s\S]*macos: the build failed/);
+    assert.equal(fs.existsSync(stamp(home)), false);
+});
+
+test('a GNOME pack that fails leaves the installed extension in place and the run going', (t) => {
+    const home = installedHome(t);
+    stub(home, 'glib-compile-schemas', 'exit 0');
+    stub(home, 'gnome-extensions', 'exit 1');
+    stub(home, 'gsettings', 'exit 0');
+    stub(home, 'cpio', 'echo "cpio: broken" >&2\nexit 1');
+    const ext = path.join(home, '.local', 'share', 'gnome-shell', 'extensions',
+        'claude-usage-panel@fschmutz.github.io');
+    fs.mkdirSync(ext, {recursive: true});
+    fs.writeFileSync(path.join(ext, 'extension.js'), '// the working install\n');
+    fs.rmSync(stamp(home));
+
+    const r = run('bash', [INSTALL, 'update', 'gnome', 'statusline'], {env: withNode(home)});
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.equal(fs.readFileSync(path.join(ext, 'extension.js'), 'utf8'), '// the working install\n',
+        'the panel must survive a failed pack');
+    assert.match(r.stdout, /Claude Code status line/, 'the next target still ran');
+    assert.match(r.stderr, /gnome: packing the extension failed/);
+    assert.deepEqual(
+        fs.readdirSync(path.join(home, '.local', 'share', 'gnome-shell')).filter((n) => n.startsWith('.cup-')),
+        [], 'no staging dir left behind');
+    assert.equal(fs.existsSync(stamp(home)), false);
+});
+
+test('a GNOME reinstall swaps the new tree in whole', (t) => {
+    const home = installedHome(t);
+    stub(home, 'glib-compile-schemas', 'exit 0');
+    stub(home, 'gnome-extensions', 'exit 1');
+    stub(home, 'gsettings', 'exit 0');
+    const shell = path.join(home, '.local', 'share', 'gnome-shell');
+    const ext = path.join(shell, 'extensions', 'claude-usage-panel@fschmutz.github.io');
+    fs.mkdirSync(ext, {recursive: true});
+    fs.writeFileSync(path.join(ext, 'stale.js'), '// from an older release\n');
+
+    const r = run('bash', [INSTALL, 'gnome'], {env: withNode(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.ok(fs.existsSync(path.join(ext, 'extension.js')));
+    assert.ok(fs.existsSync(path.join(ext, 'scripts', 'auto-update.sh')));
+    assert.equal(fs.existsSync(path.join(ext, 'stale.js')), false, 'the old tree is replaced, not merged into');
+    assert.deepEqual(fs.readdirSync(shell).filter((n) => n.startsWith('.cup-')), []);
+});
+
+// ── Uninstall ─────────────────────────────────────────────────────────────────
+
+test('a bare --uninstall removes what is installed, opt-in sessionping included', (t) => {
+    const home = stubbedHome(t, {prefix: 'cup-uninst-'});
+    honestClaude(home);
+    const unit = path.join(home, '.config', 'systemd', 'user');
+    fs.mkdirSync(unit, {recursive: true});
+    fs.writeFileSync(path.join(unit, 'claude-usage-panel-sessionping.timer'), '[Timer]\n');
+
+    const r = run('bash', [INSTALL, '--uninstall', '--dry-run'],
+        {env: withNode(home, {CUP_TEST_SCHEDULER: 'systemd'})});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /==> uninstall: sessionping {2}\(dry-run\)/);
+});
+
+test('a bare --uninstall with nothing installed says so', (t) => {
+    const home = stubbedHome(t, {prefix: 'cup-uninst-'});
+    honestClaude(home);
+    const r = run('bash', [INSTALL, '--uninstall'], {env: withNode(home)});
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /Nothing installed to uninstall/);
+});
+
+test('uninstalling the status line without node skips loudly and still removes the rest', (t) => {
+    const home = installedHome(t);
+    const cli = path.join(home, '.local', 'bin', 'claudectl');
+    assert.ok(fs.existsSync(cli));
+
+    const r = run('bash', [INSTALL, '--uninstall', 'statusline', 'cli'], {env: env(home)});
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.doesNotMatch(r.stderr, /command not found/);
+    assert.match(r.stderr, /could not be fully removed:[\s\S]*statusline: Node\.js not found/);
+    assert.equal(fs.existsSync(cli), false, 'the target after it was still uninstalled');
+    assert.match(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'), /statusline\.js/,
+        'nothing half-edited');
+});
+
+test('uninstalling the MCP server without node does not claim the Cursor entry is gone', (t) => {
+    const home = stubbedHome(t, {prefix: 'cup-uninst-'});
+    honestClaude(home);
+    const mcp = path.join(home, '.cursor', 'mcp.json');
+    fs.mkdirSync(path.dirname(mcp), {recursive: true});
+    const body = '{"mcpServers": {"claude-usage": {"command": "node", "args": ["x"]}}}\n';
+    fs.writeFileSync(mcp, body);
+
+    const r = run('bash', [INSTALL, '--uninstall', 'mcp'], {env: env(home)});
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.doesNotMatch(r.stdout, /ok +removed/);
+    assert.match(r.stderr, /mcp: Node\.js not found/);
+    assert.equal(fs.readFileSync(mcp, 'utf8'), body);
 });

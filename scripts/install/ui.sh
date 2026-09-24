@@ -19,11 +19,20 @@ ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 # stamp the new version and retries on its next run. Before this, a scheduled
 # update with no node on PATH dropped the status line, the MCP server and the
 # CLI, exited 0, and recorded the release as installed.
+#
+# install.sh runs each target in a subshell of its own (so one target that
+# fails hard cannot take the rest of the run down with it), and a variable set
+# in a subshell dies with it. The record therefore goes to INCOMPLETE_LOG, a
+# file install.sh creates before the loop and reads after it.
 # shellcheck disable=SC2034  # read by install.sh after the target loop
 INCOMPLETE=""
+INCOMPLETE_LOG=""
 skip_fatal() {
     INCOMPLETE="$INCOMPLETE
   $*"
+    if [ -n "$INCOMPLETE_LOG" ]; then
+        printf '  %s\n' "$*" >>"$INCOMPLETE_LOG"
+    fi
     skip "$*"
 }
 

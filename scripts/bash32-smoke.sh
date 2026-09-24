@@ -10,7 +10,8 @@
 #   scripts/bash32-smoke.sh          run it (expects to BE bash 3.2)
 #
 # Run it the way CI does, from a checkout root:
-#   docker run --rm -v "$PWD:/repo:ro" -e HOME=/tmp bash:3.2 bash /repo/scripts/bash32-smoke.sh
+#   docker build -t cup-bash32 .github/bash32
+#   docker run --rm -v "$PWD:/repo:ro" -e HOME=/tmp cup-bash32 bash /repo/scripts/bash32-smoke.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -77,7 +78,7 @@ done
 #    1 is the honest "nothing to do here", 127/2 are bugs.
 echo
 echo "== bare install.sh (no target named) =="
-for bare in "--dry-run" "--dry-run update"; do
+for bare in "--dry-run" "--dry-run update" "--dry-run --uninstall"; do
     # `|| rc=$?` and not a bare `rc=$?`: under `set -e` a non-zero exit aborts
     # the script before the next line ever runs, and 1 is an EXPECTED outcome
     # here (nothing installable in a container).
@@ -170,7 +171,40 @@ rm -f "$STUBS"/security "$STUBS"/codesign "$STUBS"/xcrun "$STUBS"/ditto \
     "$STUBS"/openssl "$STUBS"/base64
 rmdir "$STUBS/Stub.app" "$STUBS" 2>/dev/null || true
 
-# 5. The always-safe read-only entrypoints.
+# 5. A checkout path that needs quoting, written by the installer's scheduler
+#    helpers and read back by auto-update.sh runner_in() - which the macOS app
+#    runs under this very /bin/bash. Every form must give the path back whole.
+#    The sed range goes in as an argument: bash 3.2 misparses a { } pair
+#    inside "$(...)" inside the single-quoted script.
+echo
+echo "== scheduler path quoting round trip =="
+rc=0
+out="$(
+    bash -c '
+        set -euo pipefail
+        DRY=false
+        . "$1/scripts/install/scheduler.sh"
+        eval "$(sed -n "$2" "$1/scripts/auto-update.sh")"
+        p="/x/Dev & Ops/it'"'"'s \"q\" 100% \$HOME/scripts/auto-update.sh"
+        for line in \
+            "ExecStart=$(_sched_systemd_word "$p") --quiet" \
+            "17 11 * * * $(_sched_cron_word "$p") --quiet  # tag" \
+            "    <string>$(_sched_xml_escape "$p")</string>"; do
+            got="$(runner_in "$line")"
+            [ "$got" = "$p" ] || { echo "lost: $line -> $got"; exit 1; }
+        done
+        [ "$(runner_in "ExecStart=/plain/auto-update.sh --quiet")" = /plain/auto-update.sh ]
+        [ "$(runner_in "17 11 * * * /plain/auto-update.sh --quiet  # tag")" = /plain/auto-update.sh ]
+    ' _ "$ROOT" '/^runner_in() {/,/^}/p' 2>&1
+)" || rc=$?
+if [ "$rc" -eq 0 ]; then
+    printf '  ok    systemd, cron and launchd forms read back whole\n'
+else
+    printf '  FAIL  scheduler path round trip: %s\n' "$out"
+    fail=1
+fi
+
+# 6. The always-safe read-only entrypoints.
 echo
 echo "== read-only entrypoints =="
 for cmd in "--list" "-h"; do

@@ -516,3 +516,92 @@ test('autoupdate is a known target of install.sh', () => {
     assert.equal(r.status, 0);
     assert.match(r.stdout, /autoupdate\s+check for a new release once a day/);
 });
+
+// ── Read-only means read-only ─────────────────────────────────────────────────
+// scripts/lib.sh promises that a status query leaves a HOME that has never run
+// a job exactly as it found it. Both workers used to create their state dir
+// before even looking at --status.
+test('--status creates no state dir, in either worker', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0']});
+    const state = path.join(c.dir, 'state');
+    assert.equal(runScript(c, ['--status']).status, 0);
+    assert.equal(fs.existsSync(state), false, 'auto-update.sh --status wrote into the state dir');
+
+    const r = run('bash', [path.join(ROOT, 'scripts', 'session-ping.sh'), '--status'], {
+        env: {...env(c.dir), SP_TEST_CLAUDE_PATHS: ''},
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(fs.existsSync(state), false, 'session-ping.sh --status wrote into the state dir');
+});
+
+// ── A checkout path that needs quoting ────────────────────────────────────────
+// systemd and cron both split their command on blanks, and cron hands it to
+// /bin/sh: a checkout under "Dev & Ops" installed jobs that could never start.
+// The path is written quoted, and runner_in() - how the installed copies find
+// the checkout again - has to read that quoting back.
+test('systemd and cron jobs keep a checkout path with blanks, quotes and % whole', (t) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-q-'));
+    t.after(() => fs.rmSync(home, {recursive: true, force: true}));
+    const checkout = path.join(home, "Dev & Ops", "it's 100% $HOME");
+    fs.mkdirSync(checkout, {recursive: true});
+    fs.copyFileSync(path.join(ROOT, 'install.sh'), path.join(checkout, 'install.sh'));
+    fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(checkout, 'package.json'));
+    fs.cpSync(path.join(ROOT, 'scripts'), path.join(checkout, 'scripts'), {recursive: true});
+    execFileSync('git', ['init', '-q', checkout], {stdio: 'pipe', env: GIT_ENV});
+    const bin = path.join(home, 'bin');
+    fs.mkdirSync(bin);
+    for (const [name, body] of [
+        ['systemctl', 'exit 0'],
+        // Written through a temp file: `crontab -l | … | crontab -` reads the
+        // table while the new one is written, as the real crontab allows.
+        ['crontab', 'case "$1" in -l) cat "$HOME/crontab.txt" 2>/dev/null || exit 1 ;;'
+            + ' *) cat >"$HOME/crontab.new" && mv "$HOME/crontab.new" "$HOME/crontab.txt" ;; esac'],
+    ]) {
+        fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`);
+        fs.chmodSync(path.join(bin, name), 0o755);
+    }
+    const unitDir = path.join(home, 'config', 'systemd', 'user');
+    const runner = path.join(checkout, 'scripts', 'auto-update.sh');
+
+    // An installed copy of the worker outside any checkout, so it has to find
+    // the checkout through the schedule alone.
+    const copy = path.join(home, 'extension', 'scripts');
+    fs.mkdirSync(copy, {recursive: true});
+    fs.copyFileSync(SCRIPT, path.join(copy, 'auto-update.sh'));
+    fs.copyFileSync(LIB, path.join(copy, 'lib.sh'));
+    const resolved = () => {
+        fs.rmSync(path.join(home, 'state', 'claude-usage-panel', 'checkout-path'), {force: true});
+        const r = run('bash', [path.join(copy, 'auto-update.sh'), '--status', '--json'],
+            {env: {...env(home), PATH: `${bin}:/usr/bin:/bin`}});
+        assert.equal(r.status, 0, r.stderr);
+        return JSON.parse(r.stdout).checkout;
+    };
+    const install = (scheduler) => {
+        const r = run('bash', [path.join(checkout, 'install.sh'), 'autoupdate', 'sessionping', '06:00'], {
+            env: {...env(home), PATH: `${bin}:/usr/bin:/bin`, CUP_TEST_SCHEDULER: scheduler},
+        });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+    };
+
+    install('systemd');
+    for (const unit of ['claude-usage-panel-update', 'claude-usage-panel-sessionping']) {
+        const exec = /^ExecStart=(.*)$/m.exec(fs.readFileSync(path.join(unitDir, `${unit}.service`), 'utf8'))[1];
+        assert.match(exec, /^"[^"]*Dev & Ops\/it's 100%% \$\$HOME\/scripts\/[a-z-]+\.sh" --quiet/, exec);
+    }
+    assert.equal(resolved(), checkout, 'runner_in lost the quoted systemd path');
+
+    fs.rmSync(unitDir, {recursive: true});
+    install('cron');
+    const lines = fs.readFileSync(path.join(home, 'crontab.txt'), 'utf8').trim().split('\n');
+    assert.equal(lines.length, 2);
+    for (const line of lines) {
+        // What /bin/sh gets once cron has turned \% back into %.
+        const command = line.replace(/ {2}#.*$/, '').replace(/^(\S+ +){5}/, '').replace(/\\%/g, '%');
+        const argv = run('bash', ['-c', `set -- ${command}; printf '%s\\n' "$@"`]).stdout.split('\n');
+        assert.match(argv[0], /^\/.*\/Dev & Ops\/it's 100% \$HOME\/scripts\/(auto-update|session-ping)\.sh$/, line);
+        assert.equal(argv[1], '--quiet');
+    }
+    assert.equal(resolved(), checkout, 'runner_in lost the quoted cron path');
+    assert.ok(lines.find((l) => l.includes('auto-update')).includes(`'${runner.slice(0, 5)}`),
+        'the path is single-quoted for /bin/sh');
+});

@@ -130,7 +130,13 @@ uninstall_statusline() {
         return 0
     fi
     # Remove only OUR statusLine entry; if we had backed up a foreign one at
-    # install time, restore it instead of leaving none.
+    # install time, restore it instead of leaving none. Editing the JSON takes
+    # node; without it the run died here on `node: command not found`, and
+    # every target after this one was never uninstalled.
+    if _statusline_installed && ! command -v node >/dev/null; then
+        skip_fatal "statusline: Node.js not found on PATH - remove the \"statusLine\" key from $CLAUDE_SETTINGS by hand (or re-run with node on PATH)"
+        return 0
+    fi
     if _statusline_installed; then
         if [ -f "$prev" ] && _json set "$CLAUDE_SETTINGS" statusLine "$(cat "$prev")" 2>/dev/null; then
             echo "  restored your previous statusLine"
@@ -198,11 +204,16 @@ uninstall_mcp() {
             claude mcp remove --scope user claude-usage >/dev/null 2>&1 || true
         fi
     fi
-    if [ -f "$CURSOR_MCP" ]; then
+    if [ -f "$CURSOR_MCP" ] && grep -q '"claude-usage"' "$CURSOR_MCP"; then
         if $DRY; then
             echo "  would: drop claude-usage from $CURSOR_MCP"
         elif command -v node >/dev/null; then
             _json delete "$CURSOR_MCP" mcpServers.claude-usage
+        else
+            # Not an "ok removed": the entry is still there, and --list keeps
+            # reporting the target as installed.
+            skip_fatal "mcp: Node.js not found on PATH - remove \"claude-usage\" from mcpServers in $CURSOR_MCP by hand (or re-run with node on PATH)"
+            return 0
         fi
     fi
     _prune_node_tree

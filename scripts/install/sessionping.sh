@@ -91,16 +91,17 @@ install_sessionping() {
         h="$((10#${t%%:*}))"
         m="$((10#${t#*:}))"
         intervals+="    <dict><key>Hour</key><integer>$h</integer><key>Minute</key><integer>$m</integer></dict>"$'\n'
-        line="$m $h * * * $runner --quiet --days=$days  $SP_CRON_TAG"
+        line="$m $h * * * $(_sched_cron_word "$runner") --quiet --days=$days  $SP_CRON_TAG"
         cron="${cron:+$cron$'\n'}$line"
     done
-    local sched_service="[Unit]
+    local sched_service
+    sched_service="[Unit]
 Description=Claude Usage Panel - session-window ping
 Documentation=https://github.com/fschmutz/claude-usage-panel
 
 [Service]
 Type=oneshot
-ExecStart=$runner --quiet --days=$days"
+ExecStart=$(_sched_systemd_word "$runner") --quiet --days=$days"
     # Exact times are the point: no RandomizedDelaySec, and no catch-up on
     # wake (Persistent) - a late ping would only shift the window.
     local sched_timer="[Unit]

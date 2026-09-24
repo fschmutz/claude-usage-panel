@@ -178,8 +178,6 @@ if [ "$MODE" = schedule ]; then
     exit 0
 fi
 
-mkdir -p "$STATE_DIR"
-
 if [ "$MODE" = status ]; then
     times="$(current_times | paste -sd' ' -)"
     days="$(current_days)"
@@ -194,6 +192,10 @@ if [ "$MODE" = status ]; then
     printf 'log:        %s\n' "$LOG"
     exit 0
 fi
+
+# Created only past the read-only --status and --schedule branches: neither
+# may leave anything behind in a HOME that has never pinged (see lib.sh).
+mkdir -p "$STATE_DIR"
 
 # ── One run at a time ───────────────────────────────────────────────────────────
 # A ping is short, so a lock older than 15 minutes is stale.

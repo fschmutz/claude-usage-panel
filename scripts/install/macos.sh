@@ -22,19 +22,26 @@ install_macos() {
         ok "dry-run: no build performed"
         return 0
     fi
+    # Every step carries its own `|| exit 1`. `set -e` cannot do it here: bash
+    # ignores errexit inside a command whose status is being tested (this
+    # `if !`), even after an explicit `set -e` in the subshell. The status was
+    # then the last command's - the Info.plist heredoc - so a failed `swift
+    # build` reported "built" with no binary in the bundle, and the release
+    # zip or /Applications got the empty app. The -x check after it is the
+    # outcome itself: no executable, no build, whatever the steps said.
     if ! (
         cd "$ROOT/macos" || exit 1
-        swift build -c release
-        local bin
-        bin="$(swift build -c release --show-bin-path)/$app"
-        rm -rf "$bundle"
-        mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
-        cp "$bin" "$bundle/Contents/MacOS/$app"
+        swift build -c release || exit 1
+        bin_dir="$(swift build -c release --show-bin-path)" || exit 1
+        rm -rf "$bundle" || exit 1
+        mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" || exit 1
+        cp "$bin_dir/$app" "$bundle/Contents/MacOS/$app" || exit 1
         # The app's Settings can schedule session pings; give the launchd agent
         # a runner that survives without a git checkout - with the lib it sources.
-        cp "$ROOT/scripts/session-ping.sh" "$ROOT/scripts/lib.sh" "$bundle/Contents/Resources/"
-        chmod +x "$bundle/Contents/Resources/session-ping.sh"
-        cat >"$bundle/Contents/Info.plist" <<PLIST
+        cp "$ROOT/scripts/session-ping.sh" "$ROOT/scripts/lib.sh" \
+            "$bundle/Contents/Resources/" || exit 1
+        chmod +x "$bundle/Contents/Resources/session-ping.sh" || exit 1
+        cat >"$bundle/Contents/Info.plist" <<PLIST || exit 1
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -51,7 +58,7 @@ install_macos() {
 </dict>
 </plist>
 PLIST
-    ); then
+    ) || [ ! -x "$bundle/Contents/MacOS/$app" ]; then
         skip_fatal "macos: the build failed - $installed_note"
         return 1
     fi

@@ -7,11 +7,39 @@ install_gnome() {
         skip_fatal "gnome: glib-compile-schemas not found (not a GNOME desktop?)"
         return 0
     fi
+    # pack-gnome.sh copies the sources through cpio. Checked here, before
+    # anything is touched, like the schema compiler above.
+    if ! command -v cpio >/dev/null; then
+        skip_fatal "gnome: cpio not found (install the cpio package) - the installed extension is left as it was"
+        return 0
+    fi
     local dest="$HOME/.local/share/gnome-shell/extensions/$UUID"
-    act rm -rf "$dest"
     # Sources + compiled schema + translations + the worker scripts the
     # extension runs itself, in the same layout the release zip ships.
-    act "$ROOT/scripts/pack-gnome.sh" "$dest"
+    # Packed into a staging dir first and swapped in only once the pack has
+    # succeeded: deleting $dest up front meant any pack failure (no cpio, a
+    # full disk) left an EMPTY extension dir, so the panel was gone at the
+    # next login. The staging dir sits beside extensions/, not inside it,
+    # where GNOME Shell would scan it as an extension of its own.
+    if $DRY; then
+        echo "  would: pack the extension into a staging dir, then swap it in at $dest"
+    else
+        local parent staging old
+        parent="$(dirname "$(dirname "$dest")")"
+        mkdir -p "$parent" "$(dirname "$dest")"
+        staging="$(mktemp -d "$parent/.cup-staging.XXXXXX")"
+        if ! "$ROOT/scripts/pack-gnome.sh" "$staging"; then
+            rm -rf "$staging"
+            skip_fatal "gnome: packing the extension failed - the installed extension is left as it was"
+            return 1
+        fi
+        # mktemp -d makes it 0700; the extension dir was always a plain 0755.
+        chmod 755 "$staging"
+        old="$staging.old"
+        if [ -e "$dest" ]; then mv "$dest" "$old"; fi
+        mv "$staging" "$dest"
+        rm -rf "$old"
+    fi
 
     # A global kill switch disables ALL user extensions; clear it if set.
     if [ "$(gsettings get org.gnome.shell disable-user-extensions 2>/dev/null)" = "true" ]; then

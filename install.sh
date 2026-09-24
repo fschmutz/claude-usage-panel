@@ -23,7 +23,7 @@
 #   ./install.sh gnome statusline   any combination
 #   ./install.sh update [target...]        reinstall what's already installed (upgrade)
 #   ./install.sh update --pull             git pull --ff-only first, then upgrade
-#   ./install.sh --uninstall [target...]   reverse an install (default: all detected)
+#   ./install.sh --uninstall [target...]   reverse an install (default: all installed)
 #   ./install.sh --dry-run [target...]     print the actions without doing them (alias -n)
 #   ./install.sh macos --build-only        build the .app but don't install it (used by CI)
 #   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions] \
@@ -153,33 +153,69 @@ if $PULL; then
     fi
 fi
 
-# Default target set: `update` reinstalls what's already installed; install and
-# uninstall fall back to what fits this OS. This is the bare `./install.sh`
-# path - the one the curl one-liner takes.
+# Default target set: `update` and `--uninstall` act on what is already
+# installed; a bare install falls back to what fits this OS (the path the curl
+# one-liner takes). Uninstall used to take the detected set too, and
+# sessionping is opt-in, so never detected: a bare --uninstall left the
+# schedule spending a haiku turn per ping, and on a Mac pointing at the
+# script inside the bundle it had just deleted.
 if [ ${#targets[@]} -eq 0 ]; then
-    if [ "$action" = update ]; then
-        _lines_into targets installed_targets
-    else
-        _lines_into targets detect_targets
-    fi
+    case "$action" in
+        update | uninstall) _lines_into targets installed_targets ;;
+        *) _lines_into targets detect_targets ;;
+    esac
 fi
 
 if [ ${#targets[@]} -eq 0 ]; then
-    if [ "$action" = update ]; then
-        echo "Nothing installed to update. Install first: ./install.sh [target...]" >&2
-    else
-        echo "No installable target detected. Name one explicitly: $ALL_TARGETS" >&2
-    fi
+    case "$action" in
+        update) echo "Nothing installed to update. Install first: ./install.sh [target...]" >&2 ;;
+        uninstall) echo "Nothing installed to uninstall. Name a target to clean up anyway: $ALL_TARGETS" >&2 ;;
+        *) echo "No installable target detected. Name one explicitly: $ALL_TARGETS" >&2 ;;
+    esac
     exit 1
 fi
+
+# skip_fatal records land here: every target runs in a subshell (below), and
+# a variable set there does not survive it.
+INCOMPLETE_LOG="$(mktemp "${TMPDIR:-/tmp}/cup-install.XXXXXX")"
+trap 'rm -f "$INCOMPLETE_LOG"' EXIT
+FAILED=""
 
 info "==> ${action}: ${targets[*]}$($DRY && echo '  (dry-run)')"
 echo
 for t in "${targets[@]}"; do
     # `update` is a reinstall in place (install_macos also quits + relaunches).
-    if [ "$action" = update ]; then install_"$t"; else "${action}_${t}"; fi
+    if [ "$action" = update ]; then fn="install_$t"; else fn="${action}_${t}"; fi
+    # One target failing hard - a pack step that died, a bundle that would not
+    # copy - must not abort the others, nor the report below: under a bare
+    # `set -e` it killed the run mid-loop, the remaining targets were never
+    # reinstalled and the summary saying so never printed. The target still
+    # runs under errexit inside its own subshell; the parent only stops
+    # treating its status as fatal. `set +e` rather than `if ! ( … )`, because
+    # bash ignores errexit for everything inside a tested command.
+    before="$(wc -l <"$INCOMPLETE_LOG")"
+    set +e
+    (
+        set -e
+        "$fn"
+    )
+    rc=$?
+    set -e
+    # 2 is a usage error (an invalid sessionping time): stop right there.
+    [ "$rc" -ne 2 ] || exit 2
+    if [ "$rc" -ne 0 ]; then
+        FAILED="$FAILED $t"
+        # A target that died without a skip_fatal line still names itself.
+        if [ "$(wc -l <"$INCOMPLETE_LOG")" = "$before" ]; then
+            printf '  %s: stopped with exit status %s\n' "$t" "$rc" >>"$INCOMPLETE_LOG"
+        fi
+    fi
     echo
 done
+if [ -s "$INCOMPLETE_LOG" ]; then
+    INCOMPLETE="
+$(cat "$INCOMPLETE_LOG")"
+fi
 
 # `update` reinstalls only targets this machine already has, so a target that
 # could not be installed is a failed update, not a choice. Say so and exit
@@ -189,6 +225,16 @@ done
 if [ "$action" = update ] && [ -n "$INCOMPLETE" ]; then
     echo "install: these targets are installed but could not be reinstalled:$INCOMPLETE" >&2
     echo "install: nothing was recorded as updated - fix the above and re-run" >&2
+    exit 1
+fi
+
+if [ "$action" = uninstall ] && [ -n "$INCOMPLETE" ]; then
+    echo "install: these targets could not be fully removed:$INCOMPLETE" >&2
+    exit 1
+fi
+if [ -n "$FAILED" ]; then
+    echo "install: these targets failed:$INCOMPLETE" >&2
+    echo "install: nothing was recorded as installed - fix the above and re-run" >&2
     exit 1
 fi
 
