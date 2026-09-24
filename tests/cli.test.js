@@ -89,9 +89,14 @@ test('install.sh cli: claudectl shim, autosave cron line, pre-2.0 shim migrated'
 
     // the installed tree runs through the shim, and still does with no node
     // on PATH (a GUI app's launchd PATH): it falls back to the install-time node
-    const help = run(shim(home, 'claudectl'), ['session', 'help'], {env: env(home)});
+    // Through bash, not as the program: tests/helpers.js only ever spawns a
+    // fixed tool, so a sandbox path is always an argument.
+    const help = run('bash', [shim(home, 'claudectl'), 'session', 'help'], {env: env(home)});
     assert.match(help.stdout, /claudectl session - save/);
-    const bare = run(shim(home, 'claudectl'), ['session', 'help'], {env: {...env(home), PATH: '/nonexistent'}});
+    // PATH is emptied INSIDE the shell, not in the spawn env, which still has
+    // to resolve bash itself.
+    const bare = run('bash', ['-c', 'PATH=/nonexistent exec "$0" session help',
+        shim(home, 'claudectl')], {env: env(home)});
     assert.match(bare.stdout, /claudectl session - save/, bare.stderr);
 
     const u = run('bash', [INSTALL, '--uninstall', 'cli'], {env: env(home)});

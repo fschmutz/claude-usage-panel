@@ -6,11 +6,28 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+// The only executables the suite may spawn. Everything under test is a shell
+// script, a Node module or a git command, so the program is always one of
+// these three literals and never a path built from the environment: the
+// sandbox HOMEs come from $TMPDIR, and passing one of those paths as the
+// program turns $TMPDIR into a way to choose what runs
+// (CodeQL js/shell-command-injection-from-environment). A script that lives in
+// a sandbox is run as an ARGUMENT of bash instead - execFileSync takes no
+// shell, so arguments cannot inject.
+const TOOLS = ['bash', 'git', 'node'];
+
 /** {status, stdout, stderr} for any exit code; stderr is captured, not leaked
  *  into the runner's own output. */
 export function run(cmd, args, opts = {}) {
+    const tool = TOOLS.find((t) => t === cmd);
+    if (!tool) {
+        throw new Error(
+            `tests/helpers.js: run() takes ${TOOLS.join(' | ')}, not ${cmd} - `
+                + 'pass the script as an argument (run("bash", [script, …])).',
+        );
+    }
     try {
-        const stdout = execFileSync(cmd, args, {
+        const stdout = execFileSync(tool, args, {
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
             ...opts,
