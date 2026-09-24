@@ -9,7 +9,7 @@
 # file is therefore the PREVIOUS release's until that step rewrites it, and
 # `brew` verifies it either way.
 cask "claude-usage-panel" do
-  version "2.1.2"
+  version "2.2.0"
   sha256 :no_check
 
   url "https://github.com/fschmutz/claude-usage-panel/releases/download/v#{version}/ClaudeUsagePanel-macos.zip"

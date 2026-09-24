@@ -6,6 +6,71 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-24
+
+### Fixed
+
+- **The update never actually updated anything.** Every decision compared the
+  checkout's `package.json` with the newest release tag, so a manual `git
+  pull`, a reinstall that died halfway, or an installer that dropped a target
+  all left the clients behind while the run reported "up to date" forever, and
+  never retried. The run now compares what the clients are **running**:
+  `install.sh` records `installed-version` and `checkout-path` on every
+  successful run (not only the daily job), an owed reinstall is recorded in
+  `update-pending` and retried until it lands, and the fast-forward goes to the
+  release **tag** rather than to the branch tip, which was installing
+  unreleased commits under a release's version number.
+
+- **A partial update no longer reports success.** A scheduler hands its job a
+  minimal PATH with no node on it: the status line, the MCP server and
+  `claudectl` were not even detected as installed, were dropped from the
+  update, and the new version was recorded anyway. Those targets are now
+  detected without node, the worker puts a volta/nvm/fnm/asdf node back on
+  PATH, and a target that could not be reinstalled fails `install.sh update`.
+  Same for macOS: `install_macos` used to return 0 when the build failed or
+  `/Applications` could not be written.
+
+- **macOS: the daily agent killed its own update.** Reinstalling the
+  `autoupdate` target from inside the launchd job ran `launchctl bootout` on
+  that job, so launchd SIGTERMed it: no bootstrap, no remaining targets, no
+  version stamp, and the agent stayed unloaded until the next login. It also
+  now runs at load, so a Mac that is asleep at 11:17 still gets its daily
+  check, bounded by a 20-hour freshness window.
+
+- **The panels said "Up to date" over three states that were not.** A shell
+  still running the code it loaded at login is reported ("Installed X, running
+  Y - log out and back in"); a failed remote lookup carries git's own message
+  instead of "offline?" (an auth, DNS or URL problem never fixes itself by
+  waiting), and a timer firing before the network is up retries inside the run;
+  an update that failed shows its last line instead of being discarded.
+  Closing the GNOME preferences mid-update no longer kills the script between
+  the fast-forward and the reinstall.
+
+- **An update stopped resetting the status line's `--segments` / `--tokens`**
+  to the defaults. Flags the run did not set are inherited from the installed
+  command.
+
+- The checkout pointer the macOS app reads is validated before it reaches a
+  command line, and the test helper spawns a fixed tool rather than a path
+  built from `$TMPDIR` (two CodeQL findings).
+
+### Added
+
+- **Reopen in the dropdown header**, GNOME and macOS: the newest `claudectl
+  session` snapshot, one tab per session, without opening Settings first.
+  Shown only when there is a snapshot to reopen.
+
+- **A Homebrew cask**, attached to every release with its `sha256` pinned to
+  that build, so the macOS app installs with no checkout and no tap:
+  `brew install --cask https://github.com/fschmutz/claude-usage-panel/releases/latest/download/claude-usage-panel.rb`.
+  A cask install is detected and pointed at `brew upgrade`; a zip install is
+  offered the new release instead of never hearing about it.
+
+- `tests/install-shape.test.js`: the installer running in the shape an update
+  actually runs in (real `install.sh`, throwaway HOME, stub schedulers,
+  scheduler PATH). The old suite stubbed `install.sh`, so none of the failures
+  above could go red.
+
 ## [2.1.2] - 2026-09-24
 
 ### Fixed

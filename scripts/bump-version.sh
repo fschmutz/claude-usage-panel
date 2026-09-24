@@ -2,8 +2,8 @@
 # Bump the project version in every place that carries it, from a single source
 # of truth, so they can never drift. The places are listed once, in
 # scripts/version-sites.sh (package.json, the GNOME metadata, the plugin and
-# marketplace manifests, the MCP server's VERSION const, the Homebrew cask
-# example); CHANGELOG.md gets a dated section above a fresh [Unreleased].
+# marketplace manifests, the MCP server's VERSION const, the Homebrew cask);
+# CHANGELOG.md gets a dated section above a fresh [Unreleased].
 #
 # Usage:  scripts/bump-version.sh 1.4.0
 # It only edits files - review the diff, then commit. Nothing is pushed.
