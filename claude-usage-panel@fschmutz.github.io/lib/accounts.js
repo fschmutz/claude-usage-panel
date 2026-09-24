@@ -21,8 +21,8 @@ import {jsonMessage, parseBody, send} from './http.js';
 import {claudeConfigPath, credentialsPath, stateDir} from './paths.js';
 import {run} from './proc.js';
 import {
-    PROFILE_VERSION, activeAccountName, isValidName, liveProfileName, parkName, parseProfile,
-    sameName, syncBackPlan, tokenState, worstPercent,
+    PROFILE_VERSION, isTorn, isValidName, liveProfileName, parkName, parseProfile,
+    refreshedOauth, saveRefusal, sameJSON, switchPlan, syncBackPlan, tokenState, usageCacheEntry,
 } from './pure.js';
 
 export {readLiveAccount, readLiveCredentials};
@@ -126,13 +126,6 @@ export function liveAccountName() {
         listProfiles(), readLiveCredentials()?.claudeAiOauth.accessToken ?? null, readLiveAccount());
 }
 
-// True when the live account block names a saved profile other than `name`:
-// the two halves of the login disagree.
-function liveIsTorn(name) {
-    const byAccount = activeAccountName(listProfiles(), readLiveAccount());
-    return byAccount !== null && byAccount !== name;
-}
-
 /** The unfinished switch ({at, from, to}), or null. */
 export function readPendingSwitch() {
     const p = readJSON(pendingSwitchPath());
@@ -176,18 +169,14 @@ export function syncBack() {
     if (!plan.name || !plan.snapshot)
         return plan.name;
     const stored = profiles.find(p => p.name === plan.name);
-    const same = stored && JSON.stringify(stored.credentials) === JSON.stringify(creds) &&
-        JSON.stringify(stored.account) === JSON.stringify(account);
+    const same = stored && sameJSON(stored.credentials, creds) && sameJSON(stored.account, account);
     if (!same)
         snapshotLive(plan.name);
     return plan.name;
 }
 
 /** Save the live login as `name`. `force` overrules a name that already holds
- *  a different account. Saving one account under a second name is refused
- *  outright: the store would then hold two profiles with one identity,
- *  activeAccountName() would pick whichever came first, and an auto-switch
- *  between them would move nothing. */
+ *  a different account, never a case variant or a twin (saveRefusal). */
 export function saveCurrent(name, {force = false} = {}) {
     if (!isValidName(name)) {
         throw new Error(
@@ -196,24 +185,20 @@ export function saveCurrent(name, {force = false} = {}) {
     if (!readLiveCredentials())
         throw new Error('no Claude Code login to save - run `claude auth login` first');
     const account = readLiveAccount() ?? {};
-    const profiles = listProfiles();
-    // A name differing only in case is the same file on APFS: never a new profile.
-    const variant = profiles.find(p => p.name !== name && sameName(p.name, name));
-    if (variant)
-        throw new Error(`${variant.name} already exists - names ignore case, use ${variant.name}`);
-    const existing = profiles.find(p => p.name === name);
-    if (existing && !force && account.accountUuid &&
-        existing.account?.accountUuid && existing.account.accountUuid !== account.accountUuid) {
+    const refusal = saveRefusal(listProfiles(), name, account, force);
+    if (refusal?.kind === 'variant') {
         throw new Error(
-            `${name} is already ${existing.account.emailAddress ?? 'another account'} - ` +
+            `${refusal.profile} already exists - names ignore case, use ${refusal.profile}`);
+    }
+    if (refusal?.kind === 'taken') {
+        throw new Error(
+            `${name} is already ${refusal.email ?? 'another account'} - ` +
             'pick another name or --force');
     }
-    // Not force-able: see above.
-    const twin = activeAccountName(profiles.filter(p => p.name !== name), account);
-    if (twin) {
+    if (refusal) {
         throw new Error(
-            `this login (${account.emailAddress ?? 'no email'}) is already saved as ${twin} - ` +
-            `remove ${twin} first if you meant to rename it`);
+            `this login (${account.emailAddress ?? 'no email'}) is already saved as ` +
+            `${refusal.profile} - remove ${refusal.profile} first if you meant to rename it`);
     }
     return snapshotLive(name);
 }
@@ -261,16 +246,10 @@ export async function refreshProfile(session, profile) {
         throw new Error(e.message.startsWith(profile.name)
             ? e.message : `${profile.name}: token refresh failed - ${e.message}`);
     }
-    if (typeof body?.access_token !== 'string' || !body.access_token)
-        throw new Error(`${profile.name}: token refresh returned no access token`);
     const nowMs = Date.now();
-    const next = {...oauth, accessToken: body.access_token};
-    if (Number.isFinite(Number(body.expires_in)))
-        next.expiresAt = nowMs + Number(body.expires_in) * 1000;
-    if (typeof body.refresh_token === 'string' && body.refresh_token)
-        next.refreshToken = body.refresh_token;
-    if (typeof body.scope === 'string')
-        next.scopes = body.scope.split(/\s+/).filter(Boolean);
+    const next = refreshedOauth(oauth, body, nowMs);
+    if (!next)
+        throw new Error(`${profile.name}: token refresh returned no access token`);
     return writeProfile({
         ...profile, savedAt: new Date(nowMs).toISOString(),
         credentials: {...profile.credentials, claudeAiOauth: next},
@@ -336,22 +315,22 @@ export async function switchTo(session, name) {
     if (!target)
         throw new Error(`no saved account named ${name}`);
     const synced = syncBack();
-    // An unfinished switch: the live login is of unknown ownership, so it is
-    // neither synced nor parked - the next install replaces it.
-    const pending = readPendingSwitch();
-    const from = pending ? (pending.from ?? null) : (synced ?? parkUnsavedLogin());
+    const plan = switchPlan({
+        name, synced, pending: readPendingSwitch(),
+        torn: isTorn(listProfiles(), name, readLiveAccount()), state: tokenState(target),
+    });
+    const from = plan.park ? parkUnsavedLogin() : plan.from;
     const email = target.account.emailAddress ?? null;
-    if (!pending && from === name) {
-        if (liveIsTorn(name))
+    if (plan.action === 'stay' || plan.action === 'repair') {
+        if (plan.action === 'repair')
             installLogin(target, from); // finish an interrupted switch
         return {from, to: name, changed: false, running: await runningClaudeCount(), email};
     }
-    const state = tokenState(target);
-    if (state === 'expired') {
+    if (plan.action === 'expired') {
         throw new Error(
             `${name}: login expired - run \`claude auth login\` on it and save it again`);
     }
-    if (state === 'stale')
+    if (plan.action === 'refresh')
         target = await refreshProfile(session, target);
     installLogin(target, from);
     writeLastSwitch({from, to: name});
@@ -393,10 +372,8 @@ export async function usageFor(session, name) {
 export function writeUsageCache(results, nowMs = Date.now()) {
     const accounts = {};
     for (const [name, r] of Object.entries(results)) {
-        if (!r?.ok)
-            continue;
-        const pct = key => r.cards.find(x => x.key === key)?.percent ?? null;
-        accounts[name] = {worst: worstPercent(r.cards), session: pct('session'), weekly: pct('weekly_all')};
+        if (r?.ok)
+            accounts[name] = usageCacheEntry(r.cards);
     }
     try {
         writePrivate(usageCachePath(), JSON.stringify({at: nowMs, accounts}));

@@ -1,7 +1,7 @@
 // claudectl: the dispatcher (claudectl.js) and its install target
 // (scripts/install/cli.sh, run for real against a stubbed HOME + crontab),
 // including the migration of a pre-2.0 claude-account shim. The groups
-// themselves are covered in accounts.test.js and tabs.test.js.
+// themselves are covered in accounts-*.test.js and tabs.test.js.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

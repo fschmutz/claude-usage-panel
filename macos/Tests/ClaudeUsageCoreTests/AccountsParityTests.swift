@@ -3,8 +3,8 @@ import XCTest
 
 @testable import ClaudeUsageCore
 
-/// Named-account parity against the fixture claude-code/accounts.js and
-/// lib/pure.js assert (tests/accounts.test.js, tests/parity.test.js).
+/// Named-account parity against the fixture claude-code/accounts-contract.js
+/// and lib/pure.js assert (tests/accounts-contract.test.js, tests/parity.test.js).
 final class AccountsParityTests: XCTestCase {
     private func fixture() throws -> [String: Any] { try Fixtures.load("accounts.json") }
 
@@ -179,6 +179,100 @@ final class AccountsParityTests: XCTestCase {
             } else {
                 XCTAssertEqual(got, c["expected"] as? String, c["name"] as! String)
             }
+        }
+    }
+
+    // MARK: the store decisions each port's I/O layer only carries out
+
+    func testSaveRefusal() throws {
+        let fix = try fixture()
+        let ps = profiles(fix)
+        for c in fix["saveRefusal"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            let got = Accounts.saveRefusal(
+                profiles: ps, name: c["save"] as! String, account: c["account"] as? [String: Any],
+                force: c["force"] as! Bool)
+            guard let e = c["expected"] as? [String: Any] else {
+                XCTAssertNil(got, name)
+                continue
+            }
+            XCTAssertEqual(
+                got,
+                SaveRefusal(
+                    kind: SaveRefusal.Kind(rawValue: e["kind"] as! String)!,
+                    profile: e["profile"] as! String, email: e["email"] as? String), name)
+        }
+    }
+
+    func testRefreshedOauth() throws {
+        let fix = try fixture()
+        let now = (fix["now"] as! NSNumber).doubleValue
+        let base = fix["refreshOauth"] as! [String: Any]
+        for c in fix["refresh"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            let got = Accounts.refreshedOauth(base, body: c["body"], nowMs: now)
+            guard let e = c["expected"] as? [String: Any] else {
+                XCTAssertNil(got, name)
+                continue
+            }
+            let block = try XCTUnwrap(got, name)
+            XCTAssertTrue(Accounts.sameJSON(block, e), "\(name): \(block)")
+        }
+    }
+
+    func testIsTorn() throws {
+        let fix = try fixture()
+        let ps = profiles(fix)
+        for c in fix["torn"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.isTorn(
+                    profiles: ps, name: c["profile"] as! String,
+                    account: c["account"] as? [String: Any]),
+                c["expected"] as! Bool, c["name"] as! String)
+        }
+    }
+
+    func testSwitchPlan() throws {
+        let fix = try fixture()
+        for c in fix["switchPlan"] as! [[String: Any]] {
+            let pending = (c["pending"] as? [String: Any]).map {
+                (from: $0["from"] as? String, to: $0["to"] as! String)
+            }
+            let e = c["expected"] as! [String: Any]
+            XCTAssertEqual(
+                Accounts.switchPlan(
+                    name: c["target"] as! String, synced: c["synced"] as? String,
+                    pending: pending, torn: c["torn"] as! Bool,
+                    state: TokenState(rawValue: c["state"] as! String)!),
+                SwitchPlan(
+                    from: e["from"] as? String, park: e["park"] as! Bool,
+                    action: SwitchPlan.Action(rawValue: e["action"] as! String)!),
+                c["name"] as! String)
+        }
+    }
+
+    func testSameJSON() throws {
+        let fix = try fixture()
+        for pair in fix["sameJSON"] as! [[Any]] {
+            let label = "\(pair[0]) / \(pair[1])"
+            XCTAssertEqual(Accounts.sameJSON(pair[0], pair[1]), pair[2] as! Bool, label)
+            XCTAssertEqual(Accounts.sameJSON(pair[1], pair[0]), pair[2] as! Bool, label)
+        }
+    }
+
+    func testUsageCacheEntry() throws {
+        let fix = try fixture()
+        for c in fix["usageCacheEntry"] as! [[String: Any]] {
+            let e = c["expected"] as! [String: Any]
+            let got = Accounts.usageCacheEntry(cards(c["cards"] as! [[String: Any]]))
+            let name = c["name"] as! String
+            XCTAssertEqual(
+                got,
+                UsageCacheEntry(
+                    worst: (e["worst"] as? NSNumber)?.intValue,
+                    session: (e["session"] as? NSNumber)?.intValue,
+                    weekly: (e["weekly"] as? NSNumber)?.intValue), name)
+            XCTAssertTrue(Accounts.sameJSON(got.json, e), name)
         }
     }
 

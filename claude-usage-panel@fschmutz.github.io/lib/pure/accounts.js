@@ -138,13 +138,126 @@ export function syncBackPlan(profiles, {token = null, account = null} = {}, pend
     if (!name)
         return {name: null, snapshot: false, pendingDone: false};
     const byAccount = activeAccountName(profiles, account);
-    const torn = byAccount !== null && byAccount !== name;
+    const torn = isTorn(profiles, name, account);
     const target = pending ? profiles.find(p => p.name === pending.to) : null;
     const pendingDone = Boolean(target && target.name === name && byAccount === name &&
         target.credentials.claudeAiOauth.accessToken === token);
     const snapshot = account !== null && typeof account === 'object' && !torn &&
         (!pending || pendingDone);
     return {name, snapshot, pendingDone};
+}
+
+/** The live login's two halves disagree: its account block names a saved
+ *  profile other than `name`, the one its credentials say it is. */
+export function isTorn(profiles, name, account) {
+    const byAccount = activeAccountName(profiles, account);
+    return byAccount !== null && byAccount !== name;
+}
+
+/**
+ * Two JSON values that hold the same data: objects compare by key set, not
+ * key order (Claude Code may rewrite a file with its keys reordered, which is
+ * no reason to rewrite a profile), arrays by position, scalars strictly (1 is
+ * not "1", true is not 1).
+ */
+export function sameJSON(a, b) {
+    if (a === b)
+        return true;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object')
+        return false;
+    if (Array.isArray(a) !== Array.isArray(b))
+        return false;
+    if (Array.isArray(a))
+        return a.length === b.length && a.every((x, i) => sameJSON(x, b[i]));
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length &&
+        keys.every(k => Object.hasOwn(b, k) && sameJSON(a[k], b[k]));
+}
+
+/**
+ * Why the live login (its account block `account`) may not be saved as
+ * `name`, or null when it may. First hit wins:
+ *   variant - a saved name differs from `name` only by case: one file on
+ *             APFS, never a new profile. `force` does not overrule it.
+ *   taken   - `name` holds a different account (both uuids known, and they
+ *             differ). `force` overrules it.
+ *   twin    - this account is already saved under another name. Two profiles
+ *             with one identity make activeAccountName a coin toss and an
+ *             auto-switch between them a no-op, so `force` does not overrule it.
+ * Returns {kind, profile, email}: the conflicting saved profile and its email
+ * (null when it has none).
+ */
+export function saveRefusal(profiles, name, account, force = false) {
+    const live = account && typeof account === 'object' ? account : {};
+    const uuid = a => (typeof a?.accountUuid === 'string' && a.accountUuid ? a.accountUuid : null);
+    const refusal = (kind, p) => ({
+        kind, profile: p.name,
+        email: typeof p.account?.emailAddress === 'string' ? p.account.emailAddress : null,
+    });
+    const variant = profiles.find(p => p.name !== name && sameName(p.name, name));
+    if (variant)
+        return refusal('variant', variant);
+    const existing = profiles.find(p => p.name === name);
+    if (existing && !force && uuid(live) && uuid(existing.account) &&
+        uuid(existing.account) !== uuid(live))
+        return refusal('taken', existing);
+    const twin = activeAccountName(profiles.filter(p => p.name !== name), live);
+    return twin ? refusal('twin', profiles.find(p => p.name === twin)) : null;
+}
+
+/**
+ * The OAuth block after a refresh-token exchange answered with `body`, or
+ * null when the answer carries no access token. A rotated refresh token and a
+ * scope list replace ours when present. `expires_in` (seconds) moves
+ * expiresAt only when it is a finite number above zero: null, a string, a
+ * boolean, 0 or less keep the old expiry, so a malformed answer never stamps
+ * a fresh token stale.
+ */
+export function refreshedOauth(oauth, body, nowMs) {
+    if (!body || typeof body !== 'object' || typeof body.access_token !== 'string' ||
+        !body.access_token)
+        return null;
+    const next = {...oauth, accessToken: body.access_token};
+    const ttl = body.expires_in;
+    if (typeof ttl === 'number' && Number.isFinite(ttl) && ttl > 0)
+        next.expiresAt = nowMs + ttl * 1000;
+    if (typeof body.refresh_token === 'string' && body.refresh_token)
+        next.refreshToken = body.refresh_token;
+    if (typeof body.scope === 'string')
+        next.scopes = body.scope.split(/\s+/).filter(Boolean);
+    return next;
+}
+
+/**
+ * What switchTo(name) does once the live login is synced back.
+ *   synced  - the saved name syncBack gave the live login, or null
+ *   pending - the unfinished switch ({from, to}), or null
+ *   torn    - isTorn(profiles, name, live account block)
+ *   state   - the target's tokenState
+ * Returns {from, park, action}:
+ *   from    - the login the switch leaves: an unfinished switch's source (its
+ *             live login is of unknown ownership, so it is neither synced nor
+ *             parked), else the synced name
+ *   park    - no switch pending and the live login was never saved: park it
+ *             under parkName first; the parked name becomes `from`
+ *   action  - stay:    already the live login, nothing to do
+ *             repair:  already the live login but torn - reinstall it as is
+ *                      (finishes an interrupted switch), no last-switch stamp
+ *             expired: refuse, the target must log in again
+ *             refresh: refresh the target first, then install it
+ *             install: install it
+ */
+export function switchPlan({name, synced = null, pending = null, torn = false, state}) {
+    const from = pending ? (pending.from ?? null) : synced;
+    const park = !pending && synced === null;
+    let action;
+    if (!pending && synced !== null && synced === name)
+        action = torn ? 'repair' : 'stay';
+    else if (state === 'expired')
+        action = 'expired';
+    else
+        action = state === 'stale' ? 'refresh' : 'install';
+    return {from, park, action};
 }
 
 /** Two profile names that would land on one file on a case-insensitive disk
@@ -180,6 +293,13 @@ export function worstPercent(cards) {
         worst = worst === null ? clamped : Math.max(worst, clamped);
     }
     return worst;
+}
+
+/** One account's row of the usage cache: its worst limit, and its session
+ *  and weekly-all percents (null for a card it does not have). */
+export function usageCacheEntry(cards) {
+    const pct = key => (cards ?? []).find(c => c?.key === key)?.percent ?? null;
+    return {worst: worstPercent(cards), session: pct('session'), weekly: pct('weekly_all')};
 }
 
 /**

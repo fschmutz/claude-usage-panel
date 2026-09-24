@@ -278,14 +278,6 @@ enum AccountStore {
             profiles: list(), token: liveToken(readLiveCredentials()), account: readLiveAccount())
     }
 
-    // True when the live account block names a saved profile other than
-    // `name`: the two halves of the login disagree.
-    private static func liveIsTorn(_ name: String) -> Bool {
-        guard let byAccount = Accounts.activeName(profiles: list(), live: readLiveAccount())
-        else { return false }
-        return byAccount != name
-    }
-
     static var pendingSwitchURL: URL { directory.appendingPathComponent(switchPendingFile) }
 
     /// The unfinished switch: its source (nil when unknown) and target.
@@ -298,13 +290,6 @@ enum AccountStore {
 
     private static func clearPendingSwitch() {
         try? FileManager.default.removeItem(at: pendingSwitchURL)
-    }
-
-    private static func sameJSON(_ a: [String: Any], _ b: [String: Any]) -> Bool {
-        guard let da = try? JSONSerialization.data(withJSONObject: a, options: [.sortedKeys]),
-            let db = try? JSONSerialization.data(withJSONObject: b, options: [.sortedKeys])
-        else { return false }
-        return da == db
     }
 
     /// Write the live login back into its own profile, so the tokens Claude
@@ -322,7 +307,7 @@ enum AccountStore {
         if plan.pendingDone { clearPendingSwitch() }
         guard let name = plan.name, plan.snapshot, let account else { return plan.name }
         if let stored = profiles.first(where: { $0.name == name }),
-            sameJSON(stored.credentials, creds), sameJSON(stored.account, account)
+            Accounts.sameJSON(stored.credentials, creds), Accounts.sameJSON(stored.account, account)
         {
             return name
         }
@@ -332,10 +317,8 @@ enum AccountStore {
     }
 
     /// Save the live login as `name`. `force` overrules a name that already
-    /// holds a different account. Saving one account under a second name is
-    /// refused outright: the store would then hold two profiles with one
-    /// identity, `activeName` would pick whichever came first, and an
-    /// auto-switch between them would move nothing.
+    /// holds a different account, never a case variant or a twin
+    /// (Accounts.saveRefusal).
     @discardableResult
     static func saveCurrent(_ name: String, force: Bool = false) throws -> AccountProfile {
         guard Accounts.isValidName(name) else {
@@ -347,29 +330,24 @@ enum AccountStore {
                 "no Claude Code login to save - run `claude auth login` first")
         }
         let account = readLiveAccount() ?? [:]
-        let profiles = list()
-        // A name differing only in case is the same file on APFS: never a new profile.
-        if let variant = profiles.first(where: {
-            $0.name != name && Accounts.sameName($0.name, name)
-        }) {
-            throw AccountError.message(
-                "\(variant.name) already exists - names ignore case, use \(variant.name)")
-        }
-        if let existing = profiles.first(where: { $0.name == name }), !force,
-            let liveUuid = account["accountUuid"] as? String,
-            let storedUuid = existing.accountUuid, storedUuid != liveUuid
+        if let refusal = Accounts.saveRefusal(
+            profiles: list(), name: name, account: account, force: force)
         {
-            throw AccountError.message(
-                "\(name) is already \(existing.email ?? "another account") - pick another name or force"
-            )
-        }
-        // Not force-able: see above.
-        let others = profiles.filter { $0.name != name }
-        if let twin = Accounts.activeName(profiles: others, live: account) {
-            let who = account["emailAddress"] as? String ?? "no email"
-            throw AccountError.message(
-                "this login (\(who)) is already saved as \(twin) - "
-                    + "remove \(twin) first if you meant to rename it")
+            let saved = refusal.profile
+            switch refusal.kind {
+            case .variant:
+                throw AccountError.message(
+                    "\(saved) already exists - names ignore case, use \(saved)")
+            case .taken:
+                throw AccountError.message(
+                    "\(name) is already \(refusal.email ?? "another account") - pick another name or force"
+                )
+            case .twin:
+                let who = account["emailAddress"] as? String ?? "no email"
+                throw AccountError.message(
+                    "this login (\(who)) is already saved as \(saved) - "
+                        + "remove \(saved) first if you meant to rename it")
+            }
         }
         return try write(
             AccountProfile(name: name, savedAt: stamp(), account: account, credentials: creds))
@@ -424,21 +402,11 @@ enum AccountStore {
             throw AccountError.message(
                 "\(profile.name): token refresh rejected (HTTP \(status))\(hint)")
         }
-        guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let access = body["access_token"] as? String, !access.isEmpty
+        guard
+            let oauth = Accounts.refreshedOauth(
+                profile.oauth, body: try? JSONSerialization.jsonObject(with: data), nowMs: nowMs())
         else {
             throw AccountError.message("\(profile.name): token refresh returned no access token")
-        }
-        var oauth = profile.oauth
-        oauth["accessToken"] = access
-        if let expiresIn = (body["expires_in"] as? NSNumber)?.doubleValue {
-            oauth["expiresAt"] = nowMs() + expiresIn * 1000
-        }
-        if let rotated = body["refresh_token"] as? String, !rotated.isEmpty {
-            oauth["refreshToken"] = rotated
-        }
-        if let scope = body["scope"] as? String {
-            oauth["scopes"] = scope.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         }
         var credentials = profile.credentials
         credentials["claudeAiOauth"] = oauth
@@ -495,22 +463,23 @@ enum AccountStore {
             throw AccountError.message("no saved account named \(name)")
         }
         let synced = try syncBack()
-        // An unfinished switch: the live login is of unknown ownership, so it
-        // is neither synced nor parked - the install below replaces it.
-        let pending = readPendingSwitch()
-        let from = try pending.map { $0.from } ?? (synced ?? parkUnsavedLogin())
-        if pending == nil, from == name {
-            if liveIsTorn(name) { try installLogin(target, from: from) }
+        let plan = Accounts.switchPlan(
+            name: name, synced: synced, pending: readPendingSwitch(),
+            torn: Accounts.isTorn(profiles: list(), name: name, account: readLiveAccount()),
+            state: target.tokenState(nowMs: nowMs()))
+        let from = try plan.park ? parkUnsavedLogin() : plan.from
+        switch plan.action {
+        case .stay, .repair:
+            // repair: finish an interrupted switch
+            if plan.action == .repair { try installLogin(target, from: from) }
             return SwitchResult(
                 from: from, to: name, changed: false, running: runningClaudeCount(),
                 email: target.email)
-        }
-        switch target.tokenState(nowMs: nowMs()) {
         case .expired:
             throw AccountError.message(
                 "\(name): login expired - run `claude auth login` on it and save it again")
-        case .stale: target = try await refresh(target)
-        case .valid: break
+        case .refresh: target = try await refresh(target)
+        case .install: break
         }
         try installLogin(target, from: from)
         writeLastSwitch(from: from, to: name)
@@ -552,11 +521,7 @@ enum AccountStore {
     static func writeUsageCache(_ usage: [String: [LimitCard]]) {
         var accounts: [String: Any] = [:]
         for (name, cards) in usage {
-            accounts[name] = [
-                "worst": Accounts.worstPercent(cards) as Any? ?? NSNull(),
-                "session": cards.first { $0.id == "session" }?.percent as Any? ?? NSNull(),
-                "weekly": cards.first { $0.id == "weekly_all" }?.percent as Any? ?? NSNull(),
-            ]
+            accounts[name] = Accounts.usageCacheEntry(cards).json
         }
         let obj: [String: Any] = ["at": nowMs(), "accounts": accounts]
         guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }

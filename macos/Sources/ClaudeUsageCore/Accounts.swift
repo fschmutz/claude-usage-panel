@@ -165,6 +165,61 @@ public struct SyncBackPlan: Equatable, Sendable {
     }
 }
 
+/// Why saveCurrent refuses a name (see `Accounts.saveRefusal`).
+public struct SaveRefusal: Equatable, Sendable {
+    public enum Kind: String, Sendable {
+        case variant, taken, twin
+    }
+    public let kind: Kind
+    /// The conflicting saved profile, and its email when it has one.
+    public let profile: String
+    public let email: String?
+
+    public init(kind: Kind, profile: String, email: String?) {
+        self.kind = kind
+        self.profile = profile
+        self.email = email
+    }
+}
+
+/// What switchTo does once the live login is synced back (see
+/// `Accounts.switchPlan`).
+public struct SwitchPlan: Equatable, Sendable {
+    public enum Action: String, Sendable {
+        case stay, repair, expired, refresh, install
+    }
+    public let from: String?
+    public let park: Bool
+    public let action: Action
+
+    public init(from: String?, park: Bool, action: Action) {
+        self.from = from
+        self.park = park
+        self.action = action
+    }
+}
+
+/// One account's row of the usage cache (see `Accounts.usageCacheEntry`).
+public struct UsageCacheEntry: Equatable, Sendable {
+    public let worst: Int?
+    public let session: Int?
+    public let weekly: Int?
+
+    public init(worst: Int?, session: Int?, weekly: Int?) {
+        self.worst = worst
+        self.session = session
+        self.weekly = weekly
+    }
+
+    /// The row as the cache file holds it: null for a missing figure.
+    public var json: [String: Any] {
+        [
+            "worst": worst as Any? ?? NSNull(), "session": session as Any? ?? NSNull(),
+            "weekly": weekly as Any? ?? NSNull(),
+        ]
+    }
+}
+
 public enum Accounts {
     /// Claude Code's macOS Keychain item for its credentials, by default.
     public static let keychainService = "Claude Code-credentials"
@@ -225,13 +280,145 @@ public enum Accounts {
             return SyncBackPlan(name: nil, snapshot: false, pendingDone: false)
         }
         let byAccount = activeName(profiles: profiles, live: account)
-        let torn = byAccount != nil && byAccount != name
+        let torn = isTorn(profiles: profiles, name: name, account: account)
         var pendingDone = false
         if let pendingTo, let target = profiles.first(where: { $0.name == pendingTo }) {
             pendingDone = target.name == name && byAccount == name && target.accessToken == token
         }
         let snapshot = account != nil && !torn && (pendingTo == nil || pendingDone)
         return SyncBackPlan(name: name, snapshot: snapshot, pendingDone: pendingDone)
+    }
+
+    /// The live login's two halves disagree: its account block names a saved
+    /// profile other than `name`, the one its credentials say it is.
+    public static func isTorn(profiles: [AccountProfile], name: String, account: [String: Any]?)
+        -> Bool
+    {
+        guard let byAccount = activeName(profiles: profiles, live: account) else { return false }
+        return byAccount != name
+    }
+
+    /// A JSON boolean. JSONSerialization hands booleans back as NSNumber
+    /// too, so `as? NSNumber` alone would read `true` as 1; its objCType ("c",
+    /// a C char) is what tells them apart, on Darwin and Linux alike.
+    static func isJSONBool(_ value: Any) -> Bool {
+        guard let n = value as? NSNumber else { return false }
+        return String(cString: n.objCType) == "c"
+    }
+
+    /// Two JSON values that hold the same data: objects compare by key set,
+    /// not key order (Claude Code may rewrite a file with its keys reordered,
+    /// which is no reason to rewrite a profile), arrays by position, scalars
+    /// strictly (1 is not "1", true is not 1).
+    public static func sameJSON(_ a: Any, _ b: Any) -> Bool {
+        if a is NSNull || b is NSNull { return a is NSNull && b is NSNull }
+        if let x = a as? String { return (b as? String) == x }
+        if b is String { return false }
+        if let x = a as? [String: Any] {
+            guard let y = b as? [String: Any], x.count == y.count else { return false }
+            return x.allSatisfy { key, value in y[key].map { sameJSON(value, $0) } ?? false }
+        }
+        if b is [String: Any] { return false }
+        if let x = a as? [Any] {
+            guard let y = b as? [Any], x.count == y.count else { return false }
+            return zip(x, y).allSatisfy { sameJSON($0, $1) }
+        }
+        if b is [Any] { return false }
+        guard let x = a as? NSNumber, let y = b as? NSNumber else { return false }
+        return isJSONBool(x) == isJSONBool(y) && x.doubleValue == y.doubleValue
+    }
+
+    /// Why the live login (its account block `account`) may not be saved as
+    /// `name`, or nil when it may. First hit wins: `variant` (a saved name
+    /// differs only by case - one file on APFS), `taken` (`name` holds a
+    /// different account, both uuids known; `force` overrules it only), `twin`
+    /// (this account is already saved under another name: two profiles with
+    /// one identity make `activeName` a coin toss and an auto-switch between
+    /// them a no-op).
+    public static func saveRefusal(
+        profiles: [AccountProfile], name: String, account: [String: Any]?, force: Bool
+    ) -> SaveRefusal? {
+        let live = account ?? [:]
+        let uuid = { (a: [String: Any]) -> String? in
+            guard let u = a["accountUuid"] as? String, !u.isEmpty else { return nil }
+            return u
+        }
+        let refusal = { (kind: SaveRefusal.Kind, p: AccountProfile) in
+            SaveRefusal(kind: kind, profile: p.name, email: p.email)
+        }
+        if let variant = profiles.first(where: { $0.name != name && sameName($0.name, name) }) {
+            return refusal(.variant, variant)
+        }
+        if !force, let existing = profiles.first(where: { $0.name == name }),
+            let liveUuid = uuid(live), let storedUuid = uuid(existing.account),
+            storedUuid != liveUuid
+        {
+            return refusal(.taken, existing)
+        }
+        let others = profiles.filter { $0.name != name }
+        if let twin = activeName(profiles: others, live: live),
+            let p = profiles.first(where: { $0.name == twin })
+        {
+            return refusal(.twin, p)
+        }
+        return nil
+    }
+
+    /// The OAuth block after a refresh-token exchange answered with `body`,
+    /// or nil when the answer carries no access token. A rotated refresh token
+    /// and a scope list replace ours when present. `expires_in` (seconds)
+    /// moves expiresAt only when it is a finite number above zero: null, a
+    /// string, a boolean, 0 or less keep the old expiry, so a malformed answer
+    /// never stamps a fresh token stale.
+    public static func refreshedOauth(_ oauth: [String: Any], body: Any?, nowMs: Double)
+        -> [String: Any]?
+    {
+        guard let body = body as? [String: Any],
+            let access = body["access_token"] as? String, !access.isEmpty
+        else { return nil }
+        var next = oauth
+        next["accessToken"] = access
+        if let ttl = body["expires_in"] as? NSNumber, !isJSONBool(ttl), ttl.doubleValue.isFinite,
+            ttl.doubleValue > 0
+        {
+            next["expiresAt"] = nowMs + ttl.doubleValue * 1000
+        }
+        if let rotated = body["refresh_token"] as? String, !rotated.isEmpty {
+            next["refreshToken"] = rotated
+        }
+        if let scope = body["scope"] as? String {
+            next["scopes"] = scope.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        }
+        return next
+    }
+
+    /// What switchTo(name) does once the live login is synced back. `synced`
+    /// is the name syncBack gave the live login, `pending` the unfinished
+    /// switch, `torn` isTorn for the live account block, `state` the target's
+    /// token state. `from` is the login the switch leaves (an unfinished
+    /// switch's source - its live login is of unknown ownership, so it is
+    /// neither synced nor parked - else the synced name); `park` says the live
+    /// login was never saved and is parked first, its parked name becoming
+    /// `from`. `action`: stay (already live), repair (already live but torn:
+    /// reinstall as is, no last-switch stamp), expired (refuse), refresh
+    /// (refresh, then install), install.
+    public static func switchPlan(
+        name: String, synced: String?, pending: (from: String?, to: String)?, torn: Bool,
+        state: TokenState
+    ) -> SwitchPlan {
+        let from: String? = if let pending { pending.from } else { synced }
+        let park = pending == nil && synced == nil
+        let action: SwitchPlan.Action
+        if pending == nil, let synced, synced == name {
+            action = torn ? .repair : .stay
+        } else {
+            switch state {
+            case .expired: action = .expired
+            case .stale: action = .refresh
+            case .valid: action = .install
+            }
+        }
+        return SwitchPlan(from: from, park: park, action: action)
     }
 
     /// Two profile names that would land on one file on a case-insensitive
@@ -311,6 +498,14 @@ public enum Accounts {
     /// The fullest limit of a set of cards.
     public static func worstPercent(_ cards: [LimitCard]) -> Int? {
         cards.map { max(0, min(100, $0.percent)) }.max()
+    }
+
+    /// One account's row of the usage cache: its worst limit, and its session
+    /// and weekly-all percents (nil for a card it does not have).
+    public static func usageCacheEntry(_ cards: [LimitCard]) -> UsageCacheEntry {
+        UsageCacheEntry(
+            worst: worstPercent(cards), session: cards.first { $0.id == "session" }?.percent,
+            weekly: cards.first { $0.id == "weekly_all" }?.percent)
     }
 
     /// The account to switch to, or nil to stay. `worst` maps each saved name
