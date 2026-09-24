@@ -29,11 +29,12 @@ class HeaderBar extends St.BoxLayout {
     /**
      * @param {object} handlers
      * @param {() => void} handlers.onRefresh poll now, without closing the menu
+     * @param {() => void} handlers.onReopen reopen the newest session snapshot
      * @param {() => void} handlers.onSettings open the preferences window
      * @param {() => void} handlers.onAutoSwitch flip the auto-switch setting
      * @param {() => void} handlers.onQuit turn the extension off
      */
-    _init({onRefresh, onSettings, onAutoSwitch, onQuit}) {
+    _init({onRefresh, onReopen, onSettings, onAutoSwitch, onQuit}) {
         super._init({style_class: 'cu-header', x_expand: true});
 
         this.add_child(new St.Label({
@@ -56,6 +57,14 @@ class HeaderBar extends St.BoxLayout {
         this._autoSwitch.visible = false;
         this.add_child(this._autoSwitch);
 
+        // Reopen the newest `claudectl session` snapshot as tabs. Hidden until
+        // there is one to reopen (no claudectl, or no snapshot yet), so the
+        // header never offers a button that can only fail.
+        this._reopen = iconButton(
+            'document-open-recent-symbolic', '', () => onReopen());
+        this._reopen.visible = false;
+        this.add_child(this._reopen);
+
         this.add_child(iconButton(
             'view-refresh-symbolic', _('Refresh now'), () => onRefresh()));
         this.add_child(iconButton(
@@ -67,6 +76,16 @@ class HeaderBar extends St.BoxLayout {
     /** @param {string} text the plan name from the API, '' when unknown */
     setPlan(text) {
         this._plan.text = text;
+    }
+
+    /**
+     * @param {object} state
+     * @param {boolean} state.visible a snapshot exists and claudectl can open it
+     * @param {string} state.title hover text: which snapshot, and from when
+     */
+    syncReopen({visible, title}) {
+        this._reopen.visible = visible;
+        setTooltip(this._reopen, title);
     }
 
     /**

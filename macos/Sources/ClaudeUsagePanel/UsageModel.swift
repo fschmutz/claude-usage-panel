@@ -110,6 +110,9 @@ final class UsageModel: ObservableObject {
     /// re-published so a view holding only the model still re-renders.
     let sessionPing = SessionPingSettings()
     let updates = UpdateState()
+    /// The `claudectl session` snapshot store, for the header's Reopen button
+    /// (the same store and the same button as Settings ▸ Saved sessions).
+    let saved = SavedSessions()
     private var forwarders: [AnyCancellable] = []
 
     /// Per-limit [epochMs, percent] samples - sparkline + burn-rate forecast.
@@ -191,7 +194,9 @@ final class UsageModel: ObservableObject {
         // Both children publish on the main thread (they are @MainActor), so
         // re-publishing from their sink is main-actor work the compiler cannot
         // see; assumeIsolated says so, and traps if it ever were not.
-        for child in [sessionPing.objectWillChange, updates.objectWillChange] {
+        for child in [
+            sessionPing.objectWillChange, updates.objectWillChange, saved.objectWillChange,
+        ] {
             forwarders.append(
                 child.sink { [weak self] _ in
                     MainActor.assumeIsolated { self?.objectWillChange.send() }
@@ -303,6 +308,7 @@ final class UsageModel: ObservableObject {
         }
         await refreshCost()
         sessionPing.refreshLastPing()
+        saved.reload()
         await refreshSessions()
         await refreshCursor()
         await refreshAccounts()

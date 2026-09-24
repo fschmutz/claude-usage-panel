@@ -125,6 +125,14 @@ struct PopupView: View {
                         lit: model.accountsAutoSwitch
                     ) { model.accountsAutoSwitch.toggle() }
                 }
+                // Reopen the newest session snapshot as tabs. Shown only when
+                // there is one, exactly as on GNOME.
+                if model.saved.canReopen {
+                    HeaderIcon(
+                        systemImage: "clock.arrow.circlepath",
+                        title: "Reopen \(model.saved.newestLine)"
+                    ) { model.saved.reopen() }
+                }
                 HeaderIcon(systemImage: "arrow.clockwise", title: "Refresh now") {
                     Task { await model.refresh() }
                 }
@@ -216,7 +224,10 @@ struct PopupView: View {
         }
         .padding(14)
         .frame(width: 340)
-        .onAppear { model.sessionPing.reload() }
+        .onAppear {
+            model.sessionPing.reload()
+            model.saved.reload()
+        }
     }
 }
 

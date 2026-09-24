@@ -103,11 +103,13 @@ const text = (x, yy, s, size, fill, extra = '') =>
 
 y = 34;
 text(PAD, y, 'Claude usage', 16, C.text, 'font-weight="700"');
-// The header's controls, right to left: settings, refresh, and - lit, because
-// this account has more than one saved login - auto-switch.
+// The header's controls, right to left: settings, refresh, reopen (the newest
+// session snapshot) and - lit, because this account has more than one saved
+// login - auto-switch.
 const ICONS = [
   ['\u2699', C.dim],
   ['\u21bb', C.dim],
+  ['\u21ba', C.dim],
   ['\u21c4', DATA.autoSwitchOn ? C.accent : C.dim],
 ];
 let iconX = W - PAD;

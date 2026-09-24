@@ -16,78 +16,91 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:172
+#: extension.js:179
 msgid "Extra usage"
 msgstr "额外用量"
 
-#: extension.js:297
+#: extension.js:221
+#, javascript-format
+msgid "Reopen %s (%d sessions)"
+msgstr "重新打开 %s（%d 个会话）"
+
+#: extension.js:240
+msgid "Reopened your sessions"
+msgstr "已重新打开会话"
+
+#: extension.js:240
+msgid "Could not reopen the sessions"
+msgstr "无法重新打开会话"
+
+#: extension.js:338
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - 正在重试，显示上次读数"
 
-#: extension.js:321
+#: extension.js:362
 #, javascript-format
 msgid "Updated %s"
 msgstr "已更新 %s"
 
-#: extension.js:347
+#: extension.js:388
 msgid "Session cost: computing…"
 msgstr "会话费用：计算中…"
 
-#: extension.js:352
+#: extension.js:393
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "会话费用：$%s · %s 个 token（估算）"
 
-#: extension.js:354
+#: extension.js:395
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "会话费用：不可用（请安装 ccusage）"
 
-#: extension.js:384
+#: extension.js:425
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s（上限的 %d%%）"
 
-#: extension.js:401
+#: extension.js:442
 #, javascript-format
 msgid "last %s"
 msgstr "上次 %s"
 
-#: extension.js:401 prefs.js:332
+#: extension.js:442 prefs.js:332
 msgid "never"
 msgstr "从未"
 
-#: extension.js:405
+#: extension.js:446
 #, javascript-format
 msgid "next %s"
 msgstr "下次 %s"
 
-#: extension.js:407
+#: extension.js:448
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "会话 ping：%s"
 
-#: extension.js:422 extension.js:436 lib/accountsSection.js:287
+#: extension.js:463 extension.js:477 lib/accountsSection.js:287
 #: lib/accountsSection.js:293 lib/sessionsSection.js:159
 #: lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Claude 用量"
 
-#: extension.js:423
+#: extension.js:464
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s 已达到 %d%%"
 
-#: extension.js:437
+#: extension.js:478
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "按当前速度，%s 将在重置前用尽"
 
-#: extension.js:564
+#: extension.js:605
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:65 prefs.js:42 prefs.js:530
+#: lib/accountsSection.js:65 prefs.js:42 prefs.js:555
 msgid "Accounts"
 msgstr "账户"
 
@@ -154,15 +167,15 @@ msgstr "最高：%s $%s"
 msgid "Cursor: %s"
 msgstr "Cursor：%s"
 
-#: lib/headerBar.js:60
+#: lib/headerBar.js:69
 msgid "Refresh now"
 msgstr "立即刷新"
 
-#: lib/headerBar.js:62
+#: lib/headerBar.js:71
 msgid "Settings"
 msgstr "设置"
 
-#: lib/headerBar.js:64
+#: lib/headerBar.js:73
 msgid "Quit"
 msgstr "退出"
 
@@ -474,76 +487,94 @@ msgstr "更新"
 msgid "Daily check, and whether it is actually running."
 msgstr "每日检查，以及它是否真的在运行。"
 
-#: prefs.js:436 prefs.js:509
+#: prefs.js:436 prefs.js:522
 msgid "Checking…"
 msgstr "检查中…"
 
-#: prefs.js:440 prefs.js:461 prefs.js:485 prefs.js:495
+#: prefs.js:440 prefs.js:462 prefs.js:486 prefs.js:493 prefs.js:501
+#: prefs.js:508
 msgid "Check now"
 msgstr "立即检查"
 
-#: prefs.js:459
+#: prefs.js:460
 msgid "Cannot self-update"
 msgstr "无法自我更新"
 
-#: prefs.js:460
+#: prefs.js:461
 msgid "No git checkout found for auto-update.sh."
 msgstr "未找到 auto-update.sh 所在的 git 检出目录。"
 
-#: prefs.js:468
+#: prefs.js:469
 msgid "Could not read the update status"
 msgstr "无法读取更新状态"
 
-#: prefs.js:476
+#: prefs.js:478
 #, javascript-format
 msgid "Installed %s, checkout %s"
 msgstr "已安装 %s，检出 %s"
 
-#: prefs.js:477
-msgid "Run ./install.sh update to install the newer code."
-msgstr "运行 ./install.sh update 安装较新的代码。"
+#: prefs.js:479
+msgid "The clients are behind the code - reinstall them."
+msgstr "客户端落后于代码，请重新安装。"
 
-#: prefs.js:478 prefs.js:489 prefs.js:508
+#: prefs.js:480 prefs.js:497 prefs.js:521
 msgid "Update now"
 msgstr "立即更新"
 
-#: prefs.js:480
+#: prefs.js:484
+#, javascript-format
+msgid "Installed %s, running %s"
+msgstr "已安装 %s，运行中 %s"
+
+#: prefs.js:485
+msgid "Log out and back in to load it."
+msgstr "注销并重新登录以加载。"
+
+#: prefs.js:488
 #, javascript-format
 msgid "Paused: %s"
 msgstr "已暂停：%s"
 
-#: prefs.js:482
+#: prefs.js:490
 msgid ""
 "The daily check will not touch this checkout until that is resolved. It only "
 "ever fast-forwards a clean checkout."
 msgstr ""
 "在解决之前，每日检查不会改动此检出目录。它只会对干净的检出执行 fast-forward。"
 
-#: prefs.js:487
+#: prefs.js:495
 #, javascript-format
 msgid "Update available: %s → %s"
 msgstr "有可用更新：%s → %s"
 
-#: prefs.js:488 prefs.js:494
+#: prefs.js:496 prefs.js:500 prefs.js:507
 #, javascript-format
 msgid "Last checked %s"
 msgstr "上次检查 %s"
 
-#: prefs.js:492
+#: prefs.js:499
 #, javascript-format
 msgid "Up to date (%s)"
 msgstr "已是最新 (%s)"
 
-#: prefs.js:493
+#: prefs.js:506
 #, javascript-format
-msgid "%s (could not reach the remote)"
-msgstr "%s（无法连接远程）"
+msgid "%s (could not check)"
+msgstr "%s（无法检查）"
 
-#: prefs.js:509
+#: prefs.js:522
 msgid "Updating…"
 msgstr "更新中…"
 
-#: prefs.js:531
+#: prefs.js:539
+msgid "The update failed"
+msgstr "更新失败"
+
+#: prefs.js:541
+msgid "See the log for details."
+msgstr "详情请查看日志。"
+
+#: prefs.js:556
 msgid ""
 "Save the login Claude Code holds now under a name (PRO, PERSO) and switch "
 "between saved logins from the dropdown, no browser needed. Only the "
@@ -555,88 +586,91 @@ msgstr ""
 "的登录之间切换,无需浏览器。只有凭据和 ~/.claude.json 的账户块会改变;设置、钩"
 "子、插件和历史保持不变。已在运行的 Claude Code 会话在重启前仍使用旧登录。"
 
-#: prefs.js:538
+#: prefs.js:563
 msgid "Enable named accounts"
 msgstr "启用命名账户"
 
-#: prefs.js:539
+#: prefs.js:564
 msgid "Off by default - nothing account-related is shown until you turn it on"
 msgstr "默认关闭：开启前不会显示任何账户相关内容"
 
-#: prefs.js:546
+#: prefs.js:571
 msgid "Current login"
 msgstr "当前登录"
 
-#: prefs.js:548
+#: prefs.js:573
 msgid "Save the current login as"
 msgstr "将当前登录保存为"
 
-#: prefs.js:549
+#: prefs.js:574
 msgid "Save"
 msgstr "保存"
 
-#: prefs.js:558
+#: prefs.js:583
 msgid "Switch accounts automatically"
 msgstr "自动切换账户"
 
-#: prefs.js:559
+#: prefs.js:584
 msgid ""
 "When the active account reaches the threshold, move to the saved account "
 "with the most headroom"
 msgstr "当活动账户达到阈值时,切换到余量最多的已保存账户"
 
-#: prefs.js:564
+#: prefs.js:589
 msgid "Auto-switch threshold"
 msgstr "自动切换阈值"
 
-#: prefs.js:565
+#: prefs.js:590
 msgid "Worst limit percentage that counts as full"
 msgstr "视为已满的最差限额百分比"
 
-#: prefs.js:573
+#: prefs.js:598
 msgid "Show the auto-switch button in the dropdown"
 msgstr "在菜单中显示自动切换按钮"
 
-#: prefs.js:574
+#: prefs.js:599
 msgid ""
 "Off hides the auto-switch button from the panel header; the option stays here"
 msgstr "关闭后从面板标题栏隐藏该按钮；选项仍保留在此"
 
-#: prefs.js:579
+#: prefs.js:604
 msgid "Show the account name in the top bar"
 msgstr "在顶栏显示账户名"
 
-#: prefs.js:580
+#: prefs.js:605
 msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
 msgstr "显示“PRO · Session 42%”- 保存两个账号后出现，且仅在顶栏放得下时显示"
 
-#: prefs.js:598
+#: prefs.js:623
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s，已保存为 %s"
 
-#: prefs.js:599
+#: prefs.js:624
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（尚未保存）"
 
-#: prefs.js:600
+#: prefs.js:625
 msgid "No Claude Code login found"
 msgstr "未找到 Claude Code 登录"
 
-#: prefs.js:606
+#: prefs.js:631
 msgid "login expired - sign in and save it again"
 msgstr "登录已过期 - 请重新登录并再次保存"
 
-#: prefs.js:613
+#: prefs.js:638
 msgid "Forget this saved login"
 msgstr "忘记此已保存的登录"
 
-#: prefs.js:633
+#: prefs.js:658
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名称只能使用字母、数字、. _ -(最多 32 个字符)"
+
+#~ msgid "Run ./install.sh update to install the newer code."
+#~ msgstr "运行 ./install.sh update 安装较新的代码。"
 
 #~ msgid "\"PRO · Session 42%\" instead of \"Session 42%\""
 #~ msgstr "显示“PRO · Session 42%”而不是“Session 42%”"
