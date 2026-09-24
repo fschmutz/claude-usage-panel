@@ -17,8 +17,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CASK="$ROOT/Casks/claude-usage-panel.rb"
 ZIP_NAME="ClaudeUsagePanel-macos.zip"
 
-version_of() { sed -nE 's/.*"version": *"([^"]+)".*/\1/p' "$ROOT/package.json" | head -1; }
-cask_version() { sed -nE 's/^  version "([^"]+)".*/\1/p' "$CASK" | head -1; }
+# shellcheck source=scripts/version-sites.sh
+. "$ROOT/scripts/version-sites.sh"
+
+version_of() { version_site_read "$ROOT/package.json" json version; }
+cask_version() { version_site_read "$CASK" cask version; }
 
 if [ "${1:-}" = "--check" ]; then
     want="$(version_of)"
@@ -38,6 +41,10 @@ fi
 tag="${1:-v$(version_of)}"
 zip="${2:-}"
 version="${tag#v}"
+printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
+    echo "make-cask: not a version: $tag" >&2
+    exit 1
+}
 
 tmp=""
 if [ -z "$zip" ]; then
@@ -62,7 +69,11 @@ else
     sum="$(sha256sum "$zip" | cut -d' ' -f1)"
 fi
 
-V="$version" perl -pi -e 's/^(  version ")[^"]*(")/${1}$ENV{V}${2}/' "$CASK"
+version_site_write "$CASK" cask version "$version"
+[ "$(cask_version)" = "$version" ] || {
+    echo "make-cask: could not write v$version into $CASK (its version line no longer matches scripts/version-sites.sh)" >&2
+    exit 1
+}
 S="$sum" perl -pi -e 's/^(  sha256 ).*/${1}"$ENV{S}"/' "$CASK"
 
 echo "make-cask: $CASK -> v$version, sha256 $sum"

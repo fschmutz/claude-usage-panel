@@ -22,17 +22,19 @@ ok() { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 #
 # install.sh runs each target in a subshell of its own (so one target that
 # fails hard cannot take the rest of the run down with it), and a variable set
-# in a subshell dies with it. The record therefore goes to INCOMPLETE_LOG, a
-# file install.sh creates before the loop and reads after it.
-# shellcheck disable=SC2034  # read by install.sh after the target loop
+# in a subshell dies with it. The record therefore has exactly one channel:
+# INCOMPLETE_LOG, a file install.sh creates before the loop and turns into
+# INCOMPLETE after it. With no log there is nowhere the record could survive,
+# so skip_fatal fails instead of dropping it.
+# shellcheck disable=SC2034  # install.sh fills INCOMPLETE from the log after the target loop
 INCOMPLETE=""
 INCOMPLETE_LOG=""
 skip_fatal() {
-    INCOMPLETE="$INCOMPLETE
-  $*"
-    if [ -n "$INCOMPLETE_LOG" ]; then
-        printf '  %s\n' "$*" >>"$INCOMPLETE_LOG"
+    if [ -z "$INCOMPLETE_LOG" ]; then
+        echo "install: skip_fatal called with no INCOMPLETE_LOG, the record would be lost: $*" >&2
+        return 1
     fi
+    printf '  %s\n' "$*" >>"$INCOMPLETE_LOG"
     skip "$*"
 }
 

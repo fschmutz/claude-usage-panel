@@ -316,3 +316,23 @@ test('uninstalling the MCP server without node does not claim the Cursor entry i
     assert.match(r.stderr, /mcp: Node\.js not found/);
     assert.equal(fs.readFileSync(mcp, 'utf8'), body);
 });
+
+// skip_fatal has one channel, INCOMPLETE_LOG: every target runs in a
+// subshell, so a variable copy of the record died there. A skip_fatal with no
+// log to write to must fail, never report success with the record gone.
+test('skip_fatal records to the log from inside a subshell, and refuses to run without one', (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-skipfatal-'));
+    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+    const ui = path.join(ROOT, 'scripts', 'install', 'ui.sh');
+    const log = path.join(dir, 'incomplete.log');
+    fs.writeFileSync(log, '');
+
+    const logged = run('bash', ['-c', 'set -eu; . "$1"; INCOMPLETE_LOG="$2"; ( set -e; skip_fatal "demo: no scheduler" )',
+        '_', ui, log]);
+    assert.equal(logged.status, 0, logged.stderr);
+    assert.equal(fs.readFileSync(log, 'utf8'), '  demo: no scheduler\n');
+
+    const lost = run('bash', ['-c', 'set -eu; . "$1"; ( set -e; skip_fatal "demo: no scheduler" )', '_', ui]);
+    assert.notEqual(lost.status, 0, 'a record with nowhere to go must not pass silently');
+    assert.match(lost.stderr, /no INCOMPLETE_LOG[\s\S]*demo: no scheduler/);
+});

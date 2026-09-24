@@ -24,6 +24,9 @@
 # publishing a cask the tap already holds is a no-op, so a re-run is safe.
 set -euo pipefail
 
+# shellcheck source=scripts/version-sites.sh
+. "$(cd "$(dirname "$0")" && pwd)/version-sites.sh"
+
 usage() {
     echo "Usage: HOMEBREW_TAP_TOKEN=... scripts/publish-cask.sh <version> <cask.rb>" >&2
     exit 2
@@ -40,7 +43,7 @@ printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || die "not a ver
 [ -f "$cask" ] || die "no such cask: $cask"
 [ -n "${HOMEBREW_TAP_TOKEN:-}" ] || die "HOMEBREW_TAP_TOKEN is not set (repo Settings > Secrets > Actions)"
 
-have="$(sed -nE 's/^  version "([^"]+)".*/\1/p' "$cask" | head -1)"
+have="$(version_site_read "$cask" cask version)"
 [ "$have" = "$version" ] || die "$cask is version '$have', expected $version"
 grep -Eq '^  sha256 "[0-9a-f]{64}"$' "$cask" ||
     die "$cask has no pinned sha256 (the :no_check template?) - run scripts/make-cask.sh first"
