@@ -12,7 +12,11 @@ server** (`mcp/server.js`) exposing a `get_usage` tool to Claude Code / Cursor
 `plugin/`, or via `npx -y github:fschmutz/claude-usage-panel` - package.json has
 a `bin` entry). All read a locally-stored OAuth token read-only and render the
 same `limits[]` data. An optional Cursor team-spend section is available in the
-two desktop clients.
+two desktop clients. `linux/usage-bar.mjs` is a one-line printer for
+waybar/tmux/polybar (no install target), and the macOS app also ships as a
+Homebrew cask (`Casks/claude-usage-panel.rb` is the unpinned template;
+`release.yml` pins and publishes it via `scripts/make-cask.sh` /
+`publish-cask.sh`).
 
 ## Commands
 
@@ -36,7 +40,7 @@ pre-commit run zizmor --all-files   # workflow security audit (actionlint = vali
 ./install.sh gnome           # GNOME extension only → then log out/in (Wayland)
 ./install.sh statusline      # status line → merges into ~/.claude/settings.json
 ./install.sh mcp             # MCP server → claude mcp add + ~/.cursor/mcp.json
-./install.sh cli             # claudectl: `account` (named logins) + `session` (snapshot/reopen as tabs) + 30-min autosave
+./install.sh cli             # claudectl: `account` (named logins) + `session` (snapshot/reopen as tabs) + `codex` (Codex logins) + 30-min autosave
 ./install.sh macos           # build macos/ClaudeUsagePanel.app
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
@@ -47,6 +51,10 @@ pre-commit run zizmor --all-files   # workflow security audit (actionlint = vali
 # Screenshots are GENERATED - after any UI-visible contract change:
 node scripts/screenshots/render.mjs          # rewrites docs/screenshot.svg + og.svg
 node scripts/screenshots/render.mjs --check  # what CI runs; exits 1 on drift
+
+# GNOME i18n: after changing any _() string in the extension (needs gettext)
+scripts/update-po.sh          # regenerate po/*.pot, merge into every .po
+scripts/update-po.sh --check  # the i18n-catalogs hook / CI
 
 # Release: bump the version everywhere from one source of truth
 ./scripts/bump-version.sh 1.4.0
@@ -368,8 +376,10 @@ The normalization contract (must stay identical across ports):
 ### Platform layer (thin, wraps the pure core)
 
 - GNOME: `extension.js` (panel button, dropdown, alerts, sparkline), `prefs.js`
-  (libadwaita), `lib/claudeUsage.js` + `lib/cursorUsage.js` + `lib/cost.js` do
+  (libadwaita, one builder per tab in `prefs/`), `lib/claudeUsage.js` + `lib/cursorUsage.js` + `lib/cost.js` do
   the I/O (Soup HTTP, subprocess), settings via GSettings schema in `schemas/`.
+  Nothing on the Shell main thread may block: file walks and reads use the
+  `_async` Gio calls (see `lib/codex.js`).
 - macOS: `Sources/ClaudeUsagePanel/` (App, Usage, Cursor, Cost) is the
   networking + `MenuBarExtra` UI over `ClaudeUsageCore`.
 
@@ -395,6 +405,11 @@ with the user's Admin API key.
   (`scripts/wiki-sync.sh`) on every push to main touching `wiki/**`. Never
   clone or edit the wiki repo directly; the sync overwrites it.
 
+- **Public repo guards** (pre-commit + CI): `private-names` fails on any
+  internal project/customer/work name in files, commit messages, authors
+  (`scripts/check-private-names.sh`; the regex list lives OUTSIDE the repo at
+  `~/.config/claude-usage-panel/private-names.txt`, CI requires it, findings
+  print location only). `no-em-dash` bans U+2014 in every text file: use `-`.
 - ESLint runs with `--max-warnings=0`; Swift with `swift format lint --strict`.
   Shell is shellcheck + shfmt (`-i 4 -ci`). All gated by pre-commit **and** CI.
 - Bump `version` in `package.json`, `version-name` in `metadata.json`, and update
