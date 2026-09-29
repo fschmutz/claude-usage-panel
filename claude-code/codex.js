@@ -2,7 +2,7 @@
 // CLI holds right now under a name, and switch between the saved ones without
 // a browser. The decisions (what a profile is, which saved login is live,
 // token state, how a recorded rate-limit snapshot becomes cards) are in
-// codex-contract.js.
+// lib/pure/codex.js, the copy the GNOME extension uses too.
 //
 // A Codex login is ONE file: `auth.json` under the Codex home ($CODEX_HOME,
 // else ~/.codex). Switching replaces exactly that file and touches nothing
@@ -22,12 +22,12 @@ import {Buffer} from 'node:buffer';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {isValidName, sameJSON, sameName} from './accounts-contract.js';
+import {isValidName, sameJSON, sameName} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {
   CODEX_PROFILE_VERSION, CODEX_SESSION_SCAN_LIMIT, activeCodexName, codexIdentity, codexSummary,
   codexSwitch, codexTokenState, parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin,
   scanCodexSessions,
-} from './codex-contract.js';
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/codex.js';
 import {codexAccountsDir, codexAuthPath, codexSessionsDir} from './paths.js';
 import {readJSON, writePrivate} from './private-fs.js';
 
@@ -193,7 +193,7 @@ export function openCodexStore(io = {}) {
   function switchTo(name) {
     const target = readProfile(name);
     if (!target) throw new Error(`no saved Codex account named ${name}`);
-    // codexSwitch (codex-contract.js) re-reads auth.json right before the
+    // codexSwitch (lib/pure/codex.js) re-reads auth.json right before the
     // write and syncs a token the CLI rotated meanwhile, rather than lose it.
     const r = codexSwitch(name, {
       syncBack: () => {
@@ -251,7 +251,7 @@ export function openCodexStore(io = {}) {
 
   /**
    * The freshest usage Codex has recorded locally, as cards: the tails of the
-   * newest transcripts, handed to pickRecordedCodexUsage (codex-contract.js),
+   * newest transcripts, handed to pickRecordedCodexUsage (lib/pure/codex.js),
    * which owns every decision. OpenAI publishes no plan-limit endpoint, so
    * this is the whole Codex usage story.
    * @returns {{cards: object[], capturedAt: ?string, reason: ?string}}

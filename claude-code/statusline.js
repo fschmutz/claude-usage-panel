@@ -10,21 +10,26 @@
 // GNOME extension and the macOS app, never here. Output is left-aligned (Claude
 // Code anchors the line to the left; use the settings `padding` field to indent).
 //
-// The contract pieces it renders - the burn-rate forecast and clock pace
-// (pace.js), the ping stamps (stamps.js), the account rule (accounts-contract.js)
-// - are the same modules the MCP server uses, and the transcript token totals
-// with their on-disk cache live in transcript-tokens.js; this file is only the
-// rendering.
+// The contract pieces it renders - the usage reading, the burn-rate forecast
+// and clock pace, the ping stamps, the account rules - come from lib/pure/, the
+// one JavaScript copy the GNOME extension and the MCP server use too (the
+// sample history is pace.js); the transcript token totals with their on-disk
+// cache live in transcript-tokens.js; this file is only the rendering.
 
 import fs from 'node:fs';
 import {fileURLToPath} from 'node:url';
 
+import {
+  activeAccountName, autoSwitchTarget, usageSeverity, worstFromCache, worstPercent,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {clockPace} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pace.js';
+import {formatLastPing, localDay} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
+import {clampPercent, usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
+import {warehouseAccount} from '../claude-usage-panel@fschmutz.github.io/lib/pure/warehouse.js';
 import {openStore} from './accounts.js';
-import {accountKey, activeAccountName, autoSwitchTarget, usageSeverity, worstFromCache, worstPercent} from './accounts-contract.js';
-import {clampPercent, usageReading} from './normalize.js';
-import {clockPace, forecastMap} from './pace.js';
+import {forecastMap} from './pace.js';
 import {lastPingPath, sessionIndexPath} from './paths.js';
-import {formatLastPing, localDay, resetHint} from './stamps.js';
+import {resetHint} from './stamps.js';
 import {transcriptTotals} from './transcript-tokens.js';
 
 // Short labels for the two rate-limit windows stdin exposes. Terse because the
@@ -289,10 +294,10 @@ export function limitsSegment(stdinText, {nowMs = Date.now(), historyPath, io = 
   return render(cards, {forecasts, nowMs});
 }
 
-/** The live login's history key (accountKey), or null without one. */
+/** The live login's history key (warehouseAccount), or null without one. */
 export function liveAccountKey(io = {}) {
   try {
-    return accountKey(openStore(io).readLiveAccount());
+    return warehouseAccount(openStore(io).readLiveAccount());
   } catch {
     return null;
   }

@@ -8,7 +8,7 @@
 // as the estimate it is.
 
 import {openCodexStore} from './codex.js';
-import {codexIdentity} from './codex-contract.js';
+import {codexIdentity} from '../claude-usage-panel@fschmutz.github.io/lib/pure/codex.js';
 import {resetHint} from './stamps.js';
 
 export const HELP = `claudectl codex - named OpenAI Codex logins, switch without a browser

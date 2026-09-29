@@ -11,9 +11,9 @@
 //   macOS  - the menu-bar app's `terminalChoice` default (auto / terminal /
 //            iterm; auto = iTerm when it is installed).
 //
-// TERMINALS, terminalArgv and pickTerminal mirror lib/pure/sessions.js 1:1 (parity asserted
-// in tests/terminals.test.js), so a session opened from the CLI starts exactly
-// like one clicked in the panel.
+// TERMINALS, terminalArgv and pickTerminal are lib/pure/sessions.js itself,
+// imported, so a session opened from the CLI starts exactly like one clicked
+// in the panel.
 //
 // The "how": few terminals can open N windows of tabs with N commands from
 // one command line. gnome-terminal / xfce4-terminal (--window --tab ...) and
@@ -29,6 +29,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
+import {
+  pickTerminal, shellQuote, terminalArgv,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {onPath} from './tools.js';
 
 export const TMUX_SESSION = 'claudectl';
@@ -36,68 +39,6 @@ export const TMUX_SESSION = 'claudectl';
 export const MAC_DEFAULTS_DOMAIN = 'io.github.fschmutz.claude-usage-panel';
 /** The GNOME extension's GSettings path, as dconf sees it. */
 export const GNOME_TERMINAL_KEY = '/org/gnome/shell/extensions/claude-usage-panel/terminal-command';
-
-export const shellQuote = (s) => `'${String(s ?? '').replace(/'/g, `'\\''`)}'`;
-
-// Mirrors TERMINALS in lib/pure/sessions.js: same entries, same order.
-export const TERMINALS = [
-  {bin: 'ghostty', desktop: ['com.mitchellh.ghostty.desktop'],
-    argv: (d, c) => [`--working-directory=${d}`, '-e', 'bash', '-lc', c]},
-  {bin: 'kitty', desktop: ['kitty.desktop'], argv: (d, c) => ['--directory', d, 'bash', '-lc', c]},
-  {bin: 'wezterm', desktop: ['org.wezfurlong.wezterm.desktop'],
-    argv: (d, c) => ['start', '--cwd', d, '--', 'bash', '-lc', c]},
-  {bin: 'alacritty', desktop: ['Alacritty.desktop'],
-    argv: (d, c) => ['--working-directory', d, '-e', 'bash', '-lc', c]},
-  {bin: 'foot', desktop: ['foot.desktop', 'footclient.desktop'], argv: (d, c) => ['-D', d, 'bash', '-lc', c]},
-  {bin: 'gnome-terminal', desktop: ['org.gnome.Terminal.desktop'],
-    argv: (d, c) => [`--working-directory=${d}`, '--', 'bash', '-lc', c]},
-  {bin: 'konsole', desktop: ['org.kde.konsole.desktop'], argv: (d, c) => ['--workdir', d, '-e', 'bash', '-lc', c]},
-  {bin: 'tilix', desktop: ['com.gexperts.Tilix.desktop'], argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
-  {bin: 'xfce4-terminal', desktop: ['xfce4-terminal.desktop'],
-    argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
-  {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
-  {bin: 'xterm', desktop: ['xterm.desktop', 'debian-xterm.desktop'],
-    argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
-  {bin: 'xdg-terminal-exec', desktop: [], argv: (d, c) => [`--dir=${d}`, '--', 'bash', '-lc', c]},
-];
-
-/** Mirrors terminalForDesktopId in lib/pure/sessions.js. */
-export function terminalForDesktopId(id) {
-  const bare = String(id ?? '').trim().split(':')[0];
-  return TERMINALS.find((t) => t.desktop.includes(bare))?.bin ?? null;
-}
-
-/** Mirrors terminalForAlternative in lib/pure/sessions.js. */
-export function terminalForAlternative(target) {
-  const name = String(target ?? '').split('/').pop().replace(/\.wrapper$/, '');
-  return TERMINALS.find((t) => t.bin === name && t.bin !== 'x-terminal-emulator')?.bin ?? null;
-}
-
-/** Mirrors pickTerminal in lib/pure/sessions.js: the user's choice, then
- *  $TERMINAL, then the desktop's default, then the first known installed. */
-export function pickTerminal({configured, envTerminal, desktopId, alternative}, installed) {
-  if (configured) return configured;
-  if (envTerminal && installed(envTerminal)) return envTerminal;
-  if (desktopId) {
-    const bin = terminalForDesktopId(desktopId);
-    if (bin && installed(bin)) return bin;
-    if (installed('xdg-terminal-exec')) return 'xdg-terminal-exec';
-  }
-  const alt = terminalForAlternative(alternative);
-  if (alt && installed(alt)) return alt;
-  return TERMINALS.find((t) => installed(t.bin))?.bin ?? null;
-}
-
-/** Mirrors terminalArgv in lib/pure/sessions.js. */
-export function terminalArgv(bin, cwd, command) {
-  if (!bin) return null;
-  const dir = cwd || '.';
-  const known = TERMINALS.find((t) => t.bin === bin || bin.endsWith(`/${t.bin}`));
-  const tail = known
-    ? known.argv(dir, command)
-    : ['-e', 'bash', '-lc', `cd ${shellQuote(dir)} && ${command}`];
-  return [bin, ...tail];
-}
 
 /** What one tab runs: resume the session under its name - with `prompt` as
  *  its first message when given - then stay on an interactive shell in its

@@ -23,8 +23,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
+import {turnTokens} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {projectsDir} from '../claude-code/paths.js';
-import {turnTokens} from '../mcp/sessions.js';
 import {flag as argvFlag} from './lib/argv.mjs';
 
 export {turnTokens};
@@ -43,9 +43,9 @@ export const BUCKETS = [
 ];
 
 // turnTokens (cache reads excluded - charged at a fraction, they would inflate
-// long sessions into meaninglessness) is the MCP server's, and a message is
-// counted once per message.id as mcp/sessions.js foldSessionLine does, so both
-// reports count a turn the same way.
+// long sessions into meaninglessness) is lib/pure/sessions.js's, and a message
+// is counted once per message.id as its foldSessionLine does, so this report
+// and the session index count a turn the same way.
 
 /** The directory name Claude Code gives a project under projects/: every
  *  character that is not an ASCII letter or digit becomes '-', so

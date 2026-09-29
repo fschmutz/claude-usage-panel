@@ -13,7 +13,7 @@
 // server uses - same endpoint, same normalization, same official `limits[]`
 // numbers - so there is no second copy of the contract to keep in sync.
 import {openStore} from '../claude-code/accounts.js';
-import {panelCard, usageReading} from '../claude-code/normalize.js';
+import {panelCard, usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 import {resetHint} from '../claude-code/stamps.js';
 import {flag} from '../scripts/lib/argv.mjs';
 

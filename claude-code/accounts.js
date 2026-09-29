@@ -1,7 +1,8 @@
 // Named Claude Code accounts, the I/O half: save the login Claude Code holds
 // right now under a name ("PRO", "PERSO"), and switch between the saved ones
 // without a browser. The decisions (what a profile is, which saved login is
-// live, token state, the auto-switch rule) are in accounts-contract.js.
+// live, token state, the auto-switch rule) are lib/pure/accounts.js, the
+// copy the GNOME extension uses too.
 //
 // A login is two things: the credentials blob (~/.claude/.credentials.json on
 // Linux, the "Claude Code-credentials" login-Keychain item on macOS) and the
@@ -36,9 +37,9 @@ import {execFileSync} from 'node:child_process';
 import {
   PROFILE_VERSION, accountSummary, isTorn, isValidName, keychainServices, keychainWriteLine,
   liveProfileName, parkName, parseProfile, saveRefusal, sameJSON, switchPlan, syncBackPlan, tokenState,
-} from './accounts-contract.js';
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {accountHealth, accountNotices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/notices.js';
 import {bindUsage, coded} from './accounts-usage.js';
-import {accountHealth, accountNotices} from './notices.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from './paths.js';
 import {readJSON, writePrivate} from './private-fs.js';
 

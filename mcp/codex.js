@@ -9,8 +9,8 @@
 // the rate limits the API returned with a turn, and that is reported as an
 // estimate, stamped with when it was captured, or not at all.
 
-import {NAME_RE} from '../claude-code/accounts-contract.js';
-import {codexIdentity} from '../claude-code/codex-contract.js';
+import {NAME_RE} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {codexIdentity} from '../claude-usage-panel@fschmutz.github.io/lib/pure/codex.js';
 import {resetHint} from '../claude-code/stamps.js';
 
 const CODEX_LIMIT_ITEM = {

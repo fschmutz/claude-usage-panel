@@ -23,9 +23,9 @@ import path from 'node:path';
 import {
   REFRESH_LOCK, refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, tokenState,
   usageCacheEntry,
-} from './accounts-contract.js';
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {normalizeExtraUsage, normalizeUsage, usageFailure} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 import {usageForLogin} from './login-usage.js';
-import {normalizeExtraUsage, normalizeUsage, usageFailure} from './normalize.js';
 import {readJSON, writePrivate} from './private-fs.js';
 
 export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';

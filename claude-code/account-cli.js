@@ -3,8 +3,8 @@
 // their usage), switch, forget, refresh. claudectl.js dispatches here.
 
 import {openStore} from './accounts.js';
-import {tokenState} from './accounts-contract.js';
-import {usageReading} from './normalize.js';
+import {tokenState} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 
 export const HELP = `claudectl account - named Claude Code accounts, switch without a browser
 
