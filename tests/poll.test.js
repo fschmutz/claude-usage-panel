@@ -18,6 +18,13 @@ test('sectionCards: fresh cards, the last reading on a retry, else none', () => 
     assert.deepEqual(sectionCards({ok: false, code: 'transient'}, []), []);
     assert.deepEqual(sectionCards({ok: false, code: 'auth_expired'}, LATEST), []);
     assert.deepEqual(sectionCards({ok: false, code: 'no_token'}, LATEST), []);
+    assert.deepEqual(sectionCards({ok: false, code: 'forbidden'}, LATEST), []);
+});
+
+test('sectionCards: a dropped connection keeps the last reading, like a "not now" status', () => {
+    // macOS always kept the cards on a network error and GNOME dropped them:
+    // the rule is isRetryableFailure now, one decision for both panels.
+    assert.deepEqual(sectionCards({ok: false, code: 'network_error'}, LATEST), LATEST);
 });
 
 function spySections(extra = {}) {
@@ -29,7 +36,7 @@ function spySections(extra = {}) {
 }
 
 test('a failed poll still refreshes every section, the accounts with no live cards', async () => {
-    for (const code of ['auth_expired', 'no_token', 'network_error']) {
+    for (const code of ['auth_expired', 'no_token', 'forbidden']) {
         const {calls, sections} = spySections();
         const out = await refreshSections(sections, {result: {ok: false, code}, latest: LATEST});
         assert.deepEqual(calls.map(([n]) => n).sort(), ['accounts', 'cost', 'cursor', 'sessions'], code);

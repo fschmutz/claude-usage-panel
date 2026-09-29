@@ -28,6 +28,7 @@ struct SettingsView: View {
                     Toggle("Show session cost (ccusage)", isOn: $model.showCost)
                 }
                 CursorSection(model: model)
+                CodexSettingsSection(model: model)
             }
             .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
         }

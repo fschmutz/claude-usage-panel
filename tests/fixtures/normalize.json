@@ -135,6 +135,26 @@
       "expected": [
         {"kind": "session", "group": "session", "scoped": false, "percent": 12, "severity": "normal", "resetsAt": null, "active": true}
       ]
+    },
+    {
+      "name": "limits[]: a JSON boolean percent is absent, never 1 % (JSONSerialization hands booleans back as NSNumber)",
+      "input": {
+        "limits": [{"kind": "session", "percent": true, "is_active": true}, {"kind": "weekly_all", "percent": false}]
+      },
+      "expected": [
+        {"kind": "session", "group": "session", "scoped": false, "percent": 0, "severity": "normal", "resetsAt": null, "active": true},
+        {"kind": "weekly_all", "group": "weekly", "scoped": false, "percent": 0, "severity": "normal", "resetsAt": null, "active": false}
+      ]
+    },
+    {
+      "name": "legacy: a JSON boolean utilization is absent, never a 1 % or 0 % card",
+      "input": {
+        "five_hour": {"utilization": true},
+        "seven_day": {"utilization": 30}
+      },
+      "expected": [
+        {"kind": "weekly_all", "group": "weekly", "scoped": false, "percent": 30, "severity": "normal", "resetsAt": null, "active": false}
+      ]
     }
   ]
 }

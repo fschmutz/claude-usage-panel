@@ -42,4 +42,8 @@ public enum Provenances {
     public static let limits: Provenance = .official
     /// Session cost via ccusage: local logs times a price table.
     public static let cost: Provenance = .estimated
+    /// Codex rate limits: OpenAI publishes no usage endpoint, so the only
+    /// figures that exist are the ones the codex CLI wrote down when the API
+    /// last returned them. Real numbers, but from then, not from now.
+    public static let codex: Provenance = .estimated
 }

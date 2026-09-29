@@ -154,6 +154,63 @@ for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]])
     });
 }
 
+// ── The usage endpoint's non-2xx contract ───────────────────────────────────────
+// One call per port turns a status into the three things a client acts on:
+// whether the credentials are finished (nothing retries out of that), whether
+// the last reading may stay up, and what to put on screen. The Swift twin is
+// UsageFailureTests.
+const endpointFix = fixture('usage-endpoint.json');
+
+for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
+    test(`${portName} usageFailure - the live-login message is the fixture's`, () => {
+        assert.equal(port.AUTH_EXPIRED_MESSAGE, endpointFix.authExpiredMessage);
+    });
+    for (const c of endpointFix.cases) {
+        test(`${portName} usageFailure - ${c.name}`, () => {
+            assert.deepEqual(
+                port.usageFailure(c.status, c.body, {
+                    label: c.label, retryAfter: c.retryAfter ?? null,
+                    nowMs: Date.parse(endpointFix.now),
+                }),
+                {ok: false, ...c.expected});
+        });
+    }
+}
+
+// ── Honest readings ─────────────────────────────────────────────────────────────
+// When a percentage may NOT be printed: no number in the payload, or a window
+// that has already rolled over. The Swift twin is UsageReadingTests.
+const readingFix = fixture('reading.json');
+const readingNow = Date.parse(readingFix.now);
+
+for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
+    test(`${portName} - the em dash is the fixture's`, () => {
+        assert.equal(port.NO_READING, readingFix.noReading);
+    });
+    for (const c of readingFix.normalize) {
+        test(`${portName} percentKnown - ${c.name}`, () => {
+            assert.deepEqual(
+                port.normalizeUsage(c.input).map(
+                    (card) => ({
+                        kind: card.key.split(':')[0],
+                        percent: card.percent,
+                        percentKnown: card.percentKnown,
+                    })),
+                c.expected);
+        });
+    }
+    for (const c of readingFix.cases) {
+        test(`${portName} usageReading - ${c.name}`, () => {
+            assert.deepEqual(port.usageReading(c.card, readingNow), c.expected);
+        });
+    }
+    for (const c of readingFix.panelCard) {
+        test(`${portName} panelCard - ${c.name}`, () => {
+            assert.equal(port.panelCard(c.cards, c.mode, readingNow)?.key ?? null, c.expected);
+        });
+    }
+}
+
 // ── Named accounts ──────────────────────────────────────────────────────────────
 // What a valid profile is, which saved login is the live one, whether a stored
 // token is still usable, and when to move to another account.

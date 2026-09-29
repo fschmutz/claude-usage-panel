@@ -16,9 +16,11 @@ import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 import {openStore} from '../claude-code/accounts.js';
+import {openCodexStore} from '../claude-code/codex.js';
 import {liveLoginUsage} from '../claude-code/login-usage.js';
 import {withPace} from '../claude-code/pace.js';
 import {historyPath, warehousePath} from '../claude-code/paths.js';
+import {CODEX_TOOL_NAMES, CODEX_TOOLS, callCodexTool} from './codex.js';
 import {readLastPing, refreshSessions, renderPing, renderSessions} from './sessions.js';
 import {
   ACCOUNT_TOOL_NAMES, ACCOUNT_TOOLS, GET_USAGE_TOOL, callAccountTool, currentAccount,
@@ -95,12 +97,20 @@ export async function handleRequest(msg, io = {}) {
     case 'ping':
       return {};
     case 'tools/list':
-      return {tools: [GET_USAGE_TOOL, ...ACCOUNT_TOOLS]};
+      return {tools: [GET_USAGE_TOOL, ...ACCOUNT_TOOLS, ...CODEX_TOOLS]};
     case 'tools/call': {
       const name = msg.params?.name;
       if (ACCOUNT_TOOL_NAMES.has(name)) {
         try {
           return await callAccountTool(name, msg.params?.arguments, openStore(io));
+        } catch (e) {
+          return {content: [{type: 'text', text: e.message}], isError: true};
+        }
+      }
+      if (CODEX_TOOL_NAMES.has(name)) {
+        try {
+          return callCodexTool(
+            name, msg.params?.arguments, openCodexStore(io), io.nowMs ?? Date.now());
         } catch (e) {
           return {content: [{type: 'text', text: e.message}], isError: true};
         }

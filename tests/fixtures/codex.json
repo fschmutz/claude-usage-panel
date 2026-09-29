@@ -1,0 +1,579 @@
+{
+  "_comment": "Named OpenAI Codex logins, pinned across lib/pure/codex.js (GNOME), claude-code/codex-contract.js (CLI + MCP) and ClaudeUsageCore/Codex.swift (macOS). A Codex profile is one saved `auth.json` from the Codex home ($CODEX_HOME, else ~/.codex). Identity comes out of the id token's claims, read WITHOUT verifying the signature - the file is one only this user can write, and the claims are used for nothing but naming the account and its plan. tokenState never triggers an exchange: unlike the Claude store, nothing here mints a Codex token, so a stale one is reported and left to `codex login`. The recorded-usage contract (the only Codex numbers this project shows) is pinned in codex-usage.json.",
+  "now": 1789300000000,
+  "refreshLeadMs": 300000,
+  "refreshMaxAgeMs": 2419200000,
+  "authClaim": "https://api.openai.com/auth",
+  "tokens": {
+    "idPlus": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InBsdXNAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1wbHVzIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIiwiY2hhdGdwdF91c2VyX2lkIjoidS1wbHVzIn19.sig",
+    "idPro": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InByb0BleGFtcGxlLmNvbSIsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LXBybyIsImNoYXRncHRfcGxhbl90eXBlIjoicHJvIn19.sig",
+    "idNoPlan": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6Im5vcGxhbkBleGFtcGxlLmNvbSJ9.sig",
+    "accessValid": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+    "accessStale": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMDAxMDB9.sig",
+    "accessNoExp": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig"
+  },
+  "jwt": [
+    {
+      "name": "not a JWT at all",
+      "token": "sk-abcdef",
+      "expected": null
+    },
+    {
+      "name": "the empty string",
+      "token": "",
+      "expected": null
+    },
+    {
+      "name": "three parts, but the payload is not base64",
+      "token": "a.!!!!.c",
+      "expected": null
+    },
+    {
+      "name": "three parts, valid base64, not JSON",
+      "token": "a.aGVsbG8.c",
+      "expected": null
+    },
+    {
+      "name": "a payload that is a JSON array is not a claim set",
+      "token": "a.WzEsMl0.c",
+      "expected": null
+    },
+    {
+      "name": "unpadded base64url decodes like the padded form",
+      "token": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig",
+      "expected": {
+        "sub": "x"
+      }
+    }
+  ],
+  "planLabels": [
+    {
+      "plan": "plus",
+      "expected": "Plus"
+    },
+    {
+      "plan": "pro",
+      "expected": "Pro"
+    },
+    {
+      "plan": "business",
+      "expected": "Business"
+    },
+    {
+      "plan": "chatgpt_enterprise",
+      "expected": "Chatgpt enterprise"
+    },
+    {
+      "plan": "",
+      "expected": ""
+    },
+    {
+      "plan": null,
+      "expected": ""
+    }
+  ],
+  "profiles": [
+    {
+      "version": 1,
+      "name": "PLUS",
+      "savedAt": "2026-09-13T10:00:00Z",
+      "auth": {
+        "OPENAI_API_KEY": null,
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InBsdXNAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1wbHVzIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIiwiY2hhdGdwdF91c2VyX2lkIjoidS1wbHVzIn19.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+          "refresh_token": "rt-plus",
+          "account_id": "acct-plus"
+        },
+        "last_refresh": "2026-09-13T09:00:00Z"
+      }
+    },
+    {
+      "version": 1,
+      "name": "PRO",
+      "savedAt": "2026-09-13T10:00:00Z",
+      "auth": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InByb0BleGFtcGxlLmNvbSIsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LXBybyIsImNoYXRncHRfcGxhbl90eXBlIjoicHJvIn19.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMDAxMDB9.sig",
+          "refresh_token": "rt-pro"
+        },
+        "last_refresh": "2026-09-13T09:00:00Z"
+      }
+    },
+    {
+      "version": 1,
+      "name": "OLD",
+      "savedAt": "2026-09-01T10:00:00Z",
+      "auth": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6Im5vcGxhbkBleGFtcGxlLmNvbSJ9.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig"
+        },
+        "last_refresh": "2026-09-01T09:00:00Z"
+      }
+    },
+    {
+      "version": 1,
+      "name": "LAPSED",
+      "savedAt": "2026-09-01T10:00:00Z",
+      "auth": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6Im5vcGxhbkBleGFtcGxlLmNvbSJ9.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig",
+          "refresh_token": "rt-lapsed"
+        },
+        "last_refresh": "2026-08-01T09:00:00Z"
+      }
+    }
+  ],
+  "summaries": [
+    {
+      "name": "PLUS",
+      "email": "plus@example.com",
+      "accountId": "acct-plus",
+      "plan": "plus",
+      "planLabel": "Plus",
+      "tokenState": "valid"
+    },
+    {
+      "name": "PRO",
+      "email": "pro@example.com",
+      "accountId": "acct-pro",
+      "plan": "pro",
+      "planLabel": "Pro",
+      "tokenState": "stale"
+    },
+    {
+      "name": "OLD",
+      "email": "noplan@example.com",
+      "accountId": null,
+      "plan": null,
+      "planLabel": "",
+      "tokenState": "expired"
+    },
+    {
+      "name": "LAPSED",
+      "email": "noplan@example.com",
+      "accountId": null,
+      "plan": null,
+      "planLabel": "",
+      "tokenState": "expired"
+    }
+  ],
+  "invalidProfiles": [
+    null,
+    "PLUS",
+    {
+      "name": "PLUS"
+    },
+    {
+      "name": "PLUS",
+      "auth": {}
+    },
+    {
+      "name": "PLUS",
+      "auth": {
+        "tokens": {}
+      }
+    },
+    {
+      "name": "PLUS",
+      "auth": {
+        "tokens": {
+          "access_token": ""
+        }
+      }
+    },
+    {
+      "name": "PLUS",
+      "auth": {
+        "OPENAI_API_KEY": "sk-only"
+      }
+    },
+    {
+      "name": ".hidden",
+      "auth": {
+        "tokens": {
+          "access_token": "a.b.c"
+        }
+      }
+    },
+    {
+      "name": "",
+      "auth": {
+        "tokens": {
+          "access_token": "a.b.c"
+        }
+      }
+    }
+  ],
+  "active": [
+    {
+      "name": "an account id alone is a workspace, not a login",
+      "live": {
+        "tokens": {
+          "account_id": "acct-pro",
+          "access_token": "x"
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "by the user id in the id token",
+      "live": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InBsdXNAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1wbHVzIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIiwiY2hhdGdwdF91c2VyX2lkIjoidS1wbHVzIn19.sig"
+        }
+      },
+      "expected": "PLUS"
+    },
+    {
+      "name": "a login nobody saved",
+      "live": {
+        "tokens": {
+          "account_id": "acct-nobody"
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "no live login at all",
+      "live": null,
+      "expected": null
+    }
+  ],
+  "team": {
+    "_comment": "One ChatGPT Team workspace, two members, plus one member's personal workspace. tokens.account_id is the WORKSPACE: ana and ben share acct-team, so matching on it alone would call ben ana and overwrite ANA with his tokens. A login is (account id, user id); the email decides only when one side has no user id.",
+    "profiles": [
+      {
+        "version": 1,
+        "name": "ANA",
+        "savedAt": "2026-09-13T10:00:00Z",
+        "auth": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImFuYUB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIiwiY2hhdGdwdF91c2VyX2lkIjoidXNlci1hbmEiLCJ1c2VyX2lkIjoidXNlci1hbmEifX0.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "refresh_token": "rt-ana",
+            "account_id": "acct-team"
+          },
+          "last_refresh": "2026-09-13T09:00:00Z"
+        }
+      },
+      {
+        "version": 1,
+        "name": "ANA_PLUS",
+        "savedAt": "2026-09-13T10:00:00Z",
+        "auth": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImFuYUB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1hbmEtcGx1cyIsImNoYXRncHRfcGxhbl90eXBlIjoicGx1cyIsImNoYXRncHRfdXNlcl9pZCI6InVzZXItYW5hIn19.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "refresh_token": "rt-ana_plus",
+            "account_id": "acct-ana-plus"
+          },
+          "last_refresh": "2026-09-13T09:00:00Z"
+        }
+      },
+      {
+        "version": 1,
+        "name": "BEN",
+        "savedAt": "2026-09-13T10:00:00Z",
+        "auth": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImJlbkB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIiwiY2hhdGdwdF91c2VyX2lkIjoidXNlci1iZW4iLCJ1c2VyX2lkIjoidXNlci1iZW4ifX0.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "refresh_token": "rt-ben",
+            "account_id": "acct-team"
+          },
+          "last_refresh": "2026-09-13T09:00:00Z"
+        }
+      }
+    ],
+    "active": [
+      {
+        "name": "ben in the shared workspace is BEN, not the first profile with that account id",
+        "live": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImJlbkB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIiwiY2hhdGdwdF91c2VyX2lkIjoidXNlci1iZW4iLCJ1c2VyX2lkIjoidXNlci1iZW4ifX0.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "account_id": "acct-team"
+          }
+        },
+        "expected": "BEN"
+      },
+      {
+        "name": "ana in the team workspace",
+        "live": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImFuYUB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIiwiY2hhdGdwdF91c2VyX2lkIjoidXNlci1hbmEiLCJ1c2VyX2lkIjoidXNlci1hbmEifX0.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "account_id": "acct-team"
+          }
+        },
+        "expected": "ANA"
+      },
+      {
+        "name": "the same person in her own workspace is a different login",
+        "live": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImFuYUB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1hbmEtcGx1cyIsImNoYXRncHRfcGxhbl90eXBlIjoicGx1cyIsImNoYXRncHRfdXNlcl9pZCI6InVzZXItYW5hIn19.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "account_id": "acct-ana-plus"
+          }
+        },
+        "expected": "ANA_PLUS"
+      },
+      {
+        "name": "an unsaved member of the same workspace matches nobody",
+        "live": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImN5QHRlYW0uZXhhbXBsZSIsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LXRlYW0iLCJjaGF0Z3B0X3BsYW5fdHlwZSI6InRlYW0iLCJjaGF0Z3B0X3VzZXJfaWQiOiJ1c2VyLWN5In19.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "account_id": "acct-team"
+          }
+        },
+        "expected": null
+      },
+      {
+        "name": "the access token's user id is read when the id token carries none, and beats the email",
+        "live": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImJlbkB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIn19.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDAsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfdXNlcl9pZCI6InVzZXItYW5hX19hY2N0LXRlYW0iLCJjaGF0Z3B0X3VzZXJfaWQiOiJ1c2VyLWFuYSIsInVzZXJfaWQiOiJ1c2VyLWFuYSJ9fQ.sig",
+            "account_id": "acct-team"
+          }
+        },
+        "expected": "ANA"
+      },
+      {
+        "name": "no user id anywhere: the email decides, inside the workspace",
+        "live": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImJlbkB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIn19.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "account_id": "acct-team"
+          }
+        },
+        "expected": "BEN"
+      },
+      {
+        "name": "an account id alone is a workspace, not a login",
+        "live": {
+          "tokens": {
+            "access_token": "x",
+            "account_id": "acct-team"
+          }
+        },
+        "expected": null
+      }
+    ],
+    "identities": [
+      {
+        "name": "chatgpt_user_id from the id token",
+        "auth": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImJlbkB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIiwiY2hhdGdwdF91c2VyX2lkIjoidXNlci1iZW4iLCJ1c2VyX2lkIjoidXNlci1iZW4ifX0.sig",
+            "account_id": "acct-team"
+          }
+        },
+        "expected": {
+          "email": "ben@team.example",
+          "accountId": "acct-team",
+          "userId": "user-ben",
+          "plan": "team"
+        }
+      },
+      {
+        "name": "user_id when chatgpt_user_id is absent",
+        "auth": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImRlZUB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwidXNlcl9pZCI6InVzZXItZGVlIn19.sig"
+          }
+        },
+        "expected": {
+          "email": "dee@team.example",
+          "accountId": "acct-team",
+          "userId": "user-dee",
+          "plan": null
+        }
+      },
+      {
+        "name": "the access token when the id token has no user id",
+        "auth": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImJlbkB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIn19.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDAsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfdXNlcl9pZCI6InVzZXItYW5hX19hY2N0LXRlYW0iLCJjaGF0Z3B0X3VzZXJfaWQiOiJ1c2VyLWFuYSIsInVzZXJfaWQiOiJ1c2VyLWFuYSJ9fQ.sig"
+          }
+        },
+        "expected": {
+          "email": "ben@team.example",
+          "accountId": "acct-team",
+          "userId": "user-ana",
+          "plan": "team"
+        }
+      },
+      {
+        "name": "no user id anywhere",
+        "auth": {
+          "tokens": {
+            "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImJlbkB0ZWFtLmV4YW1wbGUiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC10ZWFtIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJ0ZWFtIn19.sig",
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig"
+          }
+        },
+        "expected": {
+          "email": "ben@team.example",
+          "accountId": "acct-team",
+          "userId": null,
+          "plan": "team"
+        }
+      }
+    ]
+  },
+  "tokenStateStrict": {
+    "_comment": "Fields of the wrong JSON type count as absent in every port: a string or boolean `exp` is no expiry (stale, never valid), and a `last_refresh` that is not an RFC 3339 date-time is no date (JS Date.parse would otherwise accept forms Swift never reads).",
+    "cases": [
+      {
+        "name": "a numeric exp far enough ahead is valid",
+        "auth": {
+          "tokens": {
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "refresh_token": "rt"
+          }
+        },
+        "expected": "valid"
+      },
+      {
+        "name": "a string exp is no expiry",
+        "auth": {
+          "tokens": {
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOiIxNzg5MzEwMDAwIn0.sig",
+            "refresh_token": "rt"
+          }
+        },
+        "expected": "stale"
+      },
+      {
+        "name": "a boolean exp is no expiry",
+        "auth": {
+          "tokens": {
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOnRydWV9.sig",
+            "refresh_token": "rt"
+          }
+        },
+        "expected": "stale"
+      },
+      {
+        "name": "an RFC 3339 last_refresh past the max age expires the login",
+        "auth": {
+          "tokens": {
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "refresh_token": "rt"
+          },
+          "last_refresh": "2020-01-01T00:00:00Z"
+        },
+        "expected": "expired"
+      },
+      {
+        "name": "a last_refresh in another date format is ignored",
+        "auth": {
+          "tokens": {
+            "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+            "refresh_token": "rt"
+          },
+          "last_refresh": "Jan 1 2020"
+        },
+        "expected": "valid"
+      }
+    ]
+  },
+  "switchSyncTries": 3,
+  "switchGuard": {
+    "_comment": "codexSwitch / Codex.guardedSwitch over a fake store. live: the saved profile the live auth.json is (null: an unsaved login), hasLive: whether auth.json exists at all, rotations[i]: whether the codex CLI rewrites auth.json between the i-th sync-back and the re-read before the write.",
+    "cases": [
+      {
+        "name": "a quiet live file: synced once, written once",
+        "live": "A",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "switched",
+          "from": "A",
+          "syncs": 1,
+          "writes": 1
+        }
+      },
+      {
+        "name": "rotated once mid-switch: synced again before the write",
+        "live": "A",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [
+          true
+        ],
+        "expected": {
+          "outcome": "switched",
+          "from": "A",
+          "syncs": 2,
+          "writes": 1
+        }
+      },
+      {
+        "name": "rotated on every try: nothing is written",
+        "live": "A",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [
+          true,
+          true,
+          true
+        ],
+        "expected": {
+          "outcome": "busy",
+          "from": "A",
+          "syncs": 3,
+          "writes": 0
+        }
+      },
+      {
+        "name": "an unsaved live login is refused",
+        "live": null,
+        "hasLive": true,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "unsaved",
+          "from": null,
+          "syncs": 1,
+          "writes": 0
+        }
+      },
+      {
+        "name": "already the live login",
+        "live": "B",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "already",
+          "from": "B",
+          "syncs": 1,
+          "writes": 0
+        }
+      },
+      {
+        "name": "no live login at all: the target is written",
+        "live": null,
+        "hasLive": false,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "switched",
+          "from": null,
+          "syncs": 1,
+          "writes": 1
+        }
+      }
+    ]
+  }
+}

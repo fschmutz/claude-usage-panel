@@ -2,25 +2,28 @@
 // claudectl: the one command-line entry point. `claudectl account …` manages
 // named logins (account-cli.js over accounts.js), `claudectl session …`
 // snapshots the running Claude Code sessions and reopens them as tabs
-// (session-cli.js over tabs.js). This file only dispatches and owns the
-// process edges (exit code, stderr, the TTY confirm); `main` is exported for
-// the tests and runs when the file is invoked directly (the install.sh shim,
-// the npm bin symlink).
+// (session-cli.js over tabs.js), `claudectl codex …` does for OpenAI Codex
+// logins what `account` does for Claude ones (codex-cli.js over codex.js).
+// This file only dispatches and owns the process edges (exit code, stderr, the
+// TTY confirm); `main` is exported for the tests and runs when the file is
+// invoked directly (the install.sh shim, the npm bin symlink).
 
 import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 import * as account from './account-cli.js';
+import * as codex from './codex-cli.js';
 import * as session from './session-cli.js';
 
-const GROUPS = {account, session};
+const GROUPS = {account, codex, session};
 
 const HELP = `claudectl - Claude Code from the command line
 
   claudectl account ...   named logins: list, current, save, use, remove, refresh
   claudectl session ...   running sessions: list, save, store, show, open, purge, autosave
+  claudectl codex ...     named OpenAI Codex logins: list, current, save, use, remove, usage
 
-  claudectl account help | claudectl session help   the commands of one group`;
+  claudectl <group> help  the commands of one group`;
 
 export async function main(argv, io = {}) {
   const out = io.stdout ?? ((s) => process.stdout.write(s));

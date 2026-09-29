@@ -106,6 +106,81 @@
         "limits": []
       },
       "expected": null
+    },
+    {
+      "name": "a null amount is no reading, not $0.00",
+      "payload": {
+        "spend": {
+          "enabled": true,
+          "percent": 10,
+          "severity": "normal",
+          "used": {
+            "amount_minor": null,
+            "currency": "USD",
+            "exponent": 2
+          },
+          "limit": null
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "a boolean amount is no reading, not 1 minor unit",
+      "payload": {
+        "spend": {
+          "enabled": true,
+          "percent": 10,
+          "severity": "normal",
+          "used": {
+            "amount_minor": true,
+            "currency": "USD",
+            "exponent": 2
+          },
+          "limit": null
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "a string amount is no reading",
+      "payload": {
+        "spend": {
+          "enabled": true,
+          "percent": 10,
+          "severity": "normal",
+          "used": {
+            "amount_minor": "1240",
+            "currency": "USD",
+            "exponent": 2
+          },
+          "limit": null
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "fields of the wrong JSON type fall back to their defaults",
+      "payload": {
+        "spend": {
+          "enabled": true,
+          "percent": "24",
+          "severity": "alarm",
+          "used": {
+            "amount_minor": 1240,
+            "currency": 7,
+            "exponent": null
+          },
+          "limit": null
+        }
+      },
+      "expected": {
+        "percent": 0,
+        "severity": "normal",
+        "usedAmount": 12.4,
+        "limitAmount": null,
+        "currency": "USD",
+        "detail": "$12.40"
+      }
     }
   ],
   "labels": [
@@ -115,19 +190,19 @@
     },
     {
       "kind": "weekly_all",
-      "expected": "Weekly \u00b7 all models"
+      "expected": "Weekly · all models"
     },
     {
       "kind": "weekly_cowork",
-      "expected": "Weekly \u00b7 cowork"
+      "expected": "Weekly · cowork"
     },
     {
       "kind": "weekly_opus_4_1",
-      "expected": "Weekly \u00b7 opus 4 1"
+      "expected": "Weekly · opus 4 1"
     },
     {
       "kind": "session_burst",
-      "expected": "Session \u00b7 burst"
+      "expected": "Session · burst"
     },
     {
       "kind": "nimbus_quill",

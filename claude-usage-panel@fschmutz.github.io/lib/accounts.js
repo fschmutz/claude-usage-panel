@@ -16,13 +16,14 @@ import Gio from 'gi://Gio';
 
 import {readLiveAccount, readLiveCredentials} from './claudeFiles.js';
 import {fetchUsage} from './claudeUsage.js';
-import {readJSON, writeText} from './fs.js';
+import {readJSON, readText, writeText} from './fs.js';
 import {jsonMessage, parseBody, send} from './http.js';
 import {claudeConfigPath, credentialsPath, stateDir} from './paths.js';
 import {run} from './proc.js';
 import {
-    PROFILE_VERSION, isTorn, isValidName, liveProfileName, parkName, parseProfile,
-    refreshedOauth, saveRefusal, sameJSON, switchPlan, syncBackPlan, tokenState, usageCacheEntry,
+    PROFILE_VERSION, REFRESH_LOCK, isTorn, isValidName, liveProfileName, parkName, parseProfile,
+    refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, saveRefusal, sameJSON,
+    switchPlan, syncBackPlan, tokenState, usageCacheEntry,
 } from './pure.js';
 
 export {readLiveAccount, readLiveCredentials};
@@ -66,6 +67,14 @@ function pendingSwitchPath() {
 
 // Everything in the store is a secret: created 0600, never world-readable.
 const writePrivate = (path, text) => writeText(path, text, {mode: 0o600});
+
+// An error the UI has to classify rather than just print. `code` is the string
+// accountHealth() reads ('refresh_failed', 'login_expired', 'no_account',
+// 'no_token', 'transient', 'http_error', 'network_error'), so a broken saved
+// login is reported identically by every port.
+function coded(code, message) {
+    return Object.assign(new Error(message), {code});
+}
 
 // ── Store ───────────────────────────────────────────────────────────────────────
 
@@ -221,39 +230,178 @@ export async function runningClaudeCount() {
 }
 
 // ── Token refresh (our store only) ──────────────────────────────────────────────
+// A refresh token is single-use and several processes poll one store (this
+// panel, one MCP server per Claude Code window, the CLI, the macOS app on a
+// shared home), so the exchange runs under the per-profile lock file every
+// port uses (REFRESH_LOCK in lib/pure/accounts.js), and a profile another
+// process already refreshed is used as it is (refreshRaced).
 
-/**
- * Exchange the profile's refresh token for a new access token and store the
- * result. Throws on failure. Never touches the live login.
- */
-export async function refreshProfile(session, profile) {
-    const oauth = profile.credentials.claudeAiOauth;
-    if (!oauth.refreshToken)
-        throw new Error(`${profile.name}: no refresh token - log in again and save it`);
-    let body;
+const sleep = ms => new Promise(resolve => {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+        resolve();
+        return GLib.SOURCE_REMOVE;
+    });
+});
+
+// O_EXCL create, 0600 (G_FILE_CREATE_PRIVATE). The lock carries a random id so
+// a holder only ever removes its own lock, never one a waiter took over after
+// it went stale.
+function createLock(file, text) {
+    const stream = file.create(Gio.FileCreateFlags.PRIVATE, null);
+    stream.write_all(new TextEncoder().encode(text), null);
+    stream.close(null);
+}
+
+// The lock as a waiter judged it: its id and mtime, or null once it is gone.
+function lockSnapshot(path) {
     try {
-        const {status, bytes} = await send(session, jsonMessage('POST', OAUTH_TOKEN_ENDPOINT, {
+        const info = Gio.File.new_for_path(path)
+            .query_info('time::modified', Gio.FileQueryInfoFlags.NONE, null);
+        const mtimeMs = info.get_modification_date_time().to_unix() * 1000;
+        const text = readText(path);
+        return text === null ? null : {text, mtimeMs};
+    } catch {
+        return null;
+    }
+}
+
+// A stale lock is moved aside, never deleted in place: a rename is atomic, so
+// of two waiters that judged one lock stale only one moves it (the other gets
+// NOT_FOUND and waits again). The mover checks it moved the lock it judged;
+// one a faster waiter had already replaced is put back with O_EXCL, so it
+// never lands over a newer holder's.
+function takeOverStale(path, file, judged) {
+    const aside = Gio.File.new_for_path(`${path}.stale-${GLib.uuid_string_random()}`);
+    try {
+        file.move(aside, Gio.FileCopyFlags.NONE, null, null);
+    } catch (e) {
+        if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
+            return;
+        throw e;
+    }
+    const moved = lockSnapshot(aside.get_path());
+    if (moved && (moved.text !== judged.text || moved.mtimeMs !== judged.mtimeMs)) {
+        try {
+            createLock(file, moved.text);
+        } catch {
+            // a newer holder is already in
+        }
+    }
+    try {
+        aside.delete(null);
+    } catch {
+        // already gone
+    }
+}
+
+async function acquireRefreshLock(name) {
+    const path = GLib.build_filenamev([accountsDir(), refreshLockFile(name)]);
+    const file = Gio.File.new_for_path(path);
+    const id = GLib.uuid_string_random();
+    GLib.mkdir_with_parents(accountsDir(), 0o700);
+    const start = Date.now();
+    for (;;) {
+        try {
+            createLock(file, id);
+            return {path, file, id};
+        } catch (e) {
+            if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS))
+                throw e;
+        }
+        const judged = lockSnapshot(path);
+        if (!judged)
+            continue; // released between the two calls: try again at once
+        if (Date.now() - judged.mtimeMs > REFRESH_LOCK.staleMs) {
+            takeOverStale(path, file, judged); // a crashed holder
+            continue;
+        }
+        if (Date.now() - start > REFRESH_LOCK.waitMs) {
+            throw coded('transient',
+                `${name}: another refresh of this login is still running - try again`);
+        }
+        await sleep(REFRESH_LOCK.pollMs);
+    }
+}
+
+function releaseRefreshLock({path, file, id}) {
+    if (readText(path) !== id)
+        return;
+    try {
+        file.delete(null);
+    } catch {
+        // already gone
+    }
+}
+
+// The token exchange itself: the new OAuth block, or a coded throw.
+async function exchange(session, name, oauth) {
+    let status, bytes;
+    try {
+        ({status, bytes} = await send(session, jsonMessage('POST', OAUTH_TOKEN_ENDPOINT, {
             grant_type: 'refresh_token',
             refresh_token: oauth.refreshToken,
             client_id: OAUTH_CLIENT_ID,
-        }));
-        if (status < 200 || status >= 300) {
-            const again = status === 400 || status === 401 ? ' - log in again and save it' : '';
-            throw new Error(`${profile.name}: token refresh rejected (HTTP ${status})${again}`);
-        }
-        body = parseBody(bytes);
+        })));
     } catch (e) {
-        throw new Error(e.message.startsWith(profile.name)
-            ? e.message : `${profile.name}: token refresh failed - ${e.message}`);
+        throw coded('network_error', `${name}: token refresh failed - ${e.message}`);
     }
-    const nowMs = Date.now();
-    const next = refreshedOauth(oauth, body, nowMs);
+    if (status < 200 || status >= 300) {
+        const code = refreshFailureCode(status);
+        const again = code === 'refresh_failed' ? ' - log in again and save it' : '';
+        throw coded(code, `${name}: token refresh rejected (HTTP ${status})${again}`);
+    }
+    let body = null;
+    try {
+        body = parseBody(bytes);
+    } catch {
+        // a 200 without a JSON body carries no access token either
+    }
+    const next = refreshedOauth(oauth, body, Date.now());
     if (!next)
-        throw new Error(`${profile.name}: token refresh returned no access token`);
-    return writeProfile({
-        ...profile, savedAt: new Date(nowMs).toISOString(),
-        credentials: {...profile.credentials, claudeAiOauth: next},
-    });
+        throw coded('refresh_failed', `${name}: token refresh returned no access token`);
+    return next;
+}
+
+/**
+ * Exchange the profile's refresh token for a new access token and store the
+ * result, under the profile's refresh lock. When another process refreshed it
+ * first, the stored result is returned and no token is spent. Throws a coded
+ * error on failure. Never touches the live login.
+ */
+export async function refreshProfile(session, profile) {
+    const sent = profile.credentials.claudeAiOauth;
+    if (!sent.refreshToken) {
+        throw coded('login_expired',
+            `${profile.name}: no refresh token - log in again and save it`);
+    }
+    const lock = await acquireRefreshLock(profile.name);
+    try {
+        const current = readProfile(profile.name);
+        if (!current)
+            throw coded('no_account', `no saved account named ${profile.name}`);
+        if (refreshRaced(sent, current.credentials.claudeAiOauth))
+            return current;
+        let next;
+        try {
+            next = await exchange(session, profile.name, sent);
+        } catch (e) {
+            // A writer that took no lock may have spent it: a spent token
+            // whose replacement is on disk is fine.
+            const again = e.code === 'refresh_failed' ? readProfile(profile.name) : null;
+            if (again && refreshRaced(sent, again.credentials.claudeAiOauth))
+                return again;
+            throw e;
+        }
+        // The rotated tokens go into OUR store and nowhere else. This is
+        // reached for parked accounts on every poll; writing the live
+        // credentials from here would rotate the token Claude Code is running on.
+        return writeProfile({
+            ...current, savedAt: new Date().toISOString(),
+            credentials: {...current.credentials, claudeAiOauth: next},
+        });
+    } finally {
+        releaseRefreshLock(lock);
+    }
 }
 
 /**
@@ -264,11 +412,15 @@ export async function refreshProfile(session, profile) {
 export async function accessTokenFor(session, name) {
     const profile = readProfile(name);
     if (!profile)
-        throw new Error(`no saved account named ${name}`);
+        throw coded('no_account', `no saved account named ${name}`);
+    // THE RULE: a name that resolves to the live login returns the live token
+    // or throws no_token; it never reaches the refresh below, whatever its
+    // stored copy says. Its stored refresh token is the one Claude Code holds.
     if (liveAccountName() === name) {
         const live = readLiveCredentials();
         if (live)
             return {token: live.claudeAiOauth.accessToken, source: 'live'};
+        throw coded('no_token', `${name}: the live login cannot be read right now - try again`);
     }
     switch (tokenState(profile)) {
     case 'valid':
@@ -278,7 +430,7 @@ export async function accessTokenFor(session, name) {
         return {token: fresh.credentials.claudeAiOauth.accessToken, source: 'refreshed'};
     }
     default:
-        throw new Error(
+        throw coded('login_expired',
             `${name}: login expired - run \`claude auth login\` on it and save it again`);
     }
 }
@@ -314,6 +466,11 @@ export async function switchTo(session, name) {
     let target = readProfile(name);
     if (!target)
         throw new Error(`no saved account named ${name}`);
+    // The live login by its account block, with credentials we cannot read:
+    // refreshing or reinstalling the stored copy would spend or overwrite the
+    // refresh token Claude Code is running on. Wait for it to be readable.
+    if (!readLiveCredentials() && liveAccountName() === name)
+        throw coded('no_token', `${name}: the live login cannot be read right now - try again`);
     const synced = syncBack();
     const plan = switchPlan({
         name, synced, pending: readPendingSwitch(),
@@ -355,16 +512,23 @@ export function readLastSwitchMs() {
 
 // ── Per-account usage ───────────────────────────────────────────────────────────
 
-/** Normalized usage for one saved account, or {ok: false, code, message}. */
+/** Normalized usage for one saved account, or {ok: false, code, message};
+ *  `source` is where the token came from (accountHealth's `live`).
+ *  A token taken from the live login is Claude Code's to keep fresh, so its
+ *  refusal is reported as the live login's (no label, so the message keeps the
+ *  refresh hint); a stored or refreshed one names the profile. Same rule as
+ *  claude-code/login-usage.js. */
 export async function usageFor(session, name) {
-    let token;
+    let token, source;
     try {
-        ({token} = await accessTokenFor(session, name));
+        ({token, source} = await accessTokenFor(session, name));
     } catch (e) {
-        return {name, ok: false, code: 'no_token', message: e.message};
+        // The store's own codes are what accountHealth() tells a broken login
+        // from a merely unreachable one with.
+        return {name, ok: false, code: e.code ?? 'no_token', message: e.message};
     }
-    const result = await fetchUsage(session, token);
-    return {name, ...result};
+    const result = await fetchUsage(session, token, {label: source === 'live' ? null : name});
+    return {name, source, ...result};
 }
 
 // The panels and the MCP server drop the latest per-account worst limit here
@@ -373,7 +537,7 @@ export function writeUsageCache(results, nowMs = Date.now()) {
     const accounts = {};
     for (const [name, r] of Object.entries(results)) {
         if (r?.ok)
-            accounts[name] = usageCacheEntry(r.cards);
+            accounts[name] = usageCacheEntry(r.cards, nowMs);
     }
     try {
         writePrivate(usageCachePath(), JSON.stringify({at: nowMs, accounts}));

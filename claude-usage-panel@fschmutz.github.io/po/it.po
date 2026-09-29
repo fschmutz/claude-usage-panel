@@ -16,121 +16,209 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:179
+#: extension.js:183
 msgid "Extra usage"
 msgstr "Utilizzo extra"
 
-#: extension.js:221
+#: extension.js:228
 #, javascript-format
 msgid "Reopen %s (%d session)"
 msgid_plural "Reopen %s (%d sessions)"
 msgstr[0] "Riapri %s (%d sessione)"
 msgstr[1] "Riapri %s (%d sessioni)"
 
-#: extension.js:241
+#: extension.js:248
 msgid "Reopened your sessions"
 msgstr "Sessioni riaperte"
 
-#: extension.js:241
+#: extension.js:248
 msgid "Could not reopen the sessions"
 msgstr "Impossibile riaprire le sessioni"
 
-#: extension.js:340
+#: extension.js:356
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - nuovo tentativo, ultima lettura mostrata"
 
-#: extension.js:376
+#: extension.js:393
 #, javascript-format
 msgid "Updated %s"
 msgstr "Aggiornato %s"
 
-#: extension.js:408
+#: extension.js:426
 msgid "Session cost: computing…"
 msgstr "Costo sessione: calcolo…"
 
-#: extension.js:413
+#: extension.js:431
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "Costo sessione: $%s · %s token (stima)"
 
-#: extension.js:415
+#: extension.js:433
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "Costo sessione: non disponibile (installa ccusage)"
 
-#: extension.js:445
+#: extension.js:463
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (%d%% del limite)"
 
-#: extension.js:462
+#: extension.js:480
 #, javascript-format
 msgid "last %s"
 msgstr "ultimo %s"
 
-#: extension.js:462 prefs.js:332
+#: extension.js:480 prefs/pings.js:96
 msgid "never"
 msgstr "mai"
 
-#: extension.js:466
+#: extension.js:484
 #, javascript-format
 msgid "next %s"
 msgstr "prossimo %s"
 
-#: extension.js:468
+#: extension.js:486
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "Ping di sessione: %s"
 
-#: extension.js:480 extension.js:484 lib/accountsSection.js:289
-#: lib/accountsSection.js:295 lib/headerBar.js:41 lib/sessionsSection.js:159
-#: lib/sessionsSection.js:169
+#: extension.js:498 extension.js:502 lib/accountsSection.js:525
+#: lib/headerBar.js:41 lib/sessionsSection.js:159 lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Utilizzo di Claude"
 
-#: extension.js:481
+#: extension.js:499
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s ha raggiunto il %d%%"
 
-#: extension.js:485
+#: extension.js:503
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s si esaurirà prima del reset al ritmo attuale"
 
-#: extension.js:608
+#: extension.js:627
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:65 prefs.js:42 prefs.js:557
+#: lib/accountsSection.js:77
+#, javascript-format
+msgid "Incomplete switch to %s - the login may be half-installed."
+msgstr ""
+"Passaggio a %s incompleto: l'accesso potrebbe essere installato a metà."
+
+#: lib/accountsSection.js:79
+#, javascript-format
+msgid "%s's credentials and account block disagree."
+msgstr "Le credenziali e il blocco account di %s non coincidono."
+
+#: lib/accountsSection.js:81
+#, javascript-format
+msgid "Signed in as %s, but this login is not saved."
+msgstr "Accesso effettuato come %s, ma non è salvato."
+
+#: lib/accountsSection.js:83
+#, javascript-format
+msgid "%s: login expired - a new sign-in is the only fix."
+msgstr "%s: accesso scaduto; solo un nuovo accesso lo risolve."
+
+#: lib/accountsSection.js:85
+#, javascript-format
+msgid "%s: the stored login was refused - sign in again."
+msgstr "%s: l'accesso salvato è stato rifiutato; accedi di nuovo."
+
+#: lib/accountsSection.js:87
+#, javascript-format
+msgid "%s: no usage reading right now."
+msgstr "%s: nessuna lettura di utilizzo al momento."
+
+#: lib/accountsSection.js:95
+msgid "Finish switch"
+msgstr "Completa il passaggio"
+
+#: lib/accountsSection.js:97
+msgid "Repair"
+msgstr "Ripara"
+
+#: lib/accountsSection.js:99
+#, javascript-format
+msgid "Save as %s"
+msgstr "Salva come %s"
+
+#: lib/accountsSection.js:101
+msgid "Copy sign-in command"
+msgstr "Copia il comando di accesso"
+
+#: lib/accountsSection.js:103
+msgid "Retry"
+msgstr "Riprova"
+
+#: lib/accountsSection.js:126 prefs/accounts.js:22 prefs.js:37
 msgid "Accounts"
 msgstr "Account"
 
-#: lib/accountsSection.js:126
+#: lib/accountsSection.js:130
+msgid "Next"
+msgstr "Successivo"
+
+#: lib/accountsSection.js:209
+#, javascript-format
+msgid "Next walks %s and wraps. Up next: %s."
+msgstr "Successivo percorre %s e ricomincia. Prossimo: %s."
+
+#: lib/accountsSection.js:229
 msgid "(login expired)"
 msgstr "(accesso scaduto)"
 
-#: lib/accountsSection.js:187
+#: lib/accountsSection.js:231
+msgid "(refresh failed)"
+msgstr "(aggiornamento non riuscito)"
+
+#: lib/accountsSection.js:233
+msgid "(no reading)"
+msgstr "(nessuna lettura)"
+
+#: lib/accountsSection.js:314
 #, javascript-format
 msgid "Auto-switch at %d%% · on"
 msgstr "Cambio automatico al %d%% · attivo"
 
-#: lib/accountsSection.js:188
+#: lib/accountsSection.js:315
 #, javascript-format
 msgid "Auto-switch at %d%% · off"
 msgstr "Cambio automatico al %d%% · disattivo"
 
-#: lib/accountsSection.js:280
+#: lib/accountsSection.js:478
+#, javascript-format
+msgid "saved as %s"
+msgstr "salvato come %s"
+
+#: lib/accountsSection.js:488
+#, javascript-format
+msgid "copied `%s` - run it, then save the login again"
+msgstr "`%s` copiato: eseguilo e salva di nuovo l'accesso"
+
+#
+#: lib/accountsSection.js:493
+msgid "re-reading…"
+msgstr "rilettura…"
+
+#: lib/accountsSection.js:512
+#, javascript-format
+msgid "%s was already the login"
+msgstr "%s era già l'accesso attivo"
+
+#: lib/accountsSection.js:516
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "Passato da %s → %s: %s era al %d%%"
 
-#: lib/accountsSection.js:282
+#: lib/accountsSection.js:518
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "Passato da %s → %s"
 
-#: lib/accountsSection.js:285
+#: lib/accountsSection.js:521
 #, javascript-format
 msgid " - %d running session keeps the old login until restarted"
 msgid_plural " - %d running sessions keep the old login until restarted"
@@ -138,20 +226,71 @@ msgstr[0] " - %d sessione in corso mantiene il vecchio accesso fino al riavvio"
 msgstr[1] ""
 " - %d sessioni in corso mantengono il vecchio accesso fino al riavvio"
 
-#: lib/accountsSection.js:296
+#: lib/accountsSection.js:529
 #, javascript-format
-msgid "Could not switch to %s: %s"
-msgstr "Impossibile passare a %s: %s"
+msgid "now on %s"
+msgstr "ora su %s"
 
-#: lib/claudeUsage.js:49
+#: lib/claudeUsage.js:41
 msgid "No Claude credentials found. Sign in with Claude Code."
 msgstr "Nessuna credenziale Claude trovata. Accedi con Claude Code."
 
-#: lib/claudeUsage.js:66
+#: lib/claudeUsage.js:70
 msgid "Claude session expired. Run any Claude Code command to refresh."
 msgstr ""
 "Sessione Claude scaduta. Esegui un qualsiasi comando di Claude Code per "
 "rinnovarla."
+
+#: lib/codexSection.js:21
+msgid "No Codex sessions on this machine yet - nothing has recorded a limit."
+msgstr ""
+"Nessuna sessione Codex su questa macchina: niente ha ancora registrato un "
+"limite."
+
+#: lib/codexSection.js:22
+msgid "The recent Codex sessions carry no rate limits."
+msgstr "Le sessioni Codex recenti non contengono limiti."
+
+#: lib/codexSection.js:23
+msgid "The newest recorded Codex reading is too old to mean anything now."
+msgstr ""
+"L'ultima lettura Codex registrata è troppo vecchia per significare qualcosa."
+
+#: lib/codexSection.js:43
+msgid "OpenAI Codex"
+msgstr "OpenAI Codex"
+
+#: lib/codexSection.js:50
+msgid "est."
+msgstr "stim."
+
+#: lib/codexSection.js:93
+#, javascript-format
+msgid "Signed in as %s - `claudectl codex save NAME` keeps it."
+msgstr "Accesso come %s: `claudectl codex save NOME` lo conserva."
+
+#: lib/codexSection.js:95
+msgid "No Codex login found. Run `codex login` first."
+msgstr "Nessun accesso Codex trovato. Esegui `codex login`."
+
+#: lib/codexSection.js:115
+#, javascript-format
+msgid "Recorded by the codex CLI at %s, not read now."
+msgstr "Registrato dalla CLI codex alle %s, non letto ora."
+
+#: lib/codexSection.js:134
+msgid "needs `codex login`"
+msgstr "richiede `codex login`"
+
+#: lib/codexSection.js:153
+#, javascript-format
+msgid "now on %s - restart codex to use it"
+msgstr "ora su %s: riavvia codex per usarlo"
+
+#: lib/codexSection.js:154
+#, javascript-format
+msgid "%s was already the Codex login"
+msgstr "%s era già l'accesso Codex"
 
 #: lib/cursorSection.js:40
 msgid "Cursor"
@@ -236,7 +375,7 @@ msgstr "session-ping.sh non trovato - reinstalla con ./install.sh gnome."
 msgid "Could not write the systemd units: %s"
 msgstr "Impossibile scrivere le unità systemd: %s"
 
-#: lib/sessionsSection.js:46 prefs.js:179
+#: lib/sessionsSection.js:46 prefs/sessions.js:16
 msgid "Today’s sessions"
 msgstr "Sessioni di oggi"
 
@@ -258,393 +397,15 @@ msgstr ""
 msgid "Could not open %s"
 msgstr "Impossibile aprire %s"
 
-#: prefs.js:38
-msgid "General"
-msgstr "Generale"
-
-#: prefs.js:44
-msgid "Sessions"
-msgstr "Sessioni"
-
-#: prefs.js:49
-msgid "Integrations"
-msgstr "Integrazioni"
-
-#: prefs.js:61
-msgid "Behavior"
-msgstr "Comportamento"
-
-#: prefs.js:62
-msgid "How often to poll the Claude usage endpoint."
-msgstr "Ogni quanto interrogare l'endpoint di utilizzo di Claude."
-
-#: prefs.js:67
-msgid "Refresh interval"
-msgstr "Intervallo di aggiornamento"
-
-#: prefs.js:69
-msgid ""
-"Minutes between updates (min 1). Idle windows back off to 15 minutes, and a "
-"poll always lands just after a reset, on wake and when the network returns."
-msgstr ""
-"Minuti tra gli aggiornamenti (min 1). Le finestre inattive rallentano fino a "
-"15 minuti e un aggiornamento arriva sempre subito dopo un reset, al "
-"risveglio e al ritorno della rete."
-
-#: prefs.js:81
-msgid "Top bar shows"
-msgstr "La barra superiore mostra"
-
-#: prefs.js:82
-msgid "Which limit to display in the panel"
-msgstr "Quale limite mostrare nel pannello"
-
-#: prefs.js:83
-msgid "Worst limit"
-msgstr "Limite peggiore"
-
-#: prefs.js:83
-msgid "Current session"
-msgstr "Sessione corrente"
-
-#: prefs.js:91
-msgid "Limit-crossing alerts"
-msgstr "Avvisi al superamento dei limiti"
-
-#: prefs.js:92
-msgid "Notify when a limit reaches 90% or 100%"
-msgstr "Avvisa quando un limite raggiunge il 90% o il 100%"
-
-#: prefs.js:101
-msgid "Run on limit crossing or reset"
-msgstr "Esegui al superamento o al reset"
-
-#: prefs.js:110
-msgid "Placeholders"
-msgstr "Segnaposto"
-
-#: prefs.js:112
-msgid ""
-"%e event (threshold or reset) · %l label · %p percent · %t threshold · %k "
-"key · %% a literal %. Empty disables it. Example: notify-send \"Claude %l\" "
-"\"%e at %p%%\""
-msgstr ""
-"%e evento (threshold o reset) · %l etichetta · %p percentuale · %t soglia · "
-"%k chiave · %% un % letterale. Vuoto lo disattiva. Esempio: notify-send "
-"\"Claude %l\" \"%e al %p%%\""
-
-#: prefs.js:123
-msgid "Cost"
-msgstr "Costo"
-
-#: prefs.js:124
-msgid ""
-"The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires ccusage installed: npm i "
-"-g ccusage)."
-msgstr ""
-"L'API ufficiale non espone il costo in dollari sui piani in abbonamento. "
-"Attivalo per calcolarlo in locale con ccusage (richiede ccusage installato: "
-"npm i -g ccusage)."
-
-#: prefs.js:127
-msgid "Show session cost"
-msgstr "Mostra il costo della sessione"
-
-#: prefs.js:128
-msgid "Runs `ccusage blocks --active` on each refresh"
-msgstr "Esegue `ccusage blocks --active` a ogni aggiornamento"
-
-#: prefs.js:137
-msgid "Cursor (optional)"
-msgstr "Cursor (opzionale)"
-
-#: prefs.js:138
-msgid ""
-"Show Cursor team spend using the Cursor Admin API. Create a key at "
-"cursor.com → team → Settings → Admin API. Stored in the system keyring."
-msgstr ""
-"Mostra la spesa del team Cursor tramite l'API Admin di Cursor. Crea una "
-"chiave su cursor.com → team → Settings → Admin API. Salvata nel portachiavi "
-"di sistema."
-
-#: prefs.js:141
-msgid "Show Cursor usage"
-msgstr "Mostra l'utilizzo di Cursor"
-
-#: prefs.js:142
-msgid "Adds a Cursor spend section to the dropdown"
-msgstr "Aggiunge al menu una sezione di spesa Cursor"
-
-#: prefs.js:151
-msgid "Cursor Admin API key"
-msgstr "Chiave API Admin di Cursor"
-
-#: prefs.js:180
-msgid ""
-"List the sessions that spent the most tokens today, biggest first, and "
-"resume one in a terminal with a click. Read from the local transcripts in "
-"$CLAUDE_CONFIG_DIR/projects (~/.claude/projects by default)."
-msgstr ""
-"Elenca le sessioni che hanno speso più token oggi, dalla maggiore, e ne "
-"riprende una nel terminale con un clic. Letto dalle trascrizioni locali in "
-"$CLAUDE_CONFIG_DIR/projects (~/.claude/projects per impostazione "
-"predefinita)."
-
-#: prefs.js:183
-msgid "Show today’s sessions"
-msgstr "Mostra le sessioni di oggi"
-
-#: prefs.js:184
-msgid "Adds up to 5 resume links to the dropdown"
-msgstr "Aggiunge al menu fino a 5 link di ripresa"
-
-#: prefs.js:189
-msgid "Terminal"
-msgstr "Terminale"
-
-#: prefs.js:196
-msgid ""
-"Leave empty for the desktop default terminal ($TERMINAL first); without one: "
-"ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
-"xfce4-terminal, xterm. Also used by claudectl session open."
-msgstr ""
-"Lascia vuoto per il terminale predefinito del desktop ($TERMINAL per primo); "
-"in mancanza: ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, "
-"konsole, tilix, xfce4-terminal, xterm. Usato anche da claudectl session open."
-
-#: prefs.js:213
-msgid "Saved sessions"
-msgstr "Sessioni salvate"
-
-#: prefs.js:214
-msgid ""
-"claudectl session keeps the running Claude Code sessions in snapshots and "
-"reopens them as tabs of one terminal window."
-msgstr ""
-"claudectl session salva le sessioni Claude Code in corso in istantanee e le "
-"riapre come schede di un’unica finestra del terminale."
-
-#: prefs.js:216
-msgid "Autosave"
-msgstr "Salvataggio automatico"
-
-#: prefs.js:218
-msgid "Newest snapshot"
-msgstr "Istantanea più recente"
-
-#: prefs.js:219
-msgid "Reopen"
-msgstr "Riapri"
-
-#: prefs.js:227
-msgid "claudectl is not installed - run ./install.sh cli"
-msgstr "claudectl non è installato - esegui ./install.sh cli"
-
-#: prefs.js:229
-msgid "None yet - run claudectl session save, or wait for the autosave"
-msgstr ""
-"Nessuna per ora - esegui claudectl session save o attendi il salvataggio "
-"automatico"
-
-#: prefs.js:240
-msgid "Every 30 minutes"
-msgstr "Ogni 30 minuti"
-
-#: prefs.js:240
-msgid "Not scheduled - run ./install.sh cli"
-msgstr "Non pianificato - esegui ./install.sh cli"
-
-#: prefs.js:257
-msgid "Session pings"
-msgstr "Ping di sessione"
-
-#: prefs.js:258
-msgid ""
-"A 5-hour window is anchored to its first message, so pinging claude (haiku, "
-"one turn) at a fixed time lines the day’s windows up with the hours you "
-"actually work. Same schedule as ./install.sh sessionping."
-msgstr ""
-"Una finestra di 5 ore parte dal suo primo messaggio: un ping a claude "
-"(haiku, un turno) a un orario fisso allinea le finestre della giornata alle "
-"ore in cui lavori davvero. Stessa pianificazione di ./install.sh sessionping."
-
-#: prefs.js:265
-msgid "Open the 5h session window on schedule"
-msgstr "Apri la finestra di 5 h secondo pianificazione"
-
-#: prefs.js:267
-msgid "Runs scripts/session-ping.sh from a systemd user timer"
-msgstr "Esegue scripts/session-ping.sh da un timer utente systemd"
-
-#: prefs.js:268
-msgid "Needs a systemd user session - use ./install.sh sessionping here"
-msgstr ""
-"Richiede una sessione utente systemd - qui usa ./install.sh sessionping"
-
-#: prefs.js:274
-msgid "Last ping"
-msgstr "Ultimo ping"
-
-#: prefs.js:277
-msgid "Coverage"
-msgstr "Copertura"
-
-#: prefs.js:281
-msgid "Working day"
-msgstr "Giornata lavorativa"
-
-#: prefs.js:292
-msgid "Days"
-msgstr "Giorni"
-
-#: prefs.js:293
-msgid "Mon"
-msgstr "lun"
-
-#: prefs.js:293
-msgid "Tue"
-msgstr "mar"
-
-#: prefs.js:293
-msgid "Wed"
-msgstr "mer"
-
-#: prefs.js:293
-msgid "Thu"
-msgstr "gio"
-
-#: prefs.js:293
-msgid "Fri"
-msgstr "ven"
-
-#: prefs.js:293
-msgid "Sat"
-msgstr "sab"
-
-#: prefs.js:293
-msgid "Sun"
-msgstr "dom"
-
-#: prefs.js:316
-msgid "Add a ping"
-msgstr "Aggiungi un ping"
-
-#: prefs.js:319
-msgid "Suggest times"
-msgstr "Suggerisci orari"
-
-#: prefs.js:335
-#, javascript-format
-msgid "%d%% of %s-%s covered"
-msgstr "%d%% di %s-%s coperto"
-
-#: prefs.js:337
-msgid "no valid times yet"
-msgstr "nessun orario valido"
-
-#: prefs.js:358
-#, javascript-format
-msgid "Ping %d"
-msgstr "Ping %d"
-
-#: prefs.js:432
-msgid "Updates"
-msgstr "Aggiornamenti"
-
-#: prefs.js:433
-msgid "Daily check, and whether it is actually running."
-msgstr "Controllo giornaliero e se è davvero attivo."
-
-#: prefs.js:436 prefs.js:524
-msgid "Checking…"
-msgstr "Verifica…"
-
-#: prefs.js:440 prefs.js:464 prefs.js:488 prefs.js:495 prefs.js:503
-#: prefs.js:510
-msgid "Check now"
-msgstr "Verifica ora"
-
-#: prefs.js:462
-msgid "Cannot self-update"
-msgstr "Aggiornamento automatico impossibile"
-
-#: prefs.js:463
-msgid "No git checkout found for auto-update.sh."
-msgstr "Nessun checkout git trovato per auto-update.sh."
-
-#: prefs.js:471
-msgid "Could not read the update status"
-msgstr "Impossibile leggere lo stato dell'aggiornamento"
-
-#: prefs.js:480
-#, javascript-format
-msgid "Installed %s, checkout %s"
-msgstr "Installato %s, checkout %s"
-
-#: prefs.js:481
-msgid "The clients are behind the code - reinstall them."
-msgstr "I client sono indietro rispetto al codice: reinstallali."
-
-#: prefs.js:482 prefs.js:499 prefs.js:523
-msgid "Update now"
-msgstr "Aggiorna ora"
-
-#: prefs.js:486
-#, javascript-format
-msgid "Installed %s, running %s"
-msgstr "Installato %s, in esecuzione %s"
-
-#: prefs.js:487
-msgid "Log out and back in to load it."
-msgstr "Esci e rientra per caricarlo."
-
-#: prefs.js:490
-#, javascript-format
-msgid "Paused: %s"
-msgstr "In pausa: %s"
-
-#: prefs.js:492
-msgid ""
-"The daily check will not touch this checkout until that is resolved. It only "
-"ever fast-forwards a clean checkout."
-msgstr ""
-"Il controllo giornaliero non toccherà questo checkout finché non è risolto. "
-"Fa solo fast-forward su un checkout pulito."
-
-#: prefs.js:497
-#, javascript-format
-msgid "Update available: %s → %s"
-msgstr "Aggiornamento disponibile: %s → %s"
-
-#: prefs.js:498 prefs.js:502 prefs.js:509
-#, javascript-format
-msgid "Last checked %s"
-msgstr "Ultimo controllo %s"
-
-#: prefs.js:501
-#, javascript-format
-msgid "Up to date (%s)"
-msgstr "Aggiornato (%s)"
-
-#: prefs.js:508
-#, javascript-format
-msgid "%s (could not check)"
-msgstr "%s (controllo non riuscito)"
-
-#: prefs.js:524
-msgid "Updating…"
-msgstr "Aggiornamento…"
-
-#: prefs.js:541
-msgid "The update failed"
-msgstr "Aggiornamento non riuscito"
-
-#: prefs.js:543
-msgid "See the log for details."
-msgstr "Vedi il log per i dettagli."
-
-#: prefs.js:558
+#: lib/usageCard.js:22
+msgid "window reset - waiting for the first reading of the new one"
+msgstr "finestra azzerata: in attesa della prima lettura della nuova"
+
+#: lib/usageCard.js:24
+msgid "the endpoint reported no figure for this limit"
+msgstr "l'endpoint non ha comunicato alcun valore per questo limite"
+
+#: prefs/accounts.js:23
 msgid ""
 "Save the login Claude Code holds now under a name (PRO, PERSO) and switch "
 "between saved logins from the dropdown, no browser needed. Only the "
@@ -658,33 +419,33 @@ msgstr ""
 "plugin e cronologia restano. Le sessioni Claude Code già aperte mantengono "
 "il vecchio accesso fino al riavvio."
 
-#: prefs.js:565
+#: prefs/accounts.js:30
 msgid "Enable named accounts"
 msgstr "Attiva gli account con nome"
 
-#: prefs.js:566
+#: prefs/accounts.js:31
 msgid "Off by default - nothing account-related is shown until you turn it on"
 msgstr ""
 "Disattivato per impostazione predefinita: nulla sugli account viene mostrato "
 "finché non lo attivi"
 
-#: prefs.js:573
+#: prefs/accounts.js:38
 msgid "Current login"
 msgstr "Accesso attuale"
 
-#: prefs.js:575
+#: prefs/accounts.js:40
 msgid "Save the current login as"
 msgstr "Salva l’accesso attuale come"
 
-#: prefs.js:576
+#: prefs/accounts.js:41
 msgid "Save"
 msgstr "Salva"
 
-#: prefs.js:585
+#: prefs/accounts.js:50
 msgid "Switch accounts automatically"
 msgstr "Cambia account automaticamente"
 
-#: prefs.js:586
+#: prefs/accounts.js:51
 msgid ""
 "When the active account reaches the threshold, move to the saved account "
 "with the most headroom"
@@ -692,30 +453,30 @@ msgstr ""
 "Quando l’account attivo raggiunge la soglia, passa all’account salvato con "
 "più margine"
 
-#: prefs.js:591
+#: prefs/accounts.js:56
 msgid "Auto-switch threshold"
 msgstr "Soglia del cambio automatico"
 
-#: prefs.js:592
+#: prefs/accounts.js:57
 msgid "Worst limit percentage that counts as full"
 msgstr "Percentuale del limite peggiore considerata piena"
 
-#: prefs.js:600
+#: prefs/accounts.js:65
 msgid "Show the auto-switch button in the dropdown"
 msgstr "Mostra il pulsante di cambio automatico nel menu"
 
-#: prefs.js:601
+#: prefs/accounts.js:66
 msgid ""
 "Off hides the auto-switch button from the panel header; the option stays here"
 msgstr ""
 "Se disattivato nasconde il pulsante dall’intestazione del pannello; "
 "l’opzione resta qui"
 
-#: prefs.js:606
+#: prefs/accounts.js:71
 msgid "Show the account name in the top bar"
 msgstr "Mostra il nome dell’account nella barra superiore"
 
-#: prefs.js:607
+#: prefs/accounts.js:72
 msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
@@ -723,31 +484,467 @@ msgstr ""
 "«PRO · Sessione 42%» - mostrato quando ci sono due account salvati, e solo "
 "finché entra nella barra"
 
-#: prefs.js:625
+#: prefs/accounts.js:90
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s, salvato come %s"
 
-#: prefs.js:626
+#: prefs/accounts.js:91
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s (non ancora salvato)"
 
-#: prefs.js:627
+#: prefs/accounts.js:92
 msgid "No Claude Code login found"
 msgstr "Nessun accesso Claude Code trovato"
 
-#: prefs.js:633
+#: prefs/accounts.js:98
 msgid "login expired - sign in and save it again"
 msgstr "accesso scaduto - accedi di nuovo e salvalo"
 
-#: prefs.js:640
+#: prefs/accounts.js:105
 msgid "Forget this saved login"
 msgstr "Dimentica questo accesso salvato"
 
-#: prefs.js:660
+#: prefs/accounts.js:125
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "I nomi usano solo lettere, cifre, . _ - (fino a 32 caratteri)"
+
+#: prefs/general.js:13
+msgid "Behavior"
+msgstr "Comportamento"
+
+#: prefs/general.js:14
+msgid "How often to poll the Claude usage endpoint."
+msgstr "Ogni quanto interrogare l'endpoint di utilizzo di Claude."
+
+#: prefs/general.js:19
+msgid "Refresh interval"
+msgstr "Intervallo di aggiornamento"
+
+#: prefs/general.js:21
+msgid ""
+"Minutes between updates (min 1). Idle windows back off to 15 minutes, and a "
+"poll always lands just after a reset, on wake and when the network returns."
+msgstr ""
+"Minuti tra gli aggiornamenti (min 1). Le finestre inattive rallentano fino a "
+"15 minuti e un aggiornamento arriva sempre subito dopo un reset, al "
+"risveglio e al ritorno della rete."
+
+#: prefs/general.js:33
+msgid "Top bar shows"
+msgstr "La barra superiore mostra"
+
+#: prefs/general.js:34
+msgid "Which limit to display in the panel"
+msgstr "Quale limite mostrare nel pannello"
+
+#: prefs/general.js:35
+msgid "Worst limit"
+msgstr "Limite peggiore"
+
+#: prefs/general.js:35
+msgid "Current session"
+msgstr "Sessione corrente"
+
+#: prefs/general.js:43
+msgid "Limit-crossing alerts"
+msgstr "Avvisi al superamento dei limiti"
+
+#: prefs/general.js:44
+msgid "Notify when a limit reaches 90% or 100%"
+msgstr "Avvisa quando un limite raggiunge il 90% o il 100%"
+
+#: prefs/general.js:53
+msgid "Run on limit crossing or reset"
+msgstr "Esegui al superamento o al reset"
+
+#: prefs/general.js:62
+msgid "Placeholders"
+msgstr "Segnaposto"
+
+#: prefs/general.js:64
+msgid ""
+"%e event (threshold or reset) · %l label · %p percent · %t threshold · %k "
+"key · %% a literal %. Empty disables it. Example: notify-send \"Claude %l\" "
+"\"%e at %p%%\""
+msgstr ""
+"%e evento (threshold o reset) · %l etichetta · %p percentuale · %t soglia · "
+"%k chiave · %% un % letterale. Vuoto lo disattiva. Esempio: notify-send "
+"\"Claude %l\" \"%e al %p%%\""
+
+#: prefs/integrations.js:12
+msgid "Cost"
+msgstr "Costo"
+
+#: prefs/integrations.js:13
+msgid ""
+"The official API does not expose dollar cost on subscription plans. Enable "
+"this to compute it locally with ccusage (requires ccusage installed: npm i "
+"-g ccusage)."
+msgstr ""
+"L'API ufficiale non espone il costo in dollari sui piani in abbonamento. "
+"Attivalo per calcolarlo in locale con ccusage (richiede ccusage installato: "
+"npm i -g ccusage)."
+
+#: prefs/integrations.js:16
+msgid "Show session cost"
+msgstr "Mostra il costo della sessione"
+
+#: prefs/integrations.js:17
+msgid "Runs `ccusage blocks --active` on each refresh"
+msgstr "Esegue `ccusage blocks --active` a ogni aggiornamento"
+
+#: prefs/integrations.js:26
+msgid "Cursor (optional)"
+msgstr "Cursor (opzionale)"
+
+#: prefs/integrations.js:27
+msgid ""
+"Show Cursor team spend using the Cursor Admin API. Create a key at "
+"cursor.com → team → Settings → Admin API. Stored in the system keyring."
+msgstr ""
+"Mostra la spesa del team Cursor tramite l'API Admin di Cursor. Crea una "
+"chiave su cursor.com → team → Settings → Admin API. Salvata nel portachiavi "
+"di sistema."
+
+#: prefs/integrations.js:30
+msgid "Show Cursor usage"
+msgstr "Mostra l'utilizzo di Cursor"
+
+#: prefs/integrations.js:31
+msgid "Adds a Cursor spend section to the dropdown"
+msgstr "Aggiunge al menu una sezione di spesa Cursor"
+
+#: prefs/integrations.js:40
+msgid "Cursor Admin API key"
+msgstr "Chiave API Admin di Cursor"
+
+#
+#: prefs/integrations.js:68
+msgid "OpenAI Codex (optional)"
+msgstr "OpenAI Codex (facoltativo)"
+
+#: prefs/integrations.js:69
+msgid ""
+"A sibling section for the ChatGPT logins the codex CLI holds: save them "
+"under a name and switch without a browser. Off by default - with it off, "
+"nothing under the Codex home is read. Reads auth.json (and the read-only "
+"session transcripts) from $CODEX_HOME, else ~/.codex; saved copies are kept "
+"mode 0600 next to, never inside, the Claude store. Nothing is uploaded, and "
+"no token is ever minted here."
+msgstr ""
+"Una sezione gemella per gli accessi ChatGPT della CLI codex: salvali con un "
+"nome e passa dall'uno all'altro senza browser. Disattivata per impostazione "
+"predefinita: finché lo è, non viene letto nulla sotto la cartella Codex. "
+"Legge auth.json (e le trascrizioni di sessione, in sola lettura) da "
+"$CODEX_HOME, altrimenti ~/.codex; le copie salvate restano in modo 0600 "
+"accanto all'archivio Claude, mai dentro. Nulla viene caricato e qui non "
+"viene mai emesso un token."
+
+#
+#: prefs/integrations.js:72
+msgid "Show saved Codex logins"
+msgstr "Mostra gli accessi Codex salvati"
+
+#
+#: prefs/integrations.js:73
+msgid "Adds an OpenAI Codex section below the Claude ones"
+msgstr "Aggiunge una sezione OpenAI Codex sotto quelle di Claude"
+
+#: prefs/integrations.js:80
+msgid "Usage figures are est."
+msgstr "Le cifre sono stime"
+
+#: prefs/integrations.js:81
+msgid ""
+"OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
+"ones the codex CLI recorded when the API last returned them, stamped with "
+"when. Manage the logins with `claudectl codex`."
+msgstr ""
+"OpenAI non pubblica alcun endpoint di utilizzo del piano, quindi le "
+"percentuali mostrate sono quelle che la CLI codex ha registrato all'ultima "
+"risposta dell'API, con l'ora. Gestisci gli accessi con `claudectl codex`."
+
+#: prefs.js:33
+msgid "General"
+msgstr "Generale"
+
+#: prefs.js:39
+msgid "Sessions"
+msgstr "Sessioni"
+
+#: prefs.js:44
+msgid "Integrations"
+msgstr "Integrazioni"
+
+#: prefs/pings.js:21
+msgid "Session pings"
+msgstr "Ping di sessione"
+
+#: prefs/pings.js:22
+msgid ""
+"A 5-hour window is anchored to its first message, so pinging claude (haiku, "
+"one turn) at a fixed time lines the day’s windows up with the hours you "
+"actually work. Same schedule as ./install.sh sessionping."
+msgstr ""
+"Una finestra di 5 ore parte dal suo primo messaggio: un ping a claude "
+"(haiku, un turno) a un orario fisso allinea le finestre della giornata alle "
+"ore in cui lavori davvero. Stessa pianificazione di ./install.sh sessionping."
+
+#: prefs/pings.js:29
+msgid "Open the 5h session window on schedule"
+msgstr "Apri la finestra di 5 h secondo pianificazione"
+
+#: prefs/pings.js:31
+msgid "Runs scripts/session-ping.sh from a systemd user timer"
+msgstr "Esegue scripts/session-ping.sh da un timer utente systemd"
+
+#: prefs/pings.js:32
+msgid "Needs a systemd user session - use ./install.sh sessionping here"
+msgstr ""
+"Richiede una sessione utente systemd - qui usa ./install.sh sessionping"
+
+#: prefs/pings.js:38
+msgid "Last ping"
+msgstr "Ultimo ping"
+
+#: prefs/pings.js:41
+msgid "Coverage"
+msgstr "Copertura"
+
+#: prefs/pings.js:45
+msgid "Working day"
+msgstr "Giornata lavorativa"
+
+#: prefs/pings.js:56
+msgid "Days"
+msgstr "Giorni"
+
+#: prefs/pings.js:57
+msgid "Mon"
+msgstr "lun"
+
+#: prefs/pings.js:57
+msgid "Tue"
+msgstr "mar"
+
+#: prefs/pings.js:57
+msgid "Wed"
+msgstr "mer"
+
+#: prefs/pings.js:57
+msgid "Thu"
+msgstr "gio"
+
+#: prefs/pings.js:57
+msgid "Fri"
+msgstr "ven"
+
+#: prefs/pings.js:57
+msgid "Sat"
+msgstr "sab"
+
+#: prefs/pings.js:57
+msgid "Sun"
+msgstr "dom"
+
+#: prefs/pings.js:80
+msgid "Add a ping"
+msgstr "Aggiungi un ping"
+
+#: prefs/pings.js:83
+msgid "Suggest times"
+msgstr "Suggerisci orari"
+
+#: prefs/pings.js:99
+#, javascript-format
+msgid "%d%% of %s-%s covered"
+msgstr "%d%% di %s-%s coperto"
+
+#: prefs/pings.js:101
+msgid "no valid times yet"
+msgstr "nessun orario valido"
+
+#: prefs/pings.js:122
+#, javascript-format
+msgid "Ping %d"
+msgstr "Ping %d"
+
+#: prefs/sessions.js:17
+msgid ""
+"List the sessions that spent the most tokens today, biggest first, and "
+"resume one in a terminal with a click. Read from the local transcripts in "
+"$CLAUDE_CONFIG_DIR/projects (~/.claude/projects by default)."
+msgstr ""
+"Elenca le sessioni che hanno speso più token oggi, dalla maggiore, e ne "
+"riprende una nel terminale con un clic. Letto dalle trascrizioni locali in "
+"$CLAUDE_CONFIG_DIR/projects (~/.claude/projects per impostazione "
+"predefinita)."
+
+#: prefs/sessions.js:20
+msgid "Show today’s sessions"
+msgstr "Mostra le sessioni di oggi"
+
+#: prefs/sessions.js:21
+msgid "Adds up to 5 resume links to the dropdown"
+msgstr "Aggiunge al menu fino a 5 link di ripresa"
+
+#: prefs/sessions.js:26
+msgid "Terminal"
+msgstr "Terminale"
+
+#: prefs/sessions.js:33
+msgid ""
+"Leave empty for the desktop default terminal ($TERMINAL first); without one: "
+"ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
+"xfce4-terminal, xterm. Also used by claudectl session open."
+msgstr ""
+"Lascia vuoto per il terminale predefinito del desktop ($TERMINAL per primo); "
+"in mancanza: ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, "
+"konsole, tilix, xfce4-terminal, xterm. Usato anche da claudectl session open."
+
+#: prefs/sessions.js:44
+msgid "Saved sessions"
+msgstr "Sessioni salvate"
+
+#: prefs/sessions.js:45
+msgid ""
+"claudectl session keeps the running Claude Code sessions in snapshots and "
+"reopens them as tabs of one terminal window."
+msgstr ""
+"claudectl session salva le sessioni Claude Code in corso in istantanee e le "
+"riapre come schede di un’unica finestra del terminale."
+
+#: prefs/sessions.js:47
+msgid "Autosave"
+msgstr "Salvataggio automatico"
+
+#: prefs/sessions.js:49
+msgid "Newest snapshot"
+msgstr "Istantanea più recente"
+
+#: prefs/sessions.js:50
+msgid "Reopen"
+msgstr "Riapri"
+
+#: prefs/sessions.js:58
+msgid "claudectl is not installed - run ./install.sh cli"
+msgstr "claudectl non è installato - esegui ./install.sh cli"
+
+#: prefs/sessions.js:60
+msgid "None yet - run claudectl session save, or wait for the autosave"
+msgstr ""
+"Nessuna per ora - esegui claudectl session save o attendi il salvataggio "
+"automatico"
+
+#: prefs/sessions.js:71
+msgid "Every 30 minutes"
+msgstr "Ogni 30 minuti"
+
+#: prefs/sessions.js:71
+msgid "Not scheduled - run ./install.sh cli"
+msgstr "Non pianificato - esegui ./install.sh cli"
+
+#: prefs/updates.js:18
+msgid "Updates"
+msgstr "Aggiornamenti"
+
+#: prefs/updates.js:19
+msgid "Daily check, and whether it is actually running."
+msgstr "Controllo giornaliero e se è davvero attivo."
+
+#: prefs/updates.js:22 prefs/updates.js:110
+msgid "Checking…"
+msgstr "Verifica…"
+
+#: prefs/updates.js:26 prefs/updates.js:50 prefs/updates.js:74
+#: prefs/updates.js:81 prefs/updates.js:89 prefs/updates.js:96
+msgid "Check now"
+msgstr "Verifica ora"
+
+#: prefs/updates.js:48
+msgid "Cannot self-update"
+msgstr "Aggiornamento automatico impossibile"
+
+#: prefs/updates.js:49
+msgid "No git checkout found for auto-update.sh."
+msgstr "Nessun checkout git trovato per auto-update.sh."
+
+#: prefs/updates.js:57
+msgid "Could not read the update status"
+msgstr "Impossibile leggere lo stato dell'aggiornamento"
+
+#: prefs/updates.js:66
+#, javascript-format
+msgid "Installed %s, checkout %s"
+msgstr "Installato %s, checkout %s"
+
+#: prefs/updates.js:67
+msgid "The clients are behind the code - reinstall them."
+msgstr "I client sono indietro rispetto al codice: reinstallali."
+
+#: prefs/updates.js:68 prefs/updates.js:85 prefs/updates.js:109
+msgid "Update now"
+msgstr "Aggiorna ora"
+
+#: prefs/updates.js:72
+#, javascript-format
+msgid "Installed %s, running %s"
+msgstr "Installato %s, in esecuzione %s"
+
+#: prefs/updates.js:73
+msgid "Log out and back in to load it."
+msgstr "Esci e rientra per caricarlo."
+
+#: prefs/updates.js:76
+#, javascript-format
+msgid "Paused: %s"
+msgstr "In pausa: %s"
+
+#: prefs/updates.js:78
+msgid ""
+"The daily check will not touch this checkout until that is resolved. It only "
+"ever fast-forwards a clean checkout."
+msgstr ""
+"Il controllo giornaliero non toccherà questo checkout finché non è risolto. "
+"Fa solo fast-forward su un checkout pulito."
+
+#: prefs/updates.js:83
+#, javascript-format
+msgid "Update available: %s → %s"
+msgstr "Aggiornamento disponibile: %s → %s"
+
+#: prefs/updates.js:84 prefs/updates.js:88 prefs/updates.js:95
+#, javascript-format
+msgid "Last checked %s"
+msgstr "Ultimo controllo %s"
+
+#: prefs/updates.js:87
+#, javascript-format
+msgid "Up to date (%s)"
+msgstr "Aggiornato (%s)"
+
+#: prefs/updates.js:94
+#, javascript-format
+msgid "%s (could not check)"
+msgstr "%s (controllo non riuscito)"
+
+#: prefs/updates.js:110
+msgid "Updating…"
+msgstr "Aggiornamento…"
+
+#: prefs/updates.js:127
+msgid "The update failed"
+msgstr "Aggiornamento non riuscito"
+
+#: prefs/updates.js:129
+msgid "See the log for details."
+msgstr "Vedi il log per i dettagli."
+
+#, javascript-format
+#~ msgid "Could not switch to %s: %s"
+#~ msgstr "Impossibile passare a %s: %s"
 
 #~ msgid "Run ./install.sh update to install the newer code."
 #~ msgstr "Esegui ./install.sh update per installare il codice più recente."

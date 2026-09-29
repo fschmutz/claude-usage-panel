@@ -6,12 +6,24 @@
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
+import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+
 import {
-    severityClass, sparkline, formatResets, poolNote,
+    severityClass, sparkline, formatResets, poolNote, usageReading,
     formatForecast, historyPercents, clockPace, formatClockPace, formatWeekOverWeek,
 } from './pure.js';
 import {ProgressBar, ClockRow} from './bar.js';
 import {vboxProps, wrapLabel, clipLabel} from './widgets.js';
+
+// Why the card shows `–`. Silence when it shows a percentage: the number is
+// its own explanation.
+function readingNote(reading) {
+    if (reading.reason === 'window_reset')
+        return _('window reset - waiting for the first reading of the new one');
+    if (reading.reason === 'no_reading')
+        return _('the endpoint reported no figure for this limit');
+    return '';
+}
 
 export const UsageCard = GObject.registerClass(
 class UsageCard extends St.BoxLayout {
@@ -44,16 +56,23 @@ class UsageCard extends St.BoxLayout {
     }
 
     update(card, history, fc, trend) {
-        const sev = severityClass(card.severity);
+        // A percentage the endpoint cannot currently stand behind draws as `–`
+        // with an empty bar, never as the last one it gave: after a window
+        // resets the figure on file belongs to a window that is gone, and a
+        // limit the payload never carried a number for is not a limit at 0 %.
+        const reading = usageReading(card);
+        const sev = reading.known ? severityClass(card.severity) : 'cu-normal';
         this._label.text = card.label + (card.active ? '  ●' : '');
-        this._pct.text = `${card.percent}%`;
+        this._pct.text = reading.text;
         this._pct.style_class = `cu-card-pct ${sev}`;
-        this._track.setFill(card.percent, sev);
+        this._track.setFill(reading.fill, sev);
         // How far into the window we are, as a caret under the bar: quota to
         // the left of it is spent on schedule, quota to the right of the fill
         // is what the clock has not yet earned. Hidden when the window length
         // is unknown (no reset, or a group we have no span for).
-        const pace = clockPace(card);
+        // Clock pace and burn rate are both drawn from the percentage, so a
+        // card that shows `–` shows neither: they would contradict the dash.
+        const pace = reading.known ? clockPace(card) : null;
         this._clockRow.visible = pace !== null;
         if (pace)
             this._clockRow.setMark(pace.elapsedPercent, pace.state === 'ahead');
@@ -63,11 +82,12 @@ class UsageCard extends St.BoxLayout {
         const reset = formatResets(card.resetsAt);
         const note = poolNote(card);
         const paceText = formatClockPace(pace);
-        this._reset.text = [reset, note, paceText].filter(s => s).join(' · ');
+        this._reset.text = [reset, note, paceText, readingNote(reading)]
+            .filter(s => s).join(' · ');
         // Burn-rate projection: amber when the limit runs out before its reset,
         // quiet grey when the pace outlasts it, hidden when there is no honest
         // pace to project (idle, too few samples).
-        const fcText = formatForecast(fc);
+        const fcText = reading.known ? formatForecast(fc) : '';
         this._forecast.text = fcText;
         this._forecast.visible = fcText.length > 0;
         this._forecast.style_class =

@@ -199,6 +199,55 @@
 .cu-account-meta.cu-warning  { color: #e0a458; }
 .cu-account-meta.cu-critical { color: #e5484d; }
 
+/* ---- inline notices + button-local outcomes ----
+   A problem with a login sits IN the list it is about, tinted by its own
+   severity, with the one repair on the same line; the answer to pressing it
+   appears just under the control and clears itself. */
+.cu-notices {
+    spacing: 4px;
+    padding-top: 4px;
+}
+.cu-notice {
+    spacing: 2px;
+    border-radius: 8px;
+    padding: 4px 6px;
+    background-color: rgba(224, 164, 88, 0.10);
+}
+.cu-notice.cu-critical {
+    background-color: rgba(229, 72, 77, 0.12);
+}
+.cu-notice-dot {
+    font-size: 9px;
+    padding-right: 6px;
+    color: #e0a458;
+}
+.cu-notice-dot.cu-critical { color: #e5484d; }
+.cu-notice-text {
+    color: #d1cbbf;
+    font-size: 11px;
+}
+.cu-notice-action {
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin-left: 6px;
+    color: #d97757;
+    font-size: 11px;
+    font-weight: 600;
+}
+.cu-notice-action:hover,
+.cu-notice-action:focus {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+.cu-outcome {
+    padding-left: 6px;
+}
+.cu-outcome-text {
+    font-size: 10px;
+    color: #9a948a;
+}
+.cu-outcome-text.cu-normal   { color: #d97757; }
+.cu-outcome-text.cu-critical { color: #e5484d; }
+
 /* header controls: auto-switch, refresh, settings. Small enough to sit on the
    title row, lit when the toggle they stand for is on. */
 .cu-icon-btn {
@@ -261,6 +310,10 @@
 .cu-light .cu-account-active .cu-account-name { color: #1a1a1a; }
 .cu-light .cu-account-meta { color: #6b6b60; }
 .cu-light .cu-account-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
+.cu-light .cu-notice-text { color: #1a1a1a; }
+.cu-light .cu-outcome-text { color: #6b6b60; }
+.cu-light .cu-notice-action:hover,
+.cu-light .cu-notice-action:focus { background-color: rgba(0, 0, 0, 0.08); }
 .cu-light .cu-plan { color: #666; }
 
 /* ---- status footer ---- */

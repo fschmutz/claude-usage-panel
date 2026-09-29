@@ -21,7 +21,7 @@ import {fileURLToPath} from 'node:url';
 
 import {openStore} from './accounts.js';
 import {accountKey, activeAccountName, autoSwitchTarget, usageSeverity, worstFromCache, worstPercent} from './accounts-contract.js';
-import {clampPercent} from './normalize.js';
+import {clampPercent, usageReading} from './normalize.js';
 import {clockPace, forecastMap} from './pace.js';
 import {lastPingPath, sessionIndexPath} from './paths.js';
 import {formatLastPing, localDay, resetHint} from './stamps.js';
@@ -72,7 +72,9 @@ export function contextSegment(stdinText) {
   } catch {
     return '';
   }
-  if (!Number.isFinite(Number(pct))) return '';
+  // Strictly a JSON number: Number(null) / Number('') / Number(false) are 0,
+  // which would print a "0%" nobody measured.
+  if (typeof pct !== 'number' || !Number.isFinite(pct)) return '';
   const p = clampPercent(pct);
   const color = SEV_COLOR[usageSeverity(p)];
   return `Context ${gauge(p, color)} ${color}${p}%${RESET}`;
@@ -91,16 +93,23 @@ export function cardsFromStdin(stdinText) {
   }
   const cards = [];
   const add = (win, kind, label) => {
-    const pct = Number(win?.used_percentage);
-    if (!Number.isFinite(pct)) return;
+    // Read by JSON type, like every normalizer: Number(null), Number('') and
+    // Number(false) are all 0, and a "0%" card nobody measured reads as a
+    // full tank. No number, no card.
+    const pct = win?.used_percentage;
+    if (typeof pct !== 'number' || !Number.isFinite(pct)) return;
     const p = clampPercent(pct);
-    const secs = Number(win.resets_at);
+    const secs = typeof win.resets_at === 'number' ? win.resets_at : NaN;
     cards.push({
       key: kind,
       kind,
       label,
       group: kind === 'session' ? 'session' : 'weekly',
       percent: p,
+      // stdin only carries a window it has a number for, so a card built here
+      // always has a reading - but its window can still have rolled over
+      // between the turn and this render (see usageReading in render()).
+      percentKnown: true,
       severity: usageSeverity(p),
       resetsAt: Number.isFinite(secs) ? new Date(secs * 1000).toISOString() : null,
       active: true,
@@ -143,11 +152,16 @@ export function render(cards, {forecasts = new Map(), nowMs = Date.now()} = {}) 
 
   return shown
     .map((c, i) => {
-      const color = SEV_COLOR[c.severity] ?? SEV_COLOR.normal;
+      // Once a window's reset instant has passed, the percentage stdin carried
+      // belongs to a window that is gone: draw the gauge empty and print `–`
+      // rather than a figure this line cannot stand behind. The projections
+      // go quiet with it - there is nothing to project from.
+      const reading = usageReading(c, nowMs);
+      const color = reading.known ? (SEV_COLOR[c.severity] ?? SEV_COLOR.normal) : DIM;
       const reset = lastWithHint.get(hints[i]) === i ? ` ${DIM}${hints[i]}${RESET}` : '';
-      const marker = exhaustionMarker(forecasts.get(c.key));
-      const clock = paceMarker(clockPace(c, nowMs));
-      return `${c.label} ${gauge(c.percent, color)} ${color}${c.percent}%${RESET}${reset}${clock}${marker}`;
+      const marker = reading.known ? exhaustionMarker(forecasts.get(c.key)) : '';
+      const clock = reading.known ? paceMarker(clockPace(c, nowMs)) : '';
+      return `${c.label} ${gauge(reading.fill, color)} ${color}${reading.text}${RESET}${reset}${clock}${marker}`;
     })
     .join('  ');
 }
@@ -249,7 +263,7 @@ export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
     if (!active) return '';
     const worst = worstFromCache(store.readUsageCache());
     // This session's own numbers are fresher than any cache entry.
-    const own = worstPercent(cardsFromStdin(stdinText));
+    const own = worstPercent(cardsFromStdin(stdinText), nowMs);
     if (own !== null) worst[active] = own;
     const target = autoSwitchTarget({active, worst, nowMs, lastSwitchMs: store.readLastSwitchMs()});
     if (target) return `${SEV_COLOR.warning}[${active} ⇢ ${target.to}]${RESET}`;

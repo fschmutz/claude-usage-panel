@@ -37,6 +37,18 @@
         %p percent, %t threshold crossed, %% a literal percent sign.
       </description>
     </key>
+    <key name="codex-enabled" type="b">
+      <default>false</default>
+      <summary>Show saved OpenAI Codex logins</summary>
+      <description>
+        Add a sibling section for OpenAI Codex: the ChatGPT logins saved under
+        a name, one click from becoming the live one, and the newest rate
+        limits the codex CLI recorded. Off by default; with it off, nothing
+        under the Codex home is read. OpenAI publishes no plan-usage endpoint,
+        so the percentages are the ones the codex CLI wrote down when the API
+        last returned them, labelled est. and stamped with when.
+      </description>
+    </key>
     <key name="cursor-enabled" type="b">
       <default>false</default>
       <summary>Show Cursor usage</summary>

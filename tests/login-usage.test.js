@@ -41,7 +41,7 @@ test('usageLabel: only a live token drops the profile name', () => {
 test('usageForLogin labels by token source and names the row', async () => {
     for (const [source, label] of [['live', null], ['store', 'PRO'], ['refreshed', 'PRO']]) {
         const r = await usageForLogin(fakeStore({access: {token: `t-${source}`, source}}), 'PRO');
-        assert.deepEqual(r, {name: 'PRO', ok: false, code: 'auth_expired', token: `t-${source}`, label});
+        assert.deepEqual(r, {name: 'PRO', source, ok: false, code: 'auth_expired', token: `t-${source}`, label});
     }
 });
 

@@ -216,6 +216,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
     nextPollSeconds, nextResetMs, sameUsage, POLL_IDLE_AFTER, POLL_RETRY_SECONDS,
+    POLL_RETRY_FACTOR, isRetryableFailure,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 const pollFix = JSON.parse(
@@ -226,6 +227,14 @@ const pollFix = JSON.parse(
 test('the idle threshold is part of the pinned contract', () => {
     assert.equal(POLL_IDLE_AFTER, pollFix.idleAfter);
     assert.equal(POLL_RETRY_SECONDS, pollFix.retrySeconds);
+    assert.equal(POLL_RETRY_FACTOR, pollFix.retryFactor);
+});
+
+test('isRetryableFailure - which failed polls keep the last reading and retry soon', () => {
+    for (const [code, want] of Object.entries(pollFix.retryable))
+        assert.equal(isRetryableFailure({ok: false, code}), want, code);
+    assert.equal(isRetryableFailure({ok: true, code: 'transient'}), false, 'a success is no failure');
+    assert.equal(isRetryableFailure(null), false);
 });
 
 for (const c of pollFix.cases) {
@@ -234,6 +243,7 @@ for (const c of pollFix.cases) {
             nextPollSeconds({
                 baseSeconds: c.baseSeconds, idleStreak: c.idleStreak,
                 nextResetMs: c.nextResetMs, nowMs: pollFix.now, retry: c.retry ?? false,
+                retryStreak: c.retryStreak ?? 1, retryAfterSeconds: c.retryAfterSeconds ?? null,
             }),
             c.expected);
     });

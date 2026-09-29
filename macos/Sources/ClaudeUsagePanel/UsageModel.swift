@@ -73,6 +73,28 @@ final class UsageModel: ObservableObject {
     /// The live login's email, for the Settings "save as" row.
     @Published var liveLoginEmail: String?
     @Published var accountsError: String?
+    /// Inline rows in the accounts list: something needs saying, and one
+    /// button on that row fixes it (Notices.accountNotices).
+    @Published var accountNotices: [AccountNotice] = []
+    /// The answer to the last action, keyed by the control that caused it. One
+    /// at a time, cleared by `outcomeTask` after ControlOutcome.ttlMs and by
+    /// the next action before that.
+    @Published var outcomes: [String: ControlOutcome] = [:]
+    var outcomeTask: Task<Void, Never>?
+
+    // OpenAI Codex: a sibling vault, off by default. Behaviour lives in
+    // Codex.swift (extension UsageModel); only the stored properties are here.
+    @Published var codexEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(codexEnabled, forKey: "codexEnabled")
+            refreshCodex()
+        }
+    }
+    @Published var codexAccounts: [CodexRow] = []
+    @Published var codexActive: String?
+    @Published var codexLiveEmail: String?
+    /// The last reading the codex CLI recorded, or the reason there is none.
+    @Published var codexUsage: CodexStore.RecordedUsage?
     @Published var accountsAutoSwitch: Bool {
         didSet { UserDefaults.standard.set(accountsAutoSwitch, forKey: "accountsAutoSwitch") }
     }
@@ -133,8 +155,12 @@ final class UsageModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     /// Consecutive polls in which no limit moved - drives the backoff.
     private var idleStreak = 0
-    /// The last poll failed with a "not now" status - retry soon, not next interval.
+    /// The last poll failed retryably - retry soon, not next interval.
     private var retry = false
+    /// Retryable failures in a row (backs the retry off) and what the last
+    /// one's Retry-After asked for.
+    private var retryStreak = 0
+    private var retryAfterSeconds: Int?
 
     /// 90 days of poll samples for the week-over-week line. Loaded once; every
     /// later poll that moved appends to both the file and this list.
@@ -142,12 +168,19 @@ final class UsageModel: ObservableObject {
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "claude-usage-panel.network")
 
-    init() {
+    /// Where usage comes from. Injected so everything above it - the poll
+    /// loop, the account rows, the auto-switch - can be driven without
+    /// reaching api.anthropic.com with a real bearer token.
+    let endpoint: any UsageEndpoint
+
+    init(endpoint: any UsageEndpoint = ClaudeUsage.live) {
+        self.endpoint = endpoint
         refreshMinutes = UserDefaults.standard.object(forKey: "refreshMinutes") as? Int ?? 10
         showCost = UserDefaults.standard.bool(forKey: "showCost")
         alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
         eventCommand = UserDefaults.standard.string(forKey: "eventCommand") ?? ""
         cursorEnabled = UserDefaults.standard.bool(forKey: "cursorEnabled")
+        codexEnabled = UserDefaults.standard.bool(forKey: "codexEnabled")
         accountsEnabled = UserDefaults.standard.bool(forKey: "accountsEnabled")
         accountsAutoSwitch = UserDefaults.standard.bool(forKey: "accountsAutoSwitch")
         accountsSwitchThreshold =
@@ -219,7 +252,8 @@ final class UsageModel: ObservableObject {
                 // and lands late on the one tick that matters - the reset.
                 let delay = PollSchedule.nextPollSeconds(
                     baseSeconds: base, idleStreak: self.idleStreak,
-                    nextReset: PollSchedule.nextReset(self.cards), retry: self.retry)
+                    nextReset: PollSchedule.nextReset(self.cards), retry: self.retry,
+                    retryStreak: self.retryStreak, retryAfterSeconds: self.retryAfterSeconds)
                 try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
             }
         }
@@ -269,7 +303,7 @@ final class UsageModel: ObservableObject {
 
     private func poll() async {
         do {
-            let result = try await ClaudeUsage.fetch()
+            let result = try await ClaudeUsage.fetchLive(endpoint)
             let nowMs = Date().timeIntervalSince1970 * 1000
             let moved = !PollSchedule.sameUsage(cards, result.cards)
             idleStreak = moved ? 0 : idleStreak + 1
@@ -293,13 +327,18 @@ final class UsageModel: ObservableObject {
             planLabel = result.planLabel
             errorText = nil
             retry = false
+            retryStreak = 0
+            retryAfterSeconds = nil
             updated = Self.timeFormatter.string(from: Date())
             recordHistory(result.cards, nowMs: nowMs)
             checkAlerts(result.cards)
         } catch {
             // A transient answer keeps the cards and says so under them; the
             // popup only blanks on a failure that is not going to clear itself.
-            retry = (error as? UsageError)?.isTransient ?? false
+            let usageError = error as? UsageError
+            retry = usageError?.isTransient ?? false
+            retryStreak = retry ? retryStreak + 1 : 0
+            retryAfterSeconds = retry ? usageError?.retryAfterSeconds : nil
             if retry, !cards.isEmpty {
                 errorText = "\(error.localizedDescription) - retrying, showing the last reading"
             } else {
@@ -312,6 +351,7 @@ final class UsageModel: ObservableObject {
         await refreshSessions()
         await refreshCursor()
         await refreshAccounts()
+        refreshCodex()
     }
 
     private func refreshCost() async {
@@ -425,18 +465,25 @@ final class UsageModel: ObservableObject {
     /// but on pace to run out before its reset shows the warning dot -
     /// trouble at 50%, not at 90%.
     var titleText: String {
-        guard let worst = cards.max(by: { $0.percent < $1.percent }) else {
+        // Rank on what the cards may honestly show (PanelCard): a window that
+        // has just reset still carries the old percentage, and picking by that
+        // would park a stale 96% in the menu bar. Ties break exactly like the
+        // GNOME top bar's.
+        let now = Date()
+        guard let worst = PanelCard.pick(cards, mode: .worst, now: now) else {
             return errorText == nil ? "⚪️ …" : "⚪️ ?"
         }
-        var sev = worst.severity
-        if sev == .normal, forecasts[worst.id]?.exhaustsBeforeReset == true {
+        let reading = UsageReading.of(worst, now: now)
+        var sev = reading.known ? worst.severity : .normal
+        if sev == .normal, reading.known, forecasts[worst.id]?.exhaustsBeforeReset == true {
             sev = .warning
         }
         // "PRO · Session 42%" once there is more than one saved account to tell
         // apart - and only while the name fits the bar's character budget.
         let showAccount = showAccountInMenuBar && accounts.count > 1
         let name = showAccount ? activeAccount ?? "" : ""
-        let text = PanelReadout.text(account: name, label: worst.label, percent: worst.percent)
+        let text = PanelReadout.text(
+            account: name, label: worst.label, percent: worst.percent, known: reading.known)
         return "\(dot(sev)) \(text)"
     }
 

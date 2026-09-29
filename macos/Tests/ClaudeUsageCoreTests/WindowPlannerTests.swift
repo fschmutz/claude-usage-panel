@@ -141,6 +141,10 @@ final class PollScheduleParityTests: XCTestCase {
         let now = Date(timeIntervalSince1970: (fix["now"] as! NSNumber).doubleValue / 1000)
         XCTAssertEqual(PollSchedule.idleAfter, (fix["idleAfter"] as! NSNumber).intValue)
         XCTAssertEqual(PollSchedule.retrySeconds, (fix["retrySeconds"] as! NSNumber).intValue)
+        XCTAssertEqual(PollSchedule.retryFactor, (fix["retryFactor"] as! NSNumber).intValue)
+        for (code, want) in fix["retryable"] as! [String: Bool] {
+            XCTAssertEqual(PollSchedule.isRetryable(code: code), want, code)
+        }
 
         for c in fix["cases"] as! [[String: Any]] {
             let name = c["name"] as? String ?? "?"
@@ -151,7 +155,9 @@ final class PollScheduleParityTests: XCTestCase {
                 PollSchedule.nextPollSeconds(
                     baseSeconds: (c["baseSeconds"] as! NSNumber).intValue,
                     idleStreak: (c["idleStreak"] as! NSNumber).intValue,
-                    nextReset: reset, now: now, retry: c["retry"] as? Bool ?? false),
+                    nextReset: reset, now: now, retry: c["retry"] as? Bool ?? false,
+                    retryStreak: (c["retryStreak"] as? NSNumber)?.intValue ?? 1,
+                    retryAfterSeconds: (c["retryAfterSeconds"] as? NSNumber)?.intValue),
                 (c["expected"] as! NSNumber).intValue, name)
         }
     }

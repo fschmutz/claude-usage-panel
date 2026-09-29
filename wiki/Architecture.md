@@ -50,7 +50,14 @@ others, and the status line only ever reads it.
 ```text
 claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
 ├── extension.js        # panel button, dropdown, alerts, sparkline
-├── prefs.js            # libadwaita preferences
+├── prefs.js            # libadwaita preferences: builds one page per tab
+├── prefs/              # one builder per preferences tab
+│   ├── general.js      # General tab: top bar, polling, alerts, event command
+│   ├── updates.js      # General tab: the update group
+│   ├── accounts.js     # Accounts tab: saved logins and auto-switch
+│   ├── sessions.js     # Sessions tab: today's sessions, saved snapshots
+│   ├── pings.js        # Sessions tab: scheduled session pings
+│   └── integrations.js # Integrations tab: cost, Cursor, OpenAI Codex
 ├── stylesheet.css
 ├── schemas/            # GSettings schema
 ├── po/                 # translation catalogs (compiled to locale/ at pack time)
@@ -66,12 +73,17 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── pings.js    # session-window planner
     │   ├── sessions.js # ping stamps, transcript fold, ranking, resume command, terminals
     │   ├── accounts.js # named-account rules (mirrors claude-code/accounts-contract.js)
+    │   ├── notices.js  # account health, inline notices, button outcomes, switch rotation
+    │   ├── codex.js    # named OpenAI Codex logins (mirrors claude-code/codex-contract.js)
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   └── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
     ├── claudeUsage.js  # /oauth/usage fetch (live or saved token)
     ├── accounts.js     # the account store's GJS I/O
     ├── accountsSection.js # the dropdown's Accounts rows
+    ├── noticeRow.js    # one inline notice row: severity dot, sentence, one repair button
+    ├── codex.js        # the Codex store's GJS I/O (auth.json + recorded rate limits)
+    ├── codexSection.js # the dropdown's optional OpenAI Codex section
     ├── cost.js         # optional ccusage cost (subprocess)
     ├── cursorUsage.js  # optional Cursor Admin API spend
     ├── cursorSection.js# the dropdown's Cursor section
@@ -98,6 +110,8 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── Model.swift               # normalization, pace, forecast
     │   ├── CursorModel.swift         # Cursor spend math
     │   ├── Accounts.swift            # named-account rules
+    │   ├── Notices.swift             # account health, inline notices, button outcomes, rotation
+    │   ├── Codex.swift               # named OpenAI Codex logins (twin of codex-contract.js)
     │   ├── Warehouse.swift           # the 90-day history rules
     │   ├── EventHooks.swift          # event-hook detection + expansion
     │   ├── Sessions.swift            # ping stamps, transcript fold, ranking, resume
@@ -117,13 +131,18 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── UsageModel.swift          # the view model
         ├── PopupView.swift           # the popup's views
         ├── SettingsView.swift        # the Settings window
-        ├── Usage.swift               # usage fetch
+        ├── Usage.swift               # the UsageEndpoint protocol + the ephemeral-session fetch
         ├── Cost.swift                # ccusage via Process
         ├── Cursor.swift              # Cursor Admin API
         ├── KeychainStore.swift       # the Cursor key in the login Keychain
         ├── Accounts.swift            # accounts in the model, manual + auto switch
         ├── AccountStore.swift        # the account store's I/O (file + Keychain)
+        ├── AccountUsage.swift        # a saved login's usage: token, locked refresh, fetch
         ├── AccountsView.swift        # accounts in the popup and Settings
+        ├── NoticeRow.swift           # one inline notice row + the button-local outcome
+        ├── Codex.swift               # the Codex vault in the model
+        ├── CodexStore.swift          # the Codex store's I/O (auth.json, recorded limits)
+        ├── CodexView.swift           # the optional Codex section in the popup and Settings
         ├── Sessions.swift            # the same index + the terminal launch (osascript)
         ├── SavedSessions.swift       # the claudectl snapshot store in Settings
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
@@ -142,13 +161,19 @@ claude-code/            # the Node clients (installed together under ~/.claude/c
 ├── stamps.js           # timestamp parsing and the "3h06m" / "yesterday 05:30" formats
 ├── paths.js            # every state/cache/config path, derived from one `io`
 ├── accounts-contract.js# the pure account rules (mirrors lib/pure/accounts.js 1:1)
-├── accounts.js         # openStore(io): the account store - save, switch, refresh, usage
+├── accounts.js         # openStore(io): the account store - list, save, switch
+├── accounts-usage.js   # a saved login's usage: token, locked refresh, fetch, usage cache
+├── private-fs.js       # 0600 JSON read/write shared by the account and Codex stores
+├── notices.js          # account health and inline notices (outcomes/rotation are GUI-only)
+├── codex-contract.js   # the pure Codex rules (mirrors lib/pure/codex.js 1:1)
+├── codex.js            # openCodexStore(io): saved Codex logins + what the CLI recorded
 ├── login-usage.js      # which login's usage, and how its auth failure is labelled
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
 ├── layout.js           # which window and tab each session sits in (tmux, kitty, WezTerm, iTerm, Terminal.app)
 ├── tools.js            # finding and querying tmux / ps / osascript from a scheduler's minimal PATH
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
+├── codex-cli.js        # `claudectl codex`: the CLI over the Codex store
 ├── session-cli.js      # `claudectl session`: the CLI over tabs.js
 └── claudectl.js        # the claudectl entry point: dispatches to the two groups
 
@@ -156,6 +181,7 @@ mcp/                    # MCP server (Claude Code, Cursor…)
 ├── server.js           # stdio JSON-RPC transport + get_usage; also the npx bin
 ├── tools.js            # tool schemas, renderers, the account tool calls
 ├── sessions.js         # today's sessions + session-ping index
+├── codex.js            # the OpenAI Codex tools (vault + the recorded rate limits)
 └── warehouse.js        # the 90-day usage history reader
 
 linux/usage-bar.mjs     # one-line usage for any bar (waybar, polybar, i3blocks…)

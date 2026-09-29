@@ -16,22 +16,81 @@ public struct LimitCard: Identifiable, Equatable, Sendable {
     /// A per-model sub-cap of `group`'s pool (e.g. Fable), not a pool of its own.
     public let scoped: Bool
     public let percent: Int  // 0...100
+    /// The payload actually carried a number for this limit. False for the
+    /// null placeholders the endpoint ships for kinds nobody has enabled -
+    /// those are no reading at all, not a limit sitting at 0 % (UsageReading).
+    public let percentKnown: Bool
     public let severity: Severity
     public var resetsAt: Date?
     public let active: Bool
 
     public init(
         id: String, label: String, percent: Int, severity: Severity,
-        resetsAt: Date?, active: Bool, group: String = "", scoped: Bool = false
+        resetsAt: Date?, active: Bool, group: String = "", scoped: Bool = false,
+        percentKnown: Bool = true
     ) {
         self.id = id
         self.label = label
         self.group = group
         self.scoped = scoped
         self.percent = percent
+        self.percentKnown = percentKnown
         self.severity = severity
         self.resetsAt = resetsAt
         self.active = active
+    }
+}
+
+/// What a card's percentage may honestly say right now. A percentage is only
+/// worth printing while it still describes the window it is drawn under, and
+/// two things end that: a payload that carried no number for the limit
+/// (`percentKnown == false`), and a window whose reset instant has passed -
+/// the endpoint keeps the old figure until the next window is opened, so for
+/// the minutes in between the number on file belongs to a window that is gone.
+/// Both give `–` and an empty bar rather than a stale percentage that looks
+/// exactly like a fresh one. Mirrors `usageReading()` in lib/pure/usage.js and
+/// claude-code/normalize.js; tests/fixtures/reading.json pins all three.
+public struct UsageReading: Equatable, Sendable {
+    public enum Reason: String, Sendable {
+        case noReading = "no_reading"
+        case windowReset = "window_reset"
+    }
+
+    public let known: Bool
+    public let percent: Int?
+    /// What a bar draws: 0 for an unknown reading, so the bar is empty rather
+    /// than frozen at the last percentage.
+    public let fill: Int
+    public let text: String
+    public let reason: Reason?
+
+    /// What a bar shows in place of a percentage nobody can stand behind.
+    public static let noReading = "–"
+
+    public init(known: Bool, percent: Int?, fill: Int, text: String, reason: Reason?) {
+        self.known = known
+        self.percent = percent
+        self.fill = fill
+        self.text = text
+        self.reason = reason
+    }
+
+    /// The window this card measures has already rolled over. Whole seconds
+    /// floored, exactly like `ResetCountdown`, so a reading and its countdown
+    /// never disagree by a rounding step.
+    public static func windowRolledOver(_ resetsAt: Date?, now: Date) -> Bool {
+        guard let resetsAt else { return false }
+        return (resetsAt.timeIntervalSince(now)).rounded(.down) <= 0
+    }
+
+    public static func of(_ card: LimitCard, now: Date = Date()) -> UsageReading {
+        let rolledOver = windowRolledOver(card.resetsAt, now: now)
+        let known = card.percentKnown && !rolledOver
+        let percent = known ? max(0, min(100, card.percent)) : nil
+        return UsageReading(
+            known: known, percent: percent, fill: percent ?? 0,
+            text: percent.map { "\($0)%" } ?? noReading,
+            reason: known ? nil : (rolledOver ? .windowReset : .noReading))
     }
 }
 
@@ -58,11 +117,22 @@ public enum UsageNormalizer {
         return plain.isEmpty ? "Limit" : plain
     }
 
-    static func parseDate(_ s: String?) -> Date? {
+    /// An ISO 8601 instant as the payload writes it, with or without
+    /// fractional seconds. Public because the app layer parses the same shape
+    /// out of files the endpoint never touched (a Codex transcript's stamp).
+    public static func parseDate(_ s: String?) -> Date? {
         guard let s else { return nil }
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
+    }
+
+    /// A JSON number, read strictly: JSONSerialization hands `true` back as an
+    /// NSNumber too, and `as? NSNumber` alone would read it as 1 %.
+    static func number(_ v: Any?) -> Double? {
+        guard let n = v as? NSNumber, !Accounts.isJSONBool(n) else { return nil }
+        let d = n.doubleValue
+        return d.isFinite ? d : nil
     }
 
     static func clampPercent(_ v: Double) -> Int {
@@ -109,14 +179,17 @@ public enum UsageNormalizer {
                 let scope = entry["scope"] as? [String: Any]
                 let model = (scope?["model"] as? [String: Any])?["display_name"] as? String
                 if let model { label += " · \(model)" }
-                let pct = clampPercent((entry["percent"] as? NSNumber)?.doubleValue ?? 0)
+                // A limit the payload gave no number for is not a limit at 0 %.
+                let raw = number(entry["percent"])
+                let pct = clampPercent(raw ?? 0)
                 let sev = Severity(rawValue: entry["severity"] as? String ?? "normal") ?? .normal
                 return LimitCard(
                     id: kind + (model.map { ":\($0)" } ?? ""),
                     label: label, percent: pct, severity: sev,
                     resetsAt: parseDate(entry["resets_at"] as? String),
                     active: (entry["is_active"] as? Bool) ?? false,
-                    group: groupOf(kind, entry["group"] as? String), scoped: model != nil)
+                    group: groupOf(kind, entry["group"] as? String), scoped: model != nil,
+                    percentKnown: raw != nil)
             }
             return inheritPooledResets(cards).sorted {
                 let ai = kindOrder.firstIndex(of: $0.id.components(separatedBy: ":")[0]) ?? 99
@@ -130,7 +203,7 @@ public enum UsageNormalizer {
             _ payloadKey: String, id: String, _ label: String, group: String, active: Bool
         ) {
             guard let obj = payload[payloadKey] as? [String: Any],
-                let util = (obj["utilization"] as? NSNumber)?.doubleValue
+                let util = number(obj["utilization"])
             else { return }
             cards.append(
                 LimitCard(
@@ -177,8 +250,8 @@ public struct ExtraUsage: Equatable, Sendable {
     }
 
     static func money(_ obj: [String: Any]?) -> Double? {
-        guard let minor = (obj?["amount_minor"] as? NSNumber)?.doubleValue else { return nil }
-        let exp = (obj?["exponent"] as? NSNumber)?.doubleValue ?? 2
+        guard let minor = UsageNormalizer.number(obj?["amount_minor"]) else { return nil }
+        let exp = UsageNormalizer.number(obj?["exponent"]) ?? 2
         return minor / pow(10, exp)
     }
 
@@ -196,7 +269,7 @@ public struct ExtraUsage: Equatable, Sendable {
             limit.map { "\(usedText) of \(formatMoney($0, currency: currency))" } ?? usedText
         return ExtraUsage(
             percent: UsageNormalizer.clampPercent(
-                (spend["percent"] as? NSNumber)?.doubleValue ?? 0),
+                UsageNormalizer.number(spend["percent"]) ?? 0),
             severity: Severity(rawValue: spend["severity"] as? String ?? "normal") ?? .normal,
             usedAmount: used, limitAmount: limit, currency: currency, detail: detail)
     }
@@ -391,6 +464,47 @@ public enum UsageForecast {
 
 // MARK: - Top-bar readout
 
+/// The one card a single-reading surface shows. Mirrors pure.js `panelCard()`
+/// and claude-code/normalize.js; tests/fixtures/reading.json "panelCard" pins
+/// all three.
+public enum PanelCard {
+    public enum Mode: String, Sendable {
+        case worst, session
+    }
+
+    /// `.session` is the session card, else the first. `.worst` ranks on the
+    /// honest reading, so a rolled-over window's stale figure never wins while
+    /// another card has a reading. Ties go to the first card in the kind order,
+    /// then to payload order - never to however `max(by:)` breaks them, which
+    /// with every unknown card at fill 0 is a certain tie.
+    public static func pick(_ cards: [LimitCard], mode: Mode = .worst, now: Date = Date())
+        -> LimitCard?
+    {
+        guard let first = cards.first else { return nil }
+        if mode == .session { return cards.first { $0.id.hasPrefix("session") } ?? first }
+        let order = UsageNormalizer.kindOrder
+        func rank(_ c: LimitCard) -> Int {
+            order.firstIndex(of: c.id.components(separatedBy: ":")[0]) ?? order.count
+        }
+        let scored = cards.enumerated().map { index, card in
+            let r = UsageReading.of(card, now: now)
+            return (index: index, card: card, fill: r.fill, known: r.known)
+        }
+        let honest = scored.filter(\.known)
+        let pool = honest.isEmpty ? scored : honest
+        var best = pool[0]
+        for s in pool.dropFirst() {
+            if s.fill != best.fill {
+                if s.fill > best.fill { best = s }
+                continue
+            }
+            let r = rank(s.card) - rank(best.card)
+            if r < 0 || (r == 0 && s.index < best.index) { best = s }
+        }
+        return best.card
+    }
+}
+
 /// The menu-bar / top-bar text. Mirrors pure.js `panelText()`;
 /// tests/fixtures/panel.json pins both ports (PanelTextParityTests).
 public enum PanelReadout {
@@ -409,13 +523,17 @@ public enum PanelReadout {
         return String(s.prefix(max - 1)) + "…"
     }
 
-    /// "PRO · Fable 100%" - "" account means no prefix.
+    /// "PRO · Fable 100%" - "" account means no prefix. `known: false` puts
+    /// the en dash where the percentage would go, so the bar never carries a
+    /// figure the popup is already refusing to show (UsageReading).
     public static func text(
-        account: String = "", label: String, percent: Int, max: Int = maxChars
+        account: String = "", label: String, percent: Int, known: Bool = true,
+        max: Int = maxChars
     ) -> String {
         let short =
             label.components(separatedBy: "·").last?.trimmingCharacters(in: .whitespaces) ?? label
-        let pct = "\(UsageNormalizer.clampPercent(Double(percent)))%"
+        let pct =
+            known ? "\(UsageNormalizer.clampPercent(Double(percent)))%" : UsageReading.noReading
         let name = account.trimmingCharacters(in: .whitespaces)
         // The limit reading is built at the full budget first; the name is
         // added only if it fits beside it, never by squeezing the label.

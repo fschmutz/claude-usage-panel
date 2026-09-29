@@ -28,6 +28,9 @@ export default [
                 AbortSignal: 'readonly',
                 setTimeout: 'readonly',
                 clearTimeout: 'readonly',
+                // Web-standard in Node since 11; the pure contracts use it so
+                // the GJS copies can be byte-identical (GJS has it too).
+                TextDecoder: 'readonly',
             },
         },
         rules,

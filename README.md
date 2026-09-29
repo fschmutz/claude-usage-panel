@@ -42,7 +42,7 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+); also installable without a checkout: `brew install --cask fschmutz/tap/claude-usage-panel` (upgrade: `brew upgrade --cask claude-usage-panel`) | [macos/README.md](macos/README.md) |
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
 | `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
-| `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) |
+| `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory; `codex` does what `account` does for OpenAI Codex logins | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs), [Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex) |
 | `autoupdate` | Daily check for a new release, installed automatically (on by default) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#staying-up-to-date) |
 | `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
@@ -55,11 +55,26 @@ login changes; settings, hooks, MCP servers and history stay. Off by default in
 the panels - one switch in the preferences turns it on. Details and the
 exact files touched: [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts).
 
+<img src="docs/switch-story.svg" alt="Three frames: PRO's session limit at 100%, the switch in progress with no reading yet, and PERSO with room left" width="760">
+
+Note the middle frame. Between the switch and the first reading of the new
+window there is no honest percentage to show, so none is shown - a bar here is
+never the last number it happened to have.
+
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list
 today's sessions ranked by the tokens each one spent; clicking one opens your
 terminal on that project with `claude --resume <that session>`. The MCP tool
 returns the same list (with the resume command) and the status line can show the
 day's biggest spender with `--segments=…,sessions`.
+
+**Codex too, if you want it.** `claudectl codex` saves the ChatGPT logins the
+`codex` CLI holds under names and switches between them the same way, and both
+panels can show them as a sibling section - off by default, clearly labelled,
+and never in front of anything Claude. OpenAI publishes no plan-usage endpoint,
+so the only figures shown are the rate limits the `codex` CLI itself recorded
+when the API last returned them, marked `est.` and stamped with when; when
+there is no usable record the answer says so rather than showing a zero.
+Details: [wiki/Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex).
 
 **Where did the tokens go?** `node scripts/token-attribution.mjs --days 7`
 breaks your spend into exploration / implementation / verification / rework /

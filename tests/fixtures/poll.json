@@ -66,7 +66,85 @@
       "nextResetMs": null,
       "retry": true,
       "expected": 60
+    },
+    {
+      "name": "a second failure in a row doubles the retry",
+      "baseSeconds": 600,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": true,
+      "retryStreak": 2,
+      "expected": 120
+    },
+    {
+      "name": "a fourth failure in a row waits eight minutes",
+      "baseSeconds": 60,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": true,
+      "retryStreak": 4,
+      "expected": 480
+    },
+    {
+      "name": "the backoff is capped at the idle maximum",
+      "baseSeconds": 300,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": true,
+      "retryStreak": 30,
+      "expected": 900
+    },
+    {
+      "name": "a Retry-After longer than the backoff is honoured",
+      "baseSeconds": 600,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": true,
+      "retryStreak": 1,
+      "retryAfterSeconds": 300,
+      "expected": 300
+    },
+    {
+      "name": "a Retry-After shorter than the backoff never speeds it up",
+      "baseSeconds": 600,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": true,
+      "retryStreak": 3,
+      "retryAfterSeconds": 10,
+      "expected": 240
+    },
+    {
+      "name": "a Retry-After past the idle maximum is capped there",
+      "baseSeconds": 600,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": true,
+      "retryStreak": 1,
+      "retryAfterSeconds": 86400,
+      "expected": 900
+    },
+    {
+      "name": "a Retry-After without a failure changes nothing",
+      "baseSeconds": 300,
+      "idleStreak": 0,
+      "nextResetMs": null,
+      "retry": false,
+      "retryStreak": 5,
+      "retryAfterSeconds": 800,
+      "expected": 300
     }
   ],
-  "retrySeconds": 60
+  "retrySeconds": 60,
+  "retryFactor": 2,
+  "retryableComment": "Which failed polls keep the last good reading up and retry soon: a \"not now\" status (usageFailure's transient) and a request that never completed (network_error). Everything else blanks the cards. Pinned for lib/pure/poll.js isRetryableFailure and Swift PollSchedule.isRetryable.",
+  "retryable": {
+    "transient": true,
+    "network_error": true,
+    "auth_expired": false,
+    "forbidden": false,
+    "http_error": false,
+    "no_token": false,
+    "parse_error": false
+  }
 }

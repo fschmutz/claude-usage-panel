@@ -8,28 +8,53 @@
 //   2. A reset inside the next delay → land just after it instead, so the fresh
 //      window shows up as a number and not as a stale card.
 //   3. Never poll faster than the configured base, whatever else is true -
-//      except after a transient failure (424, 429, 5xx): that poll produced
-//      nothing, so the retry comes at POLL_RETRY_SECONDS, one request, instead
-//      of leaving a blank or stale panel up for the whole base interval.
+//      except after a retryable failure (408/424/425/429/5xx, or no network):
+//      that poll produced nothing, so the retry comes at POLL_RETRY_SECONDS,
+//      one request, instead of leaving a blank or stale panel up for the
+//      whole base interval. Consecutive failures double that wait, capped at
+//      POLL_IDLE_MAX, and a server's Retry-After is honoured (same cap): a
+//      rate-limited endpoint must not be asked again every minute forever.
 
 export const POLL_IDLE_AFTER = 3;              // unchanged polls before backing off
 export const POLL_IDLE_FACTOR = 4;
 export const POLL_IDLE_MAX_SECONDS = 15 * 60;
 export const POLL_RESET_LAG_SECONDS = 5;       // land just PAST the reset, never on it
-export const POLL_RETRY_SECONDS = 60;          // after a transient failure
+export const POLL_RETRY_SECONDS = 60;          // after a retryable failure
+export const POLL_RETRY_FACTOR = 2;            // per consecutive retryable failure
+
+/**
+ * A failure worth retrying soon with the last good reading kept on screen: a
+ * "not now" status (usageFailure's `transient`) or a request that never
+ * completed (`network_error`: offline, DNS, timeout - the same outage every
+ * poll during it hits). Anything else is a real failure and blanks the cards.
+ * Swift twin `PollSchedule.isRetryable(code:)`; tests/fixtures/poll.json pins both.
+ */
+export function isRetryableFailure(result) {
+    if (!result || result.ok)
+        return false;
+    return result.code === 'transient' || result.code === 'network_error';
+}
 
 /**
  * Seconds to wait before the next poll.
  * @param {{baseSeconds: number, idleStreak: number, nextResetMs: ?number,
- *          nowMs: number, retry: boolean}} o
+ *          nowMs: number, retry: boolean, retryStreak?: number,
+ *          retryAfterSeconds?: ?number}} o
  *   idleStreak counts consecutive polls where no limit moved; retry is true
- *   when the last poll failed with a transient status.
+ *   when the last poll failed retryably, retryStreak how many in a row did
+ *   (1 for the first), retryAfterSeconds what its Retry-After asked for.
  */
 export function nextPollSeconds({baseSeconds, idleStreak = 0, nextResetMs = null,
-    nowMs = Date.now(), retry = false}) {
+    nowMs = Date.now(), retry = false, retryStreak = 1, retryAfterSeconds = null}) {
     const base = Math.max(60, Math.round(Number(baseSeconds) || 60));
-    if (retry)
-        return Math.min(base, POLL_RETRY_SECONDS);
+    if (retry) {
+        const streak = Math.max(1, Math.floor(Number(retryStreak) || 1));
+        const backoff = Math.min(POLL_IDLE_MAX_SECONDS,
+            POLL_RETRY_SECONDS * POLL_RETRY_FACTOR ** Math.min(streak - 1, 16));
+        const asked = typeof retryAfterSeconds === 'number' && Number.isFinite(retryAfterSeconds)
+            ? Math.min(POLL_IDLE_MAX_SECONDS, Math.max(0, Math.ceil(retryAfterSeconds))) : 0;
+        return Math.max(backoff, asked);
+    }
     let delay = base;
     if (idleStreak >= POLL_IDLE_AFTER)
         delay = Math.min(POLL_IDLE_MAX_SECONDS, base * POLL_IDLE_FACTOR);
@@ -76,13 +101,13 @@ export const SECTION_DEADLINE_MS = 90_000;
 
 /**
  * The cards the account section should treat as the live login's usage: the
- * fresh ones, the last reading while a "not now" failure keeps it on screen,
+ * fresh ones, the last reading while a retryable failure keeps it on screen,
  * else none (usage unknown - no figures, no auto-switch decision from them).
  */
 export function sectionCards(result, latest) {
     if (result?.ok)
         return result.cards ?? [];
-    if (result?.code === 'transient' && latest?.length)
+    if (isRetryableFailure(result) && latest?.length)
         return latest;
     return [];
 }

@@ -35,18 +35,28 @@ private struct CardView: View {
     /// Week-over-week peak - the one thing the 6-hour forecast cannot say.
     let trend: WeekOverWeek?
     var body: some View {
+        // A percentage the endpoint cannot currently stand behind draws as `–`
+        // with an empty bar, never as the last one it gave: after a window
+        // resets the figure on file belongs to a window that is gone, and a
+        // limit the payload never carried a number for is not a limit at 0 %.
+        let reading = UsageReading.of(card)
         let color = Color.severity(card.severity)
-        let pace = UsageClock.pace(card)
+        // Clock pace and burn rate are both drawn from the percentage, so a
+        // card that shows `–` shows neither: they would contradict the dash.
+        let pace = reading.known ? UsageClock.pace(card) : nil
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(card.label).font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.primary.opacity(0.85))
                 if card.active { Circle().fill(color).frame(width: 6, height: 6) }
                 Spacer()
-                Text("\(card.percent)%").font(.system(size: 15, weight: .heavy))
-                    .foregroundColor(color).monospacedDigit()
+                Text(reading.text).font(.system(size: 15, weight: .heavy))
+                    .foregroundColor(reading.known ? color : .secondary).monospacedDigit()
+                    .help(Self.readingNote(reading))
             }
-            ProgressBar(percent: card.percent, color: color, elapsedPercent: pace?.elapsedPercent)
+            ProgressBar(
+                percent: reading.fill, color: reading.known ? color : .secondary,
+                elapsedPercent: pace?.elapsedPercent)
             HStack {
                 // A per-model card (Fable) caps a share of the weekly pool rather
                 // than adding one, so its reset line carries that note - same
@@ -54,7 +64,7 @@ private struct CardView: View {
                 Text(
                     [
                         ResetCountdown.text(card.resetsAt), UsageNormalizer.poolNote(card),
-                        UsageClock.format(pace),
+                        UsageClock.format(pace), Self.readingNote(reading),
                     ]
                     .filter { !$0.isEmpty }.joined(separator: " · ")
                 ).font(.system(size: 11))
@@ -67,7 +77,7 @@ private struct CardView: View {
             }
             // Burn-rate projection: amber when the limit runs out before its
             // reset, quiet when the pace outlasts it, absent when idle.
-            if let fc = forecast {
+            if reading.known, let fc = forecast {
                 Text(UsageForecast.format(fc)).font(.system(size: 11))
                     .foregroundColor(fc.exhaustsBeforeReset ? .cuWarning : .secondary)
             }
@@ -82,6 +92,16 @@ private struct CardView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
                     card.severity == .critical ? color.opacity(0.35) : Color.primary.opacity(0.08)))
+    }
+
+    /// Why the card shows `–`. Silence when it shows a percentage: the number
+    /// is its own explanation.
+    static func readingNote(_ reading: UsageReading) -> String {
+        switch reading.reason {
+        case .windowReset: return "window reset - waiting for the first reading of the new one"
+        case .noReading: return "the endpoint reported no figure for this limit"
+        case nil: return ""
+        }
     }
 }
 
@@ -192,8 +212,16 @@ struct PopupView: View {
                 CursorSectionView(model: model)
             }
 
-            if model.accountsEnabled && !model.accounts.isEmpty {
+            // Notices too: "signed in but not saved" has to be reachable
+            // before there is a single saved account to list it under.
+            if model.accountsEnabled && !(model.accounts.isEmpty && model.accountNotices.isEmpty) {
                 AccountsSectionView(model: model)
+            }
+
+            // Codex last, and only when asked for: this app is Claude-first,
+            // and a sibling vault does not get to reorder the popup.
+            if model.codexEnabled {
+                CodexSectionView(model: model)
             }
 
             Divider()

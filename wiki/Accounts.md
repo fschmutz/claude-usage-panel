@@ -96,6 +96,59 @@ A refresh token lasts about thirty days. A saved account left untouched longer
 than that reads *login expired* everywhere; sign in to it once with
 `claude auth login` and `save` it again.
 
+Reading a parked account's usage can therefore rotate that account's tokens -
+and nothing else. The live branch returns Claude Code's own token before any
+exchange can happen, so polling never touches the credentials Claude Code is
+running on, not even when the account being polled *is* the live login.
+`tests/accounts-store.test.js` pins all three halves of that: the profile
+rotates, `~/.claude/.credentials.json` and `~/.claude.json` do not, and a
+refused refresh leaves every one of them as it was.
+
+## What a row says when something is wrong
+
+A stored login's own dates are not the whole story: a token whose `expiresAt`
+is hours away can still be one the endpoint turns down. So each row's state
+folds the dates together with whatever the last fetch actually said:
+
+| State | Means | The row's one repair |
+| --- | --- | --- |
+| `valid` | the stored token is good as it stands | - |
+| `stale` | it is about to expire; the refresh token handles it on next use | - |
+| `expired` | the refresh token is gone or spent | `claude auth login`, then save again |
+| `refresh-failed` | the exchange was refused, or the endpoint turned the token down | the same - the saved credentials are finished whatever their dates say |
+| `unreachable` | nothing is known to be wrong; the reading is simply missing (a 429, a 5xx, no network) | retry |
+
+A row in one of the first two states shows its usage. A row in any of the
+others shows **why it has none** - never the figures from the last poll that
+worked, because a broken login must stop looking like a working one.
+
+## Inline notices
+
+Anything that needs doing is said next to the account it is about, with the one
+button that fixes it - not in a line at the bottom of the panel, and not in
+Settings:
+
+| Notice | When | Its one button |
+| --- | --- | --- |
+| Incomplete switch to *NAME* | a switch was interrupted between its two writes | **Finish switch** (re-runs it) |
+| *NAME*'s credentials and account block disagree | a torn login | **Repair** (reinstalls the profile it says it is) |
+| Signed in as *email*, but this login is not saved | the live login was never named | **Save as *name*** - the name a switch would have parked it under |
+| *NAME*: login expired / the stored login was refused | see the table above | **Copy sign-in command** (`claude auth login`) |
+| *NAME*: no usage reading right now | `unreachable` | **Retry** |
+
+The answer to pressing one of those - and to a switch, a save or a remove -
+appears beside the control that caused it and clears itself after a few seconds
+or on the next action.
+
+## Next
+
+With two or more saved logins, the accounts block carries a **Next** control
+that walks the saved list in order and wraps, plus one quiet line saying so and
+naming where it would go. That order is the same code-point order every client
+lists accounts in, so the line describes exactly what the button does. It is a
+manual rotation and is unrelated to the auto-switch below, which picks by
+headroom rather than by position.
+
 ## Auto-switch
 
 Off by default. When it is on (a button in the dropdown's header on both
@@ -130,6 +183,16 @@ needed) and writes the snapshot the status line reads. `refresh` without a
 name goes through every saved account even when one fails, and exits 1 if any
 did.
 
+## When a percentage is not shown
+
+A bar shows `–` and draws empty, rather than a number, in two cases: when the
+payload carried no figure for that limit at all (the endpoint ships kinds
+nobody has enabled as null placeholders, and drawing those as 0% reads as a
+full tank), and in the minutes after a window's reset instant has passed, while
+the endpoint is still returning the old window's figure. The same rule runs in
+the GNOME dropdown, the macOS popup, both top bars and the status line, and is
+pinned by `tests/fixtures/reading.json`.
+
 ## Where the same logic lives
 
 `claude-code/accounts.js` is the implementation behind the CLI, the MCP server
@@ -139,3 +202,10 @@ mirror it; `tests/fixtures/accounts.json` pins the decisions they must agree on
 (what a valid profile is, which saved account the live login is, when a token
 is valid / stale / expired, and the auto-switch rule). The usage snapshot the
 panels write for the status line is one small JSON file next to the profiles.
+
+The row states, the inline notices, the button-local answers and the rotation
+are their own shared contract - `claude-code/notices.js`, `lib/pure/notices.js`
+and `ClaudeUsageCore/Notices.swift` - pinned by `tests/fixtures/notices.json`.
+The sentences and button labels are deliberately per-port, because they are
+translated; what the fixture pins is which notice appears, in what order, how
+loud it is, and what its one repair does.

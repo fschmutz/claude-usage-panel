@@ -495,17 +495,72 @@ public enum Accounts {
     /// included, must be shorter.
     public static let keychainLineMax = 4096
 
-    /// The fullest limit of a set of cards.
-    public static func worstPercent(_ cards: [LimitCard]) -> Int? {
-        cards.map { max(0, min(100, $0.percent)) }.max()
+    /// The fullest limit of a set of cards at `now`; nil without one honest
+    /// reading. A card with no honest reading (UsageReading: the payload gave
+    /// no number, or its window already rolled over) is skipped, not counted:
+    /// a 0 % placeholder would make every account look freer than it is, and a
+    /// 96 % from a window that reset an hour ago would drive an auto-switch
+    /// away from an account that is empty again.
+    public static func worstPercent(_ cards: [LimitCard], now: Date = Date()) -> Int? {
+        cards.compactMap { UsageReading.of($0, now: now).percent }.max()
+    }
+
+    /// The first card with `key`, then its honest reading - never "the first
+    /// card with that key that happens to be known" (a duplicate must not win).
+    static func reading(_ cards: [LimitCard], _ key: String, now: Date) -> UsageReading? {
+        cards.first { $0.id == key }.map { UsageReading.of($0, now: now) }
     }
 
     /// One account's row of the usage cache: its worst limit, and its session
-    /// and weekly-all percents (nil for a card it does not have).
-    public static func usageCacheEntry(_ cards: [LimitCard]) -> UsageCacheEntry {
+    /// and weekly-all percents (nil for a card it does not have, or has no
+    /// honest reading for at `now`).
+    public static func usageCacheEntry(_ cards: [LimitCard], now: Date = Date())
+        -> UsageCacheEntry
+    {
         UsageCacheEntry(
-            worst: worstPercent(cards), session: cards.first { $0.id == "session" }?.percent,
-            weekly: cards.first { $0.id == "weekly_all" }?.percent)
+            worst: worstPercent(cards, now: now),
+            session: reading(cards, "session", now: now)?.percent,
+            weekly: reading(cards, "weekly_all", now: now)?.percent)
+    }
+
+    // MARK: refreshing a stored login
+    //
+    // A refresh token is single-use: whoever spends it first gets the new
+    // pair, and every later spend of the same token is refused
+    // (invalid_grant). Several processes poll one store (this app, one MCP
+    // server per Claude Code window, the CLI), so every port takes the same
+    // exclusive lock file around read -> POST -> write, and re-reads the
+    // profile once it holds it.
+
+    /// The per-profile refresh lock: <accounts dir>/refreshLockFile(name),
+    /// created O_EXCL 0600. A lock older than `staleMs` is a crashed holder
+    /// and is taken over; a waiter gives up after `waitMs` (longer than the
+    /// 10 s token request), polling every `pollMs`.
+    public enum RefreshLock {
+        public static let staleMs: Double = 30_000
+        public static let waitMs: Double = 15_000
+        public static let pollMs: Double = 100
+    }
+
+    public static func refreshLockFile(_ name: String) -> String { ".refresh-\(name).lock" }
+
+    /// Another process refreshed this profile since `sent` was read from it:
+    /// the stored access or refresh token moved. Then the caller uses the
+    /// stored one and does not spend a refresh token that is already spent.
+    public static func refreshRaced(sent: [String: Any], stored: [String: Any]) -> Bool {
+        stored["accessToken"] as? String != sent["accessToken"] as? String
+            || stored["refreshToken"] as? String != sent["refreshToken"] as? String
+    }
+
+    /// The error code a refused token exchange is filed under. Only 400 / 401
+    /// (the server's invalid_grant: that refresh token is spent or revoked)
+    /// say the stored login is finished - "refresh_failed", which asks for a
+    /// new sign-in. A 429 or a 5xx is "transient" and anything else
+    /// "http_error": both leave the login's health unreachable. A transport
+    /// failure is "network_error".
+    public static func refreshFailureCode(_ status: Int) -> String {
+        if status == 400 || status == 401 { return "refresh_failed" }
+        return HttpFailure.isTransient(status) ? "transient" : "http_error"
     }
 
     /// The account to switch to, or nil to stay. `worst` maps each saved name
@@ -536,13 +591,13 @@ public enum Accounts {
     }
 
     /// "S 42% · W 12%" from the session / weekly-all cards, for a compact
-    /// row; a missing card is left out, and no card at all gives "".
-    public static func formatUsage(_ cards: [LimitCard]) -> String {
-        let part = { (key: String, tag: String) -> String? in
-            cards.first { $0.id == key }.map { "\(tag) \(max(0, min(100, $0.percent)))%" }
-        }
-        return [part("session", "S"), part("weekly_all", "W")].compactMap { $0 }.joined(
-            separator: " · ")
+    /// row; a missing card is left out, and no card at all gives "". A card
+    /// with no honest reading at `now` prints UsageReading.noReading rather
+    /// than a number.
+    public static func formatUsage(_ cards: [LimitCard], now: Date = Date()) -> String {
+        [("session", "S"), ("weekly_all", "W")].compactMap { key, tag in
+            reading(cards, key, now: now).map { "\(tag) \($0.text)" }
+        }.joined(separator: " · ")
     }
 
     /// A fetch/refresh error as an account ROW shows it: the store prefixes

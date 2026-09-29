@@ -38,9 +38,27 @@ for (const [portName, port] of PORTS) {
     });
 }
 
-test('pure.js formatAccountUsage matches the shared fixture', () => {
-    for (const c of FIX.formatUsage) assert.equal(pure.formatAccountUsage(c.cards), c.expected, c.name);
-});
+// Every card is read through usageReading at the fixture's `now`: a
+// placeholder or a window that already rolled over has no honest reading.
+for (const [portName, port] of PORTS) {
+    test(`${portName} formatAccountUsage matches the shared fixture`, () => {
+        for (const c of FIX.formatUsage) assert.equal(port.formatAccountUsage(c.cards, NOW), c.expected, c.name);
+    });
+    test(`${portName} worstPercent skips a card with no honest reading`, () => {
+        for (const c of FIX.worstPercent) assert.equal(port.worstPercent(c.cards, NOW), c.expected, c.name);
+    });
+    test(`${portName} refresh lock: one file name and timing for every port`, () => {
+        const {name, file, ...timing} = FIX.refreshLock;
+        assert.equal(port.refreshLockFile(name), file);
+        assert.deepEqual(port.REFRESH_LOCK, timing);
+    });
+    test(`${portName} refreshFailureCode: only 400/401 asks for a new sign-in`, () => {
+        for (const [status, code] of FIX.refreshFailure) assert.equal(port.refreshFailureCode(status), code, String(status));
+    });
+    test(`${portName} refreshRaced: another process already spent the refresh token`, () => {
+        for (const c of FIX.refreshRaced) assert.equal(port.refreshRaced(c.sent, c.stored), c.expected, c.name);
+    });
+}
 
 test('keychainServices: Claude Code\'s per-config-dir item name', () => {
     for (const [input, hex] of Object.entries(FIX.keychain.sha256)) assert.equal(sha256Hex(input), hex, input);
@@ -48,10 +66,11 @@ test('keychainServices: Claude Code\'s per-config-dir item name', () => {
         assert.deepEqual(contract.keychainServices(c.env, sha256Hex), c.expected, c.name);
 });
 
-test('worstPercent takes the fullest card, clamped', () => {
-    assert.equal(contract.worstPercent([{percent: 12}, {percent: 34}]), 34);
-    assert.equal(contract.worstPercent([{percent: 140}]), 100);
-    assert.equal(contract.worstPercent([]), null);
+test('worstPercent reads by JSON type: a percent that is not a number is no reading', () => {
+    for (const port of [contract, pure]) {
+        assert.equal(port.worstPercent([{percent: 12}, {percent: 34}], NOW), 34);
+        assert.equal(port.worstPercent([{percent: '96'}, {percent: null}, {percent: true}], NOW), null);
+    }
 });
 
 test('keychainWriteLine: the tokens go hex-encoded on stdin, quoted names only', () => {
@@ -95,6 +114,6 @@ for (const [portName, port] of PORTS) {
         }
     });
     test(`${portName} usageCacheEntry: worst, session and weekly-all of one account`, () => {
-        for (const c of FIX.usageCacheEntry) assert.deepEqual(port.usageCacheEntry(c.cards), c.expected, c.name);
+        for (const c of FIX.usageCacheEntry) assert.deepEqual(port.usageCacheEntry(c.cards, NOW), c.expected, c.name);
     });
 }

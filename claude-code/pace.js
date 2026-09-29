@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 
-import {clampPercent} from './normalize.js';
+import {clampPercent, usageReading} from './normalize.js';
 import {historyPath as defaultHistoryPath} from './paths.js';
 
 // ── Clock pace ──────────────────────────────────────────────────────────────────
@@ -147,8 +147,11 @@ export function recordHistory(cards, {nowMs = Date.now(), historyPath = defaultH
   }
   const mine = () =>
     Object.fromEntries(cards.map((c) => [c.key, hist[historyKey(c.key, account)] ?? []]));
-  if (!cards.length) return mine(); // nothing to add - do not rewrite the file
-  for (const c of cards) {
+  // A null placeholder carries no measurement: a 0 filed for it would later
+  // read as a burn from 0 once the limit gets a real number.
+  const measured = cards.filter((c) => c.percentKnown !== false);
+  if (!measured.length) return mine(); // nothing to add - do not rewrite the file
+  for (const c of measured) {
     const key = historyKey(c.key, account);
     const list = hist[key] ?? [];
     list.push([nowMs, c.percent]);
@@ -171,12 +174,16 @@ export function forecastMap(cards, opts = {}) {
 
 /**
  * Attach `pace` (when history supports an honest projection) and `vsClock`
- * (always, when the card has a reset) to every card.
+ * (always, when the card has a reset) to every card whose percentage may be
+ * shown. A card with no honest reading (usageReading: a null placeholder, or
+ * a window already rolled over) gets neither: a burn rate or a clock delta
+ * computed from a figure nobody can stand behind would contradict the dash.
  */
 export function withPace(cards, opts = {}) {
   const nowMs = opts.nowMs ?? Date.now();
   const forecasts = forecastMap(cards, {...opts, nowMs});
   return cards.map((c) => {
+    if (!usageReading(c, nowMs).known) return c;
     const fc = forecasts.get(c.key);
     const vsClock = clockPace(c, nowMs);
     return {...c, ...(fc ? {pace: fc} : {}), ...(vsClock ? {vsClock} : {})};

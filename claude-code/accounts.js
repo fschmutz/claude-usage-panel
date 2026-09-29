@@ -23,7 +23,9 @@
 // claudectl CLI, the MCP tools, the status line, the tests - gets the
 // same operations without threading paths through every call. It is also the
 // ONE reader of the live login: the usage fetch for the MCP server and the
-// Linux status bar goes through it too.
+// Linux status bar goes through it too. The token and usage half (refresh,
+// accessTokenFor, the usage fetch and its cache) is accounts-usage.js, bound
+// here to the same io.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -33,21 +35,17 @@ import {execFileSync} from 'node:child_process';
 
 import {
   PROFILE_VERSION, accountSummary, isTorn, isValidName, keychainServices, keychainWriteLine,
-  liveProfileName, parkName, parseProfile, refreshedOauth, saveRefusal, sameJSON, switchPlan,
-  syncBackPlan, tokenState, usageCacheEntry,
+  liveProfileName, parkName, parseProfile, saveRefusal, sameJSON, switchPlan, syncBackPlan, tokenState,
 } from './accounts-contract.js';
-import {usageForLogin} from './login-usage.js';
-import {httpFailure, normalizeExtraUsage, normalizeUsage} from './normalize.js';
+import {bindUsage, coded} from './accounts-usage.js';
+import {accountHealth, accountNotices} from './notices.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from './paths.js';
+import {readJSON, writePrivate} from './private-fs.js';
 
-export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
-// Claude Code's public OAuth client - the same id the CLI itself refreshes with.
-export const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-export const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
-export const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
-const FETCH_TIMEOUT_MS = 10_000;
+export {
+  OAUTH_BETA_HEADER, OAUTH_CLIENT_ID, OAUTH_TOKEN_ENDPOINT, USAGE_CACHE_MAX_AGE_MS, USAGE_ENDPOINT,
+} from './accounts-usage.js';
 
-const USAGE_CACHE_FILE = '.usage-cache.json';
 const LAST_SWITCH_FILE = '.last-switch.json';
 // A switch in progress: {at, from, to}, written before the live login is
 // touched and removed once both halves are installed. While it is there no
@@ -55,24 +53,6 @@ const LAST_SWITCH_FILE = '.last-switch.json';
 const SWITCH_PENDING_FILE = '.switch-pending.json';
 
 const sha256Hex = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-/** The status line trusts a cached usage snapshot this long. */
-export const USAGE_CACHE_MAX_AGE_MS = 30 * 60_000;
-
-// Atomic, private write: tmp file in the same dir, created 0600, renamed over.
-function writePrivate(file, text) {
-  fs.mkdirSync(path.dirname(file), {recursive: true, mode: 0o700});
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, text, {mode: 0o600});
-  fs.renameSync(tmp, file);
-}
-
-function readJSON(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null;
-  }
-}
 
 /**
  * The credentials blob as the store keeps it: `{claudeAiOauth: {accessToken,
@@ -337,148 +317,9 @@ export function openStore(io = {}) {
     return Number.isFinite(at) ? at : null;
   }
 
-  // ── Tokens and usage ────────────────────────────────────────────────────────
-
-  /**
-   * Exchange the profile's refresh token for a new access token and store the
-   * result. Throws with the HTTP status on failure. Never touches the live login.
-   */
-  async function refreshProfile(profile) {
-    const oauth = profile.credentials.claudeAiOauth;
-    if (!oauth.refreshToken) throw new Error(`${profile.name}: no refresh token - log in again and save it`);
-    let response;
-    try {
-      response = await fetchImpl(OAUTH_TOKEN_ENDPOINT, {
-        method: 'POST',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify({
-          grant_type: 'refresh_token', refresh_token: oauth.refreshToken, client_id: OAUTH_CLIENT_ID,
-        }),
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-    } catch (e) {
-      throw new Error(`${profile.name}: token refresh failed - ${e.message}`);
-    }
-    if (!response.ok) {
-      throw new Error(`${profile.name}: token refresh rejected (HTTP ${response.status})` +
-        (response.status === 400 || response.status === 401 ? ' - log in again and save it' : ''));
-    }
-    const next = refreshedOauth(oauth, await response.json(), now());
-    if (!next) throw new Error(`${profile.name}: token refresh returned no access token`);
-    return writeProfile({
-      ...profile, savedAt: stamp(),
-      credentials: {...profile.credentials, claudeAiOauth: next},
-    });
-  }
-
-  /**
-   * A usable access token for a saved account: the live one when that account
-   * is the active login (Claude Code keeps it fresh), else the stored one,
-   * refreshed first when stale.
-   */
-  async function accessTokenFor(name) {
-    const profile = readProfile(name);
-    if (!profile) throw new Error(`no saved account named ${name}`);
-    if (liveAccountName() === name) {
-      const token = liveAccessToken();
-      if (token) return {token, source: 'live'};
-    }
-    switch (tokenState(profile, now())) {
-      case 'valid':
-        return {token: profile.credentials.claudeAiOauth.accessToken, source: 'store'};
-      case 'stale': {
-        const fresh = await refreshProfile(profile);
-        return {token: fresh.credentials.claudeAiOauth.accessToken, source: 'refreshed'};
-      }
-      default:
-        throw new Error(`${name}: login expired - run \`claude auth login\` on it and save it again`);
-    }
-  }
-
-  /**
-   * Fetch and normalize usage with one token. `label` names the account in
-   * the auth-expired message; without it the message is the live-login one.
-   * @returns {Promise<{ok: true, cards, extraUsage, raw}
-   *                   | {ok: false, code: string, message: string}>}
-   */
-  async function fetchUsageWith(token, {label = null} = {}) {
-    if (!token) {
-      return {ok: false, code: 'no_token', message: 'No Claude credentials found. Sign in with Claude Code first.'};
-    }
-    let response;
-    try {
-      response = await fetchImpl(USAGE_ENDPOINT, {
-        headers: {authorization: `Bearer ${token}`, 'anthropic-beta': OAUTH_BETA_HEADER},
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-    } catch (e) {
-      return {ok: false, code: 'network_error', message: e.message};
-    }
-    if (response.status === 401 || response.status === 403) {
-      return {
-        ok: false, code: 'auth_expired',
-        message: label
-          ? `${label}: usage endpoint refused the token`
-          : 'Claude session expired. Run any Claude Code command to refresh it.',
-      };
-    }
-    if (!response.ok) {
-      let body = null;
-      try {
-        body = await response.json();
-      } catch {
-        // no JSON body - the status alone is the message
-      }
-      const failure = httpFailure(response.status, body);
-      return label ? {...failure, message: `${label}: ${failure.message}`} : failure;
-    }
-    try {
-      const raw = await response.json();
-      return {ok: true, raw, cards: normalizeUsage(raw), extraUsage: normalizeExtraUsage(raw)};
-    } catch (e) {
-      return {ok: false, code: 'parse_error', message: e.message};
-    }
-  }
-
-  /** Usage for whatever login Claude Code holds now. */
-  function fetchLiveUsage() {
-    return fetchUsageWith(liveAccessToken());
-  }
-
-  /** Normalized usage for one saved account, or {ok: false, code, message}. */
-  /** Usage for one saved account: the label rule is login-usage.js's, so a
-   *  live token's refusal keeps the "run any Claude Code command" hint. */
-  function usageFor(name) {
-    return usageForLogin({accessTokenFor, fetchUsageWith}, name);
-  }
-
-  /** Usage of every saved account, in parallel, keyed by name. */
-  async function usageForAll() {
-    const results = await Promise.all(listProfiles().map((p) => usageFor(p.name)));
-    return Object.fromEntries(results.map((r) => [r.name, r]));
-  }
-
-  // The panels and the MCP server drop the latest per-account worst limit here
-  // so the status line (no network, no credentials) can hint at a freer account.
-  // `results` is usageForAll()'s shape: {name: {ok, cards}}.
-  function writeUsageCache(results) {
-    const accounts = {};
-    for (const [name, r] of Object.entries(results)) {
-      if (r?.ok) accounts[name] = usageCacheEntry(r.cards);
-    }
-    try {
-      writePrivate(path.join(dir, USAGE_CACHE_FILE), JSON.stringify({at: now(), accounts}));
-    } catch {
-      // read-only state dir just means no hint in the status line
-    }
-  }
-
-  /** The cached snapshot when fresh enough, else null. */
-  function readUsageCache(maxAgeMs = USAGE_CACHE_MAX_AGE_MS) {
-    const cache = readJSON(path.join(dir, USAGE_CACHE_FILE));
-    if (!cache || !Number.isFinite(cache.at) || now() - cache.at > maxAgeMs) return null;
-    return cache.accounts && typeof cache.accounts === 'object' ? cache : null;
-  }
+  const usage = bindUsage({
+    dir, now, fetchImpl, stamp, readProfile, writeProfile, listProfiles, liveAccountName, liveAccessToken,
+  });
 
   // ── Switch ──────────────────────────────────────────────────────────────────
 
@@ -507,6 +348,12 @@ export function openStore(io = {}) {
   async function switchTo(name) {
     let target = readProfile(name);
     if (!target) throw new Error(`no saved account named ${name}`);
+    // The live login by its account block, with credentials we cannot read:
+    // refreshing or reinstalling the stored copy would spend or overwrite the
+    // refresh token Claude Code is running on. Wait for it to be readable.
+    if (!readLiveCredentials() && liveAccountName() === name) {
+      throw coded('no_token', `${name}: the live login cannot be read right now - try again`);
+    }
     const synced = syncBack();
     const plan = switchPlan({
       name, synced, pending: readPendingSwitch(),
@@ -521,7 +368,7 @@ export function openStore(io = {}) {
     if (plan.action === 'expired') {
       throw new Error(`${name}: login expired - run \`claude auth login\` on it and save it again`);
     }
-    if (plan.action === 'refresh') target = await refreshProfile(target);
+    if (plan.action === 'refresh') target = await usage.refreshProfile(target);
     installLogin(target, from);
     writeLastSwitch({from, to: name});
     return {from, to: name, changed: true, running: runningClaudeCount(), email};
@@ -532,31 +379,47 @@ export function openStore(io = {}) {
    * optionally each one's usage (which also refreshes the status line's cache).
    * Shared by the CLI and the MCP list_accounts tool.
    */
-  async function listAccounts({usage = false} = {}) {
+  async function listAccounts({usage: withUsage = false} = {}) {
     syncBack();
     const profiles = listProfiles();
     const active = liveAccountName();
-    const results = usage ? await usageForAll() : {};
-    if (usage) writeUsageCache(results);
+    const results = withUsage ? await usage.usageForAll() : {};
+    if (withUsage) usage.writeUsageCache(results);
     const accounts = profiles.map((p) => {
       const r = results[p.name];
+      const summary = accountSummary(p, now());
       return {
-        ...accountSummary(p, now()), active: p.name === active,
+        ...summary, active: p.name === active,
         cards: r?.ok ? r.cards : null,
         error: r && !r.ok ? r.message : null,
+        // The stored dates alone call a refused token "valid"; health folds in
+        // what the fetch actually said, so every client reports the same thing.
+        // A live token's refusal is Claude Code's to refresh, not the
+        // profile's: it reads unreachable, like the panels' active row.
+        health: accountHealth({
+          tokenState: summary.tokenState, errorCode: r && !r.ok ? r.code : null, live: r?.source === 'live',
+        }),
       };
     });
-    return {active, accounts, live: readLiveAccount(), pendingSwitch: readPendingSwitch()};
+    const live = readLiveAccount();
+    const pendingSwitch = readPendingSwitch();
+    return {
+      active, accounts, live, pendingSwitch,
+      notices: accountNotices({
+        rows: accounts.map((a) => ({name: a.name, health: a.health})),
+        liveEmail: typeof live?.emailAddress === 'string' ? live.emailAddress : null,
+        activeName: active, pending: pendingSwitch,
+        torn: active !== null && isTorn(profiles, active, live),
+      }),
+    };
   }
 
   return {
-    dir, credentialsPath: credsPath, configPath,
+    dir, credentialsPath: credsPath, configPath, now,
     listProfiles, readProfile, writeProfile, removeProfile,
     readLiveCredentials, liveAccessToken, readLiveAccount, liveAccountName, readPendingSwitch,
     syncBack, saveCurrent, runningClaudeCount,
-    writeLastSwitch, readLastSwitchMs,
-    refreshProfile, accessTokenFor, switchTo,
-    fetchUsageWith, fetchLiveUsage, usageFor, usageForAll, writeUsageCache, readUsageCache,
-    listAccounts,
+    writeLastSwitch, readLastSwitchMs, switchTo, listAccounts,
+    ...usage,
   };
 }

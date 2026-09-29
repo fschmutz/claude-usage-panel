@@ -190,6 +190,37 @@ command line of 4096 bytes or more. Both read the item back. The panels gate all
 `accounts-enabled` (GSettings) / `accountsEnabled` (UserDefaults), **off by
 default**; the status line segment is opt-in. The CLI + MCP tools are always on.
 
+Refresh rules (all three ports, pinned by `accounts.json` + `notices.json`):
+a name that resolves to the live login is **never** refreshed - Claude Code
+holds the same single-use refresh token - so an unreadable live token is
+`no_token`, not a refresh of the stored copy. Every refresh of a saved login
+runs under `<accounts dir>/.refresh-<name>.lock` (O_EXCL, 0600, owner id
+inside, stale after 30 s, waiters give up after 15 s), re-reads the profile
+inside the lock and skips the POST if the token already moved; a 400 whose
+replacement is already on disk is a success. Only a 400/401 or a 200 without an
+access token is `refresh_failed`; throw/timeout is `network_error`, 429/5xx
+`transient`. `accountHealth` (valid / stale / expired / refresh-failed /
+unreachable) folds token dates with the last fetch's code, and a live login's
+own 401 is never `refresh-failed`. `claude-code/accounts-usage.js` /
+`AccountUsage.swift` hold the usage half (token, locked refresh, fetch, usage
+cache); `notices.js` / `Notices.swift` the inline notices (button outcomes and
+the Next rotation are GUI-only: GNOME + Swift).
+
+## Codex vault - opt-in sibling, no path to a Claude login
+
+`claudectl codex`, four MCP tools (`mcp/codex.js`) and a section in both panels
+(`codex-enabled` / `codexEnabled`, off by default) save and switch
+`$CODEX_HOME/auth.json` under names. A login is (**account id, user id**):
+`account_id` is the ChatGPT workspace and every Team member shares it, so it
+never identifies a login alone; email decides only when a side has no user id.
+OpenAI has no plan-usage endpoint: usage is the last `rate_limits` the `codex`
+CLI wrote into `sessions/**/rollout-*.jsonl` (`resets_at` epoch seconds,
+`resets_in_seconds` legacy), always `provenance: "estimated"`, else
+`unavailable` with a reason. No Codex token is ever refreshed here, and
+`list*` never writes (sync happens on save/switch). Pinned by
+`tests/fixtures/codex.json` (identity, token state) and `codex-usage.json`
+(transcripts, recorded usage).
+
 ## Architecture - one contract, three ports
 
 The load-bearing idea: **all business logic is pure and duplicated across
@@ -199,17 +230,18 @@ summarization, you must change it in **every** port and keep them matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
-  sessions,accounts,snapshots,layout}.js` (`layout.js`, the dropdown
+ sessions,accounts,notices,codex,snapshots,layout}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
   imports anywhere under `pure/`, so it all runs under plain `node` for tests. This is the reference implementation, and
   every importer keeps importing `lib/pure.js`.
 - **`macos/Sources/ClaudeUsageCore/`** - Foundation-only mirror of `pure.js`
-  (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Warehouse.swift`,
-  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
-  `Snapshots.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
-  `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
-  `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
-  `PlanLabel.swift`).
+ (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Notices.swift`,
+ `Codex.swift`, `Warehouse.swift`,
+ `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
+ `Snapshots.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
+ `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
+ `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
+ `PlanLabel.swift`).
   No networking/SwiftUI, so it unit-tests on Linux CI. The files say "Mirrors
   the GNOME extension's lib/pure.js" - keep it that way.
 - **`claude-code/`** - the Node port, one concern per file: `normalize.js`
@@ -218,6 +250,9 @@ summarization, you must change it in **every** port and keep them matching.
   (every state/cache/config path derived from one `io`, nothing at module
   load), `accounts-contract.js` (the pure account rules, mirroring
   `lib/pure/accounts.js` 1:1), `accounts.js` (`openStore(io)`),
+  `accounts-usage.js` (its usage half), `private-fs.js` (0600 JSON I/O shared
+  by the account and Codex stores), `notices.js` (account health + notices),
+  `codex-contract.js` / `codex.js` / `codex-cli.js` (the Codex vault),
   `login-usage.js` (which login's usage and its auth-failure label: a live
   token keeps the refresh hint, a stored one names the profile),
   `statusline.js` (renders from Claude Code's stdin, nothing else),
@@ -233,11 +268,12 @@ summarization, you must change it in **every** port and keep them matching.
   `SOURCES` table; AppleScript only on an interactive `save`, never the
   autosave; Node-only), `tools.js` (tool lookup on PATH plus Homebrew/system
   dirs, for a scheduler's minimal PATH). **One CLI, `claudectl`**:
-  `claudectl.js` only dispatches `account …` to `account-cli.js` and
-  `session …` to `session-cli.js`; a new command group is a new
+  `claudectl.js` only dispatches `account …`, `session …` and `codex …` to
+  their `<group>-cli.js`; a new command group is a new
   `<group>-cli.js` exporting `main(argv, io)` + `HELP`, never a new binary.
 - **`mcp/`** - the MCP server: `server.js` is transport + `get_usage` only,
-  `tools.js` the tool schemas / renderers / account tool calls,
+  `tools.js` the tool schemas / renderers / account tool calls, `codex.js`
+  the Codex tools,
   `sessions.js` the session + ping index, `warehouse.js` the 90-day history
   reader. `server.js` carries the exported `VERSION` const, bumped by
   `scripts/bump-version.sh` and guarded by `scripts/check-versions.sh` - both
@@ -282,6 +318,19 @@ The normalization contract (must stay identical across ports):
   card with a null `resets_at` inherits the pooled card's reset (the API fills
   the scoped one only after that model is used in the window), and `poolNote()`
   returns the "share of the weekly all-models limit" sub-line the UIs render.
+- Every card carries `percentKnown`; `usageReading(card, now)` is the only way
+  a figure is shown or ranked: no figure in the payload, or a window whose
+  `resets_at` has passed, is `–` and an empty bar, never 0% or the stale
+  percent. `panelCard(cards, mode, now)` picks the top-bar card (honest
+  readings first, ties to the first in `KIND_ORDER`); `worstPercent`,
+  `usageCacheEntry` and the auto-switch skip unknown readings.
+  `tests/fixtures/reading.json`.
+- `usageFailure` (`tests/fixtures/usage-endpoint.json`): 401 `auth_expired`
+  (refresh hint), 403 `forbidden` (server words, no refresh hint), 408/424/425/
+  429/5xx `transient` with `Retry-After` parsed; `transient` and
+  `network_error` keep the last cards. The poll backs off
+  `max(60 s * 2^(streak-1), Retry-After)`, capped at 900 s
+  (`tests/fixtures/poll.json`).
 - `clampPercent` → 0..100 int; `severity` comes straight from the API
   (normal/warning/critical) and also drives the top-bar glyph color.
 - `alertThreshold` buckets to 0/90/100 for limit-crossing notifications. The

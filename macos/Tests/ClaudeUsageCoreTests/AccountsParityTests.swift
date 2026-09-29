@@ -71,8 +71,22 @@ final class AccountsParityTests: XCTestCase {
         }
     }
 
+    /// Fixture cards: key, percent, and optionally percentKnown and an ISO
+    /// resetsAt, the two things an honest reading depends on.
     private func cards(_ raw: [[String: Any]]) -> [LimitCard] {
-        raw.map { .stub(id: $0["key"] as! String, percent: ($0["percent"] as! NSNumber).intValue) }
+        raw.map {
+            LimitCard(
+                id: $0["key"] as! String, label: $0["key"] as! String,
+                percent: ($0["percent"] as! NSNumber).intValue, severity: .normal,
+                resetsAt: ($0["resetsAt"] as? String).flatMap {
+                    ISO8601DateFormatter().date(from: $0)
+                }, active: true, percentKnown: $0["percentKnown"] as? Bool ?? true)
+        }
+    }
+
+    /// The fixture's clock, as the Swift port reads time.
+    private func now(_ fix: [String: Any]) -> Date {
+        Date(timeIntervalSince1970: (fix["now"] as! NSNumber).doubleValue / 1000)
     }
 
     func testAutoSwitchTarget() throws {
@@ -147,8 +161,36 @@ final class AccountsParityTests: XCTestCase {
         let fix = try fixture()
         for c in fix["formatUsage"] as! [[String: Any]] {
             XCTAssertEqual(
-                Accounts.formatUsage(cards(c["cards"] as! [[String: Any]])),
+                Accounts.formatUsage(cards(c["cards"] as! [[String: Any]]), now: now(fix)),
                 c["expected"] as? String, c["name"] as! String)
+        }
+    }
+
+    func testWorstPercentSkipsCardsWithNoHonestReading() throws {
+        let fix = try fixture()
+        for c in fix["worstPercent"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.worstPercent(cards(c["cards"] as! [[String: Any]]), now: now(fix)),
+                (c["expected"] as? NSNumber)?.intValue, c["name"] as! String)
+        }
+    }
+
+    func testRefreshLockAndFailureCodes() throws {
+        let fix = try fixture()
+        let lock = fix["refreshLock"] as! [String: Any]
+        XCTAssertEqual(Accounts.refreshLockFile(lock["name"] as! String), lock["file"] as! String)
+        XCTAssertEqual(Accounts.RefreshLock.staleMs, (lock["staleMs"] as! NSNumber).doubleValue)
+        XCTAssertEqual(Accounts.RefreshLock.waitMs, (lock["waitMs"] as! NSNumber).doubleValue)
+        XCTAssertEqual(Accounts.RefreshLock.pollMs, (lock["pollMs"] as! NSNumber).doubleValue)
+        for pair in fix["refreshFailure"] as! [[Any]] {
+            let status = (pair[0] as! NSNumber).intValue
+            XCTAssertEqual(Accounts.refreshFailureCode(status), pair[1] as! String, "\(status)")
+        }
+        for c in fix["refreshRaced"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.refreshRaced(
+                    sent: c["sent"] as! [String: Any], stored: c["stored"] as! [String: Any]),
+                c["expected"] as! Bool, c["name"] as! String)
         }
     }
 
@@ -264,7 +306,7 @@ final class AccountsParityTests: XCTestCase {
         let fix = try fixture()
         for c in fix["usageCacheEntry"] as! [[String: Any]] {
             let e = c["expected"] as! [String: Any]
-            let got = Accounts.usageCacheEntry(cards(c["cards"] as! [[String: Any]]))
+            let got = Accounts.usageCacheEntry(cards(c["cards"] as! [[String: Any]]), now: now(fix))
             let name = c["name"] as! String
             XCTAssertEqual(
                 got,
