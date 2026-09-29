@@ -15,15 +15,23 @@ export function readJSON(file) {
 }
 
 /**
- * Atomic, private write: a tmp file in the same directory, 0600, renamed over
- * `file`. The rename swaps the inode, so the result is 0600 even when the file
- * it replaces was not. The explicit chmod covers a tmp left behind by an
- * earlier process with the same pid, whose mode `writeFileSync` would keep.
+ * Atomic, private write: a tmp file in the same directory, renamed over
+ * `file`. The tmp is CREATED 0600 (O_CREAT|O_EXCL, flag 'wx'), so the secret
+ * never sits in a wider-moded file, not even for an instant, and a tmp path
+ * someone else pre-created (or a symlink planted there) fails the write
+ * instead of receiving it. A stale tmp from an earlier process with the same
+ * pid is removed first. The rename swaps the inode, so the result is 0600
+ * even when the file it replaces was not.
  */
 export function writePrivate(file, text) {
   fs.mkdirSync(path.dirname(file), {recursive: true, mode: 0o700});
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, text, {mode: 0o600});
-  fs.chmodSync(tmp, 0o600);
-  fs.renameSync(tmp, file);
+  fs.rmSync(tmp, {force: true});
+  fs.writeFileSync(tmp, text, {mode: 0o600, flag: 'wx'});
+  try {
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, {force: true});
+    throw e;
+  }
 }
