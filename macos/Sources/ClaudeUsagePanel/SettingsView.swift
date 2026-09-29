@@ -31,6 +31,10 @@ struct SettingsView: View {
                 CodexSettingsSection(model: model)
             }
             .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
+            // Its own tab on purpose: the only thing here that removes
+            // anything does not belong a click away from the usage popup.
+            SettingsTab { ReclaimSettingsSection() }
+                .tabItem { Label("Storage", systemImage: "internaldrive") }
         }
         .frame(width: 480, height: 560)
         .onAppear { model.sessionPing.reload() }

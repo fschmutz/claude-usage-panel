@@ -68,6 +68,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── accounts.js # named-account rules (mirrors claude-code/accounts-contract.js)
     │   ├── notices.js  # account health, inline notices, button outcomes, switch rotation
     │   ├── codex.js    # named OpenAI Codex logins (mirrors claude-code/codex-contract.js)
+    │   ├── reclaim.js  # the dev-cache catalog and what may be moved to the trash
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   └── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
@@ -105,6 +106,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── Accounts.swift            # named-account rules
     │   ├── Notices.swift             # account health, inline notices, button outcomes, rotation
     │   ├── Codex.swift               # named OpenAI Codex logins (twin of codex-contract.js)
+    │   ├── Reclaim.swift             # the dev-cache catalog (twin of reclaim-contract.js)
     │   ├── Warehouse.swift           # the 90-day history rules
     │   ├── EventHooks.swift          # event-hook detection + expansion
     │   ├── Sessions.swift            # ping stamps, transcript fold, ranking, resume
@@ -135,6 +137,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── Codex.swift               # the Codex vault in the model
         ├── CodexStore.swift          # the Codex store's I/O (auth.json, recorded limits)
         ├── CodexView.swift           # the optional Codex section in the popup and Settings
+        ├── ReclaimView.swift         # the Storage tab: sizes, and the move to the Trash
         ├── Sessions.swift            # the same index + the terminal launch (osascript)
         ├── SavedSessions.swift       # the claudectl snapshot store in Settings
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
@@ -157,6 +160,8 @@ claude-code/            # the Node clients (installed together under ~/.claude/c
 ├── notices.js          # account health, inline notices, button outcomes, switch rotation
 ├── codex-contract.js   # the pure Codex rules (mirrors lib/pure/codex.js 1:1)
 ├── codex.js            # openCodexStore(io): saved Codex logins + what the CLI recorded
+├── reclaim-contract.js # the dev-cache catalog and its rules (mirrors lib/pure/reclaim.js)
+├── reclaim.js          # openReclaim(io): measure the caches, move chosen ones to the trash
 ├── login-usage.js      # which login's usage, and how its auth failure is labelled
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
@@ -164,6 +169,7 @@ claude-code/            # the Node clients (installed together under ~/.claude/c
 ├── tools.js            # finding and querying tmux / ps / osascript from a scheduler's minimal PATH
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── codex-cli.js        # `claudectl codex`: the CLI over the Codex store
+├── reclaim-cli.js      # `claudectl cache`: what the caches cost, and the trash move
 ├── session-cli.js      # `claudectl session`: the CLI over tabs.js
 └── claudectl.js        # the claudectl entry point: dispatches to the two groups
 
