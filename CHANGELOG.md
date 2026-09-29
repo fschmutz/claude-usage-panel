@@ -121,6 +121,14 @@ semantic versioning.
   one ChatGPT Team workspace share `account_id`, which used to make a switch
   overwrite one saved login with the other. Resets come from the `resets_at`
   the current `codex` CLI writes, and `list_codex_accounts` is truly read-only.
+- **Codex**: GNOME scans the session transcripts asynchronously (it walked
+  them on the Shell's main thread every poll), and all ports walk newest day
+  first, at most 4 levels deep, 8 files. A token the `codex` CLI rotates in the
+  middle of a switch is synced into its profile before `auth.json` is written.
+  Private files are created 0600 with O_EXCL rather than chmod'ed after.
+- A stale refresh lock is taken over by an atomic rename, so two waiters can no
+  longer both take it and spend one refresh token twice; `save_account` and
+  `save_codex_account` are annotated destructive (`force` overwrites).
 - Every port reads payload numbers strictly: a JSON boolean, string or null is
   no reading (Swift used to read `true` as 1%), extra-usage money included.
 - The GNOME outcome line no longer turns a "Save as NAME" button into
