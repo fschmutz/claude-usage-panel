@@ -1,12 +1,14 @@
 // Pure logic - no GJS/gi imports, so it is unit-testable under plain `node`.
 // Re-exported by lib/pure.js; import from there.
 
-// ── Named accounts (mirrors claude-code/accounts.js; tests/fixtures/accounts.json)
+// ── Named accounts (tests/fixtures/accounts.json)
 // A saved login is the credentials blob plus the `oauthAccount` block of
 // ~/.claude.json, under a name of the user's choosing. The decisions below -
 // which saved profile the live login is, whether a stored token is still
-// usable, and when to move to another account - are pinned by one fixture
-// across the GNOME, Node and Swift ports. The I/O lives in lib/accounts.js.
+// usable, and when to move to another account - are the ONE JavaScript copy:
+// the GNOME extension (I/O in lib/accounts.js) and the Node CLI / MCP server /
+// status line (I/O in claude-code/accounts.js) both import this file. The
+// Swift twin (ClaudeUsageCore/Accounts.swift) is pinned by the same fixture.
 
 import {isTransientStatus, usageReading} from './usage.js';
 
@@ -284,6 +286,62 @@ export function parkName(email, taken = []) {
     return name;
 }
 
+// ── macOS Keychain (the Node CLI / MCP; Swift Accounts.keychainServices) ──────
+
+/** Claude Code's macOS Keychain item for its credentials, by default. */
+export const KEYCHAIN_SERVICE = 'Claude Code-credentials';
+/** Names older Claude Code releases used for the default item. */
+export const LEGACY_KEYCHAIN_SERVICES = ['Claude Code', 'claude'];
+
+/**
+ * The Keychain items to read, current first; writes go to the first. Claude
+ * Code suffixes its item with the first 8 hex digits of sha256(NFC config
+ * dir) whenever CLAUDE_CONFIG_DIR is set, so each config dir holds its own
+ * login; CLAUDE_SECURESTORAGE_CONFIG_DIR overrides the hashed dir, and set
+ * but empty it forces the plain name. A suffixed item has no legacy names.
+ * `sha256Hex` is the port's hash (text -> lowercase hex).
+ */
+export function keychainServices(env, sha256Hex) {
+    const secure = env?.CLAUDE_SECURESTORAGE_CONFIG_DIR;
+    const dir = typeof secure === 'string' ? secure : env?.CLAUDE_CONFIG_DIR;
+    if (!dir)
+        return [KEYCHAIN_SERVICE, ...LEGACY_KEYCHAIN_SERVICES];
+    return [`${KEYCHAIN_SERVICE}-${sha256Hex(dir.normalize('NFC')).slice(0, 8)}`];
+}
+
+/** security(1)'s MAX_LINE_LEN: one `security -i` command, newline included, must be shorter. */
+export const KEYCHAIN_LINE_MAX = 4096;
+
+// UTF-8 bytes of `text` as lowercase hex, built-in free: encodeURIComponent
+// already spells every non-ASCII byte as %XX; the rest is one byte each.
+function utf8Hex(text) {
+    return encodeURIComponent(text).replace(/%([0-9A-F]{2})|[^%]/g,
+        (m, h) => (h ? h.toLowerCase() : m.charCodeAt(0).toString(16).padStart(2, '0')));
+}
+
+/**
+ * The line fed to `security -i` on stdin that stores `secret` in the Keychain
+ * item (account, service). The secret never goes on the command line, where
+ * `ps` shows it: it travels hex-encoded (-X) on stdin. Account and service are
+ * double-quoted; one that cannot be quoted plainly (a quote, a backslash, a
+ * control character, or empty) gives null, and the caller refuses the write.
+ * So does a line of KEYCHAIN_LINE_MAX bytes or more: `security -i` reads each
+ * command into a buffer of that size and would run a truncated one.
+ */
+export function keychainWriteLine(account, service, secret) {
+    const plain = s => typeof s === 'string' && s !== '' && !/["\\\p{Cc}]/u.test(s);
+    if (!plain(account) || !plain(service) || typeof secret !== 'string')
+        return null;
+    let hex;
+    try {
+        hex = utf8Hex(secret);
+    } catch {
+        return null; // a lone surrogate: not text a Keychain item can hold
+    }
+    const line = `add-generic-password -U -a "${account}" -s "${service}" -X ${hex}\n`;
+    return utf8Hex(line).length / 2 < KEYCHAIN_LINE_MAX ? line : null; // bytes, not code units
+}
+
 /** The fullest limit of a set of normalized cards at `nowMs`; null without
  *  one honest reading. A card with no honest reading (usageReading: the
  *  payload gave no number, or its window already rolled over) is skipped, not
@@ -353,6 +411,14 @@ export function autoSwitchTarget({
     if (!best)
         return null;
     return {from: active, to: best.name, activePercent, targetPercent: best.percent};
+}
+
+/** Worst limit per saved account from a usage-cache snapshot, for autoSwitchTarget. */
+export function worstFromCache(cache) {
+    const out = {};
+    for (const [name, v] of Object.entries(cache?.accounts ?? {}))
+        out[name] = Number.isFinite(v?.worst) ? v.worst : null;
+    return out;
 }
 
 /** "S 42% · W 12%" from the session / weekly-all cards; '' without either.

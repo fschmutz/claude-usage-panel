@@ -2,10 +2,10 @@
 // Re-exported by lib/pure.js; import from there.
 
 // ── Inline notices, button-local outcomes, switch rotation ───────────────────────
-// The GNOME copy of the shared contract. ClaudeUsageCore/Notices.swift mirrors
-// all of it; claude-code/notices.js mirrors the health and the notices only
-// (no Node client draws a button, so outcomes and the rotation have no Node
-// port). tests/fixtures/notices.json pins every leg.
+// The one JavaScript copy of the shared contract: the GNOME extension and the
+// Node CLI / MCP server import it (the Node side uses the health and the
+// notices only - no Node client draws a button). ClaudeUsageCore/Notices.swift
+// is the Swift twin; tests/fixtures/notices.json pins every leg.
 //
 // The rule these three share: a problem with a saved login belongs next to that
 // login, with the ONE thing that repairs it attached, and the answer to pressing

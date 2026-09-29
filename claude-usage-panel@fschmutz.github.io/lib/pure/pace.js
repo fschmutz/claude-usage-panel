@@ -10,8 +10,8 @@ import {clampPercent} from './usage.js';
 // forecast cannot give at a glance - a pace of 0 %/h right now still runs out
 // early when the window is already mostly spent, and a steep pace in the first
 // ten minutes of a fresh window is nothing to act on. Part of the shared
-// cross-port contract (Model.swift / statusline.js / mcp/server.js mirror it;
-// tests/fixtures/pace.json pins the numbers).
+// cross-port contract (the status line and the MCP server import this file;
+// Model.swift is the Swift twin; tests/fixtures/pace.json pins the numbers).
 
 export const WINDOW_MS = {session: 5 * 3600_000, weekly: 7 * 86400_000};
 
@@ -30,8 +30,7 @@ export function elapsedPercent(card, nowMs = Date.now()) {
     const reset = Date.parse(card.resetsAt);
     if (!Number.isFinite(reset))
         return null;
-    const ratio = 1 - (reset - nowMs) / span;
-    return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+    return clampPercent((1 - (reset - nowMs) / span) * 100);
 }
 
 /**
@@ -63,7 +62,8 @@ export function formatClockPace(pace) {
 // ── Burn-rate forecast ──────────────────────────────────────────────────────────
 // From timestamped percent samples, project when a limit hits 100% at the
 // current pace and whether that lands before its reset. Part of the shared
-// cross-port contract (Model.swift / statusline.js / mcp/server.js mirror it;
+// cross-port contract (the status line and the MCP server import it through
+// claude-code/pace.js; Model.swift is the Swift twin;
 // tests/fixtures/forecast.json pins the numbers).
 
 const FORECAST_WINDOW_MS = 6 * 3600_000; // regress over the last 6 h only

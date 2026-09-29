@@ -2,8 +2,10 @@
 // Re-exported by lib/pure.js; import from there.
 
 // ── Usage normalization, severity, resets, alerts ─────────────────────────────
-// The GNOME copy of the shared contract (Model.swift / claude-code/normalize.js
-// mirror it; tests/fixtures/normalize.json + extra-usage.json pin the numbers).
+// The one JavaScript copy of the shared contract: the GNOME extension, the
+// status line, the MCP server, the CLI and linux/usage-bar.mjs all import it.
+// Model.swift is the Swift twin; tests/fixtures/normalize.json +
+// extra-usage.json pin the numbers.
 
 const KIND_LABELS = {
     session: 'Current session',
@@ -158,8 +160,8 @@ export function poolNote(card) {
 //   - the window's reset instant has passed. The endpoint keeps the old figure
 //     until the next window is opened, so for the minutes in between the number
 //     on file belongs to a window that is gone.
-// Both give `–` and an empty bar. Mirrors Swift `UsageReading` and
-// claude-code/normalize.js; tests/fixtures/reading.json pins all three.
+// Both give `–` and an empty bar. Twin of Swift `UsageReading`;
+// tests/fixtures/reading.json pins both.
 
 /** What a bar shows in place of a percentage nobody can stand behind. */
 export const NO_READING = '–';
@@ -297,9 +299,9 @@ export function sparkline(history) {
 // The reset countdown every client prints, broken into units: whole seconds
 // FLOORED (a reset 59 s away is "0m", never "1m"; 23h59m40s is never "1d"),
 // then days / hours / minutes. null without a parseable date, {past: true}
-// once the reset is due. The status line / MCP (claude-code/stamps.js
-// resetHint) and Swift (ResetCountdown) split it the same way;
-// tests/fixtures/resets.json pins all three. Only the labels differ per port.
+// once the reset is due. The status line / MCP render it compactly
+// (claude-code/stamps.js resetHint, built on this) and Swift (ResetCountdown)
+// splits it the same way; tests/fixtures/resets.json pins every label.
 export function resetParts(iso, nowMs = Date.now()) {
     if (!iso)
         return null;
