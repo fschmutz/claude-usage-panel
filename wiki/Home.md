@@ -25,6 +25,8 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 - [[Status Line]] - condensed usage under the Claude Code prompt
 - [[MCP Tool]] - ask Claude or Cursor for your usage in-conversation
 - [[Accounts]] - save each Claude login under a name (PRO, PERSO) and switch without a browser
+- [[Codex]] - the same for the OpenAI Codex logins, opt-in and clearly labelled
+- [[Cache]] - what the local dev caches cost, and moving them to the trash
 - [[Tabs]] - snapshot the running Claude Code sessions, reopen them in the same windows and tabs
 - [[Troubleshooting]] - common issues and fixes
 - [[Architecture]] - how the code is laid out

@@ -23,6 +23,7 @@ import {
   clockPace,
   severityClass, compactTokens, formatAccountUsage,
 } from '../../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+import {storySvg} from './story.mjs';
 
 // formatForecast prints the LOCAL weekday and time, as the panel does. Pin the
 // zone so the picture does not depend on where it was rendered; Node applies a
@@ -237,6 +238,9 @@ const emit = (rel, content) => {
 
 emit('docs/screenshot.svg', screenshotSvg);
 emit('docs/og.svg', ogSvg);
+// The one beat a still cannot tell: a limit filling up, the switch, the room
+// on the other side. Same generator, same drift gate, same shared logic.
+emit('docs/switch-story.svg', storySvg({C, FONT, esc, story: DATA.switchStory}));
 
 // Raster og.png for OpenGraph scrapers (they don't read SVG). Best-effort.
 if (!CHECK) {

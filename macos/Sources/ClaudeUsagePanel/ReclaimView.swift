@@ -11,7 +11,7 @@ import SwiftUI
 // mis-aim costs somebody their transcripts. It is READ-ONLY until Reclaim is
 // pressed: opening the tab measures and nothing else.
 //
-// Everything it moves goes through NSWorkspace.recycle - the Trash, with
+// Everything it moves goes through FileManager.trashItem - the Trash, with
 // Finder's own Put Back as the undo. There is no unlink in this file.
 
 @MainActor
@@ -86,8 +86,7 @@ final class ReclaimModel: ObservableObject {
         var failures: [String] = []
         for entry in targets {
             do {
-                // recycle, not removeItem: this lands in the Trash, and Finder
-                // knows how to put it back.
+                // Trash, not delete: Finder knows how to put this back.
                 try FileManager.default.trashItem(
                     at: URL(fileURLWithPath: entry.path), resultingItemURL: nil)
                 moved += 1

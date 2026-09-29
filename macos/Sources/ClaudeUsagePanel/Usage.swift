@@ -11,7 +11,7 @@ import Foundation
 // and none of that could be exercised without reaching api.anthropic.com with
 // a real bearer token. A caller now injects an endpoint instead.
 
-struct UsageResult {
+struct UsageResult: Sendable {
     let cards: [LimitCard]
     /// Prepaid credits charged beyond the plan; nil unless the account has
     /// extra usage enabled. Money, so it is not one of the cards.

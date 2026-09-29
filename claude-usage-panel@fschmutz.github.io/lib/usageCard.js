@@ -15,7 +15,7 @@ import {
 import {ProgressBar, ClockRow} from './bar.js';
 import {vboxProps, wrapLabel, clipLabel} from './widgets.js';
 
-// Why the card shows `—`. Silence when it shows a percentage: the number is
+// Why the card shows `–`. Silence when it shows a percentage: the number is
 // its own explanation.
 function readingNote(reading) {
     if (reading.reason === 'window_reset')
@@ -56,7 +56,7 @@ class UsageCard extends St.BoxLayout {
     }
 
     update(card, history, fc, trend) {
-        // A percentage the endpoint cannot currently stand behind draws as `—`
+        // A percentage the endpoint cannot currently stand behind draws as `–`
         // with an empty bar, never as the last one it gave: after a window
         // resets the figure on file belongs to a window that is gone, and a
         // limit the payload never carried a number for is not a limit at 0 %.

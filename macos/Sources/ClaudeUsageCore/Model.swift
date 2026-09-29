@@ -47,7 +47,7 @@ public struct LimitCard: Identifiable, Equatable, Sendable {
 /// (`percentKnown == false`), and a window whose reset instant has passed -
 /// the endpoint keeps the old figure until the next window is opened, so for
 /// the minutes in between the number on file belongs to a window that is gone.
-/// Both give `—` and an empty bar rather than a stale percentage that looks
+/// Both give `–` and an empty bar rather than a stale percentage that looks
 /// exactly like a fresh one. Mirrors `usageReading()` in lib/pure/usage.js and
 /// claude-code/normalize.js; tests/fixtures/reading.json pins all three.
 public struct UsageReading: Equatable, Sendable {
@@ -65,7 +65,7 @@ public struct UsageReading: Equatable, Sendable {
     public let reason: Reason?
 
     /// What a bar shows in place of a percentage nobody can stand behind.
-    public static let noReading = "—"
+    public static let noReading = "–"
 
     public init(known: Bool, percent: Int?, fill: Int, text: String, reason: Reason?) {
         self.known = known
@@ -117,7 +117,10 @@ public enum UsageNormalizer {
         return plain.isEmpty ? "Limit" : plain
     }
 
-    static func parseDate(_ s: String?) -> Date? {
+    /// An ISO 8601 instant as the payload writes it, with or without
+    /// fractional seconds. Public because the app layer parses the same shape
+    /// out of files the endpoint never touched (a Codex transcript's stamp).
+    public static func parseDate(_ s: String?) -> Date? {
         guard let s else { return nil }
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -472,7 +475,7 @@ public enum PanelReadout {
     }
 
     /// "PRO · Fable 100%" - "" account means no prefix. `known: false` puts
-    /// the em dash where the percentage would go, so the bar never carries a
+    /// the en dash where the percentage would go, so the bar never carries a
     /// figure the popup is already refusing to show (UsageReading).
     public static func text(
         account: String = "", label: String, percent: Int, known: Bool = true,

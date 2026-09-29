@@ -166,11 +166,11 @@ export function poolNote(card) {
 // limit (percentKnown: false - the endpoint ships kinds nobody has enabled as
 // null placeholders, and "0 %" reads as a full tank), and a window whose reset
 // instant has passed (the endpoint keeps the old figure until the next window
-// opens). Both give `—`. Mirrors lib/pure/usage.js and Swift `UsageReading`;
+// opens). Both give `–`. Mirrors lib/pure/usage.js and Swift `UsageReading`;
 // tests/fixtures/reading.json pins all three.
 
 /** What a reading shows in place of a percentage nobody can stand behind. */
-export const NO_READING = '—';
+export const NO_READING = '–';
 
 /** The window this card measures has already rolled over. Whole seconds
  *  floored, exactly like the reset countdown, so the two never disagree by a

@@ -35,7 +35,7 @@ private struct CardView: View {
     /// Week-over-week peak - the one thing the 6-hour forecast cannot say.
     let trend: WeekOverWeek?
     var body: some View {
-        // A percentage the endpoint cannot currently stand behind draws as `—`
+        // A percentage the endpoint cannot currently stand behind draws as `–`
         // with an empty bar, never as the last one it gave: after a window
         // resets the figure on file belongs to a window that is gone, and a
         // limit the payload never carried a number for is not a limit at 0 %.
@@ -92,7 +92,7 @@ private struct CardView: View {
                     card.severity == .critical ? color.opacity(0.35) : Color.primary.opacity(0.08)))
     }
 
-    /// Why the card shows `—`. Silence when it shows a percentage: the number
+    /// Why the card shows `–`. Silence when it shows a percentage: the number
     /// is its own explanation.
     static func readingNote(_ reading: UsageReading) -> String {
         switch reading.reason {

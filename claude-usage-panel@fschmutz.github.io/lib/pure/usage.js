@@ -158,11 +158,11 @@ export function poolNote(card) {
 //   - the window's reset instant has passed. The endpoint keeps the old figure
 //     until the next window is opened, so for the minutes in between the number
 //     on file belongs to a window that is gone.
-// Both give `—` and an empty bar. Mirrors Swift `UsageReading` and
+// Both give `–` and an empty bar. Mirrors Swift `UsageReading` and
 // claude-code/normalize.js; tests/fixtures/reading.json pins all three.
 
 /** What a bar shows in place of a percentage nobody can stand behind. */
-export const NO_READING = '—';
+export const NO_READING = '–';
 
 /** The window this card measures has already rolled over. Whole seconds
  *  floored, exactly like resetParts, so a reset and its countdown never

@@ -99,6 +99,19 @@ Three more tools manage the saved logins (every install form has them):
 So *"switch me to PERSO"* works in the conversation. Ask *"which account has
 the most room?"* and the answer comes from `list_accounts`.
 
+Four more do the same for OpenAI Codex logins (see [[Codex]]):
+`list_codex_accounts`, `save_codex_account`, `switch_codex_account` and
+`get_codex_usage`. They read only the Codex home and its own store, never a
+Claude login, and they never mint a token.
+
+`get_codex_usage` is the one place in this server where a number is not read
+live, and the schema makes that impossible to miss: `provenance` is the
+constant `"estimated"`, `capturedAt` is required, and when there is nothing
+usable to report the answer is `available: false` with a reason
+(`no_sessions` / `no_snapshot` / `stale`) rather than a zero. OpenAI publishes
+no plan-usage endpoint; these are the figures the `codex` CLI recorded when the
+API last returned them.
+
 ## Details
 
 See [mcp/README.md](https://github.com/fschmutz/claude-usage-panel/blob/main/mcp/README.md).

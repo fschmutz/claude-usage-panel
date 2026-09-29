@@ -41,6 +41,50 @@
     {"name": "PERSO", "email": "perso@example.com", "session": 8, "weekly": 15, "active": false}
   ],
   "autoSwitchOn": true,
+  "switchStory": {
+    "subtitle": "Three frames of the same top bar and the same two saved logins - every figure below is fake.",
+    "footer": "Auto-switch does this for you at 90%; Next walks the saved list in order and wraps.",
+    "frames": [
+      {
+        "title": "PRO fills up",
+        "active": "PRO",
+        "cards": [
+          {"label": "Current session", "percent": 100},
+          {"label": "Weekly · all models", "percent": 96}
+        ],
+        "accounts": [
+          {"name": "PERSO", "session": 8, "weekly": 15},
+          {"name": "PRO", "session": 100, "weekly": 96}
+        ],
+        "note": "Session limit reached."
+      },
+      {
+        "title": "One click",
+        "active": "PRO",
+        "cards": [
+          {"label": "Current session", "percent": 100, "percentKnown": false}
+        ],
+        "accounts": [
+          {"name": "PERSO", "session": 8, "weekly": 15},
+          {"name": "PRO", "session": 100, "weekly": 96}
+        ],
+        "note": "Switching - no reading yet, so none is shown."
+      },
+      {
+        "title": "Room left on PERSO",
+        "active": "PERSO",
+        "cards": [
+          {"label": "Current session", "percent": 8},
+          {"label": "Weekly · all models", "percent": 15}
+        ],
+        "accounts": [
+          {"name": "PERSO", "session": 8, "weekly": 15},
+          {"name": "PRO", "session": 100, "weekly": 96}
+        ],
+        "note": "Same settings, same history, new quota."
+      }
+    ]
+  },
   "cursor": {
     "cycle": "This cycle: $842.10 · 3 members",
     "today": "Today: $28.40",

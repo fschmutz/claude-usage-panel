@@ -148,7 +148,7 @@ export function render(cards, {forecasts = new Map(), nowMs = Date.now()} = {}) 
   return shown
     .map((c, i) => {
       // Once a window's reset instant has passed, the percentage stdin carried
-      // belongs to a window that is gone: draw the gauge empty and print `—`
+      // belongs to a window that is gone: draw the gauge empty and print `–`
       // rather than a figure this line cannot stand behind. The projections
       // go quiet with it - there is nothing to project from.
       const reading = usageReading(c, nowMs);
