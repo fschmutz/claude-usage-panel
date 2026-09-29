@@ -17,8 +17,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
+import {spawnSync} from 'node:child_process';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {run, stubbedHome} from './helpers.js';
 
@@ -335,4 +336,66 @@ test('skip_fatal records to the log from inside a subshell, and refuses to run w
     const lost = run('bash', ['-c', 'set -eu; . "$1"; ( set -e; skip_fatal "demo: no scheduler" )', '_', ui]);
     assert.notEqual(lost.status, 0, 'a record with nowhere to go must not pass silently');
     assert.match(lost.stderr, /no INCOMPLETE_LOG[\s\S]*demo: no scheduler/);
+});
+
+// The Node clients import the shared contract from the GNOME extension's pure
+// modules (claude-code/*.js -> ../claude-usage-panel@…/lib/pure/*.js), so the
+// installed tree must carry that dir at the same relative spot. Each client is
+// started FROM THE TREE under a resolve hook that logs every file it loads:
+// all of them must come from the tree (pure dir included), none from this
+// checkout - a tree that only worked because the checkout sat next to it
+// would break the day the checkout moves.
+test('the installed status line, MCP server and claudectl start from the tree, lib/pure included', (t) => {
+    const home = stubbedHome(t, {prefix: 'cup-tree-'});
+    const tree = path.join(home, '.claude', 'claude-usage-panel');
+    const pureDir = path.join(tree, 'claude-usage-panel@fschmutz.github.io', 'lib', 'pure');
+    // A module dropped from the checkout must not survive the next install.
+    fs.mkdirSync(pureDir, {recursive: true});
+    fs.writeFileSync(path.join(pureDir, 'gone.js'), 'export const stale = true;\n');
+    const r = run('bash', [INSTALL, 'statusline', 'mcp', 'cli'], {env: withNode(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const want = fs.readdirSync(path.join(ROOT, 'claude-usage-panel@fschmutz.github.io', 'lib', 'pure'));
+    assert.deepEqual(fs.readdirSync(pureDir).sort(), want.sort(), 'every pure module, and no stale one');
+
+    const trace = path.join(home, 'resolved.log');
+    const hook = path.join(home, 'trace-hook.mjs');
+    fs.writeFileSync(hook, [
+        "import fs from 'node:fs';",
+        "import {registerHooks} from 'node:module';",
+        'registerHooks({resolve(specifier, context, next) {',
+        '    const r = next(specifier, context);',
+        "    if (r.url.startsWith('file:')) fs.appendFileSync(process.env.CUP_TRACE, `${r.url}\\n`);",
+        '    return r;',
+        '}});',
+        '',
+    ].join('\n'));
+    const start = (file, args, input) => {
+        fs.rmSync(trace, {force: true});
+        const out = spawnSync(process.execPath,
+            ['--import', pathToFileURL(hook).href, path.join(tree, file), ...args],
+            {env: withNode(home, {CUP_TRACE: trace, CLAUDE_CONFIG_DIR: path.join(home, '.claude')}),
+                input, cwd: home, encoding: 'utf8', timeout: 20_000});
+        assert.equal(out.status, 0, `${file}: ${out.stderr}`);
+        const loaded = fs.readFileSync(trace, 'utf8').trim().split('\n').map((u) => fileURLToPath(u))
+            .filter((p) => p !== hook);
+        for (const p of loaded) assert.ok(p.startsWith(`${tree}${path.sep}`), `${file} loaded ${p}`);
+        assert.ok(loaded.some((p) => p.startsWith(`${pureDir}${path.sep}`)), `${file} never reached lib/pure`);
+        return out.stdout;
+    };
+
+    const resets = Math.floor(Date.now() / 1000) + 3 * 3600;
+    const line = start('claude-code/statusline.js', ['--segments=limits'], JSON.stringify({
+        rate_limits: {five_hour: {used_percentage: 26, resets_at: resets}},
+    }));
+    assert.match(line, /26%/);
+
+    const init = start('mcp/server.js', [], `${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'initialize',
+        params: {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 't', version: '0'}},
+    })}\n${JSON.stringify({jsonrpc: '2.0', id: 2, method: 'tools/list'})}\n`);
+    const [hello, tools] = init.trim().split('\n').map((l) => JSON.parse(l));
+    assert.equal(hello.result.serverInfo.version, VERSION);
+    assert.ok(tools.result.tools.some((tool) => tool.name === 'get_usage'));
+
+    assert.match(start('claude-code/claudectl.js', ['--help'], ''), /claudectl session/);
 });

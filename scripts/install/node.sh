@@ -4,24 +4,30 @@
 # share.
 #
 # The status line, the MCP server and the claudectl CLI are ES modules
-# that import each other by relative path (mcp/server.js -> ../claude-code/…).
+# that import each other by relative path (mcp/server.js -> ../claude-code/…),
+# and the shared contract straight from the GNOME extension's pure modules
+# (claude-code/*.js -> ../claude-usage-panel@fschmutz.github.io/lib/pure/…).
 # They are installed as ONE tree that mirrors the checkout's layout, so every
 # import resolves exactly as it does in the repo - no per-file renaming, no
 # runtime path probing. The tree's package.json marks the files as ESM.
 NODE_TREE="$HOME/.claude/claude-usage-panel"
+# Checkout-relative dirs copied into the tree: every *.js of each, nothing else.
+NODE_TREE_DIRS="mcp claude-code claude-usage-panel@fschmutz.github.io/lib/pure"
 SL_DEST="$NODE_TREE/claude-code/statusline.js"
 MCP_DEST="$NODE_TREE/mcp/server.js"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 CURSOR_MCP="$HOME/.cursor/mcp.json"
 
 _install_node_tree() {
-    act mkdir -p "$NODE_TREE/mcp" "$NODE_TREE/claude-code"
-    act cp "$ROOT"/mcp/*.js "$NODE_TREE/mcp/"
-    act cp "$ROOT"/claude-code/*.js "$NODE_TREE/claude-code/"
-    # A module renamed or dropped in the checkout (claude-account.js became
-    # account-cli.js in 2.0) must not linger in the tree as a stale copy.
     local dir f
-    for dir in mcp claude-code; do
+    for dir in $NODE_TREE_DIRS; do
+        act mkdir -p "$NODE_TREE/$dir"
+        act cp "$ROOT/$dir"/*.js "$NODE_TREE/$dir/"
+    done
+    # A module renamed or dropped in the checkout (claude-account.js became
+    # account-cli.js in 2.0; the claude-code/ contract copies gave way to
+    # lib/pure imports) must not linger in the tree as a stale copy.
+    for dir in $NODE_TREE_DIRS; do
         for f in "$NODE_TREE/$dir"/*.js; do
             [ -e "$f" ] || continue
             [ -e "$ROOT/$dir/$(basename "$f")" ] || act rm -f "$f"
