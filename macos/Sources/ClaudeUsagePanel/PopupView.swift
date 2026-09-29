@@ -216,6 +216,12 @@ struct PopupView: View {
                 AccountsSectionView(model: model)
             }
 
+            // Codex last, and only when asked for: this app is Claude-first,
+            // and a sibling vault does not get to reorder the popup.
+            if model.codexEnabled {
+                CodexSectionView(model: model)
+            }
+
             Divider()
 
             HStack {

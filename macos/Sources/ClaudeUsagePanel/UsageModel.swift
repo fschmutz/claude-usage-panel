@@ -81,6 +81,20 @@ final class UsageModel: ObservableObject {
     /// the next action before that.
     @Published var outcomes: [String: ControlOutcome] = [:]
     var outcomeTask: Task<Void, Never>?
+
+    // OpenAI Codex: a sibling vault, off by default. Behaviour lives in
+    // Codex.swift (extension UsageModel); only the stored properties are here.
+    @Published var codexEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(codexEnabled, forKey: "codexEnabled")
+            refreshCodex()
+        }
+    }
+    @Published var codexAccounts: [CodexRow] = []
+    @Published var codexActive: String?
+    @Published var codexLiveEmail: String?
+    /// The last reading the codex CLI recorded, or the reason there is none.
+    @Published var codexUsage: CodexStore.RecordedUsage?
     @Published var accountsAutoSwitch: Bool {
         didSet { UserDefaults.standard.set(accountsAutoSwitch, forKey: "accountsAutoSwitch") }
     }
@@ -162,6 +176,7 @@ final class UsageModel: ObservableObject {
         alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
         eventCommand = UserDefaults.standard.string(forKey: "eventCommand") ?? ""
         cursorEnabled = UserDefaults.standard.bool(forKey: "cursorEnabled")
+        codexEnabled = UserDefaults.standard.bool(forKey: "codexEnabled")
         accountsEnabled = UserDefaults.standard.bool(forKey: "accountsEnabled")
         accountsAutoSwitch = UserDefaults.standard.bool(forKey: "accountsAutoSwitch")
         accountsSwitchThreshold =
@@ -326,6 +341,7 @@ final class UsageModel: ObservableObject {
         await refreshSessions()
         await refreshCursor()
         await refreshAccounts()
+        refreshCodex()
     }
 
     private func refreshCost() async {

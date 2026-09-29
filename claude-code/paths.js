@@ -61,6 +61,29 @@ export function accountsDir(io) {
   return path.join(stateDir(io), 'accounts');
 }
 
+/** The Codex CLI's own config dir - follows CODEX_HOME when set, like
+ *  CLAUDE_CONFIG_DIR does for Claude Code. */
+export function codexHome(io) {
+  return env(io).CODEX_HOME || path.join(homedir(io), '.codex');
+}
+
+/** Where the Codex CLI keeps the ChatGPT login it signed in with. */
+export function codexAuthPath(io) {
+  return path.join(codexHome(io), 'auth.json');
+}
+
+/** The Codex CLI's session transcripts - the only local record of what the
+ *  API last said about its rate limits. Read-only, always. */
+export function codexSessionsDir(io) {
+  return path.join(codexHome(io), 'sessions');
+}
+
+/** Saved Codex logins. A directory of their own, next to (never inside) the
+ *  Claude one: nothing in the Codex store can reach a Claude login. */
+export function codexAccountsDir(io) {
+  return path.join(stateDir(io), 'codex-accounts');
+}
+
 /** Claude Code's live-session registry: one <pid>.json per running session. */
 export function sessionRegistryDir(io) {
   return path.join(claudeDir(io), 'sessions');

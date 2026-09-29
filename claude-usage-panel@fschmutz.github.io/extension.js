@@ -24,6 +24,7 @@ import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
 import {readLastPing, readSchedule} from './lib/sessionPing.js';
 import {AccountsController} from './lib/accountsSection.js';
+import {CodexController} from './lib/codexSection.js';
 import {CursorController} from './lib/cursorSection.js';
 import {SessionsController} from './lib/sessionsSection.js';
 import {UsageCard} from './lib/usageCard.js';
@@ -206,6 +207,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
             onActiveChanged: () => this._renderPanel(),
             syncAutoSwitch: state => this._header.syncAutoSwitch(state),
         });
+        // Codex last, and only when asked for: this extension is Claude-first,
+        // and a sibling vault does not get to reorder the dropdown.
+        this._codex = new CodexController(deps);
     }
 
     // The reopen button offers exactly one thing - the newest snapshot - and
@@ -388,6 +392,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             sessions: () => this._sessions.refresh(),
             cursor: () => this._cursor.refresh(),
             accounts: cards => this._accounts.refresh(cards),
+            codex: () => this._codex.refresh(),
         }, {result, latest: this._latest});
         for (const {section, outcome, error} of outcomes) {
             if (outcome === 'failed')

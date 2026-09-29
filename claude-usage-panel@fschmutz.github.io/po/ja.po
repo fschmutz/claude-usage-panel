@@ -16,87 +16,87 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:179
+#: extension.js:180
 msgid "Extra usage"
 msgstr "追加利用"
 
-#: extension.js:221
+#: extension.js:225
 #, javascript-format
 msgid "Reopen %s (%d session)"
 msgid_plural "Reopen %s (%d sessions)"
 msgstr[0] "%s を再度開く (%d セッション)"
 
-#: extension.js:241
+#: extension.js:245
 msgid "Reopened your sessions"
 msgstr "セッションを再度開きました"
 
-#: extension.js:241
+#: extension.js:245
 msgid "Could not reopen the sessions"
 msgstr "セッションを再度開けませんでした"
 
-#: extension.js:340
+#: extension.js:344
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - 再試行中、前回の値を表示しています"
 
-#: extension.js:376
+#: extension.js:380
 #, javascript-format
 msgid "Updated %s"
 msgstr "更新 %s"
 
-#: extension.js:408
+#: extension.js:413
 msgid "Session cost: computing…"
 msgstr "セッション費用: 計算中…"
 
-#: extension.js:413
+#: extension.js:418
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "セッション費用: $%s · %s トークン (推定)"
 
-#: extension.js:415
+#: extension.js:420
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "セッション費用: 利用不可 (ccusage をインストール)"
 
-#: extension.js:445
+#: extension.js:450
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (上限の %d%%)"
 
-#: extension.js:462
+#: extension.js:467
 #, javascript-format
 msgid "last %s"
 msgstr "前回 %s"
 
-#: extension.js:462 prefs.js:332
+#: extension.js:467 prefs.js:353
 msgid "never"
 msgstr "なし"
 
-#: extension.js:466
+#: extension.js:471
 #, javascript-format
 msgid "next %s"
 msgstr "次回 %s"
 
-#: extension.js:468
+#: extension.js:473
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
-#: extension.js:480 extension.js:484 lib/accountsSection.js:513
+#: extension.js:485 extension.js:489 lib/accountsSection.js:513
 #: lib/headerBar.js:41 lib/sessionsSection.js:159 lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Claude の使用状況"
 
-#: extension.js:481
+#: extension.js:486
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s が %d%% に達しました"
 
-#: extension.js:485
+#: extension.js:490
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s は現在のペースだとリセット前に上限に達します"
 
-#: extension.js:619
+#: extension.js:624
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -152,7 +152,7 @@ msgstr "サインインコマンドをコピー"
 msgid "Retry"
 msgstr "再試行"
 
-#: lib/accountsSection.js:124 prefs.js:42 prefs.js:557
+#: lib/accountsSection.js:124 prefs.js:42 prefs.js:578
 msgid "Accounts"
 msgstr "アカウント"
 
@@ -239,6 +239,58 @@ msgstr ""
 "Claude のセッションが期限切れです。Claude Code のコマンドを実行して更新してく"
 "ださい。"
 
+#: lib/codexSection.js:21
+msgid "No Codex sessions on this machine yet - nothing has recorded a limit."
+msgstr ""
+"このマシンにはまだ Codex のセッションがありません - リミットを記録したものが"
+"ありません。"
+
+#: lib/codexSection.js:22
+msgid "The recent Codex sessions carry no rate limits."
+msgstr "最近の Codex セッションにはレート制限が記録されていません。"
+
+#: lib/codexSection.js:23
+msgid "The newest recorded Codex reading is too old to mean anything now."
+msgstr "最後に記録された Codex の値は古すぎて、いまの状況を表していません。"
+
+#: lib/codexSection.js:43
+msgid "OpenAI Codex"
+msgstr "OpenAI Codex"
+
+#: lib/codexSection.js:50
+msgid "est."
+msgstr "推定"
+
+#: lib/codexSection.js:90
+#, javascript-format
+msgid "Signed in as %s - `claudectl codex save NAME` keeps it."
+msgstr ""
+"%s としてサインインしています - `claudectl codex save NAME` で保存できます。"
+
+#: lib/codexSection.js:92
+msgid "No Codex login found. Run `codex login` first."
+msgstr ""
+"Codex のログインが見つかりません。まず `codex login` を実行してください。"
+
+#: lib/codexSection.js:112
+#, javascript-format
+msgid "Recorded by the codex CLI at %s, not read now."
+msgstr "codex CLI が %s に記録した値です。いま取得したものではありません。"
+
+#: lib/codexSection.js:131
+msgid "needs `codex login`"
+msgstr "`codex login` が必要です"
+
+#: lib/codexSection.js:150
+#, javascript-format
+msgid "now on %s - restart codex to use it"
+msgstr "%s に切り替えました - 反映には codex の再起動が必要です"
+
+#: lib/codexSection.js:151
+#, javascript-format
+msgid "%s was already the Codex login"
+msgstr "%s はすでに現在の Codex ログインです"
+
 #: lib/cursorSection.js:40
 msgid "Cursor"
 msgstr "Cursor"
@@ -322,7 +374,7 @@ msgstr ""
 msgid "Could not write the systemd units: %s"
 msgstr "systemd ユニットを書き込めませんでした: %s"
 
-#: lib/sessionsSection.js:46 prefs.js:179
+#: lib/sessionsSection.js:46 prefs.js:200
 msgid "Today’s sessions"
 msgstr "今日のセッション"
 
@@ -364,19 +416,64 @@ msgstr "セッション"
 msgid "Integrations"
 msgstr "連携"
 
+#
+#: prefs.js:57
+msgid "OpenAI Codex (optional)"
+msgstr "OpenAI Codex（任意）"
+
+#: prefs.js:58
+msgid ""
+"A sibling section for the ChatGPT logins the codex CLI holds: save them "
+"under a name and switch without a browser. Off by default - with it off, "
+"nothing under the Codex home is read. Reads auth.json (and the read-only "
+"session transcripts) from $CODEX_HOME, else ~/.codex; saved copies are kept "
+"mode 0600 next to, never inside, the Claude store. Nothing is uploaded, and "
+"no token is ever minted here."
+msgstr ""
+"codex CLI が保持する ChatGPT ログインのための姉妹セクションです。名前を付けて"
+"保存し、ブラウザーなしで切り替えられます。既定ではオフで、オフの間は Codex の"
+"ディレクトリを一切読みません。$CODEX_HOME（未設定なら ~/.codex）の auth.json "
+"と、読み取り専用のセッション記録を読みます。保存したコピーはモード 0600 で、"
+"Claude のストアの中ではなく隣に置かれます。アップロードは行わず、ここでトーク"
+"ンを発行することもありません。"
+
+#
 #: prefs.js:61
+msgid "Show saved Codex logins"
+msgstr "保存した Codex ログインを表示"
+
+#
+#: prefs.js:62
+msgid "Adds an OpenAI Codex section below the Claude ones"
+msgstr "Claude のセクションの下に OpenAI Codex セクションを追加します"
+
+#: prefs.js:69
+msgid "Usage figures are est."
+msgstr "数値は推定値です"
+
+#: prefs.js:70
+msgid ""
+"OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
+"ones the codex CLI recorded when the API last returned them, stamped with "
+"when. Manage the logins with `claudectl codex`."
+msgstr ""
+"OpenAI はプラン使用量のエンドポイントを公開していないため、表示される割合は "
+"codex CLI が API から最後に受け取ったときに記録した値で、記録時刻が付きます。"
+"ログインの管理は `claudectl codex` で行います。"
+
+#: prefs.js:82
 msgid "Behavior"
 msgstr "動作"
 
-#: prefs.js:62
+#: prefs.js:83
 msgid "How often to poll the Claude usage endpoint."
 msgstr "Claude の使用状況エンドポイントを取得する間隔。"
 
-#: prefs.js:67
+#: prefs.js:88
 msgid "Refresh interval"
 msgstr "更新間隔"
 
-#: prefs.js:69
+#: prefs.js:90
 msgid ""
 "Minutes between updates (min 1). Idle windows back off to 15 minutes, and a "
 "poll always lands just after a reset, on wake and when the network returns."
@@ -384,39 +481,39 @@ msgstr ""
 "更新間隔の分数 (最小 1)。アイドル時は最大 15 分まで間隔を広げ、リセット直後・"
 "スリープ復帰時・ネットワーク復帰時には必ず取得します。"
 
-#: prefs.js:81
+#: prefs.js:102
 msgid "Top bar shows"
 msgstr "トップバーの表示"
 
-#: prefs.js:82
+#: prefs.js:103
 msgid "Which limit to display in the panel"
 msgstr "パネルに表示する上限"
 
-#: prefs.js:83
+#: prefs.js:104
 msgid "Worst limit"
 msgstr "最も逼迫した上限"
 
-#: prefs.js:83
+#: prefs.js:104
 msgid "Current session"
 msgstr "現在のセッション"
 
-#: prefs.js:91
+#: prefs.js:112
 msgid "Limit-crossing alerts"
 msgstr "上限到達の通知"
 
-#: prefs.js:92
+#: prefs.js:113
 msgid "Notify when a limit reaches 90% or 100%"
 msgstr "上限が 90% または 100% に達したら通知"
 
-#: prefs.js:101
+#: prefs.js:122
 msgid "Run on limit crossing or reset"
 msgstr "上限到達時・リセット時に実行"
 
-#: prefs.js:110
+#: prefs.js:131
 msgid "Placeholders"
 msgstr "プレースホルダー"
 
-#: prefs.js:112
+#: prefs.js:133
 msgid ""
 "%e event (threshold or reset) · %l label · %p percent · %t threshold · %k "
 "key · %% a literal %. Empty disables it. Example: notify-send \"Claude %l\" "
@@ -426,11 +523,11 @@ msgstr ""
 "値 · %k キー · %% リテラルの %。空にすると無効です。例: notify-send \"Claude "
 "%l\" \"%e at %p%%\""
 
-#: prefs.js:123
+#: prefs.js:144
 msgid "Cost"
 msgstr "費用"
 
-#: prefs.js:124
+#: prefs.js:145
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
 "this to compute it locally with ccusage (requires ccusage installed: npm i -"
@@ -440,19 +537,19 @@ msgstr ""
 "ccusage でローカルに計算します (ccusage のインストールが必要: npm i -g "
 "ccusage)。"
 
-#: prefs.js:127
+#: prefs.js:148
 msgid "Show session cost"
 msgstr "セッション費用を表示"
 
-#: prefs.js:128
+#: prefs.js:149
 msgid "Runs `ccusage blocks --active` on each refresh"
 msgstr "更新のたびに `ccusage blocks --active` を実行します"
 
-#: prefs.js:137
+#: prefs.js:158
 msgid "Cursor (optional)"
 msgstr "Cursor (任意)"
 
-#: prefs.js:138
+#: prefs.js:159
 msgid ""
 "Show Cursor team spend using the Cursor Admin API. Create a key at cursor."
 "com → team → Settings → Admin API. Stored in the system keyring."
@@ -461,19 +558,19 @@ msgstr ""
 "Settings → Admin API でキーを作成してください。システムキーリングに保存されま"
 "す。"
 
-#: prefs.js:141
+#: prefs.js:162
 msgid "Show Cursor usage"
 msgstr "Cursor の利用状況を表示"
 
-#: prefs.js:142
+#: prefs.js:163
 msgid "Adds a Cursor spend section to the dropdown"
 msgstr "ドロップダウンに Cursor の支出セクションを追加します"
 
-#: prefs.js:151
+#: prefs.js:172
 msgid "Cursor Admin API key"
 msgstr "Cursor Admin API キー"
 
-#: prefs.js:180
+#: prefs.js:201
 msgid ""
 "List the sessions that spent the most tokens today, biggest first, and "
 "resume one in a terminal with a click. Read from the local transcripts in "
@@ -483,19 +580,19 @@ msgstr ""
 "から再開します。$CLAUDE_CONFIG_DIR/projects (既定は ~/.claude/projects) の"
 "ローカル記録を読み取ります。"
 
-#: prefs.js:183
+#: prefs.js:204
 msgid "Show today’s sessions"
 msgstr "今日のセッションを表示"
 
-#: prefs.js:184
+#: prefs.js:205
 msgid "Adds up to 5 resume links to the dropdown"
 msgstr "ドロップダウンに最大 5 件の再開リンクを追加します"
 
-#: prefs.js:189
+#: prefs.js:210
 msgid "Terminal"
 msgstr "ターミナル"
 
-#: prefs.js:196
+#: prefs.js:217
 msgid ""
 "Leave empty for the desktop default terminal ($TERMINAL first); without one: "
 "ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
@@ -505,11 +602,11 @@ msgstr ""
 "ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
 "xfce4-terminal, xterm。claudectl session open でも使用されます。"
 
-#: prefs.js:213
+#: prefs.js:234
 msgid "Saved sessions"
 msgstr "保存したセッション"
 
-#: prefs.js:214
+#: prefs.js:235
 msgid ""
 "claudectl session keeps the running Claude Code sessions in snapshots and "
 "reopens them as tabs of one terminal window."
@@ -517,42 +614,42 @@ msgstr ""
 "claudectl session は実行中の Claude Code セッションをスナップショットに保存"
 "し、1 つの端末ウィンドウのタブとして再び開きます。"
 
-#: prefs.js:216
+#: prefs.js:237
 msgid "Autosave"
 msgstr "自動保存"
 
-#: prefs.js:218
+#: prefs.js:239
 msgid "Newest snapshot"
 msgstr "最新のスナップショット"
 
-#: prefs.js:219
+#: prefs.js:240
 msgid "Reopen"
 msgstr "再び開く"
 
-#: prefs.js:227
+#: prefs.js:248
 msgid "claudectl is not installed - run ./install.sh cli"
 msgstr ""
 "claudectl がインストールされていません - ./install.sh cli を実行してください"
 
-#: prefs.js:229
+#: prefs.js:250
 msgid "None yet - run claudectl session save, or wait for the autosave"
 msgstr ""
 "まだありません - claudectl session save を実行するか、自動保存を待ってくださ"
 "い"
 
-#: prefs.js:240
+#: prefs.js:261
 msgid "Every 30 minutes"
 msgstr "30 分ごと"
 
-#: prefs.js:240
+#: prefs.js:261
 msgid "Not scheduled - run ./install.sh cli"
 msgstr "未設定 - ./install.sh cli を実行してください"
 
-#: prefs.js:257
+#: prefs.js:278
 msgid "Session pings"
 msgstr "セッション ping"
 
-#: prefs.js:258
+#: prefs.js:279
 msgid ""
 "A 5-hour window is anchored to its first message, so pinging claude (haiku, "
 "one turn) at a fixed time lines the day’s windows up with the hours you "
@@ -562,143 +659,143 @@ msgstr ""
 "(haiku、1 ターン) へ ping を送ると、その日のウィンドウが実際の勤務時間に揃い"
 "ます。./install.sh sessionping と同じスケジュールです。"
 
-#: prefs.js:265
+#: prefs.js:286
 msgid "Open the 5h session window on schedule"
 msgstr "5 時間ウィンドウをスケジュールで開く"
 
-#: prefs.js:267
+#: prefs.js:288
 msgid "Runs scripts/session-ping.sh from a systemd user timer"
 msgstr "systemd ユーザータイマーから scripts/session-ping.sh を実行します"
 
-#: prefs.js:268
+#: prefs.js:289
 msgid "Needs a systemd user session - use ./install.sh sessionping here"
 msgstr ""
 "systemd のユーザーセッションが必要です - ここでは ./install.sh sessionping を"
 "使ってください"
 
-#: prefs.js:274
+#: prefs.js:295
 msgid "Last ping"
 msgstr "前回の ping"
 
-#: prefs.js:277
+#: prefs.js:298
 msgid "Coverage"
 msgstr "カバー率"
 
-#: prefs.js:281
+#: prefs.js:302
 msgid "Working day"
 msgstr "勤務時間"
 
-#: prefs.js:292
+#: prefs.js:313
 msgid "Days"
 msgstr "曜日"
 
-#: prefs.js:293
+#: prefs.js:314
 msgid "Mon"
 msgstr "月"
 
-#: prefs.js:293
+#: prefs.js:314
 msgid "Tue"
 msgstr "火"
 
-#: prefs.js:293
+#: prefs.js:314
 msgid "Wed"
 msgstr "水"
 
-#: prefs.js:293
+#: prefs.js:314
 msgid "Thu"
 msgstr "木"
 
-#: prefs.js:293
+#: prefs.js:314
 msgid "Fri"
 msgstr "金"
 
-#: prefs.js:293
+#: prefs.js:314
 msgid "Sat"
 msgstr "土"
 
-#: prefs.js:293
+#: prefs.js:314
 msgid "Sun"
 msgstr "日"
 
-#: prefs.js:316
+#: prefs.js:337
 msgid "Add a ping"
 msgstr "ping を追加"
 
-#: prefs.js:319
+#: prefs.js:340
 msgid "Suggest times"
 msgstr "時刻を提案"
 
-#: prefs.js:335
+#: prefs.js:356
 #, javascript-format
 msgid "%d%% of %s-%s covered"
 msgstr "%d%% をカバー (%s-%s)"
 
-#: prefs.js:337
+#: prefs.js:358
 msgid "no valid times yet"
 msgstr "有効な時刻がまだありません"
 
-#: prefs.js:358
+#: prefs.js:379
 #, javascript-format
 msgid "Ping %d"
 msgstr "ping %d"
 
-#: prefs.js:432
+#: prefs.js:453
 msgid "Updates"
 msgstr "更新"
 
-#: prefs.js:433
+#: prefs.js:454
 msgid "Daily check, and whether it is actually running."
 msgstr "毎日のチェックと、それが実際に動いているか。"
 
-#: prefs.js:436 prefs.js:524
+#: prefs.js:457 prefs.js:545
 msgid "Checking…"
 msgstr "確認中…"
 
-#: prefs.js:440 prefs.js:464 prefs.js:488 prefs.js:495 prefs.js:503
-#: prefs.js:510
+#: prefs.js:461 prefs.js:485 prefs.js:509 prefs.js:516 prefs.js:524
+#: prefs.js:531
 msgid "Check now"
 msgstr "今すぐ確認"
 
-#: prefs.js:462
+#: prefs.js:483
 msgid "Cannot self-update"
 msgstr "自己更新できません"
 
-#: prefs.js:463
+#: prefs.js:484
 msgid "No git checkout found for auto-update.sh."
 msgstr "auto-update.sh の git チェックアウトが見つかりません。"
 
-#: prefs.js:471
+#: prefs.js:492
 msgid "Could not read the update status"
 msgstr "更新状態を読み取れませんでした"
 
-#: prefs.js:480
+#: prefs.js:501
 #, javascript-format
 msgid "Installed %s, checkout %s"
 msgstr "インストール済み %s、チェックアウト %s"
 
-#: prefs.js:481
+#: prefs.js:502
 msgid "The clients are behind the code - reinstall them."
 msgstr "クライアントがコードより古い状態です。再インストールしてください。"
 
-#: prefs.js:482 prefs.js:499 prefs.js:523
+#: prefs.js:503 prefs.js:520 prefs.js:544
 msgid "Update now"
 msgstr "今すぐ更新"
 
-#: prefs.js:486
+#: prefs.js:507
 #, javascript-format
 msgid "Installed %s, running %s"
 msgstr "インストール済み %s、実行中 %s"
 
-#: prefs.js:487
+#: prefs.js:508
 msgid "Log out and back in to load it."
 msgstr "読み込むには、ログアウトして再度ログインしてください。"
 
-#: prefs.js:490
+#: prefs.js:511
 #, javascript-format
 msgid "Paused: %s"
 msgstr "一時停止: %s"
 
-#: prefs.js:492
+#: prefs.js:513
 msgid ""
 "The daily check will not touch this checkout until that is resolved. It only "
 "ever fast-forwards a clean checkout."
@@ -706,39 +803,39 @@ msgstr ""
 "解消されるまで、毎日のチェックはこのチェックアウトに触れません。クリーンな"
 "チェックアウトを fast-forward するだけです。"
 
-#: prefs.js:497
+#: prefs.js:518
 #, javascript-format
 msgid "Update available: %s → %s"
 msgstr "更新があります: %s → %s"
 
-#: prefs.js:498 prefs.js:502 prefs.js:509
+#: prefs.js:519 prefs.js:523 prefs.js:530
 #, javascript-format
 msgid "Last checked %s"
 msgstr "最終確認 %s"
 
-#: prefs.js:501
+#: prefs.js:522
 #, javascript-format
 msgid "Up to date (%s)"
 msgstr "最新です (%s)"
 
-#: prefs.js:508
+#: prefs.js:529
 #, javascript-format
 msgid "%s (could not check)"
 msgstr "%s (確認できませんでした)"
 
-#: prefs.js:524
+#: prefs.js:545
 msgid "Updating…"
 msgstr "更新中…"
 
-#: prefs.js:541
+#: prefs.js:562
 msgid "The update failed"
 msgstr "更新に失敗しました"
 
-#: prefs.js:543
+#: prefs.js:564
 msgid "See the log for details."
 msgstr "詳細はログを確認してください。"
 
-#: prefs.js:558
+#: prefs.js:579
 msgid ""
 "Save the login Claude Code holds now under a name (PRO, PERSO) and switch "
 "between saved logins from the dropdown, no browser needed. Only the "
@@ -751,31 +848,31 @@ msgstr ""
 "claude.json のアカウント欄だけで、設定・フック・プラグイン・履歴はそのままで"
 "す。実行中の Claude Code セッションは再起動まで以前のログインのままです。"
 
-#: prefs.js:565
+#: prefs.js:586
 msgid "Enable named accounts"
 msgstr "名前付きアカウントを有効にする"
 
-#: prefs.js:566
+#: prefs.js:587
 msgid "Off by default - nothing account-related is shown until you turn it on"
 msgstr "既定ではオフ。有効にするまでアカウント関連は何も表示されません"
 
-#: prefs.js:573
+#: prefs.js:594
 msgid "Current login"
 msgstr "現在のログイン"
 
-#: prefs.js:575
+#: prefs.js:596
 msgid "Save the current login as"
 msgstr "現在のログインを次の名前で保存"
 
-#: prefs.js:576
+#: prefs.js:597
 msgid "Save"
 msgstr "保存"
 
-#: prefs.js:585
+#: prefs.js:606
 msgid "Switch accounts automatically"
 msgstr "アカウントを自動で切り替える"
 
-#: prefs.js:586
+#: prefs.js:607
 msgid ""
 "When the active account reaches the threshold, move to the saved account "
 "with the most headroom"
@@ -783,57 +880,57 @@ msgstr ""
 "アクティブなアカウントがしきい値に達したら、最も余裕のある保存済みアカウント"
 "へ移る"
 
-#: prefs.js:591
+#: prefs.js:612
 msgid "Auto-switch threshold"
 msgstr "自動切替のしきい値"
 
-#: prefs.js:592
+#: prefs.js:613
 msgid "Worst limit percentage that counts as full"
 msgstr "満杯とみなす最悪の上限の割合"
 
-#: prefs.js:600
+#: prefs.js:621
 msgid "Show the auto-switch button in the dropdown"
 msgstr "自動切替ボタンをメニューに表示"
 
-#: prefs.js:601
+#: prefs.js:622
 msgid ""
 "Off hides the auto-switch button from the panel header; the option stays here"
 msgstr "オフにするとパネル見出しからボタンを隠します。設定はここに残ります"
 
-#: prefs.js:606
+#: prefs.js:627
 msgid "Show the account name in the top bar"
 msgstr "トップバーにアカウント名を表示"
 
-#: prefs.js:607
+#: prefs.js:628
 msgid ""
 "\"PRO · Session 42%\" - shown once two logins are saved, and only while it "
 "fits the bar"
 msgstr ""
 "「PRO · Session 42%」- ログインを2つ保存すると表示され、バーに収まる場合のみ"
 
-#: prefs.js:625
+#: prefs.js:646
 #, javascript-format
 msgid "%s, saved as %s"
 msgstr "%s（%s として保存済み）"
 
-#: prefs.js:626
+#: prefs.js:647
 #, javascript-format
 msgid "%s (not saved yet)"
 msgstr "%s（未保存）"
 
-#: prefs.js:627
+#: prefs.js:648
 msgid "No Claude Code login found"
 msgstr "Claude Code のログインが見つかりません"
 
-#: prefs.js:633
+#: prefs.js:654
 msgid "login expired - sign in and save it again"
 msgstr "ログイン期限切れ - 再度サインインして保存し直してください"
 
-#: prefs.js:640
+#: prefs.js:661
 msgid "Forget this saved login"
 msgstr "この保存済みログインを削除"
 
-#: prefs.js:660
+#: prefs.js:681
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "名前に使えるのは英数字と . _ - のみ(最大 32 文字)"
 

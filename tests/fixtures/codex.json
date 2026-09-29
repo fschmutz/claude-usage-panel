@@ -1,0 +1,227 @@
+{
+  "_comment": "Named OpenAI Codex logins, pinned across lib/pure/codex.js (GNOME), claude-code/codex-contract.js (CLI + MCP) and ClaudeUsageCore/Codex.swift (macOS). A Codex profile is one saved `auth.json` from the Codex home ($CODEX_HOME, else ~/.codex). Identity comes out of the id token's claims, read WITHOUT verifying the signature - the file is one only this user can write, and the claims are used for nothing but naming the account and its plan. tokenState never triggers an exchange: unlike the Claude store, nothing here mints a Codex token, so a stale one is reported and left to `codex login`. `limits` pins the ONLY usage numbers this project will show for Codex: the rate limits the Codex CLI itself recorded when the API last told it, marked estimated and stamped with when they were captured. There is no case in which a number is invented.",
+  "now": 1789300000000,
+  "refreshLeadMs": 300000,
+  "refreshMaxAgeMs": 2419200000,
+  "snapshotMaxAgeMs": 43200000,
+  "authClaim": "https://api.openai.com/auth",
+  "tokens": {
+    "idPlus": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InBsdXNAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1wbHVzIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIiwiY2hhdGdwdF91c2VyX2lkIjoidS1wbHVzIn19.sig",
+    "idPro": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InByb0BleGFtcGxlLmNvbSIsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LXBybyIsImNoYXRncHRfcGxhbl90eXBlIjoicHJvIn19.sig",
+    "idNoPlan": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6Im5vcGxhbkBleGFtcGxlLmNvbSJ9.sig",
+    "accessValid": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+    "accessStale": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMDAxMDB9.sig",
+    "accessNoExp": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig"
+  },
+  "jwt": [
+    {
+      "name": "not a JWT at all",
+      "token": "sk-abcdef",
+      "expected": null
+    },
+    {
+      "name": "the empty string",
+      "token": "",
+      "expected": null
+    },
+    {
+      "name": "three parts, but the payload is not base64",
+      "token": "a.!!!!.c",
+      "expected": null
+    },
+    {
+      "name": "three parts, valid base64, not JSON",
+      "token": "a.aGVsbG8.c",
+      "expected": null
+    },
+    {
+      "name": "a payload that is a JSON array is not a claim set",
+      "token": "a.WzEsMl0.c",
+      "expected": null
+    },
+    {
+      "name": "unpadded base64url decodes like the padded form",
+      "token": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig",
+      "expected": {"sub": "x"}
+    }
+  ],
+  "planLabels": [
+    {"plan": "plus", "expected": "Plus"},
+    {"plan": "pro", "expected": "Pro"},
+    {"plan": "business", "expected": "Business"},
+    {"plan": "chatgpt_enterprise", "expected": "Chatgpt enterprise"},
+    {"plan": "", "expected": ""},
+    {"plan": null, "expected": ""}
+  ],
+  "profiles": [
+    {
+      "version": 1,
+      "name": "PLUS",
+      "savedAt": "2026-09-13T10:00:00Z",
+      "auth": {
+        "OPENAI_API_KEY": null,
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InBsdXNAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1wbHVzIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIiwiY2hhdGdwdF91c2VyX2lkIjoidS1wbHVzIn19.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMTAwMDB9.sig",
+          "refresh_token": "rt-plus",
+          "account_id": "acct-plus"
+        },
+        "last_refresh": "2026-09-13T09:00:00Z"
+      }
+    },
+    {
+      "version": 1,
+      "name": "PRO",
+      "savedAt": "2026-09-13T10:00:00Z",
+      "auth": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InByb0BleGFtcGxlLmNvbSIsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LXBybyIsImNoYXRncHRfcGxhbl90eXBlIjoicHJvIn19.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3ODkzMDAxMDB9.sig",
+          "refresh_token": "rt-pro"
+        },
+        "last_refresh": "2026-09-13T09:00:00Z"
+      }
+    },
+    {
+      "version": 1,
+      "name": "OLD",
+      "savedAt": "2026-09-01T10:00:00Z",
+      "auth": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6Im5vcGxhbkBleGFtcGxlLmNvbSJ9.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig"
+        },
+        "last_refresh": "2026-09-01T09:00:00Z"
+      }
+    },
+    {
+      "version": 1,
+      "name": "LAPSED",
+      "savedAt": "2026-09-01T10:00:00Z",
+      "auth": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6Im5vcGxhbkBleGFtcGxlLmNvbSJ9.sig",
+          "access_token": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig",
+          "refresh_token": "rt-lapsed"
+        },
+        "last_refresh": "2026-08-01T09:00:00Z"
+      }
+    }
+  ],
+  "summaries": [
+    {
+      "name": "PLUS", "email": "plus@example.com", "accountId": "acct-plus",
+      "plan": "plus", "planLabel": "Plus", "tokenState": "valid"
+    },
+    {
+      "name": "PRO", "email": "pro@example.com", "accountId": "acct-pro",
+      "plan": "pro", "planLabel": "Pro", "tokenState": "stale"
+    },
+    {
+      "name": "OLD", "email": "noplan@example.com", "accountId": null,
+      "plan": null, "planLabel": "", "tokenState": "expired"
+    },
+    {
+      "name": "LAPSED", "email": "noplan@example.com", "accountId": null,
+      "plan": null, "planLabel": "", "tokenState": "expired"
+    }
+  ],
+  "invalidProfiles": [
+    null,
+    "PLUS",
+    {"name": "PLUS"},
+    {"name": "PLUS", "auth": {}},
+    {"name": "PLUS", "auth": {"tokens": {}}},
+    {"name": "PLUS", "auth": {"tokens": {"access_token": ""}}},
+    {"name": "PLUS", "auth": {"OPENAI_API_KEY": "sk-only"}},
+    {"name": ".hidden", "auth": {"tokens": {"access_token": "a.b.c"}}},
+    {"name": "", "auth": {"tokens": {"access_token": "a.b.c"}}}
+  ],
+  "active": [
+    {
+      "name": "by account id",
+      "live": {"tokens": {"account_id": "acct-pro", "access_token": "x"}},
+      "expected": "PRO"
+    },
+    {
+      "name": "by email when there is no account id",
+      "live": {
+        "tokens": {
+          "id_token": "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InBsdXNAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1wbHVzIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIiwiY2hhdGdwdF91c2VyX2lkIjoidS1wbHVzIn19.sig"
+        }
+      },
+      "expected": "PLUS"
+    },
+    {
+      "name": "a login nobody saved",
+      "live": {"tokens": {"account_id": "acct-nobody"}},
+      "expected": null
+    },
+    {
+      "name": "no live login at all",
+      "live": null,
+      "expected": null
+    }
+  ],
+  "windowLabels": [
+    {"minutes": 300, "expected": "5h limit"},
+    {"minutes": 60, "expected": "1h limit"},
+    {"minutes": 10080, "expected": "Weekly limit"},
+    {"minutes": 20160, "expected": "2-week limit"},
+    {"minutes": 1440, "expected": "Daily limit"},
+    {"minutes": 4320, "expected": "3-day limit"},
+    {"minutes": 45, "expected": "45m limit"},
+    {"minutes": 0, "expected": "Codex limit"},
+    {"minutes": null, "expected": "Codex limit"}
+  ],
+  "limits": [
+    {
+      "name": "both windows, rounded and stamped",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {
+        "primary": {"used_percent": 12.4, "window_minutes": 300, "resets_in_seconds": 9000},
+        "secondary": {"used_percent": 3.6, "window_minutes": 10080, "resets_in_seconds": 500000}
+      },
+      "expected": [
+        {
+          "key": "codex_primary", "label": "5h limit", "group": "session", "percent": 12,
+          "percentKnown": true, "resetsAt": "2026-09-13T14:00:00.000Z", "active": true
+        },
+        {
+          "key": "codex_secondary", "label": "Weekly limit", "group": "weekly", "percent": 4,
+          "percentKnown": true, "resetsAt": "2026-09-19T06:23:20.000Z", "active": false
+        }
+      ]
+    },
+    {
+      "name": "a window with no reset still reads, it just has no countdown",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": 99.6, "window_minutes": 300}},
+      "expected": [
+        {
+          "key": "codex_primary", "label": "5h limit", "group": "session", "percent": 100,
+          "percentKnown": true, "resetsAt": null, "active": true
+        }
+      ]
+    },
+    {
+      "name": "a non-numeric percent is no reading, so there is no card",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": "12", "window_minutes": 300}},
+      "expected": []
+    },
+    {
+      "name": "nothing recorded at all",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": null,
+      "expected": []
+    }
+  ],
+  "snapshotAge": [
+    {"name": "just now", "capturedAtMs": 1789300000000, "expected": true},
+    {"name": "an hour ago", "capturedAtMs": 1789296400000, "expected": true},
+    {"name": "exactly at the horizon", "capturedAtMs": 1789256800000, "expected": true},
+    {"name": "a minute past it", "capturedAtMs": 1789256740000, "expected": false},
+    {"name": "from the future, which is a broken clock", "capturedAtMs": 1789300060000, "expected": false}
+  ]
+}

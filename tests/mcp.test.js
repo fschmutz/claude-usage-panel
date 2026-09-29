@@ -124,9 +124,12 @@ test('ping - empty result', async () => {
     assert.deepEqual(await handleRequest({method: 'ping'}), {});
 });
 
-test('tools/list - exposes get_usage (with schemas) and the account tools', async () => {
+test('tools/list - exposes get_usage (with schemas), the account tools and the Codex ones', async () => {
     const r = await handleRequest({method: 'tools/list'});
-    assert.deepEqual(r.tools.map(t => t.name), ['get_usage', 'list_accounts', 'save_account', 'switch_account']);
+    assert.deepEqual(r.tools.map(t => t.name), [
+        'get_usage', 'list_accounts', 'save_account', 'switch_account',
+        'list_codex_accounts', 'save_codex_account', 'switch_codex_account', 'get_codex_usage',
+    ]);
     const tool = r.tools[0];
     assert.equal(tool.inputSchema.type, 'object');
     assert.deepEqual(tool.outputSchema.required, ['limits']);
@@ -134,6 +137,32 @@ test('tools/list - exposes get_usage (with schemas) and the account tools', asyn
     assert.equal(r.tools[1].annotations.readOnlyHint, true);
     assert.equal(r.tools[3].annotations.readOnlyHint, false);
     assert.equal(r.tools[3].annotations.destructiveHint, false);
+    // A model must never be able to read a Codex figure as a live one: the
+    // schema pins the provenance to a constant and requires the capture time.
+    const codexUsage = r.tools.find(t => t.name === 'get_codex_usage');
+    const item = codexUsage.outputSchema.properties.limits.items;
+    assert.equal(item.properties.provenance.const, 'estimated');
+    assert.ok(item.required.includes('capturedAt'));
+    assert.equal(codexUsage.annotations.readOnlyHint, true);
+});
+
+test('the Codex tools answer without a Codex login, and never reach a Claude one', async (t) => {
+    const io = world(t);
+    const list = await handleRequest({method: 'tools/call', params: {name: 'list_codex_accounts'}}, io);
+    assert.equal(list.isError, undefined);
+    assert.match(list.content[0].text, /No saved Codex logins yet/);
+    assert.deepEqual(list.structuredContent, {active: null, accounts: []});
+
+    const usage = await handleRequest({method: 'tools/call', params: {name: 'get_codex_usage'}}, io);
+    assert.equal(usage.structuredContent.available, false);
+    assert.equal(usage.structuredContent.reason, 'no_sessions');
+    assert.match(usage.content[0].text, /Codex usage unavailable/);
+
+    // Saving with no Codex login is a refusal, not a silent write of nothing.
+    const save = await handleRequest(
+        {method: 'tools/call', params: {name: 'save_codex_account', arguments: {name: 'PLUS'}}}, io);
+    assert.equal(save.isError, true);
+    assert.match(save.content[0].text, /run `codex login` first/);
 });
 
 test('tools/call get_usage - text + structuredContent, from the live login', async (t) => {

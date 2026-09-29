@@ -49,6 +49,27 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         const integrations = tab(_('Integrations'), 'application-x-addon-symbolic');
         integrations.add(this._buildCost(settings));
         integrations.add(this._buildCursor(settings));
+        integrations.add(this._buildCodex(settings));
+    }
+
+    _buildCodex(settings) {
+        const codex = new Adw.PreferencesGroup({
+            title: _('OpenAI Codex (optional)'),
+            description: _('A sibling section for the ChatGPT logins the codex CLI holds: save them under a name and switch without a browser. Off by default - with it off, nothing under the Codex home is read. Reads auth.json (and the read-only session transcripts) from $CODEX_HOME, else ~/.codex; saved copies are kept mode 0600 next to, never inside, the Claude store. Nothing is uploaded, and no token is ever minted here.'),
+        });
+        const row = new Adw.SwitchRow({
+            title: _('Show saved Codex logins'),
+            subtitle: _('Adds an OpenAI Codex section below the Claude ones'),
+        });
+        settings.bind('codex-enabled', row, 'active', 0);
+        codex.add(row);
+        // The honesty note belongs where the feature is turned on, not only in
+        // the dropdown: a percentage nobody can refresh needs saying twice.
+        codex.add(new Adw.ActionRow({
+            title: _('Usage figures are est.'),
+            subtitle: _('OpenAI publishes no plan-usage endpoint, so the percentages shown are the ones the codex CLI recorded when the API last returned them, stamped with when. Manage the logins with `claudectl codex`.'),
+        }));
+        return codex;
     }
 
     // True once the window is gone: the continuation must not touch widgets.
