@@ -180,7 +180,7 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 test('wiki/Architecture.md tree names every source file of every port', () => {
     const tree = read('wiki/Architecture.md').match(/```text\n([\s\S]*?)```/)[1];
     const dirs = [
-        [`${EXT}/lib`, '.js'], [`${EXT}/lib/pure`, '.js'],
+        [`${EXT}/lib`, '.js'], [`${EXT}/lib/pure`, '.js'], [`${EXT}/prefs`, '.js'],
         ['macos/Sources/ClaudeUsageCore', '.swift'], ['macos/Sources/ClaudeUsagePanel', '.swift'],
         ['claude-code', '.js'], ['mcp', '.js'], ['scripts/install', '.sh'],
     ];

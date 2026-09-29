@@ -62,6 +62,14 @@ claims are used for exactly two things - naming the account and labelling its
 plan. Verifying it would need OpenAI's keys and would still be reading the same
 file.
 
+Which saved login *is* the current one is decided per **person**, not per
+workspace: `account_id` names the ChatGPT workspace, and every member of a
+Team workspace shares it. A login is the pair (account id, user id - the id
+token's `chatgpt_user_id`, else the access token's). The email decides only
+when one side carries no user id, and an account id alone matches nothing.
+Listing never writes: the live login is synced into its profile only on a save
+or a switch, which is why `list_codex_accounts` is a read-only tool.
+
 ## Usage figures
 
 **OpenAI publishes no plan-usage endpoint** of the kind Anthropic's
@@ -87,7 +95,7 @@ answer says which:
 | --- | --- |
 | `no_sessions` | the `codex` CLI has written no sessions on this machine |
 | `no_snapshot` | the recent sessions carry no rate limits |
-| `stale` | the newest reading is old enough that its window has rolled over |
+| `stale` | the newest reading is too old, or every window in it has passed its `resets_at` |
 
 There is no fourth case in which a number is invented.
 
@@ -131,4 +139,3 @@ requires `capturedAt`, so a model cannot read one of these as a live figure.
 ## See also
 
 - [[Accounts]] - the same pattern for Claude Code logins
-- [[Cache]] - `codex-sessions` is a *history* entry there, never a cache
