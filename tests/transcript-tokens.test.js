@@ -10,10 +10,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {
-    sumTranscriptTokens, transcriptTokens, transcriptTotals, turnTokens,
-} from '../claude-code/transcript-tokens.js';
-import {turnTokens as indexTurnTokens} from '../mcp/sessions.js';
+import {turnTokens} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
+import {sumTranscriptTokens, transcriptTokens, transcriptTotals} from '../claude-code/transcript-tokens.js';
 import {fakeFiles, noCache} from './transcript-fakes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -26,8 +24,6 @@ test('turnTokens is the session index rule: cache reads excluded, junk reads as 
         {input_tokens: '7', output_tokens: 'x', cache_creation_input_tokens: null},
     ];
     assert.deepEqual(cases.map(turnTokens), [0, 0, 0, 125, 7]);
-    // the MCP session index counts a turn exactly the same way
-    assert.deepEqual(cases.map(turnTokens), cases.map(indexTurnTokens));
 });
 
 test('transcriptTokens agrees with the shared session fold fixture', () => {

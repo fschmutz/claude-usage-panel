@@ -153,8 +153,11 @@ test('CONTRIBUTING.md names the real normalizer copies and every top-level dir',
     const c = read('CONTRIBUTING.md');
     const para = c.split('\n\n').find(p => p.includes('normalization contract'));
     assert.ok(para);
-    for (const f of ['lib/pure/usage.js', 'claude-code/normalize.js', 'Model.swift'])
+    for (const f of ['lib/pure/usage.js', 'Model.swift'])
         assert.ok(para.includes(f), `normalizer copy ${f} not named`);
+    // Named files must exist: a deleted copy must not stay documented as one.
+    for (const [, f] of para.matchAll(/`((?:claude-code|mcp)\/[\w-]+\.js)`/g))
+        assert.ok(fs.existsSync(path.join(ROOT, f)), `CONTRIBUTING names a missing ${f}`);
     assert.doesNotMatch(para, /mcp\/server\.js/);
     const layout = c.match(/## Layout\n\n```text\n([\s\S]*?)```/)[1];
     const dirs = fs.readdirSync(ROOT, {withFileTypes: true})
@@ -189,6 +192,13 @@ test('wiki/Architecture.md tree names every source file of every port', () => {
             assert.match(tree, new RegExp(`(^|[\\s/])${escapeRegExp(f)}\\b`), `Architecture tree misses ${dir}/${f}`);
     }
     assert.doesNotMatch(tree, /~\d+ lines/, 'line-count estimates go stale; drop them');
+    // …and names no file that is gone (the deleted Node contract copies stayed
+    // listed as live modules once).
+    for (const dir of ['claude-code', 'mcp']) {
+        const block = tree.split(`\n${dir}/`)[1].split('\n\n')[0];
+        for (const [, f] of block.matchAll(/^[├└]── ([\w-]+\.js)/gm))
+            assert.ok(fs.existsSync(path.join(ROOT, dir, f)), `Architecture tree names a missing ${dir}/${f}`);
+    }
 });
 
 test('every forecast copy is named where the docs pin forecast.json', () => {
@@ -199,7 +209,8 @@ test('every forecast copy is named where the docs pin forecast.json', () => {
         ...list('macos/Sources/ClaudeUsageCore', '.swift')
             .filter(f => /func forecast\(/.test(read(`macos/Sources/ClaudeUsageCore/${f}`))),
     ];
-    assert.ok(copies.length >= 3);
+    // One JS copy (lib/pure/pace.js, which the Node clients import) + Swift.
+    assert.deepEqual(copies, ['lib/pure/pace.js', 'Model.swift']);
     const arch = read('wiki/Architecture.md').split('\n\n').find(p => p.includes('forecast.json'));
     const claude = read('CLAUDE.md').replace(/\s+/g, ' ');
     const around = claude.slice(claude.indexOf('`tests/fixtures/forecast.json` pins'), claude.indexOf('`tests/fixtures/forecast.json` pins') + 200);

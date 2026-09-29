@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {openStore} from '../claude-code/accounts.js';
-import {autoSwitchTarget, keychainServices} from '../claude-code/accounts-contract.js';
+import {autoSwitchTarget, keychainServices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {NOW, account, creds, fakeSecurity, sha256Hex, world} from './accounts-world.js';
 
 test('switchTo installs the target login and patches only oauthAccount in ~/.claude.json', async () => {

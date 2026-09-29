@@ -1,6 +1,6 @@
 {
   "now": "2026-07-01T00:00:00.000Z",
-  "note": "The reset countdown in every port: whole seconds floored, then the two most significant units. panel = GNOME formatResets and Swift ResetCountdown.text; compact = claude-code/stamps.js resetHint (status line, MCP).",
+  "note": "The reset countdown in every port: whole seconds floored, then the two most significant units. panel = GNOME formatResets and Swift ResetCountdown.text; compact = claude-code/stamps.js resetHint (status line, MCP), rendered from the same lib/pure/usage.js resetParts.",
   "cases": [
     {
       "name": "no reset",

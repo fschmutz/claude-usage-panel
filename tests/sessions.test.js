@@ -1,10 +1,10 @@
 // Session pings and today's sessions, across the ports.
 //
-// The two JS copies of the contract - lib/pure.js (GNOME) and the Node modules
-// (claude-code/stamps.js for the stamps, mcp/sessions.js for the folding and
-// ranking; the status line imports those) - are asserted here against ONE
-// fixture, tests/fixtures/sessions.json; the Swift copy asserts the same file
-// in macos/Tests/ClaudeUsageCoreTests/SessionsParityTests.swift.
+// The one JS copy of the contract - lib/pure/pings.js for the stamps,
+// lib/pure/sessions.js for the folding and ranking; GNOME, the status line and
+// mcp/sessions.js all import those - is asserted here against ONE fixture,
+// tests/fixtures/sessions.json; the Swift copy asserts the same file in
+// macos/Tests/ClaudeUsageCoreTests/SessionsParityTests.swift.
 //
 // TZ is pinned to UTC before anything reads a date: localDay/formatClock are
 // deliberately LOCAL (the panel shows the user's wall clock), so a fixture with
@@ -20,7 +20,6 @@ import {fileURLToPath} from 'node:url';
 
 import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import * as statusline from '../claude-code/statusline.js';
-import * as stamps from '../claude-code/stamps.js';
 import * as mcp from '../mcp/sessions.js';
 import * as paths from '../claude-code/paths.js';
 
@@ -28,19 +27,13 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const fix = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'sessions.json'), 'utf8'));
 const NOW = fix.nowMs;
 
-// Which ports implement which slice of the contract.
-const stampPorts = {pure, stamps};
-const foldPorts = {pure, mcp};
-
-for (const [portName, port] of Object.entries(stampPorts)) {
-    for (const c of fix.stamps) {
-        test(`${portName} parseStamp - ${c.raw}`, () => {
-            assert.equal(port.parseStamp(c.raw), c.atMs);
-        });
-        test(`${portName} formatLastPing - ${c.raw}`, () => {
-            assert.equal(port.formatLastPing(c.raw, NOW), c.lastPing);
-        });
-    }
+for (const c of fix.stamps) {
+    test(`parseStamp - ${c.raw}`, () => {
+        assert.equal(pure.parseStamp(c.raw), c.atMs);
+    });
+    test(`formatLastPing - ${c.raw}`, () => {
+        assert.equal(pure.formatLastPing(c.raw, NOW), c.lastPing);
+    });
 }
 
 for (const c of fix.nextPing) {
@@ -58,13 +51,11 @@ function inDstZone(t) {
     });
 }
 
-for (const [portName, port] of Object.entries(stampPorts)) {
-    for (const c of fix.dst.lastPing) {
-        test(`${portName} formatLastPing across DST - ${c.raw} at ${c.nowMs}`, (t) => {
-            inDstZone(t);
-            assert.equal(port.formatLastPing(c.raw, c.nowMs), c.expected);
-        });
-    }
+for (const c of fix.dst.lastPing) {
+    test(`formatLastPing across DST - ${c.raw} at ${c.nowMs}`, (t) => {
+        inDstZone(t);
+        assert.equal(pure.formatLastPing(c.raw, c.nowMs), c.expected);
+    });
 }
 
 for (const c of fix.dst.nextPing) {
@@ -74,49 +65,43 @@ for (const c of fix.dst.nextPing) {
     });
 }
 
-for (const [portName, port] of Object.entries(foldPorts)) {
-    for (const c of fix.dst.prune) {
-        test(`${portName} pruneByDay across DST - keeps yesterday at ${c.nowMs}`, (t) => {
-            inDstZone(t);
-            assert.deepEqual(port.pruneByDay(c.byDay, c.nowMs), c.expected);
-        });
-    }
+for (const c of fix.dst.prune) {
+    test(`pruneByDay across DST - keeps yesterday at ${c.nowMs}`, (t) => {
+        inDstZone(t);
+        assert.deepEqual(pure.pruneByDay(c.byDay, c.nowMs), c.expected);
+    });
 }
 
-for (const [portName, port] of Object.entries(foldPorts)) {
-    test(`${portName} foldSessionLine`, () => {
-        const acc = port.newSessionAcc();
-        for (const line of fix.fold.lines)
-            port.foldSessionLine(line, acc, fix.fold.defaultDay);
-        assert.equal(acc.sessionId, fix.fold.expected.sessionId);
-        assert.equal(acc.cwd, fix.fold.expected.cwd);
-        assert.equal(acc.title, fix.fold.expected.title);
-        assert.equal(acc.lastMs, fix.fold.expected.lastMs);
-        assert.deepEqual(acc.byDay, fix.fold.expected.byDay);
-    });
+test('foldSessionLine', () => {
+    const acc = pure.newSessionAcc();
+    for (const line of fix.fold.lines)
+        pure.foldSessionLine(line, acc, fix.fold.defaultDay);
+    assert.equal(acc.sessionId, fix.fold.expected.sessionId);
+    assert.equal(acc.cwd, fix.fold.expected.cwd);
+    assert.equal(acc.title, fix.fold.expected.title);
+    assert.equal(acc.lastMs, fix.fold.expected.lastMs);
+    assert.deepEqual(acc.byDay, fix.fold.expected.byDay);
+});
 
-    test(`${portName} rankSessions`, () => {
-        const got = port.rankSessions(fix.rank.entries, {nowMs: NOW, limit: fix.rank.limit});
-        assert.deepEqual(
-            got.map((s) => ({
-                sessionId: s.sessionId, label: s.label, tokens: s.tokens, when: s.when,
-            })),
-            fix.rank.expected);
-    });
+test('rankSessions', () => {
+    const got = pure.rankSessions(fix.rank.entries, {nowMs: NOW, limit: fix.rank.limit});
+    assert.deepEqual(
+        got.map((s) => ({
+            sessionId: s.sessionId, label: s.label, tokens: s.tokens, when: s.when,
+        })),
+        fix.rank.expected);
+});
 
-    for (const c of fix.resume) {
-        test(`${portName} resumeCommand - ${c.cwd || 'no cwd'}`, () => {
-            assert.equal(port.resumeCommand({cwd: c.cwd, sessionId: c.sessionId}), c.command);
-        });
-    }
+for (const c of fix.resume) {
+    test(`resumeCommand - ${c.cwd || 'no cwd'}`, () => {
+        assert.equal(pure.resumeCommand({cwd: c.cwd, sessionId: c.sessionId}), c.command);
+    });
 }
 
-for (const [portName, port] of Object.entries(foldPorts)) {
-    for (const c of fix.indexMtime.cases) {
-        test(`${portName} indexMtime - ${c.ms}`, () => {
-            assert.equal(port.indexMtime(c.ms), c.expected);
-        });
-    }
+for (const c of fix.indexMtime.cases) {
+    test(`indexMtime - ${c.ms}`, () => {
+        assert.equal(pure.indexMtime(c.ms), c.expected);
+    });
 }
 
 for (const c of fix.projectsDir.cases) {
@@ -257,14 +242,12 @@ test('a half-written last line is folded once the rest arrives, not twice', () =
 // The rename a session gets mid-way (`/rename`, a custom-title line) must win
 // over the first one, however many turns came between.
 test('the last custom title wins, after the header fields are all known', () => {
-    for (const port of [pure, mcp]) {
-        const acc = port.newSessionAcc();
-        for (const title of ['first', 'second', 'third']) {
-            port.foldSessionLine(JSON.stringify({type: 'user', sessionId: 'S', cwd: '/p'}), acc, '2026-09-01');
-            port.foldSessionLine(JSON.stringify({type: 'custom-title', customTitle: title, sessionId: 'S'}), acc, '2026-09-01');
-        }
-        assert.equal(acc.title, 'third');
+    const acc = pure.newSessionAcc();
+    for (const title of ['first', 'second', 'third']) {
+        pure.foldSessionLine(JSON.stringify({type: 'user', sessionId: 'S', cwd: '/p'}), acc, '2026-09-01');
+        pure.foldSessionLine(JSON.stringify({type: 'custom-title', customTitle: title, sessionId: 'S'}), acc, '2026-09-01');
     }
+    assert.equal(acc.title, 'third');
 });
 
 // The entry mcp/sessions.js writes is the shape the Swift port must decode
@@ -371,8 +354,8 @@ test('the sessions segment names the biggest spender of the day', () => {
     const index = {
         version: 1,
         files: {
-            a: {sessionId: 'A', cwd: '/home/u/small', byDay: {[stamps.localDay(NOW)]: 1000}},
-            b: {sessionId: 'B', title: 'BIG', cwd: '/home/u/big', byDay: {[stamps.localDay(NOW)]: 900000}},
+            a: {sessionId: 'A', cwd: '/home/u/small', byDay: {[pure.localDay(NOW)]: 1000}},
+            b: {sessionId: 'B', title: 'BIG', cwd: '/home/u/big', byDay: {[pure.localDay(NOW)]: 900000}},
         },
     };
     const out = statusline.sessionsSegment({nowMs: NOW, readFile: () => JSON.stringify(index)});

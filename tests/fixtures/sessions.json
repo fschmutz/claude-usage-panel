@@ -1,8 +1,8 @@
 {
   "_comment": [
     "Shared contract for session pings and today's sessions, asserted by",
-    "tests/sessions.test.js (lib/pure.js, claude-code/stamps.js,",
-    "mcp/sessions.js) and macos SessionsParityTests (ClaudeUsageCore).",
+    "tests/sessions.test.js (lib/pure/pings.js + lib/pure/sessions.js, which",
+    "mcp/sessions.js and the status line import) and macos SessionsParityTests.",
     "Everything is pinned in UTC except `dst`: the JS suites set TZ=UTC, the Swift test passes",
     "the UTC time zone in, because localDay/formatClock are deliberately local.",
     "Offsets past +-18h are malformed but reachable from a hand-edited line; every port applies them as arithmetic and must not crash."
@@ -311,8 +311,8 @@
       "Day arithmetic across DST, run in the `tz` below (never UTC): yesterday and",
       "the next ping step CALENDAR days, not 86_400_000 ms. 2026-10-25 is a 25 h",
       "day in Europe/Paris, 2026-03-29 a 23 h one; a fixed 24 h step lands on the",
-      "same day or skips one. Asserted by lib/pure.js, claude-code/stamps.js,",
-      "mcp/sessions.js and Swift SessionsParityTests."
+      "same day or skips one. Asserted by lib/pure (pings.js + sessions.js)",
+      "and Swift SessionsParityTests."
     ],
     "tz": "Europe/Paris",
     "lastPing": [

@@ -14,10 +14,10 @@ import {fileURLToPath} from 'node:url';
 
 import {handleRequest, VERSION} from '../mcp/server.js';
 import {renderCards} from '../mcp/tools.js';
-import {withPace, recordHistory, forecast} from '../claude-code/pace.js';
-import {warehouseAccount, withTrend, weekOverWeek} from '../mcp/warehouse.js';
+import {withPace, recordHistory} from '../claude-code/pace.js';
+import {withTrend} from '../mcp/warehouse.js';
 import {openStore} from '../claude-code/accounts.js';
-import {normalizeUsage} from '../claude-code/normalize.js';
+import {normalizeUsage} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 import {sandboxHome, writeLiveLogin} from './helpers.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -420,7 +420,6 @@ test('withPace stays silent without enough history', () => {
     };
     const [out] = withPace([card], opts);
     assert.equal(out.pace, undefined);
-    assert.equal(forecast([], null, 0), null);
 });
 
 test('get_usage records its samples in the io tmpdir and projects from them', async (t) => {
@@ -478,9 +477,6 @@ test('withTrend attaches a week-over-week peak from the warehouse', () => {
     const [mine] = withTrend([{key: 'weekly_all', percent: 12}],
         {nowMs: now, warehouse: file, account: 'u-mine'});
     assert.deepEqual(mine.trend, {thisWeekPeak: 12, lastWeekPeak: null, deltaPoints: null});
-    assert.equal(warehouseAccount({accountUuid: 'u-1', emailAddress: 'a@x'}), 'u-1');
-    assert.equal(warehouseAccount({emailAddress: 'a@x'}), 'a@x');
-    assert.equal(warehouseAccount(null), null);
     fs.rmSync(dir, {recursive: true, force: true});
 });
 
@@ -488,7 +484,6 @@ test('no warehouse file means no trend, not an error', () => {
     const cards = [{key: 'session', percent: 4}];
     assert.deepEqual(
         withTrend(cards, {nowMs: Date.now(), warehouse: '/nonexistent/history.jsonl'}), cards);
-    assert.equal(weekOverWeek([], 'session', Date.now()), null);
 });
 
 test('get_usage syncs the live login back, so a parked profile never rots', async (t) => {
