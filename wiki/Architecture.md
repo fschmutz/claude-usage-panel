@@ -2,20 +2,21 @@
 
 Four clients (GNOME extension, macOS app, status line, MCP server) over one
 shared normalization contract (the API's `limits[]`). The business logic
-(kinds, order, percent clamping, severity, resets) lives in **three copies**:
-GNOME `lib/pure/`, the Node modules under `claude-code/` (the status line, the
-MCP server and `claudectl` all import those, so they are not ports of their
-own) and Swift `ClaudeUsageCore`. The copies are kept behaviorally identical
-by a shared test fixture (`tests/fixtures/normalize.json`) -
-`tests/parity.test.js` asserts the two JS copies, and the Swift
-`NormalizeParityTests` asserts the same file.
+(kinds, order, percent clamping, severity, resets) lives in **two copies, one
+per language**: JavaScript `lib/pure/` and Swift `ClaudeUsageCore`. The GNOME
+extension and every Node client (the status line, the MCP server, `claudectl`,
+`linux/usage-bar.mjs`) import `lib/pure/` directly - `claude-code/` and `mcp/`
+hold only their I/O and terminal labels, never a copy of a pure module. The
+two copies are kept behaviorally identical by a shared test fixture
+(`tests/fixtures/normalize.json`) - `tests/parity.test.js` asserts the JS
+copy, and the Swift `NormalizeParityTests` asserts the same file.
 
 The **burn-rate forecast** is part of the same contract: `forecast(samples,
 resetsAt, now)` regresses the last 6 h of timestamped percent samples (pruned
 at window resets, silent unless ≥3 samples span ≥30 min at ≥0.2%/h) into
-`{pctPerHour, projectedFullAt, exhaustsBeforeReset, marginHours}`. Two JS
-copies (`lib/pure/pace.js`, `claude-code/pace.js`) + the Swift one
-(`Model.swift`) are pinned by `tests/fixtures/forecast.json`. The
+`{pctPerHour, projectedFullAt, exhaustsBeforeReset, marginHours}`. The JS
+copy (`lib/pure/pace.js`, imported by `claude-code/pace.js`) and the Swift
+one (`Model.swift`) are pinned by `tests/fixtures/forecast.json`. The
 status line and MCP server share one sample file
 (`claude-usage-history.json` in a per-user scratch dir: `$XDG_RUNTIME_DIR`,
 else `~/.claude`; the per-user `$TMPDIR` on macOS; never the shared `/tmp`),
@@ -26,7 +27,7 @@ pair-form history in GSettings / UserDefaults.
 `clockPace(card, now)` turns a reset time into how much of the window has gone
 (5 h for a session, 7 d for a weekly - the payload never says when a window
 opened) and calls a card more than 5 points over that "ahead". Pinned across
-the same three copies by `tests/fixtures/pace.json`.
+the same two copies by `tests/fixtures/pace.json`.
 
 The **durable warehouse** is the long half of the history: one JSONL line per
 poll that moved, under `XDG_STATE_HOME` (Application Support on macOS), pruned
@@ -63,7 +64,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
 ├── po/                 # translation catalogs (compiled to locale/ at pack time)
 └── lib/
     ├── pure.js         # barrel over pure/ - the one import path for the pure logic
-    ├── pure/           # the reference contract, no gi imports (unit-tested under node)
+    ├── pure/           # THE JS contract, no gi imports: GNOME and every Node client import it
     │   ├── usage.js    # normalization, severity, resets, alert thresholds, HTTP failures
     │   ├── pace.js     # clock pace + burn-rate forecast
     │   ├── cursor.js   # Cursor team-spend summary
@@ -72,9 +73,9 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── poll.js     # adaptive polling + section refresh orchestration
     │   ├── pings.js    # session-window planner
     │   ├── sessions.js # ping stamps, transcript fold, ranking, resume command, terminals
-    │   ├── accounts.js # named-account rules (mirrors claude-code/accounts-contract.js)
+    │   ├── accounts.js # named-account rules, Keychain item names, the auto-switch
     │   ├── notices.js  # account health, inline notices, button outcomes, switch rotation
-    │   ├── codex.js    # named OpenAI Codex logins (mirrors claude-code/codex-contract.js)
+    │   ├── codex.js    # named OpenAI Codex logins
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   └── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
@@ -111,7 +112,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── CursorModel.swift         # Cursor spend math
     │   ├── Accounts.swift            # named-account rules
     │   ├── Notices.swift             # account health, inline notices, button outcomes, rotation
-    │   ├── Codex.swift               # named OpenAI Codex logins (twin of codex-contract.js)
+    │   ├── Codex.swift               # named OpenAI Codex logins (twin of pure/codex.js)
     │   ├── Warehouse.swift           # the 90-day history rules
     │   ├── EventHooks.swift          # event-hook detection + expansion
     │   ├── Sessions.swift            # ping stamps, transcript fold, ranking, resume
@@ -153,19 +154,15 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── UpdateState.swift         # when to re-check it
         └── Shell.swift               # the one way the app runs a child process
 
-claude-code/            # the Node clients (installed together under ~/.claude/claude-usage-panel/)
+claude-code/            # the Node clients' I/O over lib/pure/ (installed with it under ~/.claude/claude-usage-panel/)
 ├── statusline.js       # status line: renders from Claude Code's stdin - no network
 ├── transcript-tokens.js# a transcript's token totals + their incremental on-disk cache
-├── normalize.js        # the Node copy of the normalizer (shared by mcp + accounts)
-├── pace.js             # clock pace + burn-rate forecast + the shared sample history
-├── stamps.js           # timestamp parsing and the "3h06m" / "yesterday 05:30" formats
+├── pace.js             # the shared sample history + withPace (the math is pure/pace.js)
+├── stamps.js           # the compact "3h06m" reset countdown (over pure/usage.js resetParts)
 ├── paths.js            # every state/cache/config path, derived from one `io`
-├── accounts-contract.js# the pure account rules (mirrors lib/pure/accounts.js 1:1)
 ├── accounts.js         # openStore(io): the account store - list, save, switch
 ├── accounts-usage.js   # a saved login's usage: token, locked refresh, fetch, usage cache
 ├── private-fs.js       # 0600 JSON read/write shared by the account and Codex stores
-├── notices.js          # account health and inline notices (outcomes/rotation are GUI-only)
-├── codex-contract.js   # the pure Codex rules (mirrors lib/pure/codex.js 1:1)
 ├── codex.js            # openCodexStore(io): saved Codex logins + what the CLI recorded
 ├── login-usage.js      # which login's usage, and how its auth failure is labelled
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch

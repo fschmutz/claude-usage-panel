@@ -56,6 +56,18 @@ semantic versioning.
 
 ### Changed
 
+- **The Node clients import the GNOME extension's pure modules instead of
+  carrying copies of them.** `claude-code/normalize.js`,
+  `accounts-contract.js`, `notices.js` and `codex-contract.js` are gone, and
+  `pace.js`, `stamps.js`, `terminals.js`, `transcript-tokens.js`,
+  `mcp/sessions.js` and `mcp/warehouse.js` keep only their I/O and terminal
+  labels: the status line, the MCP server, `claudectl` and
+  `linux/usage-bar.mjs` import `lib/pure/` directly, so JavaScript has one
+  copy of the contract and Swift the other. The installed Node tree carries
+  `lib/pure/` at the same relative path, and a test starts all three
+  installed clients and fails if any module loads from outside the tree.
+  `elapsedPercent` now clamps a non-finite clock to 0 like the rest of the
+  contract did (the GNOME copy returned `NaN` there).
 - The account store rules (save refusal, refresh merge, torn login, switch
   plan) live in the shared contract of all three ports, pinned by
   `tests/fixtures/accounts.json`; the plan label is pure and pinned by

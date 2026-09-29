@@ -48,8 +48,8 @@ wiki page.
 │   └── Sources/
 │       ├── ClaudeUsageCore/ # Foundation-only mirror of lib/pure (tests on Linux)
 │       └── ClaudeUsagePanel/# networking + UI
-├── claude-code/             # the Node copy of the contract + its clients
-│   ├── normalize.js · pace.js · stamps.js · accounts-contract.js   # the contract
+├── claude-code/             # the Node clients: I/O + terminal labels over lib/pure/
+│   ├── accounts.js · pace.js · paths.js · tabs.js   # stores, history, paths, sessions
 │   ├── statusline.js        # render one condensed line from stdin
 │   └── claudectl.js         # the claudectl CLI (account-cli.js · session-cli.js)
 ├── mcp/                     # MCP server: usage, accounts, sessions (Claude Code, Cursor…)
@@ -65,12 +65,13 @@ wiki page.
 ```
 
 See the [Architecture](https://github.com/fschmutz/claude-usage-panel/wiki/Architecture)
-wiki page. The normalization contract has three copies (GNOME `lib/pure/usage.js`
-via the `lib/pure.js` barrel, Node `claude-code/normalize.js`, macOS
-`ClaudeUsageCore/Model.swift`); the status line and the MCP server import the
-Node copy and are not ports of their own. `tests/parity.test.js` + its Swift
-twin keep the copies identical against one shared fixture
-(`tests/fixtures/normalize.json`) - change any copy and the fixture together.
+wiki page. The normalization contract has two copies, one per language:
+`lib/pure/usage.js` (the GNOME extension reaches it through the `lib/pure.js`
+barrel; the status line, the MCP server, `claudectl` and `linux/usage-bar.mjs`
+import the module directly - never copy it into `claude-code/`) and macOS
+`ClaudeUsageCore/Model.swift`. `tests/parity.test.js` + its Swift twin keep
+the two identical against one shared fixture (`tests/fixtures/normalize.json`):
+change `lib/pure/`, the Swift twin and the fixture together.
 
 ## Rules
 

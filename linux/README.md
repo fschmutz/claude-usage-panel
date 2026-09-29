@@ -15,7 +15,7 @@ never reads as a second weekly limit: `W 26% · W·Fable 4%`.
 
 It reads the live login through `claude-code/accounts.js`, the same account
 store the MCP server and `claudectl` use: same endpoint, same normalization
-(`claude-code/normalize.js`), the same official `limits[]` numbers as every
+(`lib/pure/usage.js`, the GNOME extension's own), the same official `limits[]` numbers as every
 other client here. There is no second copy of the contract to drift.
 
 It never fails loudly. A network error, an expired token or an HTTP 429 prints

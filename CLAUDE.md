@@ -153,13 +153,14 @@ process: `wiki/CI.md`.
 `claude-code/accounts.js` is the single implementation behind the
 `claudectl account` CLI (`claude-code/account-cli.js`), the MCP server's
 `list_accounts` / `save_account` / `switch_account` tools (`mcp/tools.js`) and
-the status line's `account` segment - all static imports. Its pure half is the
-contract; `openStore(io)` binds the I/O (home, platform, clock, fetch, exec -
+the status line's `account` segment - all static imports. Its pure half is
+`lib/pure/accounts.js`, the same module the GNOME extension imports;
+`openStore(io)` binds the I/O (home, platform, clock, fetch, exec -
 every one overridable, read at call time) and returns the operations, so no
-consumer threads paths around. The GNOME extension (`lib/pure/accounts.js`
-pure part + `lib/accounts.js` I/O + `lib/accountsSection.js` controller) and
-the macOS app (`ClaudeUsageCore/Accounts.swift` + `AccountStore.swift` +
-`Accounts.swift`) mirror it; `tests/fixtures/accounts.json` pins what they
+consumer threads paths around. The GNOME extension (that same
+`lib/pure/accounts.js` + `lib/accounts.js` I/O + `lib/accountsSection.js`
+controller) and the macOS app (`ClaudeUsageCore/Accounts.swift` +
+`AccountStore.swift` + `Accounts.swift`) do the I/O their own way; `tests/fixtures/accounts.json` pins what they
 must agree on: profile validity + names, which saved profile the live login is
 (the live access token first, then the account block: uuid, then email),
 `tokenState` (valid / stale within 5 min of expiry /
@@ -229,19 +230,28 @@ CLI wrote into `sessions/**/rollout-*.jsonl` (`resets_at` epoch seconds,
 `tests/fixtures/codex.json` (identity, token state) and `codex-usage.json`
 (transcripts, recorded usage).
 
-## Architecture - one contract, three ports
+## Architecture - one contract, two languages
 
-The load-bearing idea: **all business logic is pure and duplicated across
-languages, kept behaviorally identical by a shared test contract.** When you
-change normalization, severity, sparkline, reset-formatting, or Cursor
-summarization, you must change it in **every** port and keep them matching.
+The load-bearing idea: **all business logic is pure, written once per
+language, and kept behaviorally identical across languages by a shared test
+contract.** JavaScript has ONE copy, `lib/pure/`: the GNOME extension and every
+Node client (status line, MCP server, `claudectl`, `linux/usage-bar.mjs`)
+import it. **The Node side never copies a pure module** - it imports
+`../claude-usage-panel@fschmutz.github.io/lib/pure/<x>.js` and keeps only its
+I/O and its terminal-specific labels (`claude-code/stamps.js` `resetHint`, the
+MCP markdown). Swift (`ClaudeUsageCore`) is the only separate port. When you
+change normalization, severity, sparkline, reset-formatting, accounts,
+notices, Codex, sessions or Cursor summarization, change `lib/pure/` and the
+Swift twin together, and keep the fixture matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
  sessions,accounts,notices,codex,snapshots,layout}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
-  imports anywhere under `pure/`, so it all runs under plain `node` for tests. This is the reference implementation, and
-  every importer keeps importing `lib/pure.js`.
+  imports anywhere under `pure/`, so it all runs under plain `node` for tests
+  and in the Node clients. This is the reference implementation: the GNOME
+  code imports the `lib/pure.js` barrel, the Node code the module it needs
+  (the barrel is not installed into the Node tree).
 - **`macos/Sources/ClaudeUsageCore/`** - Foundation-only mirror of `pure.js`
  (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Notices.swift`,
  `Codex.swift`, `Warehouse.swift`,
@@ -252,26 +262,26 @@ summarization, you must change it in **every** port and keep them matching.
  `PlanLabel.swift`).
   No networking/SwiftUI, so it unit-tests on Linux CI. The files say "Mirrors
   the GNOME extension's lib/pure.js" - keep it that way.
-- **`claude-code/`** - the Node port, one concern per file: `normalize.js`
-  (the normalizer), `pace.js` (clock pace + burn-rate forecast + the shared
-  sample history), `stamps.js` (timestamp parsing/formatting), `paths.js`
+- **`claude-code/`** - the Node clients' I/O over `lib/pure/`, one concern
+  per file: `pace.js` (the shared sample history + `withPace`; the clock pace
+  and forecast are `lib/pure/pace.js`), `stamps.js` (the compact "3h06m"
+  `resetHint`, rendered from `lib/pure/usage.js` `resetParts`), `paths.js`
   (every state/cache/config path derived from one `io`, nothing at module
-  load), `accounts-contract.js` (the pure account rules, mirroring
-  `lib/pure/accounts.js` 1:1), `accounts.js` (`openStore(io)`),
+  load), `accounts.js` (`openStore(io)`),
   `accounts-usage.js` (its usage half), `private-fs.js` (0600 JSON I/O shared
-  by the account and Codex stores), `notices.js` (account health + notices),
-  `codex-contract.js` / `codex.js` / `codex-cli.js` (the Codex vault),
+  by the account and Codex stores), `codex.js` / `codex-cli.js` (the Codex
+  vault),
   `login-usage.js` (which login's usage and its auth-failure label: a live
   token keeps the refresh hint, a stored one names the profile),
   `statusline.js` (renders from Claude Code's stdin, nothing else),
-  `transcript-tokens.js` (the per-turn `turnTokens` rule, a transcript's
-  token totals and their incremental on-disk cache), `tabs.js`
+  `transcript-tokens.js` (a transcript's token totals and their incremental
+  on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
   registry, checked against `/proc` start time; the snapshot store;
   autosave; Node-only, no port to mirror), `terminals.js` (which terminal
   `session open` uses - the panels' own setting, never a separate one - and
-  how it gets a tab per session; its `TERMINALS` / `terminalArgv` mirror
-  `lib/pure/sessions.js`, parity in `tests/terminals.test.js`), `layout.js`
+  how it gets a tab per session; `TERMINALS` / `terminalArgv` /
+  `pickTerminal` are `lib/pure/sessions.js`, imported), `layout.js`
   (which window and tab each session sits in, from a precedence-ordered
   `SOURCES` table; AppleScript only on an interactive `save`, never the
   autosave; Node-only), `tools.js` (tool lookup on PATH plus Homebrew/system
@@ -282,16 +292,23 @@ summarization, you must change it in **every** port and keep them matching.
 - **`mcp/`** - the MCP server: `server.js` is transport + `get_usage` only,
   `tools.js` the tool schemas / renderers / account tool calls, `codex.js`
   the Codex tools,
-  `sessions.js` the session + ping index, `warehouse.js` the 90-day history
-  reader. `server.js` carries the exported `VERSION` const, bumped by
+  `sessions.js` the session index I/O (folding and ranking are
+  `lib/pure/sessions.js`) + the ping, `warehouse.js` the 90-day history file
+  read (parsing and the peak are `lib/pure/warehouse.js`). `server.js` carries the exported `VERSION` const, bumped by
   `scripts/bump-version.sh` and guarded by `scripts/check-versions.sh` - both
   read the site list from `scripts/version-sites.sh`, so a new version site is
   one line there.
-- **Installed as one tree.** `install.sh` copies `mcp/` and `claude-code/`
-  into `~/.claude/claude-usage-panel/` (plus a `{"type":"module"}`
-  package.json) so the relative imports resolve exactly as in the checkout;
+- **Installed as one tree.** `install.sh` (`scripts/install/node.sh`
+  `NODE_TREE_DIRS`) copies `mcp/`, `claude-code/` and
+  `claude-usage-panel@fschmutz.github.io/lib/pure/` into
+  `~/.claude/claude-usage-panel/` at the same relative paths (plus a
+  `{"type":"module"}` package.json), so the relative imports resolve exactly
+  as in the checkout, and drops any `*.js` there the checkout no longer has;
   the status line command, the MCP registration and the `claudectl` shim
-  point into it. Pre-1.11 loose `.mjs` copies are removed on update.
+  point into it. `tests/install-shape.test.js` starts all three from a real
+  install and fails if any module loads from outside the tree. Pre-1.11
+  loose `.mjs` copies are removed on update. The npx / plugin path runs the
+  checkout itself (no `files` field, so `lib/pure/` ships).
 - **No file in the repo is over 700 lines**, except the ones named with a
   reason in `scripts/check-file-size.sh` (`CHANGELOG.md`, `po/*.po`). The
   file-size pre-commit hook enforces it, and a stale exemption fails too. The 1k flag is the ceiling, not
@@ -300,8 +317,8 @@ summarization, you must change it in **every** port and keep them matching.
   `ClaudeUsagePanelApp.swift` four files).
 
 **Parity is CI-enforced.** `tests/fixtures/normalize.json` is one shared set of
-raw payloads + expected core output; `tests/parity.test.js` runs it through both
-JS ports and the Swift `NormalizeParityTests` runs it through `UsageNormalizer`.
+raw payloads + expected core output; `tests/parity.test.js` runs it through
+`lib/pure/usage.js` and the Swift `NormalizeParityTests` runs it through `UsageNormalizer`.
 Change any normalizer and update the fixture - a drifting port goes red. Labels
 are intentionally per-port (compact in the terminal) and are *not* asserted.
 Cursor summarization parity is pinned the same way by
@@ -325,7 +342,8 @@ The normalization contract (must stay identical across ports):
   allowance may go to Fable). Two consequences all ports implement: a scoped
   card with a null `resets_at` inherits the pooled card's reset (the API fills
   the scoped one only after that model is used in the window), and `poolNote()`
-  returns the "share of the weekly all-models limit" sub-line the UIs render.
+  returns the "Share of the weekly all-models limit" sub-line the UIs render
+  (lower-cased mid-sentence by the MCP renderer).
 - Every card carries `percentKnown`; `usageReading(card, now)` is the only way
   a figure is shown or ranked: no figure in the payload, or a window whose
   `resets_at` has passed, is `–` and an empty bar, never 0% or the stale
@@ -350,8 +368,8 @@ The normalization contract (must stay identical across ports):
   [epochMs, percent] samples: weighted regression over the last 6 h, pruned at
   window resets, silent unless ≥3 samples span ≥30 min and pace ≥0.2%/h.
   Returns {pctPerHour, projectedFullAt, exhaustsBeforeReset, marginHours};
-  `tests/fixtures/forecast.json` pins all three copies (`lib/pure/pace.js`,
-  `claude-code/pace.js`, Swift `Model.swift`). `marginHours` is rounded half
+  `tests/fixtures/forecast.json` pins both copies (`lib/pure/pace.js`, which
+  the status line and MCP import, and Swift `Model.swift`). `marginHours` is rounded half
   toward +infinity (`roundHalfUp` = `floor(x*k+0.5)/k`) in every port, and the
   fixture includes exact half-tenth ties on purpose. Drives the card sub-line, the predictive top-bar tint, a
   once-per-window exhaustion alert (fires at margin ≤ −1 h, re-arms at ≥ +2 h),
@@ -364,8 +382,9 @@ The normalization contract (must stay identical across ports):
   GNOME/macOS persist pair-form history in GSettings/UserDefaults
   (bare-percent entries from old versions migrate as [0, p] and are ignored by
   the forecast).
-- Reset countdown: whole seconds floored, two most significant units, pinned
-  for pure `formatResets`, `claude-code/stamps.js` `resetHint` and Swift
+- Reset countdown: whole seconds floored (`resetParts`), two most significant
+  units, pinned for pure `formatResets`, `claude-code/stamps.js` `resetHint`
+  (the compact label over the same `resetParts`) and Swift
   `ResetCountdown` by `tests/fixtures/resets.json`. Sparkline: newest 12
   samples, half-steps round up, pinned by `tests/fixtures/sparkline.json`
   (pure `sparkline` + Swift `Sparkline`).
