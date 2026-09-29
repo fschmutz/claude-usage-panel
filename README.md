@@ -42,7 +42,7 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+); also installable without a checkout: `brew install --cask fschmutz/tap/claude-usage-panel` (upgrade: `brew upgrade --cask claude-usage-panel`) | [macos/README.md](macos/README.md) |
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
 | `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
-| `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory; `codex` does what `account` does for OpenAI Codex logins; `cache` says what the local dev caches cost and moves the regenerated ones to the trash | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs), [Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex), [Cache](https://github.com/fschmutz/claude-usage-panel/wiki/Cache) |
+| `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory; `codex` does what `account` does for OpenAI Codex logins | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs), [Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex) |
 | `autoupdate` | Daily check for a new release, installed automatically (on by default) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#staying-up-to-date) |
 | `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
@@ -75,14 +75,6 @@ so the only figures shown are the rate limits the `codex` CLI itself recorded
 when the API last returned them, marked `est.` and stamped with when; when
 there is no usable record the answer says so rather than showing a zero.
 Details: [wiki/Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex).
-
-**Getting the disk back.** `claudectl cache list` says what the Claude Code,
-Cursor and Codex caches are costing (it writes nothing), and
-`claudectl cache reclaim --yes` moves the regenerated ones to the **trash** -
-recoverable with your file manager's *Put back*, never an `rm -rf`. Your
-transcripts are catalogued as history, not cache: a default run never touches
-them. macOS has the same thing as its own *Settings ▸ Storage* tab. Paths and
-rules: [wiki/Cache](https://github.com/fschmutz/claude-usage-panel/wiki/Cache).
 
 **Where did the tokens go?** `node scripts/token-attribution.mjs --days 7`
 breaks your spend into exploration / implementation / verification / rework /

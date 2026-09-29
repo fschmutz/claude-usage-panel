@@ -13,6 +13,5 @@ export * from './pure/sessions.js';
 export * from './pure/accounts.js';
 export * from './pure/notices.js';
 export * from './pure/codex.js';
-export * from './pure/reclaim.js';
 export * from './pure/layout.js';
 export * from './pure/snapshots.js';

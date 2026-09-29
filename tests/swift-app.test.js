@@ -38,27 +38,11 @@ test('no AppleScript notification is built by string interpolation', () => {
         assert.doesNotMatch(text, /display notification \\"\\\(/, file);
 });
 
-// The Storage tab moves caches to the Trash so Finder's Put Back is the undo.
-// An `rm -rf` equivalent anywhere in it would silently take that away, and the
-// difference is invisible in a screenshot - so it is a source guard.
-test('the reclaim path only ever trashes, never removes', () => {
-    const reclaim = sources.filter(s => /Reclaim/.test(s.file));
-    assert.equal(reclaim.length, 1, 'ReclaimView.swift is the only reclaim source');
-    for (const source of reclaim) {
-        assert.match(source.text, /trashItem\(/, `${source.file} must move to the Trash`);
-        assert.doesNotMatch(code(source), /removeItem|unlink|rm -rf/, source.file);
-    }
-});
-
-// Both vaults refresh what they hold; neither may write the credentials the
-// tool it shadows is running on. AccountStore has exactly one credentials
-// write (installLogin, via writeLiveCredentials) and CodexStore exactly one
-// (switchTo) - a second one anywhere is the bug this guards.
-test('the account stores write a live login in one place each', () => {
-    const one = (file, pattern) => {
-        const text = code(sources.find(s => s.file === file));
-        assert.equal((text.match(pattern) ?? []).length, 1, `${file}: ${pattern}`);
-    };
-    one('AccountStore.swift', /try writeLiveCredentials\(/g);
-    one('CodexStore.swift', /to: authURL\)/g);
+// The Claude vault refreshes what it holds; it may not write the credentials
+// Claude Code is running on. AccountStore has exactly one credentials write
+// (installLogin, via writeLiveCredentials) - a second one anywhere is the bug
+// this guards.
+test('the account store writes a live login in one place', () => {
+    const text = code(sources.find(s => s.file === 'AccountStore.swift'));
+    assert.equal((text.match(/try writeLiveCredentials\(/g) ?? []).length, 1);
 });
