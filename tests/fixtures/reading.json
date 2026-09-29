@@ -38,6 +38,21 @@
         {"kind": "session", "percent": 12, "percentKnown": true},
         {"kind": "weekly_all", "percent": 34, "percentKnown": true}
       ]
+    },
+    {
+      "name": "a JSON boolean percent is no reading, never 1 %",
+      "input": {"limits": [{"kind": "session", "percent": true}, {"kind": "weekly_all", "percent": 30}]},
+      "expected": [
+        {"kind": "session", "percent": 0, "percentKnown": false},
+        {"kind": "weekly_all", "percent": 30, "percentKnown": true}
+      ]
+    },
+    {
+      "name": "a JSON boolean legacy utilization is no card at all",
+      "input": {"five_hour": {"utilization": false}, "seven_day": {"utilization": 34}},
+      "expected": [
+        {"kind": "weekly_all", "percent": 34, "percentKnown": true}
+      ]
     }
   ],
   "cases": [
@@ -102,6 +117,88 @@
       "expected": {
         "known": false, "percent": null, "fill": 0, "text": "–", "reason": "window_reset"
       }
+    }
+  ],
+  "panelCardComment": "The one card a single-reading surface shows (GNOME top bar, macOS menu-bar title, Linux status bar): `worst` ranks on the honest reading (fill), so a rolled-over window's stale figure never wins while another card has a reading; ties go to the first card in KIND_ORDER (then payload order), never to however a port's max() breaks them. `session` is the session card, else the first. Cards are listed in payload order on purpose. Pinned for lib/pure/usage.js, claude-code/normalize.js and Swift PanelCard.",
+  "panelCard": [
+    {
+      "name": "worst picks the highest honest reading",
+      "mode": "worst",
+      "cards": [
+        {"key": "session", "percent": 40, "percentKnown": true, "resetsAt": "2026-07-20T15:00:00Z"},
+        {"key": "weekly_all", "percent": 70, "percentKnown": true, "resetsAt": "2026-07-24T06:00:00Z"}
+      ],
+      "expected": "weekly_all"
+    },
+    {
+      "name": "a rolled-over window's stale 96 % loses to an honest 30 %",
+      "mode": "worst",
+      "cards": [
+        {"key": "session", "percent": 96, "percentKnown": true, "resetsAt": "2026-07-20T09:00:00Z"},
+        {"key": "weekly_all", "percent": 30, "percentKnown": true, "resetsAt": "2026-07-24T06:00:00Z"}
+      ],
+      "expected": "weekly_all"
+    },
+    {
+      "name": "all unknown: every fill is 0, the tie goes to the first kind in KIND_ORDER, not the last listed",
+      "mode": "worst",
+      "cards": [
+        {"key": "weekly_all", "percent": 0, "percentKnown": false, "resetsAt": null},
+        {"key": "session", "percent": 96, "percentKnown": true, "resetsAt": "2026-07-20T09:00:00Z"}
+      ],
+      "expected": "session"
+    },
+    {
+      "name": "equal honest readings: the pooled weekly card beats its per-model sub-cap",
+      "mode": "worst",
+      "cards": [
+        {"key": "weekly_scoped:Fable", "percent": 50, "percentKnown": true, "resetsAt": "2026-07-24T06:00:00Z"},
+        {"key": "weekly_all", "percent": 50, "percentKnown": true, "resetsAt": "2026-07-24T06:00:00Z"}
+      ],
+      "expected": "weekly_all"
+    },
+    {
+      "name": "equal readings on kinds outside KIND_ORDER rank after the known kinds, then by payload order",
+      "mode": "worst",
+      "cards": [
+        {"key": "weekly_cowork", "percent": 50, "percentKnown": true, "resetsAt": null},
+        {"key": "weekly_design", "percent": 50, "percentKnown": true, "resetsAt": null},
+        {"key": "weekly_oauth_apps", "percent": 50, "percentKnown": true, "resetsAt": null}
+      ],
+      "expected": "weekly_oauth_apps"
+    },
+    {
+      "name": "unknown kinds tie in payload order",
+      "mode": "worst",
+      "cards": [
+        {"key": "weekly_design", "percent": 50, "percentKnown": true, "resetsAt": null},
+        {"key": "weekly_cowork", "percent": 50, "percentKnown": true, "resetsAt": null}
+      ],
+      "expected": "weekly_design"
+    },
+    {
+      "name": "session mode shows the session card even when another is worse",
+      "mode": "session",
+      "cards": [
+        {"key": "weekly_all", "percent": 90, "percentKnown": true, "resetsAt": null},
+        {"key": "session", "percent": 10, "percentKnown": true, "resetsAt": null}
+      ],
+      "expected": "session"
+    },
+    {
+      "name": "session mode with no session card shows the first one",
+      "mode": "session",
+      "cards": [
+        {"key": "weekly_all", "percent": 90, "percentKnown": true, "resetsAt": null},
+        {"key": "weekly_scoped:Fable", "percent": 10, "percentKnown": true, "resetsAt": null}
+      ],
+      "expected": "weekly_all"
+    },
+    {
+      "name": "no cards, no card",
+      "mode": "worst",
+      "cards": [],
+      "expected": null
     }
   ]
 }

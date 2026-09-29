@@ -36,11 +36,11 @@ import {run} from './lib/proc.js';
 import {stateDir} from './lib/paths.js';
 import {readSnapshots, claudectlPath} from './lib/snapshots.js';
 import {
-    severityClass, formatResets, latchCrossings, latchPaceAlerts, refreshSections,
+    severityClass, formatResets, latchCrossings, latchPaceAlerts, refreshSections, isRetryableFailure,
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
-    formatLastPing, nextPing, compactTokens, formatClock, panelText, popupWidth, usageReading,
+    formatLastPing, nextPing, compactTokens, formatClock, panelCard, panelText, popupWidth, usageReading,
 } from './lib/pure.js';
 
 // How long to let a resume or a network change settle before polling: DNS and
@@ -71,8 +71,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._warehouse = loadWarehouse();
         /** Identity of the login the last poll ran as - what its entries are filed under. */
         this._warehouseAccount = null;
-        /** The last poll failed with a "not now" status - retry soon, not next interval. */
+        /** The last poll failed retryably - retry soon, not next interval. */
         this._retry = false;
+        /** Retryable failures in a row (backs the retry off), and the last one's Retry-After. */
+        this._retryStreak = 0;
+        this._retryAfter = null;
         this._refreshing = false;
         this._destroyed = false;
         this._history = this._loadHistory();  // limit id -> [[epochMs, percent], …]
@@ -276,6 +279,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
             nextResetMs: nextResetMs(this._latest),
             nowMs: Date.now(),
             retry: this._retry,
+            retryStreak: this._retryStreak,
+            retryAfterSeconds: this._retryAfter,
         });
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delay, () => {
             this._timerId = 0;
@@ -335,15 +340,23 @@ class ClaudeUsageButton extends PanelMenu.Button {
             const result = await fetchUsage(this._httpSession);
             if (this._destroyed)
                 return;
-            this._retry = !result.ok && result.code === 'transient';
-            if (result.ok)
+            this._retry = isRetryableFailure(result);
+            this._retryStreak = this._retry ? this._retryStreak + 1 : 0;
+            this._retryAfter = this._retry ? result.retryAfterSeconds ?? null : null;
+            if (result.ok) {
                 this._renderUsage(result);
-            // A "not now" answer (424, 429, 5xx) keeps the last good cards
-            // up and says so under them; only a real failure blanks them.
-            else if (this._retry && this._latest.length)
+            } else if (this._retry && this._latest.length) {
+                // A "not now" answer (424, 429, 5xx) or a dropped connection
+                // keeps the last good cards up and says so under them; only a
+                // real failure blanks them. Redrawn all the same: a window
+                // that reset during the outage must turn to `–` now, not at
+                // the next success.
+                this._renderCards(this._latest, Date.now());
+                this._renderPanel();
                 this._updatedLabel.text = _('%s - retrying, showing the last reading').format(result.message);
-            else
+            } else {
                 this._renderError(result.message);
+            }
 
             // After a failed poll too: none of these needs the Claude token,
             // and the account switcher is the fix for an expired login.
@@ -582,21 +595,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this._panelLabel.text = '…';
             return;
         }
-        const mode = this._settings.get_string('panel-mode'); // 'worst' | 'session'
-        let card;
-        if (mode === 'session') {
-            card = this._latest.find(c => c.key.startsWith('session')) ?? this._latest[0];
-        } else {
-            // Rank on what the cards may honestly show. A window that has just
-            // reset still carries the old percentage, and picking by that
-            // would park a stale 96% in the top bar until the endpoint opens
-            // the new window - a limit with no honest reading only wins when
-            // nothing else has one.
-            const honest = this._latest.filter(c => usageReading(c).known);
-            card = [...(honest.length ? honest : this._latest)]
-                .sort((a, b) => usageReading(b).fill - usageReading(a).fill)[0];
-        }
-        const reading = usageReading(card);
+        // 'worst' | 'session'; panelCard ranks on the honest reading, so a
+        // just-reset window's stale 96% never parks in the top bar.
+        const now = Date.now();
+        const card = panelCard(this._latest, this._settings.get_string('panel-mode'), now);
+        const reading = usageReading(card, now);
 
         // The saved name of the live login leads the readout, so a glance at
         // the bar says which account is being spent - but only once there is
@@ -646,6 +649,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._networkMonitor?.disconnectObject(this);
         this._networkMonitor = null;
         this._sessions.destroy();
+        this._accounts.destroy();
         this._settings?.disconnectObject(this);
         this._ifaceSettings?.disconnectObject(this);
         this.menu?.disconnectObject(this);

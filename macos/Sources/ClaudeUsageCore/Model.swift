@@ -127,6 +127,14 @@ public enum UsageNormalizer {
         return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
     }
 
+    /// A JSON number, read strictly: JSONSerialization hands `true` back as an
+    /// NSNumber too, and `as? NSNumber` alone would read it as 1 %.
+    static func number(_ v: Any?) -> Double? {
+        guard let n = v as? NSNumber, !Accounts.isJSONBool(n) else { return nil }
+        let d = n.doubleValue
+        return d.isFinite ? d : nil
+    }
+
     static func clampPercent(_ v: Double) -> Int {
         max(0, min(100, Int(v.rounded())))
     }
@@ -172,7 +180,7 @@ public enum UsageNormalizer {
                 let model = (scope?["model"] as? [String: Any])?["display_name"] as? String
                 if let model { label += " · \(model)" }
                 // A limit the payload gave no number for is not a limit at 0 %.
-                let raw = (entry["percent"] as? NSNumber)?.doubleValue
+                let raw = number(entry["percent"])
                 let pct = clampPercent(raw ?? 0)
                 let sev = Severity(rawValue: entry["severity"] as? String ?? "normal") ?? .normal
                 return LimitCard(
@@ -195,7 +203,7 @@ public enum UsageNormalizer {
             _ payloadKey: String, id: String, _ label: String, group: String, active: Bool
         ) {
             guard let obj = payload[payloadKey] as? [String: Any],
-                let util = (obj["utilization"] as? NSNumber)?.doubleValue
+                let util = number(obj["utilization"])
             else { return }
             cards.append(
                 LimitCard(
@@ -242,8 +250,8 @@ public struct ExtraUsage: Equatable, Sendable {
     }
 
     static func money(_ obj: [String: Any]?) -> Double? {
-        guard let minor = (obj?["amount_minor"] as? NSNumber)?.doubleValue else { return nil }
-        let exp = (obj?["exponent"] as? NSNumber)?.doubleValue ?? 2
+        guard let minor = UsageNormalizer.number(obj?["amount_minor"]) else { return nil }
+        let exp = UsageNormalizer.number(obj?["exponent"]) ?? 2
         return minor / pow(10, exp)
     }
 
@@ -261,7 +269,7 @@ public struct ExtraUsage: Equatable, Sendable {
             limit.map { "\(usedText) of \(formatMoney($0, currency: currency))" } ?? usedText
         return ExtraUsage(
             percent: UsageNormalizer.clampPercent(
-                (spend["percent"] as? NSNumber)?.doubleValue ?? 0),
+                UsageNormalizer.number(spend["percent"]) ?? 0),
             severity: Severity(rawValue: spend["severity"] as? String ?? "normal") ?? .normal,
             usedAmount: used, limitAmount: limit, currency: currency, detail: detail)
     }
@@ -455,6 +463,47 @@ public enum UsageForecast {
 }
 
 // MARK: - Top-bar readout
+
+/// The one card a single-reading surface shows. Mirrors pure.js `panelCard()`
+/// and claude-code/normalize.js; tests/fixtures/reading.json "panelCard" pins
+/// all three.
+public enum PanelCard {
+    public enum Mode: String, Sendable {
+        case worst, session
+    }
+
+    /// `.session` is the session card, else the first. `.worst` ranks on the
+    /// honest reading, so a rolled-over window's stale figure never wins while
+    /// another card has a reading. Ties go to the first card in the kind order,
+    /// then to payload order - never to however `max(by:)` breaks them, which
+    /// with every unknown card at fill 0 is a certain tie.
+    public static func pick(_ cards: [LimitCard], mode: Mode = .worst, now: Date = Date())
+        -> LimitCard?
+    {
+        guard let first = cards.first else { return nil }
+        if mode == .session { return cards.first { $0.id.hasPrefix("session") } ?? first }
+        let order = UsageNormalizer.kindOrder
+        func rank(_ c: LimitCard) -> Int {
+            order.firstIndex(of: c.id.components(separatedBy: ":")[0]) ?? order.count
+        }
+        let scored = cards.enumerated().map { index, card in
+            let r = UsageReading.of(card, now: now)
+            return (index: index, card: card, fill: r.fill, known: r.known)
+        }
+        let honest = scored.filter(\.known)
+        let pool = honest.isEmpty ? scored : honest
+        var best = pool[0]
+        for s in pool.dropFirst() {
+            if s.fill != best.fill {
+                if s.fill > best.fill { best = s }
+                continue
+            }
+            let r = rank(s.card) - rank(best.card)
+            if r < 0 || (r == 0 && s.index < best.index) { best = s }
+        }
+        return best.card
+    }
+}
 
 /// The menu-bar / top-bar text. Mirrors pure.js `panelText()`;
 /// tests/fixtures/panel.json pins both ports (PanelTextParityTests).

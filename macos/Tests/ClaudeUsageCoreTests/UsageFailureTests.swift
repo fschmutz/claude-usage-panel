@@ -19,6 +19,7 @@ final class UsageFailureTests: XCTestCase {
 
     func testEveryStatusMapsLikeTheOtherPorts() throws {
         let fix = try fixture()
+        let now = UsageNormalizer.parseDate(fix["now"] as? String)!
         for c in fix["cases"] as! [[String: Any]] {
             let name = c["name"] as! String
             let body = (c["body"] as? [String: Any]).flatMap {
@@ -26,12 +27,14 @@ final class UsageFailureTests: XCTestCase {
             }
             let got = UsageFailure(
                 status: (c["status"] as! NSNumber).intValue, body: body,
-                label: c["label"] as? String)
+                label: c["label"] as? String, retryAfter: c["retryAfter"] as? String, now: now)
             let want = c["expected"] as! [String: Any]
             XCTAssertEqual(got.code.rawValue, want["code"] as! String, name)
             XCTAssertEqual(got.signInAgain, want["signInAgain"] as! Bool, name)
             XCTAssertEqual(got.retryable, want["retryable"] as! Bool, name)
             XCTAssertEqual(got.message, want["message"] as! String, name)
+            XCTAssertEqual(
+                got.retryAfterSeconds, (want["retryAfterSeconds"] as? NSNumber)?.intValue, name)
         }
     }
 

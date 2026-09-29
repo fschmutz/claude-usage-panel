@@ -72,7 +72,9 @@ export function contextSegment(stdinText) {
   } catch {
     return '';
   }
-  if (!Number.isFinite(Number(pct))) return '';
+  // Strictly a JSON number: Number(null) / Number('') / Number(false) are 0,
+  // which would print a "0%" nobody measured.
+  if (typeof pct !== 'number' || !Number.isFinite(pct)) return '';
   const p = clampPercent(pct);
   const color = SEV_COLOR[usageSeverity(p)];
   return `Context ${gauge(p, color)} ${color}${p}%${RESET}`;
@@ -91,10 +93,13 @@ export function cardsFromStdin(stdinText) {
   }
   const cards = [];
   const add = (win, kind, label) => {
-    const pct = Number(win?.used_percentage);
-    if (!Number.isFinite(pct)) return;
+    // Read by JSON type, like every normalizer: Number(null), Number('') and
+    // Number(false) are all 0, and a "0%" card nobody measured reads as a
+    // full tank. No number, no card.
+    const pct = win?.used_percentage;
+    if (typeof pct !== 'number' || !Number.isFinite(pct)) return;
     const p = clampPercent(pct);
-    const secs = Number(win.resets_at);
+    const secs = typeof win.resets_at === 'number' ? win.resets_at : NaN;
     cards.push({
       key: kind,
       kind,
@@ -258,7 +263,7 @@ export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
     if (!active) return '';
     const worst = worstFromCache(store.readUsageCache());
     // This session's own numbers are fresher than any cache entry.
-    const own = worstPercent(cardsFromStdin(stdinText));
+    const own = worstPercent(cardsFromStdin(stdinText), nowMs);
     if (own !== null) worst[active] = own;
     const target = autoSwitchTarget({active, worst, nowMs, lastSwitchMs: store.readLastSwitchMs()});
     if (target) return `${SEV_COLOR.warning}[${active} ⇢ ${target.to}]${RESET}`;

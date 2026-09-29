@@ -155,8 +155,12 @@ final class UsageModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     /// Consecutive polls in which no limit moved - drives the backoff.
     private var idleStreak = 0
-    /// The last poll failed with a "not now" status - retry soon, not next interval.
+    /// The last poll failed retryably - retry soon, not next interval.
     private var retry = false
+    /// Retryable failures in a row (backs the retry off) and what the last
+    /// one's Retry-After asked for.
+    private var retryStreak = 0
+    private var retryAfterSeconds: Int?
 
     /// 90 days of poll samples for the week-over-week line. Loaded once; every
     /// later poll that moved appends to both the file and this list.
@@ -248,7 +252,8 @@ final class UsageModel: ObservableObject {
                 // and lands late on the one tick that matters - the reset.
                 let delay = PollSchedule.nextPollSeconds(
                     baseSeconds: base, idleStreak: self.idleStreak,
-                    nextReset: PollSchedule.nextReset(self.cards), retry: self.retry)
+                    nextReset: PollSchedule.nextReset(self.cards), retry: self.retry,
+                    retryStreak: self.retryStreak, retryAfterSeconds: self.retryAfterSeconds)
                 try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
             }
         }
@@ -322,13 +327,18 @@ final class UsageModel: ObservableObject {
             planLabel = result.planLabel
             errorText = nil
             retry = false
+            retryStreak = 0
+            retryAfterSeconds = nil
             updated = Self.timeFormatter.string(from: Date())
             recordHistory(result.cards, nowMs: nowMs)
             checkAlerts(result.cards)
         } catch {
             // A transient answer keeps the cards and says so under them; the
             // popup only blanks on a failure that is not going to clear itself.
-            retry = (error as? UsageError)?.isTransient ?? false
+            let usageError = error as? UsageError
+            retry = usageError?.isTransient ?? false
+            retryStreak = retry ? retryStreak + 1 : 0
+            retryAfterSeconds = retry ? usageError?.retryAfterSeconds : nil
             if retry, !cards.isEmpty {
                 errorText = "\(error.localizedDescription) - retrying, showing the last reading"
             } else {
@@ -455,19 +465,15 @@ final class UsageModel: ObservableObject {
     /// but on pace to run out before its reset shows the warning dot -
     /// trouble at 50%, not at 90%.
     var titleText: String {
-        // Rank on what the cards may honestly show. A window that has just
-        // reset still carries the old percentage, and picking by that would
-        // park a stale 96% in the menu bar for as long as the endpoint takes
-        // to open the new window - a limit with no honest reading only wins
-        // when nothing else has one.
-        let readings = cards.map { ($0, UsageReading.of($0)) }
-        let honest = readings.filter { $0.1.known }
-        guard
-            let (worst, reading) = (honest.isEmpty ? readings : honest)
-                .max(by: { $0.1.fill < $1.1.fill })
-        else {
+        // Rank on what the cards may honestly show (PanelCard): a window that
+        // has just reset still carries the old percentage, and picking by that
+        // would park a stale 96% in the menu bar. Ties break exactly like the
+        // GNOME top bar's.
+        let now = Date()
+        guard let worst = PanelCard.pick(cards, mode: .worst, now: now) else {
             return errorText == nil ? "⚪️ …" : "⚪️ ?"
         }
+        let reading = UsageReading.of(worst, now: now)
         var sev = reading.known ? worst.severity : .normal
         if sev == .normal, reading.known, forecasts[worst.id]?.exhaustsBeforeReset == true {
             sev = .warning

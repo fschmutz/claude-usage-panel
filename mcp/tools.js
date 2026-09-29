@@ -3,17 +3,25 @@
 // get_usage assembly; everything that describes or renders a tool lives here.
 
 import {NAME_RE, accountSummary} from '../claude-code/accounts-contract.js';
-import {poolNote} from '../claude-code/normalize.js';
+import {poolNote, usageReading} from '../claude-code/normalize.js';
 import {resetHint} from '../claude-code/stamps.js';
 
 // One markdown line per limit: label, percent, severity, reset countdown, and -
 // when history supports a projection - the burn rate and whether it runs out
-// before the reset.
+// before the reset. The percentage is the honest reading (usageReading): a
+// null placeholder or a window that already rolled over prints the dash and
+// the reason, never a "0%" that reads as a full tank or a stale 96%, and none
+// of the figures derived from it.
 export function renderCards(cards, now = Date.now()) {
   if (!cards.length) return 'No plan limits reported by the usage endpoint.';
   return cards.map(c => {
+    const reading = usageReading(c, now);
     const reset = resetHint(c.resetsAt, now);
-    const parts = [`**${c.label}** - ${c.percent}%`];
+    if (!reading.known) {
+      const why = reading.reason === 'window_reset' ? 'window reset, awaiting the new reading' : 'no reading';
+      return `- **${c.label}** - ${reading.text} (${why})`;
+    }
+    const parts = [`**${c.label}** - ${reading.text}`];
     if (c.severity !== 'normal') parts.push(c.severity.toUpperCase());
     if (reset) parts.push(`resets in ${reset}`);
     const note = poolNote(c);
@@ -93,7 +101,20 @@ export const GET_USAGE_TOOL = {
               type: 'boolean',
               description: 'per-model sub-cap of the group pool, not a pool of its own',
             },
-            percent: {type: 'integer', minimum: 0, maximum: 100},
+            percent: {
+              type: 'integer', minimum: 0, maximum: 100,
+              description:
+                'only meaningful while percentKnown is true and resetsAt has ' +
+                'not passed; otherwise a placeholder (0, or the rolled-over ' +
+                'window\'s last figure) and must not be read as usage',
+            },
+            percentKnown: {
+              type: 'boolean',
+              description:
+                'false when the endpoint sent no number for this limit (a ' +
+                'null placeholder for a kind nobody has enabled): no reading, ' +
+                'not 0%',
+            },
             severity: {type: 'string', enum: ['normal', 'warning', 'critical']},
             resetsAt: {type: ['string', 'null']},
             active: {type: 'boolean'},
@@ -150,7 +171,7 @@ export const GET_USAGE_TOOL = {
               required: ['pctPerHour', 'projectedFullAt', 'exhaustsBeforeReset'],
             },
           },
-          required: ['key', 'label', 'group', 'scoped', 'percent', 'severity'],
+          required: ['key', 'label', 'group', 'scoped', 'percent', 'percentKnown', 'severity'],
         },
       },
       extraUsage: {
@@ -302,7 +323,9 @@ export function renderAccount(account) {
   return `Account: **${account.name}**${meta ? ` (${meta})` : ''}`;
 }
 
-export function renderAccounts({active, accounts}) {
+// A limit's figure is its honest reading: a placeholder or a window that
+// already rolled over prints the dash, never its stale percentage.
+export function renderAccounts({active, accounts}, nowMs = Date.now()) {
   if (!accounts.length) {
     return 'No saved accounts yet - save_account names the current login.';
   }
@@ -313,7 +336,7 @@ export function renderAccounts({active, accounts}) {
     if (a.tokenState === 'expired') parts.push('login EXPIRED - `claude auth login` on it and save again');
     if (a.error) parts.push(a.error);
     if (a.limits?.length) {
-      parts.push(a.limits.map((l) => `${l.label} ${l.percent}%`).join(' · '));
+      parts.push(a.limits.map((l) => `${l.label} ${usageReading(l, nowMs).text}`).join(' · '));
     }
     return `- ${parts.join(' · ')}`;
   });
@@ -338,7 +361,8 @@ export async function callAccountTool(name, args, store) {
         active,
         accounts: accounts.map(({cards, ...a}) => ({...a, limits: cards ?? []})),
       };
-      return {content: [{type: 'text', text: renderAccounts(structured)}], structuredContent: structured};
+      const text = renderAccounts(structured, store.now?.() ?? Date.now());
+      return {content: [{type: 'text', text}], structuredContent: structured};
     }
     case 'save_account': {
       const p = store.saveCurrent(args?.name, {force: args?.force === true});

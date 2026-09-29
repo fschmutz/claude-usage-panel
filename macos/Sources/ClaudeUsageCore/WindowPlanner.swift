@@ -185,20 +185,42 @@ public enum PollSchedule {
     public static let idleMaxSeconds = 15 * 60
     /// Land just PAST a reset, never on it.
     public static let resetLagSeconds = 5
-    /// After a transient failure (424, 429, 5xx) - that poll produced nothing.
+    /// After a retryable failure (408/424/425/429/5xx, or no network) - that
+    /// poll produced nothing.
     public static let retrySeconds = 60
+    /// Each consecutive retryable failure doubles the wait, up to
+    /// `idleMaxSeconds`: a rate-limited endpoint must not be asked again every
+    /// minute forever.
+    public static let retryFactor = 2
+
+    /// A failure worth retrying soon with the last good reading kept up: a
+    /// "not now" status (`transient`) or a request that never completed
+    /// (`network_error`). Twin of pure.js `isRetryableFailure()`, pinned by
+    /// tests/fixtures/poll.json "retryable".
+    public static func isRetryable(code: String) -> Bool {
+        code == "transient" || code == "network_error"
+    }
 
     /// - Parameters:
     ///   - idleStreak: consecutive polls in which no limit moved.
-    ///   - retry: the last poll failed with a transient status; one request
-    ///     at `retrySeconds` instead of a blank or stale panel for the whole
-    ///     base interval.
+    ///   - retry: the last poll failed retryably; one request at
+    ///     `retrySeconds` instead of a blank or stale panel for the whole base
+    ///     interval, doubled per failure in a row (`retryStreak`, 1 for the
+    ///     first) and never sooner than the server's Retry-After, both capped
+    ///     at `idleMaxSeconds`.
     public static func nextPollSeconds(
         baseSeconds: Int, idleStreak: Int = 0, nextReset: Date? = nil, now: Date = Date(),
-        retry: Bool = false
+        retry: Bool = false, retryStreak: Int = 1, retryAfterSeconds: Int? = nil
     ) -> Int {
         let base = max(60, baseSeconds)
-        if retry { return min(base, retrySeconds) }
+        if retry {
+            let streak = max(1, retryStreak)
+            var backoff = retrySeconds
+            for _ in 0..<min(streak - 1, 16) { backoff *= retryFactor }
+            backoff = min(idleMaxSeconds, backoff)
+            let asked = min(idleMaxSeconds, max(0, retryAfterSeconds ?? 0))
+            return max(backoff, asked)
+        }
         var delay = base
         if idleStreak >= idleAfter { delay = min(idleMaxSeconds, base * idleFactor) }
         if let nextReset {

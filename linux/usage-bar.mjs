@@ -13,6 +13,7 @@
 // server uses - same endpoint, same normalization, same official `limits[]`
 // numbers - so there is no second copy of the contract to keep in sync.
 import {openStore} from '../claude-code/accounts.js';
+import {panelCard, usageReading} from '../claude-code/normalize.js';
 import {resetHint} from '../claude-code/stamps.js';
 import {flag} from '../scripts/lib/argv.mjs';
 
@@ -84,26 +85,36 @@ if (!result?.ok) fail('usage endpoint returned an error');
 const cards = pick(result.cards ?? []);
 if (!cards.length) fail('no matching limit');
 
-const worst = cards.reduce((a, b) => (b.percent > a.percent ? b : a));
+// Every figure is the honest reading (usageReading): a null placeholder or a
+// window whose reset has passed prints `–`, never a "0%" that reads as a full
+// tank or the rolled-over window's stale 96%. The card waybar styles on is
+// picked exactly like the GNOME top bar's (panelCard), ties included, and an
+// unknown one is no alarm.
+const now = Date.now();
+const shown = cards.map((c) => ({card: c, reading: usageReading(c, now)}));
+const sevOf = ({card, reading}) => (reading.known ? card.severity ?? 'normal' : 'normal');
+const worstCard = panelCard(cards, 'worst', now);
+const worst = shown.find((s) => s.card === worstCard);
+const line = shown.map((s) => `${short(s.card)} ${s.reading.text}`);
 
 if (format === 'waybar') {
     process.stdout.write(
         JSON.stringify({
-            text: cards.map((c) => `${short(c)} ${c.percent}%`).join(' · '),
-            tooltip: cards
-                .map((c) => `${c.label}: ${c.percent}%  ${resetHint(c.resetsAt)}`)
+            text: line.join(' · '),
+            tooltip: shown
+                .map((s) => `${s.card.label}: ${s.reading.text}  ${resetHint(s.card.resetsAt, now)}`)
                 .join('\n'),
             // waybar styles on class; severity is already computed for us.
-            class: worst.severity,
-            percentage: worst.percent,
+            class: sevOf(worst),
+            percentage: worst.reading.fill,
         }) + '\n',
     );
 } else if (format === 'tmux') {
     process.stdout.write(
-        cards
-            .map((c) => `#[fg=${COLOURS[c.severity] ?? COLOURS.normal}]${short(c)} ${c.percent}%#[default]`)
+        shown
+            .map((s, i) => `#[fg=${COLOURS[sevOf(s)] ?? COLOURS.normal}]${line[i]}#[default]`)
             .join(' ') + '\n',
     );
 } else {
-    process.stdout.write(cards.map((c) => `${short(c)} ${c.percent}%`).join(' · ') + '\n');
+    process.stdout.write(line.join(' · ') + '\n');
 }

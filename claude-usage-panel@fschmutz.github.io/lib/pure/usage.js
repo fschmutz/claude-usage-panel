@@ -191,6 +191,40 @@ export function usageReading(card, nowMs = Date.now()) {
     };
 }
 
+/**
+ * The one card a single-reading surface shows (the GNOME top bar, the macOS
+ * menu-bar title, a Linux status bar). `mode` 'session' is the session card
+ * (else the first); 'worst' ranks on what the cards may honestly show, so a
+ * window that has just reset (it still carries the old percentage) never
+ * parks a stale 96 % up top, and a limit with no honest reading only wins
+ * when nothing else has one. Ties go to the first card in KIND_ORDER - the
+ * fill of every unknown card is 0, so with all of them unknown a tie is
+ * certain and must not depend on how a port's max() breaks it. Mirrors
+ * Swift `PanelCard.pick`; tests/fixtures/reading.json pins both.
+ * @returns {?object} the card, or null when there is none
+ */
+export function panelCard(cards, mode = 'worst', nowMs = Date.now()) {
+    const list = Array.isArray(cards) ? cards : [];
+    if (!list.length)
+        return null;
+    if (mode === 'session')
+        return list.find(c => String(c?.key ?? '').startsWith('session')) ?? list[0];
+    const rank = c => {
+        const i = KIND_ORDER.indexOf(String(c?.key ?? '').split(':')[0]);
+        return i < 0 ? KIND_ORDER.length : i;
+    };
+    const scored = list.map((card, index) => ({card, index, reading: usageReading(card, nowMs)}));
+    const honest = scored.filter(s => s.reading.known);
+    const pool = honest.length ? honest : scored;
+    return pool.reduce((best, s) => {
+        const d = s.reading.fill - best.reading.fill;
+        if (d !== 0)
+            return d > 0 ? s : best;
+        const r = rank(s.card) - rank(best.card);
+        return r < 0 || (r === 0 && s.index < best.index) ? s : best;
+    }).card;
+}
+
 // ── Extra usage (prepaid credits beyond the plan) ───────────────────────────
 // The payload's `spend` object: money already charged this cycle against the
 // cap the account allows. It is NOT one of the limits[] - it has no window and
@@ -200,11 +234,10 @@ export function usageReading(card, nowMs = Date.now()) {
 // tests/fixtures/extra-usage.json.
 
 function money(obj) {
-    const minor = Number(obj?.amount_minor);
-    if (!Number.isFinite(minor))
+    const minor = num(obj?.amount_minor);
+    if (minor === null)
         return null;
-    const exp = Number(obj?.exponent);
-    return minor / 10 ** (Number.isFinite(exp) ? exp : 2);
+    return minor / 10 ** (num(obj?.exponent) ?? 2);
 }
 
 /** "$12.40", or "12.40 CHF" for anything but USD. */
@@ -229,12 +262,13 @@ export function normalizeExtraUsage(payload) {
     if (used === null)
         return null;
     const limit = money(spend.limit);
-    const currency = spend.used?.currency ?? spend.limit?.currency ?? 'USD';
+    const currency = [spend.used?.currency, spend.limit?.currency]
+        .find(c => typeof c === 'string') ?? 'USD';
     return {
         key: 'extra_usage',
         label: 'Extra usage',
-        percent: clampPercent(spend.percent),
-        severity: spend.severity ?? 'normal',
+        percent: clampPercent(num(spend.percent) ?? 0),
+        severity: SEVERITIES.includes(spend.severity) ? spend.severity : 'normal',
         usedAmount: used,
         limitAmount: limit,
         currency,
@@ -383,32 +417,67 @@ export const AUTH_EXPIRED_MESSAGE =
     'Claude session expired. Run any Claude Code command to refresh it.';
 
 /**
- * The whole non-2xx contract in one call, so no port has to remember which
- * status means what. 401/403 is the only answer that says the credentials
- * themselves are finished (`signInAgain`: retrying cannot help, and the panels
- * must stop drawing that account's bars as if they were current); the
- * transient statuses keep the last reading up; everything else is a plain
- * failure. `label` names a saved account in the message - without one the
- * message is the live login's and carries the refresh hint.
- *
- * @returns {{ok: false, code: 'auth_expired'|'transient'|'http_error',
- *            signInAgain: boolean, retryable: boolean, message: string}}
+ * Seconds a Retry-After header asks for, or null when it says nothing usable.
+ * The header is either delta-seconds ("120") or an HTTP-date ("Wed, 21 Oct
+ * 2015 07:28:00 GMT"); a date already past is 0, never negative.
+ * @param {?string} value the raw header
+ * @param {number} nowMs
  */
-export function usageFailure(status, body = null, {label = null} = {}) {
+export function parseRetryAfter(value, nowMs = Date.now()) {
+    if (typeof value !== 'string')
+        return null;
+    const v = value.trim();
+    if (/^\d+$/.test(v))
+        return Number(v);
+    // An HTTP-date always names its weekday; a bare number with a sign or a
+    // fraction is neither form and must not be read as a date.
+    if (!/^[A-Za-z]{3},/.test(v))
+        return null;
+    const at = Date.parse(v);
+    return Number.isFinite(at) ? Math.max(0, Math.ceil((at - nowMs) / 1000)) : null;
+}
+
+/**
+ * The whole non-2xx contract in one call, so no port has to remember which
+ * status means what. 401 is the only answer that says the credentials
+ * themselves are finished (`signInAgain`: retrying cannot help, and a panel
+ * must stop drawing that account's bars as if they were current). 403 is
+ * `forbidden`: the token is valid but not allowed this endpoint (a
+ * setup-token without the user:profile scope answers permission_error), so
+ * no refresh cures it and the server's own words go on screen instead of the
+ * refresh hint. The transient statuses keep the last reading up and carry
+ * `retryAfterSeconds` when the server sent a usable Retry-After; everything
+ * else is a plain failure. `label` names a saved account in the message -
+ * without one the 401 message is the live login's and carries the refresh
+ * hint.
+ *
+ * @param {number} status
+ * @param {?object} body the parsed JSON body when there was one
+ * @param {{label?: ?string, retryAfter?: ?string, nowMs?: number}} [opts]
+ * @returns {{ok: false, code: 'auth_expired'|'forbidden'|'transient'|'http_error',
+ *            signInAgain: boolean, retryable: boolean, message: string,
+ *            retryAfterSeconds?: number}}
+ */
+export function usageFailure(status, body = null, {label = null, retryAfter = null, nowMs = Date.now()} = {}) {
     const s = Number(status);
-    if (s === 401 || s === 403) {
+    if (s === 401) {
         return {
             ok: false, code: 'auth_expired', signInAgain: true, retryable: false,
             message: label ? `${label}: usage endpoint refused the token` : AUTH_EXPIRED_MESSAGE,
         };
     }
     const failure = httpFailure(s, body);
-    return {
+    const out = {
         ...failure,
+        code: s === 403 ? 'forbidden' : failure.code,
         signInAgain: false,
         retryable: failure.code === 'transient',
         message: label ? `${label}: ${failure.message}` : failure.message,
     };
+    const wait = out.retryable ? parseRetryAfter(retryAfter, nowMs) : null;
+    if (wait !== null)
+        out.retryAfterSeconds = wait;
+    return out;
 }
 
 // ── Plan label ──────────────────────────────────────────────────────────────

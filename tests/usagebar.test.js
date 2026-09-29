@@ -83,3 +83,37 @@ test('a scoped weekly card is labelled with its model, never a second bare W', (
     assert.equal(JSON.parse(run(['--format', 'waybar', '--limit', 'weekly'], SCOPED)).text, 'W 35% · W·Fable 0%');
     assert.match(run(['--format', 'tmux', '--limit', 'weekly'], SCOPED), /\]W·Fable 0%#\[default\]/);
 });
+
+// A null placeholder printed "W 0%" (a full tank), and a window whose reset
+// had passed still printed and ranked by its stale figure (S 96% critical).
+// Both are the honest reading now, and waybar styles on the card the GNOME
+// top bar would pick.
+const PAST = new Date(Date.now() - 60_000).toISOString();
+const SOON = new Date(Date.now() + 3_600_000).toISOString();
+const STALE = JSON.stringify({
+    ok: true,
+    cards: [
+        {key: 'session', label: 'Current session', group: 'session', percent: 96, percentKnown: true, severity: 'critical', resetsAt: PAST, active: true},
+        {key: 'weekly_all', label: 'Weekly · all models', group: 'weekly', percent: 30, percentKnown: true, severity: 'normal', resetsAt: SOON, active: false},
+        {key: 'weekly_cowork', label: 'Weekly · cowork', group: 'weekly', percent: 0, percentKnown: false, severity: 'normal', resetsAt: null, active: false},
+    ],
+});
+
+test('no reading prints the dash, never 0% or a rolled-over figure', () => {
+    assert.equal(run(['--limit', 'all'], STALE), 'S – · W 30% · W –');
+    assert.match(run(['--format', 'tmux', '--limit', 'all'], STALE), /^#\[fg=colour245\]S –#\[default\]/);
+});
+
+test('waybar ranks on the honest reading: a stale 96% critical is no alarm', () => {
+    const o = JSON.parse(run(['--format', 'waybar', '--limit', 'all'], STALE));
+    assert.equal(o.class, 'normal');
+    assert.equal(o.percentage, 30);
+    assert.match(o.tooltip, /Current session: –/);
+});
+
+test('with nothing known the bar reads empty and calm', () => {
+    const o = JSON.parse(run(['--format', 'waybar', '--limit', 'session'], STALE));
+    assert.equal(o.text, 'S –');
+    assert.equal(o.class, 'normal');
+    assert.equal(o.percentage, 0);
+});

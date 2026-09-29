@@ -73,6 +73,24 @@ test('cardsFromStdin builds Session/Week cards from rate_limits', () => {
     assert.deepEqual(cardsFromStdin('not json'), []);
 });
 
+test('cardsFromStdin: a used_percentage that is not a JSON number is no card, never 0%', () => {
+    // Number(null) / Number('') / Number(false) are 0 and Number(true) is 1:
+    // a loose read printed a measured-looking "0%" (a full tank) for them.
+    for (const bad of [null, '', '42', false, true, {}, []]) {
+        const cards = cardsFromStdin(JSON.stringify({
+            rate_limits: {five_hour: {used_percentage: bad, resets_at: 1}},
+        }));
+        assert.deepEqual(cards, [], JSON.stringify(bad));
+        assert.equal(contextSegment(JSON.stringify({context_window: {used_percentage: bad}})), '',
+            JSON.stringify(bad));
+    }
+    const [card] = cardsFromStdin(JSON.stringify({
+        rate_limits: {seven_day: {used_percentage: 0, resets_at: null}},
+    }));
+    assert.equal(card.percent, 0, 'a real 0 is still a reading');
+    assert.equal(card.resetsAt, null, 'a null reset is no reset, not 1970');
+});
+
 test('render draws one gauge per shown limit and a shared reset only once', () => {
     // Two cards whose resets render to the same value share one countdown.
     const base = Date.now() + 25 * 60 * 60 * 1000; // ~1d1h out

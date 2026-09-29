@@ -70,7 +70,9 @@ class UsageCard extends St.BoxLayout {
         // the left of it is spent on schedule, quota to the right of the fill
         // is what the clock has not yet earned. Hidden when the window length
         // is unknown (no reset, or a group we have no span for).
-        const pace = clockPace(card);
+        // Clock pace and burn rate are both drawn from the percentage, so a
+        // card that shows `–` shows neither: they would contradict the dash.
+        const pace = reading.known ? clockPace(card) : null;
         this._clockRow.visible = pace !== null;
         if (pace)
             this._clockRow.setMark(pace.elapsedPercent, pace.state === 'ahead');
@@ -85,7 +87,7 @@ class UsageCard extends St.BoxLayout {
         // Burn-rate projection: amber when the limit runs out before its reset,
         // quiet grey when the pace outlasts it, hidden when there is no honest
         // pace to project (idle, too few samples).
-        const fcText = formatForecast(fc);
+        const fcText = reading.known ? formatForecast(fc) : '';
         this._forecast.text = fcText;
         this._forecast.visible = fcText.length > 0;
         this._forecast.style_class =

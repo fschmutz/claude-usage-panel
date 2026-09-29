@@ -1,5 +1,6 @@
 {
-  "_comment": "What a non-2xx answer from the usage endpoint means, in one contract every port shares. `signInAgain` is the only outcome no amount of retrying fixes: the credentials themselves are finished, so the panels must stop drawing that account's bars as if they were current and say so instead. `retryable` keeps the last good reading up while the next poll tries again. `label` names a saved account in the message; without one the message is the LIVE login's, and it carries the refresh hint - clients never write that token, so Claude Code's own refresh is the only cure. Pinned across lib/pure/usage.js (GNOME), claude-code/normalize.js (CLI + MCP + status line) and ClaudeUsageCore/HttpFailure.swift (macOS).",
+  "_comment": "What a non-2xx answer from the usage endpoint means, in one contract every port shares. `signInAgain` (401 only) is the only outcome no amount of retrying fixes: the credentials themselves are finished, so the panels must stop drawing that account's bars as if they were current and say so instead. `retryable` keeps the last good reading up while the next poll tries again. `label` names a saved account in the message; without one the message is the LIVE login's, and it carries the refresh hint - clients never write that token, so Claude Code's own refresh is the only cure. Pinned across lib/pure/usage.js (GNOME), claude-code/normalize.js (CLI + MCP + status line) and ClaudeUsageCore/HttpFailure.swift (macOS). A 403 is `forbidden`, not expired: the token is valid but not allowed this endpoint (a setup-token without the user:profile scope answers permission_error), so no refresh cures it and the server's own words are shown instead of the refresh hint. `retryAfter` is the raw Retry-After header (delta-seconds or an HTTP-date, read against `now`); a transient answer carries `retryAfterSeconds` only when it was usable, and nothing else ever does.",
+  "now": "2030-01-01T00:00:00Z",
   "authExpiredMessage": "Claude session expired. Run any Claude Code command to refresh it.",
   "cases": [
     {
@@ -15,15 +16,27 @@
       }
     },
     {
-      "name": "403 is the same answer as 401",
+      "name": "403 permission_error is forbidden, not expired - no refresh hint, the server's words",
       "status": 403,
-      "body": null,
+      "body": {"error": {"type": "permission_error", "message": "OAuth token does not meet scope requirement user:profile"}},
       "label": null,
       "expected": {
-        "code": "auth_expired",
-        "signInAgain": true,
+        "code": "forbidden",
+        "signInAgain": false,
         "retryable": false,
-        "message": "Claude session expired. Run any Claude Code command to refresh it."
+        "message": "HTTP 403 permission_error: OAuth token does not meet scope requirement user:profile"
+      }
+    },
+    {
+      "name": "a bare 403 on a saved account is forbidden and names it",
+      "status": 403,
+      "body": null,
+      "label": "PERSO",
+      "expected": {
+        "code": "forbidden",
+        "signInAgain": false,
+        "retryable": false,
+        "message": "PERSO: HTTP 403"
       }
     },
     {
@@ -96,6 +109,87 @@
         "signInAgain": false,
         "retryable": false,
         "message": "HTTP 400 invalid_request_error: unknown beta header"
+      }
+    },
+    {
+      "name": "429 with Retry-After in seconds carries the wait",
+      "status": 429,
+      "body": null,
+      "label": null,
+      "retryAfter": "120",
+      "expected": {
+        "code": "transient",
+        "signInAgain": false,
+        "retryable": true,
+        "message": "HTTP 429",
+        "retryAfterSeconds": 120
+      }
+    },
+    {
+      "name": "503 with an HTTP-date Retry-After is read against now",
+      "status": 503,
+      "body": null,
+      "label": null,
+      "retryAfter": "Tue, 01 Jan 2030 00:05:00 GMT",
+      "expected": {
+        "code": "transient",
+        "signInAgain": false,
+        "retryable": true,
+        "message": "HTTP 503",
+        "retryAfterSeconds": 300
+      }
+    },
+    {
+      "name": "an HTTP-date already past is a wait of zero, never negative",
+      "status": 429,
+      "body": null,
+      "label": null,
+      "retryAfter": "Mon, 31 Dec 2029 23:00:00 GMT",
+      "expected": {
+        "code": "transient",
+        "signInAgain": false,
+        "retryable": true,
+        "message": "HTTP 429",
+        "retryAfterSeconds": 0
+      }
+    },
+    {
+      "name": "a Retry-After that is neither form is ignored",
+      "status": 429,
+      "body": null,
+      "label": null,
+      "retryAfter": "-5",
+      "expected": {
+        "code": "transient",
+        "signInAgain": false,
+        "retryable": true,
+        "message": "HTTP 429"
+      }
+    },
+    {
+      "name": "a fractional Retry-After is ignored too",
+      "status": 429,
+      "body": null,
+      "label": null,
+      "retryAfter": "1.5",
+      "expected": {
+        "code": "transient",
+        "signInAgain": false,
+        "retryable": true,
+        "message": "HTTP 429"
+      }
+    },
+    {
+      "name": "only a transient answer carries a wait: a 404 with Retry-After has none",
+      "status": 404,
+      "body": null,
+      "label": null,
+      "retryAfter": "30",
+      "expected": {
+        "code": "http_error",
+        "signInAgain": false,
+        "retryable": false,
+        "message": "HTTP 404"
       }
     }
   ]

@@ -41,7 +41,9 @@ private struct CardView: View {
         // limit the payload never carried a number for is not a limit at 0 %.
         let reading = UsageReading.of(card)
         let color = Color.severity(card.severity)
-        let pace = UsageClock.pace(card)
+        // Clock pace and burn rate are both drawn from the percentage, so a
+        // card that shows `–` shows neither: they would contradict the dash.
+        let pace = reading.known ? UsageClock.pace(card) : nil
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(card.label).font(.system(size: 13, weight: .semibold))
@@ -75,7 +77,7 @@ private struct CardView: View {
             }
             // Burn-rate projection: amber when the limit runs out before its
             // reset, quiet when the pace outlasts it, absent when idle.
-            if let fc = forecast {
+            if reading.known, let fc = forecast {
                 Text(UsageForecast.format(fc)).font(.system(size: 11))
                     .foregroundColor(fc.exhaustsBeforeReset ? .cuWarning : .secondary)
             }

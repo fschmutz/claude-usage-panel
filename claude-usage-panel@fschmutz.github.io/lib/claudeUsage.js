@@ -18,6 +18,15 @@ const {gettext: _} = Gettext.domain('claude-usage-panel');
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
 
+/** The raw Retry-After header of an answered message, or null. */
+function retryAfterHeader(message) {
+    try {
+        return message.get_response_headers()?.get_one('Retry-After') ?? null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Fetch usage from the endpoint. `token` defaults to the live login's; a
  * saved account's token (lib/accounts.js) reads that account's usage instead.
@@ -40,7 +49,9 @@ export async function fetchUsage(session, token = readAccessToken(), {label = nu
     try {
         ({status, bytes} = await send(session, message));
     } catch (e) {
-        return {ok: false, code: 'network_error', message: e.message};
+        // The request never completed (offline, DNS, timeout): retryable, so
+        // the last good reading stays up (isRetryableFailure).
+        return {ok: false, code: 'network_error', signInAgain: false, retryable: true, message: e.message};
     }
     if (status < 200 || status >= 300) {
         let body = null;
@@ -49,7 +60,7 @@ export async function fetchUsage(session, token = readAccessToken(), {label = nu
         } catch {
             // no JSON body - the status alone is the message
         }
-        const failure = usageFailure(status, body, {label});
+        const failure = usageFailure(status, body, {label, retryAfter: retryAfterHeader(message)});
         // One shared rule for what the status MEANS (usageFailure), but the
         // sentence the panel shows is translated - the contract's English
         // default belongs to the terminal clients.

@@ -43,13 +43,14 @@ enum UsageError: LocalizedError {
     }
 
     /// A "not now" answer (424, 429, 5xx) or a dropped connection: the last
-    /// good reading stays up while the next poll retries.
-    var isTransient: Bool {
-        switch self {
-        case .endpoint(let f): return f.retryable
-        case .network: return true
-        case .noToken, .parse: return false
-        }
+    /// good reading stays up while the next poll retries. The one rule both
+    /// panels follow (PollSchedule.isRetryable, pinned by poll.json).
+    var isTransient: Bool { PollSchedule.isRetryable(code: code) }
+
+    /// What the server's Retry-After asked for, when it sent a usable one.
+    var retryAfterSeconds: Int? {
+        if case .endpoint(let f) = self { return f.retryAfterSeconds }
+        return nil
     }
 
     /// No amount of retrying fixes this one - the credentials are finished.
@@ -110,9 +111,13 @@ struct LiveUsageEndpoint: UsageEndpoint {
         } catch {
             throw UsageError.network(error.localizedDescription)
         }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            throw UsageError.endpoint(UsageFailure(status: status, body: data, label: label))
+            throw UsageError.endpoint(
+                UsageFailure(
+                    status: status, body: data, label: label,
+                    retryAfter: http?.value(forHTTPHeaderField: "Retry-After")))
         }
         guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw UsageError.parse("Usage endpoint returned invalid JSON")

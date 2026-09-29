@@ -55,4 +55,24 @@ final class UsageReadingTests: XCTestCase {
             XCTAssertEqual(UsageReading.of(card, now: now), want, name)
         }
     }
+
+    /// Which card the menu-bar title shows - the same pick as the GNOME top
+    /// bar and the Linux status bar, ties included.
+    func testPanelCardPicksLikeTheOtherPorts() throws {
+        let fix = try fixture()
+        let now = date(fix["now"] as! String)
+        for c in fix["panelCard"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            let cards = (c["cards"] as! [[String: Any]]).map { raw in
+                LimitCard(
+                    id: raw["key"] as! String, label: raw["key"] as! String,
+                    percent: (raw["percent"] as! NSNumber).intValue, severity: .normal,
+                    resetsAt: UsageNormalizer.parseDate(raw["resetsAt"] as? String),
+                    active: true, percentKnown: raw["percentKnown"] as! Bool)
+            }
+            let mode = PanelCard.Mode(rawValue: c["mode"] as! String)!
+            XCTAssertEqual(
+                PanelCard.pick(cards, mode: mode, now: now)?.id, c["expected"] as? String, name)
+        }
+    }
 }
