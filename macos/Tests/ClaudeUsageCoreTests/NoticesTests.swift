@@ -33,7 +33,10 @@ final class NoticesTests: XCTestCase {
             let name = c["name"] as! String
             let state = c["state"] as! [String: Any]
             let rows = (state["rows"] as! [[String: Any]]).map {
-                (name: $0["name"] as! String, health: AccountHealth(rawValue: $0["health"] as! String)!)
+                (
+                    name: $0["name"] as! String,
+                    health: AccountHealth(rawValue: $0["health"] as! String)!
+                )
             }
             let got = Notices.accountNotices(
                 rows: rows, liveEmail: state["liveEmail"] as? String,

@@ -66,12 +66,14 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── pings.js    # session-window planner
     │   ├── sessions.js # ping stamps, transcript fold, ranking, resume command, terminals
     │   ├── accounts.js # named-account rules (mirrors claude-code/accounts-contract.js)
+    │   ├── notices.js  # account health, inline notices, button outcomes, switch rotation
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   └── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
     ├── claudeUsage.js  # /oauth/usage fetch (live or saved token)
     ├── accounts.js     # the account store's GJS I/O
     ├── accountsSection.js # the dropdown's Accounts rows
+    ├── noticeRow.js    # one inline notice row: severity dot, sentence, one repair button
     ├── cost.js         # optional ccusage cost (subprocess)
     ├── cursorUsage.js  # optional Cursor Admin API spend
     ├── cursorSection.js# the dropdown's Cursor section
@@ -98,6 +100,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── Model.swift               # normalization, pace, forecast
     │   ├── CursorModel.swift         # Cursor spend math
     │   ├── Accounts.swift            # named-account rules
+    │   ├── Notices.swift             # account health, inline notices, button outcomes, rotation
     │   ├── Warehouse.swift           # the 90-day history rules
     │   ├── EventHooks.swift          # event-hook detection + expansion
     │   ├── Sessions.swift            # ping stamps, transcript fold, ranking, resume
@@ -117,13 +120,14 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── UsageModel.swift          # the view model
         ├── PopupView.swift           # the popup's views
         ├── SettingsView.swift        # the Settings window
-        ├── Usage.swift               # usage fetch
+        ├── Usage.swift               # the UsageEndpoint protocol + the ephemeral-session fetch
         ├── Cost.swift                # ccusage via Process
         ├── Cursor.swift              # Cursor Admin API
         ├── KeychainStore.swift       # the Cursor key in the login Keychain
         ├── Accounts.swift            # accounts in the model, manual + auto switch
         ├── AccountStore.swift        # the account store's I/O (file + Keychain)
         ├── AccountsView.swift        # accounts in the popup and Settings
+        ├── NoticeRow.swift           # one inline notice row + the button-local outcome
         ├── Sessions.swift            # the same index + the terminal launch (osascript)
         ├── SavedSessions.swift       # the claudectl snapshot store in Settings
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
@@ -143,6 +147,7 @@ claude-code/            # the Node clients (installed together under ~/.claude/c
 ├── paths.js            # every state/cache/config path, derived from one `io`
 ├── accounts-contract.js# the pure account rules (mirrors lib/pure/accounts.js 1:1)
 ├── accounts.js         # openStore(io): the account store - save, switch, refresh, usage
+├── notices.js          # account health, inline notices, button outcomes, switch rotation
 ├── login-usage.js      # which login's usage, and how its auth failure is labelled
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session

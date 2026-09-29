@@ -67,6 +67,13 @@ function pendingSwitchPath() {
 // Everything in the store is a secret: created 0600, never world-readable.
 const writePrivate = (path, text) => writeText(path, text, {mode: 0o600});
 
+// An error the UI has to classify rather than just print. `code` is the string
+// accountHealth() reads ('refresh_failed', 'login_expired', 'no_account'), so
+// a broken saved login is reported identically by every port.
+function coded(code, message) {
+    return Object.assign(new Error(message), {code});
+}
+
 // ── Store ───────────────────────────────────────────────────────────────────────
 
 /** Every valid profile in the store, by name (code-point order, like every
@@ -228,8 +235,10 @@ export async function runningClaudeCount() {
  */
 export async function refreshProfile(session, profile) {
     const oauth = profile.credentials.claudeAiOauth;
-    if (!oauth.refreshToken)
-        throw new Error(`${profile.name}: no refresh token - log in again and save it`);
+    if (!oauth.refreshToken) {
+        throw coded('login_expired',
+            `${profile.name}: no refresh token - log in again and save it`);
+    }
     let body;
     try {
         const {status, bytes} = await send(session, jsonMessage('POST', OAUTH_TOKEN_ENDPOINT, {
@@ -243,13 +252,16 @@ export async function refreshProfile(session, profile) {
         }
         body = parseBody(bytes);
     } catch (e) {
-        throw new Error(e.message.startsWith(profile.name)
+        throw coded('refresh_failed', e.message.startsWith(profile.name)
             ? e.message : `${profile.name}: token refresh failed - ${e.message}`);
     }
     const nowMs = Date.now();
     const next = refreshedOauth(oauth, body, nowMs);
     if (!next)
-        throw new Error(`${profile.name}: token refresh returned no access token`);
+        throw coded('refresh_failed', `${profile.name}: token refresh returned no access token`);
+    // The rotated tokens go into OUR store and nowhere else. This is reached
+    // for parked accounts on every poll; writing the live credentials from
+    // here would rotate the token Claude Code is running on.
     return writeProfile({
         ...profile, savedAt: new Date(nowMs).toISOString(),
         credentials: {...profile.credentials, claudeAiOauth: next},
@@ -264,7 +276,10 @@ export async function refreshProfile(session, profile) {
 export async function accessTokenFor(session, name) {
     const profile = readProfile(name);
     if (!profile)
-        throw new Error(`no saved account named ${name}`);
+        throw coded('no_account', `no saved account named ${name}`);
+    // THE RULE: the live branch returns before any refresh can happen, so
+    // reading a parked account's usage never rotates the credentials Claude
+    // Code is running on - not even when that parked account IS the live login.
     if (liveAccountName() === name) {
         const live = readLiveCredentials();
         if (live)
@@ -278,7 +293,7 @@ export async function accessTokenFor(session, name) {
         return {token: fresh.credentials.claudeAiOauth.accessToken, source: 'refreshed'};
     }
     default:
-        throw new Error(
+        throw coded('login_expired',
             `${name}: login expired - run \`claude auth login\` on it and save it again`);
     }
 }
@@ -355,15 +370,21 @@ export function readLastSwitchMs() {
 
 // ── Per-account usage ───────────────────────────────────────────────────────────
 
-/** Normalized usage for one saved account, or {ok: false, code, message}. */
+/** Normalized usage for one saved account, or {ok: false, code, message}.
+ *  A token taken from the live login is Claude Code's to keep fresh, so its
+ *  refusal is reported as the live login's (no label, so the message keeps the
+ *  refresh hint); a stored or refreshed one names the profile. Same rule as
+ *  claude-code/login-usage.js. */
 export async function usageFor(session, name) {
-    let token;
+    let token, source;
     try {
-        ({token} = await accessTokenFor(session, name));
+        ({token, source} = await accessTokenFor(session, name));
     } catch (e) {
-        return {name, ok: false, code: 'no_token', message: e.message};
+        // The store's own codes are what accountHealth() tells a broken login
+        // from a merely unreachable one with.
+        return {name, ok: false, code: e.code ?? 'no_token', message: e.message};
     }
-    const result = await fetchUsage(session, token);
+    const result = await fetchUsage(session, token, {label: source === 'live' ? null : name});
     return {name, ...result};
 }
 

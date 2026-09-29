@@ -24,7 +24,10 @@ export async function usageForLogin({accessTokenFor, fetchUsageWith}, name) {
   try {
     access = await accessTokenFor(name);
   } catch (e) {
-    return {name, ok: false, code: 'no_token', message: e.message};
+    // The store's own codes ('refresh_failed', 'login_expired', 'no_account')
+    // are what accountHealth() tells a broken login from an unreachable one
+    // with; anything else never got as far as a token.
+    return {name, ok: false, code: e.code ?? 'no_token', message: e.message};
   }
   return {name, ...(await fetchUsageWith(access.token, {label: usageLabel(name, access.source)}))};
 }

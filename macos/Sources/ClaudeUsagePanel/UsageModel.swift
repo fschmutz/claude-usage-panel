@@ -73,6 +73,14 @@ final class UsageModel: ObservableObject {
     /// The live login's email, for the Settings "save as" row.
     @Published var liveLoginEmail: String?
     @Published var accountsError: String?
+    /// Inline rows in the accounts list: something needs saying, and one
+    /// button on that row fixes it (Notices.accountNotices).
+    @Published var accountNotices: [AccountNotice] = []
+    /// The answer to the last action, keyed by the control that caused it. One
+    /// at a time, cleared by `outcomeTask` after ControlOutcome.ttlMs and by
+    /// the next action before that.
+    @Published var outcomes: [String: ControlOutcome] = [:]
+    var outcomeTask: Task<Void, Never>?
     @Published var accountsAutoSwitch: Bool {
         didSet { UserDefaults.standard.set(accountsAutoSwitch, forKey: "accountsAutoSwitch") }
     }
@@ -142,7 +150,13 @@ final class UsageModel: ObservableObject {
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "claude-usage-panel.network")
 
-    init() {
+    /// Where usage comes from. Injected so everything above it - the poll
+    /// loop, the account rows, the auto-switch - can be driven without
+    /// reaching api.anthropic.com with a real bearer token.
+    let endpoint: any UsageEndpoint
+
+    init(endpoint: any UsageEndpoint = ClaudeUsage.live) {
+        self.endpoint = endpoint
         refreshMinutes = UserDefaults.standard.object(forKey: "refreshMinutes") as? Int ?? 10
         showCost = UserDefaults.standard.bool(forKey: "showCost")
         alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
@@ -269,7 +283,7 @@ final class UsageModel: ObservableObject {
 
     private func poll() async {
         do {
-            let result = try await ClaudeUsage.fetch()
+            let result = try await ClaudeUsage.fetchLive(endpoint)
             let nowMs = Date().timeIntervalSince1970 * 1000
             let moved = !PollSchedule.sameUsage(cards, result.cards)
             idleStreak = moved ? 0 : idleStreak + 1
@@ -432,8 +446,9 @@ final class UsageModel: ObservableObject {
         // when nothing else has one.
         let readings = cards.map { ($0, UsageReading.of($0)) }
         let honest = readings.filter { $0.1.known }
-        guard let (worst, reading) = (honest.isEmpty ? readings : honest)
-            .max(by: { $0.1.fill < $1.1.fill })
+        guard
+            let (worst, reading) = (honest.isEmpty ? readings : honest)
+                .max(by: { $0.1.fill < $1.1.fill })
         else {
             return errorText == nil ? "⚪️ …" : "⚪️ ?"
         }

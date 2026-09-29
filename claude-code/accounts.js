@@ -37,7 +37,8 @@ import {
   syncBackPlan, tokenState, usageCacheEntry,
 } from './accounts-contract.js';
 import {usageForLogin} from './login-usage.js';
-import {httpFailure, normalizeExtraUsage, normalizeUsage} from './normalize.js';
+import {accountHealth, accountNotices} from './notices.js';
+import {normalizeExtraUsage, normalizeUsage, usageFailure} from './normalize.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from './paths.js';
 
 export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
@@ -72,6 +73,16 @@ function readJSON(file) {
   } catch {
     return null;
   }
+}
+
+/**
+ * An error the UI has to classify rather than just print. `code` is the string
+ * accountHealth() reads ('refresh_failed', 'login_expired', 'no_account'), so
+ * a broken saved login is reported identically by the CLI, the MCP tools, the
+ * status line and both panels.
+ */
+function coded(code, message) {
+  return Object.assign(new Error(message), {code});
 }
 
 /**
@@ -345,7 +356,9 @@ export function openStore(io = {}) {
    */
   async function refreshProfile(profile) {
     const oauth = profile.credentials.claudeAiOauth;
-    if (!oauth.refreshToken) throw new Error(`${profile.name}: no refresh token - log in again and save it`);
+    if (!oauth.refreshToken) {
+      throw coded('login_expired', `${profile.name}: no refresh token - log in again and save it`);
+    }
     let response;
     try {
       response = await fetchImpl(OAUTH_TOKEN_ENDPOINT, {
@@ -357,14 +370,20 @@ export function openStore(io = {}) {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
     } catch (e) {
-      throw new Error(`${profile.name}: token refresh failed - ${e.message}`);
+      throw coded('refresh_failed', `${profile.name}: token refresh failed - ${e.message}`);
     }
     if (!response.ok) {
-      throw new Error(`${profile.name}: token refresh rejected (HTTP ${response.status})` +
+      throw coded('refresh_failed',
+        `${profile.name}: token refresh rejected (HTTP ${response.status})` +
         (response.status === 400 || response.status === 401 ? ' - log in again and save it' : ''));
     }
     const next = refreshedOauth(oauth, await response.json(), now());
-    if (!next) throw new Error(`${profile.name}: token refresh returned no access token`);
+    if (!next) {
+      throw coded('refresh_failed', `${profile.name}: token refresh returned no access token`);
+    }
+    // The rotated tokens go into OUR store and nowhere else. This function is
+    // reached for parked accounts on every poll; writing the live credentials
+    // from here would rotate the token Claude Code is running on.
     return writeProfile({
       ...profile, savedAt: stamp(),
       credentials: {...profile.credentials, claudeAiOauth: next},
@@ -375,10 +394,14 @@ export function openStore(io = {}) {
    * A usable access token for a saved account: the live one when that account
    * is the active login (Claude Code keeps it fresh), else the stored one,
    * refreshed first when stale.
+   *
+   * THE RULE: the live branch returns before any refresh can happen, so
+   * reading a parked account's usage never rotates the credentials Claude Code
+   * is running on - not even when that parked account IS the live login.
    */
   async function accessTokenFor(name) {
     const profile = readProfile(name);
-    if (!profile) throw new Error(`no saved account named ${name}`);
+    if (!profile) throw coded('no_account', `no saved account named ${name}`);
     if (liveAccountName() === name) {
       const token = liveAccessToken();
       if (token) return {token, source: 'live'};
@@ -391,7 +414,8 @@ export function openStore(io = {}) {
         return {token: fresh.credentials.claudeAiOauth.accessToken, source: 'refreshed'};
       }
       default:
-        throw new Error(`${name}: login expired - run \`claude auth login\` on it and save it again`);
+        throw coded('login_expired',
+          `${name}: login expired - run \`claude auth login\` on it and save it again`);
     }
   }
 
@@ -414,14 +438,6 @@ export function openStore(io = {}) {
     } catch (e) {
       return {ok: false, code: 'network_error', message: e.message};
     }
-    if (response.status === 401 || response.status === 403) {
-      return {
-        ok: false, code: 'auth_expired',
-        message: label
-          ? `${label}: usage endpoint refused the token`
-          : 'Claude session expired. Run any Claude Code command to refresh it.',
-      };
-    }
     if (!response.ok) {
       let body = null;
       try {
@@ -429,8 +445,7 @@ export function openStore(io = {}) {
       } catch {
         // no JSON body - the status alone is the message
       }
-      const failure = httpFailure(response.status, body);
-      return label ? {...failure, message: `${label}: ${failure.message}`} : failure;
+      return usageFailure(response.status, body, {label});
     }
     try {
       const raw = await response.json();
@@ -540,13 +555,29 @@ export function openStore(io = {}) {
     if (usage) writeUsageCache(results);
     const accounts = profiles.map((p) => {
       const r = results[p.name];
+      const summary = accountSummary(p, now());
       return {
-        ...accountSummary(p, now()), active: p.name === active,
+        ...summary, active: p.name === active,
         cards: r?.ok ? r.cards : null,
         error: r && !r.ok ? r.message : null,
+        // The stored dates alone call a refused token "valid"; health folds in
+        // what the fetch actually said, so every client reports the same thing.
+        health: accountHealth({
+          tokenState: summary.tokenState, errorCode: r && !r.ok ? r.code : null,
+        }),
       };
     });
-    return {active, accounts, live: readLiveAccount(), pendingSwitch: readPendingSwitch()};
+    const live = readLiveAccount();
+    const pendingSwitch = readPendingSwitch();
+    return {
+      active, accounts, live, pendingSwitch,
+      notices: accountNotices({
+        rows: accounts.map((a) => ({name: a.name, health: a.health})),
+        liveEmail: typeof live?.emailAddress === 'string' ? live.emailAddress : null,
+        activeName: active, pending: pendingSwitch,
+        torn: active !== null && isTorn(profiles, active, live),
+      }),
+    };
   }
 
   return {

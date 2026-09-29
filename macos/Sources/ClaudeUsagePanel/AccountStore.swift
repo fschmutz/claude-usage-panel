@@ -26,10 +26,34 @@ struct SwitchResult: Sendable {
 
 enum AccountError: LocalizedError {
     case message(String)
+    /// A failure the UI has to classify rather than just print: `code` is the
+    /// same string the Node store files it under, so `Notices.health` reads a
+    /// broken login identically in every port ("refresh_failed",
+    /// "login_expired", "no_account").
+    case coded(code: String, message: String)
+
     var errorDescription: String? {
-        if case .message(let m) = self { return m }
+        switch self {
+        case .message(let m), .coded(_, let m): return m
+        }
+    }
+
+    var code: String? {
+        if case .coded(let c, _) = self { return c }
         return nil
     }
+}
+
+/// What one saved account's usage came back as. Never a thrown error: a row
+/// for an account that cannot be read is still a row, and the code is what
+/// decides whether that row says "login expired", "refresh failed" or just
+/// "no reading right now" (Notices.health).
+struct AccountUsage: Sendable {
+    let cards: [LimitCard]?
+    let errorCode: String?
+    let message: String?
+
+    static let unread = AccountUsage(cards: nil, errorCode: nil, message: nil)
 }
 
 enum AccountStore {
@@ -374,12 +398,25 @@ enum AccountStore {
 
     // MARK: token refresh (our store only)
 
+    /// Never the shared session: the exchange carries a refresh token in and
+    /// its replacement back out, and URLSession.shared caches on disk.
+    private static let refreshSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.httpCookieStorage = nil
+        config.httpShouldSetCookies = false
+        config.timeoutIntervalForRequest = 10
+        return URLSession(configuration: config)
+    }()
+
     /// Exchange the profile's refresh token for a new access token and store
     /// the result. Never touches the live login.
     static func refresh(_ profile: AccountProfile) async throws -> AccountProfile {
         guard let refreshToken = profile.refreshToken else {
-            throw AccountError.message(
-                "\(profile.name): no refresh token - log in again and save it")
+            throw AccountError.coded(
+                code: "login_expired",
+                message: "\(profile.name): no refresh token - log in again and save it")
         }
         var req = URLRequest(url: tokenEndpoint)
         req.httpMethod = "POST"
@@ -391,44 +428,65 @@ enum AccountStore {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            // Ephemeral, like the usage fetch: the request carries a refresh
+            // token and the answer carries its replacement, and neither
+            // belongs in the shared on-disk URL cache.
+            (data, response) = try await Self.refreshSession.data(for: req)
         } catch {
-            throw AccountError.message(
-                "\(profile.name): token refresh failed - \(error.localizedDescription)")
+            throw AccountError.coded(
+                code: "refresh_failed",
+                message: "\(profile.name): token refresh failed - \(error.localizedDescription)")
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let hint = (status == 400 || status == 401) ? " - log in again and save it" : ""
-            throw AccountError.message(
-                "\(profile.name): token refresh rejected (HTTP \(status))\(hint)")
+            throw AccountError.coded(
+                code: "refresh_failed",
+                message: "\(profile.name): token refresh rejected (HTTP \(status))\(hint)")
         }
         guard
             let oauth = Accounts.refreshedOauth(
                 profile.oauth, body: try? JSONSerialization.jsonObject(with: data), nowMs: nowMs())
         else {
-            throw AccountError.message("\(profile.name): token refresh returned no access token")
+            throw AccountError.coded(
+                code: "refresh_failed",
+                message: "\(profile.name): token refresh returned no access token")
         }
         var credentials = profile.credentials
         credentials["claudeAiOauth"] = oauth
         return try write(profile.with(credentials: credentials, savedAt: stamp()))
     }
 
+    /// Where a saved account's access token came from. `live` means Claude
+    /// Code's own credentials, which this app never writes; the other two come
+    /// out of OUR store, and a refresh writes only there.
+    enum TokenSource { case live, store, refreshed }
+
     /// A usable access token for a saved account: the live one when that
     /// account is the active login (Claude Code keeps it fresh), else the
     /// stored one, refreshed first when stale.
-    static func accessTokenFor(_ name: String) async throws -> String {
+    ///
+    /// THE RULE: the live branch returns before any refresh can happen, so
+    /// polling a parked account never rotates the credentials Claude Code is
+    /// running on. A refresh from here writes one profile file and nothing
+    /// else - never ~/.claude/.credentials.json, never the Keychain item.
+    static func accessTokenFor(_ name: String) async throws -> (
+        token: String, source: TokenSource
+    ) {
         guard let profile = read(name) else {
-            throw AccountError.message("no saved account named \(name)")
+            throw AccountError.coded(
+                code: "no_account", message: "no saved account named \(name)")
         }
         if liveAccountName() == name, let token = liveToken(readLiveCredentials()) {
-            return token
+            return (token, .live)
         }
         switch profile.tokenState(nowMs: nowMs()) {
-        case .valid: return profile.accessToken
-        case .stale: return try await refresh(profile).accessToken
+        case .valid: return (profile.accessToken, .store)
+        case .stale: return (try await refresh(profile).accessToken, .refreshed)
         case .expired:
-            throw AccountError.message(
-                "\(name): login expired - run `claude auth login` on it and save it again")
+            throw AccountError.coded(
+                code: "login_expired",
+                message: "\(name): login expired - run `claude auth login` on it and save it again")
         }
     }
 
@@ -476,8 +534,9 @@ enum AccountStore {
                 from: from, to: name, changed: false, running: runningClaudeCount(),
                 email: target.email)
         case .expired:
-            throw AccountError.message(
-                "\(name): login expired - run `claude auth login` on it and save it again")
+            throw AccountError.coded(
+                code: "login_expired",
+                message: "\(name): login expired - run `claude auth login` on it and save it again")
         case .refresh: target = try await refresh(target)
         case .install: break
         }
@@ -507,10 +566,34 @@ enum AccountStore {
 
     // MARK: per-account usage
 
-    /// Normalized usage for one saved account.
-    static func usageFor(_ name: String) async throws -> [LimitCard] {
-        let token = try await accessTokenFor(name)
-        return try await ClaudeUsage.fetch(token: token).cards
+    /// Normalized usage for one saved account, with the code a row needs to
+    /// say WHY there is none. A token taken from the live login is Claude
+    /// Code's to keep fresh, so its refusal is reported as the live login's
+    /// (no label, so the message keeps the "run any Claude Code command"
+    /// hint); a stored or refreshed token is the profile's, so its failure
+    /// names the profile. Same rule as claude-code/login-usage.js.
+    static func usageFor(_ name: String, endpoint: any UsageEndpoint = ClaudeUsage.live)
+        async -> AccountUsage
+    {
+        let token: String
+        let source: TokenSource
+        do {
+            (token, source) = try await accessTokenFor(name)
+        } catch {
+            return AccountUsage(
+                cards: nil, errorCode: (error as? AccountError)?.code ?? "no_token",
+                message: error.localizedDescription)
+        }
+        do {
+            let result = try await endpoint.usage(
+                token: token, label: source == .live ? nil : name)
+            return AccountUsage(cards: result.cards, errorCode: nil, message: nil)
+        } catch let e as UsageError {
+            return AccountUsage(cards: nil, errorCode: e.code, message: e.localizedDescription)
+        } catch {
+            return AccountUsage(
+                cards: nil, errorCode: "network_error", message: error.localizedDescription)
+        }
     }
 
     // The panels drop the latest per-account worst limit here so the status

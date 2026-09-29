@@ -480,7 +480,8 @@ public enum PanelReadout {
     ) -> String {
         let short =
             label.components(separatedBy: "·").last?.trimmingCharacters(in: .whitespaces) ?? label
-        let pct = known ? "\(UsageNormalizer.clampPercent(Double(percent)))%" : UsageReading.noReading
+        let pct =
+            known ? "\(UsageNormalizer.clampPercent(Double(percent)))%" : UsageReading.noReading
         let name = account.trimmingCharacters(in: .whitespaces)
         // The limit reading is built at the full budget first; the name is
         // added only if it fits beside it, never by squeezing the label.

@@ -82,9 +82,8 @@ msgstr "próximo %s"
 msgid "Session pings: %s"
 msgstr "Pings de sessão: %s"
 
-#: extension.js:480 extension.js:484 lib/accountsSection.js:289
-#: lib/accountsSection.js:295 lib/headerBar.js:41 lib/sessionsSection.js:159
-#: lib/sessionsSection.js:169
+#: extension.js:480 extension.js:484 lib/accountsSection.js:513
+#: lib/headerBar.js:41 lib/sessionsSection.js:159 lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Utilização do Claude"
 
@@ -98,55 +97,143 @@ msgstr "%s atingiu %d%%"
 msgid "%s is on pace to run out before it resets"
 msgstr "%s vai esgotar-se antes de reiniciar ao ritmo atual"
 
-#: extension.js:608
+#: extension.js:619
 msgid "Claude ?"
 msgstr "Claude ?"
 
-#: lib/accountsSection.js:65 prefs.js:42 prefs.js:557
+#: lib/accountsSection.js:75
+#, javascript-format
+msgid "Incomplete switch to %s - the login may be half-installed."
+msgstr "Mudança para %s incompleta - o login pode estar meio instalado."
+
+#: lib/accountsSection.js:77
+#, javascript-format
+msgid "%s's credentials and account block disagree."
+msgstr "As credenciais e o bloco de conta de %s não coincidem."
+
+#: lib/accountsSection.js:79
+#, javascript-format
+msgid "Signed in as %s, but this login is not saved."
+msgstr "Sessão iniciada como %s, mas este login não está guardado."
+
+#: lib/accountsSection.js:81
+#, javascript-format
+msgid "%s: login expired - a new sign-in is the only fix."
+msgstr "%s: login expirado - só um novo início de sessão resolve."
+
+#: lib/accountsSection.js:83
+#, javascript-format
+msgid "%s: the stored login was refused - sign in again."
+msgstr "%s: o login guardado foi recusado - inicie sessão novamente."
+
+#: lib/accountsSection.js:85
+#, javascript-format
+msgid "%s: no usage reading right now."
+msgstr "%s: sem leitura de utilização neste momento."
+
+#: lib/accountsSection.js:93
+msgid "Finish switch"
+msgstr "Concluir a mudança"
+
+#: lib/accountsSection.js:95
+msgid "Repair"
+msgstr "Reparar"
+
+#: lib/accountsSection.js:97
+#, javascript-format
+msgid "Save as %s"
+msgstr "Guardar como %s"
+
+#: lib/accountsSection.js:99
+msgid "Copy sign-in command"
+msgstr "Copiar o comando de início de sessão"
+
+#: lib/accountsSection.js:101
+msgid "Retry"
+msgstr "Tentar novamente"
+
+#: lib/accountsSection.js:124 prefs.js:42 prefs.js:557
 msgid "Accounts"
 msgstr "Contas"
 
-#: lib/accountsSection.js:126
+#: lib/accountsSection.js:128
+msgid "Next"
+msgstr "Seguinte"
+
+#: lib/accountsSection.js:207
+#, javascript-format
+msgid "Next walks %s and wraps. Up next: %s."
+msgstr "Seguinte percorre %s e volta ao início. A seguir: %s."
+
+#: lib/accountsSection.js:227
 msgid "(login expired)"
 msgstr "(login expirado)"
 
-#: lib/accountsSection.js:187
+#: lib/accountsSection.js:229
+msgid "(refresh failed)"
+msgstr "(falha ao renovar)"
+
+#: lib/accountsSection.js:231
+msgid "(no reading)"
+msgstr "(sem leitura)"
+
+#: lib/accountsSection.js:308
 #, javascript-format
 msgid "Auto-switch at %d%% · on"
 msgstr "Troca automática aos %d%% · ligada"
 
-#: lib/accountsSection.js:188
+#: lib/accountsSection.js:309
 #, javascript-format
 msgid "Auto-switch at %d%% · off"
 msgstr "Troca automática aos %d%% · desligada"
 
-#: lib/accountsSection.js:280
+#: lib/accountsSection.js:466
+#, javascript-format
+msgid "saved as %s"
+msgstr "guardado como %s"
+
+#: lib/accountsSection.js:476
+#, javascript-format
+msgid "copied `%s` - run it, then save the login again"
+msgstr "`%s` copiado - execute-o e guarde o login outra vez"
+
+#
+#: lib/accountsSection.js:481
+msgid "re-reading…"
+msgstr "a reler…"
+
+#: lib/accountsSection.js:500
+#, javascript-format
+msgid "%s was already the login"
+msgstr "%s já era o login ativo"
+
+#: lib/accountsSection.js:504
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr "Trocado de %s → %s: %s estava em %d%%"
 
-#: lib/accountsSection.js:282
+#: lib/accountsSection.js:506
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr "Trocado de %s → %s"
 
-#: lib/accountsSection.js:285
+#: lib/accountsSection.js:509
 #, javascript-format
 msgid " - %d running session keeps the old login until restarted"
 msgid_plural " - %d running sessions keep the old login until restarted"
 msgstr[0] " - %d sessão em execução mantém o login antigo até reiniciar"
 msgstr[1] " - %d sessões em execução mantêm o login antigo até reiniciar"
 
-#: lib/accountsSection.js:296
+#: lib/accountsSection.js:517
 #, javascript-format
-msgid "Could not switch to %s: %s"
-msgstr "Não foi possível trocar para %s: %s"
+msgid "now on %s"
+msgstr "agora em %s"
 
-#: lib/claudeUsage.js:49
+#: lib/claudeUsage.js:32
 msgid "No Claude credentials found. Sign in with Claude Code."
 msgstr "Nenhuma credencial do Claude encontrada. Entre com o Claude Code."
 
-#: lib/claudeUsage.js:66
+#: lib/claudeUsage.js:59
 msgid "Claude session expired. Run any Claude Code command to refresh."
 msgstr ""
 "A sessão do Claude expirou. Execute qualquer comando do Claude Code para "
@@ -219,8 +306,8 @@ msgid ""
 "No systemd user session here - schedule pings with ./install.sh sessionping "
 "instead."
 msgstr ""
-"Não há sessão de utilizador do systemd aqui - agende os pings com ./"
-"install.sh sessionping."
+"Não há sessão de utilizador do systemd aqui - agende os pings com ./install."
+"sh sessionping."
 
 #: lib/sessionPing.js:111
 msgid "Add at least one ping time (HH:MM)."
@@ -255,6 +342,14 @@ msgstr "Nenhum terminal encontrado - defina um nas preferências da extensão."
 #, javascript-format
 msgid "Could not open %s"
 msgstr "Não foi possível abrir %s"
+
+#: lib/usageCard.js:22
+msgid "window reset - waiting for the first reading of the new one"
+msgstr "janela reiniciada - à espera da primeira leitura da nova"
+
+#: lib/usageCard.js:24
+msgid "the endpoint reported no figure for this limit"
+msgstr "o endpoint não comunicou qualquer valor para este limite"
 
 #: prefs.js:38
 msgid "General"
@@ -338,12 +433,12 @@ msgstr "Custo"
 #: prefs.js:124
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires ccusage installed: npm i "
-"-g ccusage)."
+"this to compute it locally with ccusage (requires ccusage installed: npm i -"
+"g ccusage)."
 msgstr ""
 "A API oficial não expõe o custo em dólares nos planos de subscrição. Ative "
-"para o calcular localmente com o ccusage (requer o ccusage instalado: npm i "
-"-g ccusage)."
+"para o calcular localmente com o ccusage (requer o ccusage instalado: npm i -"
+"g ccusage)."
 
 #: prefs.js:127
 msgid "Show session cost"
@@ -359,8 +454,8 @@ msgstr "Cursor (opcional)"
 
 #: prefs.js:138
 msgid ""
-"Show Cursor team spend using the Cursor Admin API. Create a key at "
-"cursor.com → team → Settings → Admin API. Stored in the system keyring."
+"Show Cursor team spend using the Cursor Admin API. Create a key at cursor."
+"com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
 "Mostra a despesa da equipa Cursor através da API Admin do Cursor. Crie uma "
 "chave em cursor.com → equipa → Settings → Admin API. Guardada no chaveiro do "
@@ -745,6 +840,10 @@ msgstr "Esquecer este login guardado"
 #: prefs.js:660
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr "Os nomes usam apenas letras, dígitos, . _ - (até 32 caracteres)"
+
+#, javascript-format
+#~ msgid "Could not switch to %s: %s"
+#~ msgstr "Não foi possível trocar para %s: %s"
 
 #~ msgid "Run ./install.sh update to install the newer code."
 #~ msgstr "Execute ./install.sh update para instalar o código mais recente."

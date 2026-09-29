@@ -10,6 +10,7 @@ import path from 'node:path';
 
 import {openStore} from '../claude-code/accounts.js';
 import {autoSwitchTarget, worstFromCache} from '../claude-code/accounts-contract.js';
+import {accountHealth} from '../claude-code/notices.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from '../claude-code/paths.js';
 import {NOW, account, creds, world} from './accounts-world.js';
 
@@ -97,13 +98,16 @@ test('fetchUsageWith maps every outcome; fetchLiveUsage uses the live token', as
     assert.match((await s.fetchUsageWith('t')).message, /Claude session expired/);
     assert.match((await s.fetchUsageWith('t', {label: 'PERSO'})).message, /^PERSO: usage endpoint refused/);
     io.fetchImpl = async () => ({ok: false, status: 500, json: async () => ({})});
-    assert.deepEqual(await s.fetchUsageWith('t'), {ok: false, code: 'transient', message: 'HTTP 500'});
+    // The three things a caller acts on: retry, keep the last reading, say this.
+    assert.deepEqual(await s.fetchUsageWith('t'),
+        {ok: false, code: 'transient', signInAgain: false, retryable: true, message: 'HTTP 500'});
     // The server's words reach the row, behind the account's name when there is one.
     io.fetchImpl = async () => ({ok: false, status: 424, json: async () => ({error: {type: 'failed_dependency', message: 'upstream down'}})});
     assert.equal((await s.fetchUsageWith('t', {label: 'PERSO'})).message,
         'PERSO: HTTP 424 failed_dependency: upstream down');
     io.fetchImpl = async () => ({ok: false, status: 404, json: async () => { throw new Error('no body'); }});
-    assert.deepEqual(await s.fetchUsageWith('t'), {ok: false, code: 'http_error', message: 'HTTP 404'});
+    assert.deepEqual(await s.fetchUsageWith('t'),
+        {ok: false, code: 'http_error', signInAgain: false, retryable: false, message: 'HTTP 404'});
     io.fetchImpl = async () => { throw new Error('ECONNREFUSED'); };
     assert.equal((await s.fetchUsageWith('t')).code, 'network_error');
     io.fetchImpl = async () => ({ok: true, status: 200, json: async () => { throw new Error('bad json'); }});
@@ -165,12 +169,94 @@ test('usageFor fetches with the right token and normalizes; usage cache round-tr
         {from: 'PRO', to: 'PERSO', activePercent: 95, targetPercent: 40});
 });
 
-test('usageFor reports a rejected token as auth_expired, not a throw', async () => {
+test('usageFor reports every refusal as a code, not a throw', async () => {
     const {io, s} = world();
     s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
     io.fetchImpl = async () => ({ok: false, status: 401, json: async () => ({})});
-    assert.equal((await s.usageFor('PERSO')).code, 'auth_expired');
-    assert.equal((await s.usageFor('NOPE')).code, 'no_token');
+    const refused = await s.usageFor('PERSO');
+    assert.equal(refused.code, 'auth_expired');
+    // A token the endpoint turned down is a broken login, whatever its dates
+    // say - the row must stop looking like a row that is fine.
+    assert.equal(accountHealth({tokenState: 'valid', errorCode: refused.code}), 'refresh-failed');
+    assert.equal((await s.usageFor('NOPE')).code, 'no_account');
+});
+
+// The refresh a parked account needs is the whole point of P0, and the thing
+// it must never do is touch the login Claude Code is running on.
+test('a parked account is refreshed into the store, and the live login is untouched', async () => {
+    const {home, io, calls, s} = world();
+    const credsFile = path.join(home, '.claude', '.credentials.json');
+    const stale = creds('perso', {expiresAt: NOW - 1000});
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: stale});
+    const liveBefore = fs.readFileSync(credsFile, 'utf8');
+    const configBefore = fs.readFileSync(path.join(home, '.claude.json'), 'utf8');
+
+    io.fetchImpl = async (url, init) => {
+        if (url === 'https://platform.claude.com/v1/oauth/token') {
+            calls.push({url, init});
+            return {ok: true, status: 200, json: async () => ({access_token: 'at-fresh', expires_in: 3600})};
+        }
+        return {ok: true, status: 200, json: async () => ({limits: [{kind: 'session', percent: 3}]})};
+    };
+    const r = await s.usageFor('PERSO');
+    assert.equal(r.ok, true);
+    assert.equal(calls.length, 1, 'the stale parked token was exchanged exactly once');
+    // The rotated token went into the profile...
+    assert.equal(s.readProfile('PERSO').credentials.claudeAiOauth.accessToken, 'at-fresh');
+    // ...and nowhere near Claude Code's own login.
+    assert.equal(fs.readFileSync(credsFile, 'utf8'), liveBefore);
+    assert.equal(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'), configBefore);
+});
+
+test('the LIVE login is never refreshed by a usage poll, even when it is a saved account', async () => {
+    const {home, io, calls, s} = world();
+    // A saved profile whose stored copy is stale, and which IS the live login.
+    s.writeProfile({
+        version: 1, name: 'PRO', account: account('pro'),
+        credentials: creds('pro', {expiresAt: NOW - 1000}),
+    });
+    const credsFile = path.join(home, '.claude', '.credentials.json');
+    const liveBefore = fs.readFileSync(credsFile, 'utf8');
+    const seen = [];
+    io.fetchImpl = async (url, init) => {
+        calls.push({url});
+        seen.push(init?.headers?.authorization);
+        return {ok: true, status: 200, json: async () => ({limits: [{kind: 'session', percent: 3}]})};
+    };
+    assert.equal((await s.usageFor('PRO')).ok, true);
+    // The live access token was used as it stands: no token exchange at all.
+    assert.deepEqual(seen, ['Bearer at-pro']);
+    assert.deepEqual(calls.map((c) => c.url), ['https://api.anthropic.com/api/oauth/usage']);
+    assert.equal(fs.readFileSync(credsFile, 'utf8'), liveBefore);
+});
+
+test('a refused refresh names itself, and leaves the profile and the live login as they were', async () => {
+    const {home, io, s} = world();
+    const stale = creds('perso', {expiresAt: NOW - 1000});
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: stale});
+    const credsFile = path.join(home, '.claude', '.credentials.json');
+    const liveBefore = fs.readFileSync(credsFile, 'utf8');
+    io.fetchImpl = async () => ({ok: false, status: 400, json: async () => ({})});
+    const r = await s.usageFor('PERSO');
+    assert.equal(r.code, 'refresh_failed');
+    assert.match(r.message, /token refresh rejected \(HTTP 400\)/);
+    assert.equal(accountHealth({tokenState: 'stale', errorCode: r.code}), 'refresh-failed');
+    assert.equal(s.readProfile('PERSO').credentials.claudeAiOauth.accessToken, 'at-perso');
+    assert.equal(fs.readFileSync(credsFile, 'utf8'), liveBefore);
+});
+
+test('listAccounts carries the health and the notices every port renders', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({
+        version: 1, name: 'OLD', account: account('old'),
+        credentials: {claudeAiOauth: {accessToken: 'at-old'}}, // no refresh token
+    });
+    io.fetchImpl = async () => ({ok: true, status: 200, json: async () => ({limits: []})});
+    const {accounts, notices} = await s.listAccounts({usage: true});
+    assert.deepEqual(accounts.map((a) => [a.name, a.health]), [['OLD', 'expired'], ['PRO', 'valid']]);
+    assert.deepEqual(notices.map((n) => [n.kind, n.action, n.arg]),
+        [['login-expired', 'relogin', 'OLD']]);
 });
 
 test('syncBack is a no-op for an unsaved login and rewrites only when something moved', () => {

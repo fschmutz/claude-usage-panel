@@ -199,17 +199,18 @@ summarization, you must change it in **every** port and keep them matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
-  sessions,accounts,snapshots,layout}.js` (`layout.js`, the dropdown
+ sessions,accounts,notices,snapshots,layout}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
   imports anywhere under `pure/`, so it all runs under plain `node` for tests. This is the reference implementation, and
   every importer keeps importing `lib/pure.js`.
 - **`macos/Sources/ClaudeUsageCore/`** - Foundation-only mirror of `pure.js`
-  (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Warehouse.swift`,
-  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
-  `Snapshots.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
-  `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
-  `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
-  `PlanLabel.swift`).
+ (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Notices.swift`,
+ `Warehouse.swift`,
+ `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
+ `Snapshots.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
+ `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
+ `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
+ `PlanLabel.swift`).
   No networking/SwiftUI, so it unit-tests on Linux CI. The files say "Mirrors
   the GNOME extension's lib/pure.js" - keep it that way.
 - **`claude-code/`** - the Node port, one concern per file: `normalize.js`

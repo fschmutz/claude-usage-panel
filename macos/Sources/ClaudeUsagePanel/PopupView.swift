@@ -210,7 +210,9 @@ struct PopupView: View {
                 CursorSectionView(model: model)
             }
 
-            if model.accountsEnabled && !model.accounts.isEmpty {
+            // Notices too: "signed in but not saved" has to be reachable
+            // before there is a single saved account to list it under.
+            if model.accountsEnabled && !(model.accounts.isEmpty && model.accountNotices.isEmpty) {
                 AccountsSectionView(model: model)
             }
 
