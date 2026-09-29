@@ -51,9 +51,15 @@ extension AccountStore {
     private static func createLock(_ url: URL, _ text: String) -> Bool {
         let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
         guard fd >= 0 else { return false }
-        let bytes = Array(text.utf8)
-        _ = bytes.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
-        close(fd)
+        // Through FileHandle: plain write(2) is shadowed by AccountStore's own
+        // `write(_:)`.
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        do {
+            try handle.write(contentsOf: Data(text.utf8))
+        } catch {
+            unlink(url.path)
+            return false
+        }
         return true
     }
 

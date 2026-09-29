@@ -108,7 +108,10 @@ extension UsageModel {
     private func autoSwitchIfNeeded(usage: [String: [LimitCard]], active: String?) async {
         guard accountsAutoSwitch, accounts.count >= 2 else { return }
         var worst: [String: Int?] = [:]
-        for row in accounts { worst[row.name] = usage[row.name].flatMap(Accounts.worstPercent) }
+        let now = Date()
+        for row in accounts {
+            worst[row.name] = usage[row.name].flatMap { Accounts.worstPercent($0, now: now) }
+        }
         guard
             let decision = Accounts.autoSwitchTarget(
                 active: active, worst: worst, threshold: accountsSwitchThreshold,
