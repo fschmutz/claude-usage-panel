@@ -283,7 +283,9 @@ export const ACCOUNT_TOOLS = [
       required: ['name'],
       additionalProperties: false,
     },
-    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false},
+    // `force` overwrites a profile that holds a different account: destructive,
+    // so a client asks before running it.
+    annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false},
   },
   {
     name: 'switch_account',

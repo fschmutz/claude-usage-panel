@@ -93,8 +93,9 @@ export const CODEX_TOOLS = [
       required: ['name'],
       additionalProperties: false,
     },
+    // `force` overwrites a profile that holds a different login: destructive.
     annotations: {
-      readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false,
+      readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false,
     },
   },
   {

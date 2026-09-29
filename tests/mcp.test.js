@@ -182,6 +182,9 @@ test('tools/list - exposes get_usage (with schemas), the account tools and the C
     assert.equal(r.tools[1].annotations.readOnlyHint, true);
     assert.equal(r.tools[3].annotations.readOnlyHint, false);
     assert.equal(r.tools[3].annotations.destructiveHint, false);
+    // save with `force` can overwrite another account's saved login.
+    for (const name of ['save_account', 'save_codex_account'])
+        assert.equal(r.tools.find(t => t.name === name).annotations.destructiveHint, true, name);
     // A model must never be able to read a Codex figure as a live one: the
     // schema pins the provenance to a constant and requires the capture time.
     const codexUsage = r.tools.find(t => t.name === 'get_codex_usage');
