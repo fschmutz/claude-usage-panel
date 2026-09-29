@@ -1,12 +1,13 @@
 # Claude Usage MCP server
 
-Four MCP tools for any MCP client (Claude Code, Cursor, Claude Desktop…).
+Eight MCP tools for any MCP client (Claude Code, Cursor, Claude Desktop…).
 **`get_usage`** returns your Claude plan usage (session, weekly, and per-model
 limits with percent, severity, and reset time): ask *"how much of my plan have
 I used?"* and the assistant answers with live numbers from the official
 Anthropic usage endpoint, the same data as the GNOME and macOS panels.
 **`list_accounts`**, **`save_account`** and **`switch_account`** manage named
-Claude Code logins, so *"switch me to PERSO"* works in-conversation.
+Claude Code logins, so *"switch me to PERSO"* works in-conversation. Four more
+do the same for OpenAI Codex logins.
 
 Zero dependencies, stdio transport. What each tool touches:
 
@@ -16,9 +17,23 @@ Zero dependencies, stdio transport. What each tool touches:
 | `list_accounts` | the live login and the saved profiles | the usage cache, the live login's profile when its token rotated, a stale profile's refreshed token |
 | `save_account` | the live login | one profile file in the account store |
 | `switch_account` | the target profile | **the live credentials** (file or Keychain item), the `oauthAccount` block of `~/.claude.json`, and the store (outgoing profile, switch stamp) |
+| `list_codex_accounts` | `$CODEX_HOME/auth.json` (else `~/.codex/auth.json`) and the saved Codex profiles | the live Codex login's profile when the `codex` CLI rotated its token |
+| `save_codex_account` | the live Codex login | one profile file in the Codex store |
+| `switch_codex_account` | the target Codex profile | **`auth.json`**, and the store (outgoing profile) |
+| `get_codex_usage` | the `codex` CLI's session transcripts, read-only | nothing |
 
-Every credential write stays under the account store. Only `switch_account` writes
-your Claude Code login, and only when you ask for the switch.
+Every credential write stays under one of the two account stores. Only
+`switch_account` and `switch_codex_account` write a live login, and only when
+you ask for the switch. Nothing here uploads anything, and the Codex tools
+never mint a token: OpenAI's refresh grant is the `codex` CLI's to use.
+
+`get_codex_usage` is the one tool whose numbers are not read live. OpenAI
+publishes no plan-usage endpoint, so it reports the rate limits the `codex` CLI
+recorded when the API last returned them - every card carrying
+`provenance: "estimated"` (pinned to that constant in the schema) and a
+`capturedAt` - and answers `available: false` with a reason rather than a zero
+when there is nothing usable to report. See
+[wiki/Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex).
 
 ## Install
 

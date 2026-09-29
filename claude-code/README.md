@@ -129,6 +129,10 @@ API response of the session**, so on a fresh session you'll see just the
 **Context** gauge until your first message - Session and Week appear as soon as
 Claude Code provides them.
 
+Once a window's reset instant has passed, the percentage on the line belongs to
+a window that is gone, so the gauge empties and reads `–` until Claude Code
+hands over the first figure of the new one. The same rule runs in both panels.
+
 **Per-model (Fable) weekly limits are not shown here** - Claude Code's stdin
 never exposes them; they come only from the OAuth usage endpoint, which the
 GNOME extension and macOS app read. The terminal line is deliberately the cheap
