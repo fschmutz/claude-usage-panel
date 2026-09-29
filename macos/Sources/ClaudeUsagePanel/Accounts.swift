@@ -88,8 +88,10 @@ extension UsageModel {
                     error: result.message.map {
                         Accounts.rowError(name: p.name, message: $0)
                     },
+                    // A live token's refusal is Claude Code's to refresh.
                     health: Notices.health(
-                        tokenState: summary.tokenState, errorCode: result.errorCode)))
+                        tokenState: summary.tokenState, errorCode: result.errorCode,
+                        live: result.live)))
         }
         accounts = rows
         accountsError = nil

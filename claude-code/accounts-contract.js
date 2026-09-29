@@ -5,7 +5,7 @@
 // stored token is still usable, and when to move to another account. The I/O
 // lives in accounts.js. No Node built-ins here.
 
-import {clampPercent} from './normalize.js';
+import {isTransientStatus, usageReading} from './normalize.js';
 
 /** Refresh an access token this close to its expiry rather than use it. */
 export const REFRESH_LEAD_MS = 5 * 60_000;
@@ -313,30 +313,86 @@ export function keychainWriteLine(account, service, secret) {
   return utf8Hex(line).length / 2 < KEYCHAIN_LINE_MAX ? line : null; // bytes, not code units
 }
 
-/** The fullest limit of a set of normalized cards; null without cards. A card
- *  the payload gave no number for (percentKnown false) is skipped, not counted
- *  as 0 %: it would otherwise make every account look freer than it is, and
- *  drive an auto-switch on it. */
-export function worstPercent(cards) {
+/** The fullest limit of a set of normalized cards at `nowMs`; null without
+ *  one honest reading. A card with no honest reading (usageReading: the
+ *  payload gave no number, or its window already rolled over) is skipped, not
+ *  counted: a 0 % placeholder would make every account look freer than it is,
+ *  and a 96 % from a window that reset an hour ago would drive an auto-switch
+ *  away from an account that is empty again. */
+export function worstPercent(cards, nowMs = Date.now()) {
   let worst = null;
   for (const c of cards ?? []) {
-    if (c?.percentKnown === false) continue;
-    const p = Number(c?.percent);
-    if (!Number.isFinite(p)) continue;
-    worst = worst === null ? clampPercent(p) : Math.max(worst, clampPercent(p));
+    if (typeof c?.percent !== 'number' || !Number.isFinite(c.percent)) continue;
+    const r = usageReading(c, nowMs);
+    if (!r.known) continue;
+    worst = worst === null ? r.percent : Math.max(worst, r.percent);
   }
   return worst;
 }
 
+// The first card with `key`, then its honest reading - never "the first card
+// with that key that happens to be known" (a duplicate must not win).
+const readingFor = (cards, key, nowMs) => {
+  const c = (cards ?? []).find((x) => x?.key === key);
+  return c ? usageReading(c, nowMs) : null;
+};
+
 /** One account's row of the usage cache: its worst limit, and its session
  *  and weekly-all percents (null for a card it does not have, or has no
- *  reading for). */
-export function usageCacheEntry(cards) {
+ *  honest reading for at `nowMs`). */
+export function usageCacheEntry(cards, nowMs = Date.now()) {
   const pct = (key) => {
-    const c = (cards ?? []).find((x) => x?.key === key);
-    return c && c.percentKnown !== false ? c.percent : null;
+    const r = readingFor(cards, key, nowMs);
+    return r?.known ? r.percent : null;
   };
-  return {worst: worstPercent(cards), session: pct('session'), weekly: pct('weekly_all')};
+  return {worst: worstPercent(cards, nowMs), session: pct('session'), weekly: pct('weekly_all')};
+}
+
+/** "S 42% · W 12%" from the session / weekly-all cards; '' without either.
+ *  A card with no honest reading prints NO_READING rather than a number. */
+export function formatAccountUsage(cards, nowMs = Date.now()) {
+  const s = readingFor(cards, 'session', nowMs);
+  const w = readingFor(cards, 'weekly_all', nowMs);
+  return [s && `S ${s.text}`, w && `W ${w.text}`].filter(Boolean).join(' · ');
+}
+
+// ── Refreshing a stored login ───────────────────────────────────────────────────
+// A refresh token is single-use: whoever spends it first gets the new pair, and
+// every later spend of the same token is refused (invalid_grant). Several
+// processes poll one store (the GNOME panel, one MCP server per Claude Code
+// window, the CLI), so every port takes the same exclusive lock file around
+// read -> POST -> write, and re-reads the profile once it holds it.
+
+/** The per-profile refresh lock: <accounts dir>/<refreshLockFile(name)>,
+ *  created O_EXCL 0600. A lock older than `staleMs` is a crashed holder and is
+ *  taken over; a waiter gives up after `waitMs` (longer than the 10 s token
+ *  request, so a live holder always finishes first), polling every `pollMs`. */
+export const REFRESH_LOCK = {staleMs: 30_000, waitMs: 15_000, pollMs: 100};
+
+export function refreshLockFile(name) {
+  return `.refresh-${name}.lock`;
+}
+
+/** Another process refreshed this profile since `sent` was read from it: the
+ *  stored access or refresh token moved. Then the caller uses the stored one
+ *  and does not spend a refresh token that is already spent. */
+export function refreshRaced(sent, stored) {
+  if (!sent || !stored || typeof sent !== 'object' || typeof stored !== 'object') return false;
+  return stored.accessToken !== sent.accessToken || stored.refreshToken !== sent.refreshToken;
+}
+
+/**
+ * The error code a refused token exchange is filed under. Only 400 / 401 (the
+ * server's invalid_grant: that refresh token is spent or revoked) say the
+ * stored login is finished - 'refresh_failed', which asks for a new sign-in.
+ * A 429 or a 5xx is 'transient' and anything else 'http_error': both leave the
+ * login's health 'unreachable', because nothing is known to be wrong with it.
+ * A transport failure (the caller's catch) is 'network_error'.
+ */
+export function refreshFailureCode(status) {
+  const s = Number(status);
+  if (s === 400 || s === 401) return 'refresh_failed';
+  return isTransientStatus(s) ? 'transient' : 'http_error';
 }
 
 /**

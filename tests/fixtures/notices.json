@@ -1,9 +1,34 @@
 {
-  "_comment": "Inline notices, button-local outcomes and the switch rotation, pinned across lib/pure/notices.js (GNOME), claude-code/notices.js (CLI + MCP + status line) and ClaudeUsageCore/Notices.swift (macOS). `health` folds the stored login's own dates together with whatever the last usage fetch said, so a login whose dates look fine but whose token the endpoint (or the refresh exchange) turned down is reported as refresh-failed rather than drawn as current. `notices` says WHICH inline rows appear, in what order, how loud, and what the one repair button does - the sentences and button labels are per port, because they are translated, and are not asserted here.",
+  "_comment": "Account health and the inline notices, pinned across lib/pure/notices.js (GNOME), claude-code/notices.js (CLI + MCP) and ClaudeUsageCore/Notices.swift (macOS); `outcomes`, `outcomeTtlMs`, `rotation` and `rotationMin` are GNOME + Swift only (no Node client draws a button), and so is `needsAttention`. `health` folds the stored login's own dates together with whatever the last usage fetch said, so a login whose dates look fine but whose STORED token the endpoint (or the refresh exchange) turned down is reported as refresh-failed rather than drawn as current. `live: true` marks a row whose token was the live login's: a refusal of that one is Claude Code's to refresh and reads unreachable, never refresh-failed. Only refresh_failed (a 400/401 from the token endpoint, or a 200 without an access token), a stored token's auth_expired, and login_expired call for a new sign-in; a 429/5xx (transient), any other status (http_error), no network, an unparsable body and an unreadable live login (no_token) are unreachable. `notices` says WHICH inline rows appear, in what order, how loud, and what the one repair button does - the sentences and button labels are per port, because they are translated, and are not asserted here.",
   "now": 1789300000000,
   "outcomeTtlMs": 6000,
   "rotationMin": 2,
   "health": [
+    {
+      "name": "a live token the endpoint refused is Claude Code's to refresh, not the profile's",
+      "tokenState": "valid", "errorCode": "auth_expired", "live": true,
+      "expected": "unreachable", "needsAttention": false
+    },
+    {
+      "name": "the live login could not be read: it is never refreshed in its place",
+      "tokenState": "stale", "errorCode": "no_token",
+      "expected": "unreachable", "needsAttention": false
+    },
+    {
+      "name": "the token endpoint answered 503: try again, the login is fine",
+      "tokenState": "stale", "errorCode": "transient",
+      "expected": "unreachable", "needsAttention": false
+    },
+    {
+      "name": "the token endpoint answered something unexpected (403, 404)",
+      "tokenState": "stale", "errorCode": "http_error",
+      "expected": "unreachable", "needsAttention": false
+    },
+    {
+      "name": "a 403 (forbidden) is a token not allowed this endpoint: no sign-in cures it",
+      "tokenState": "valid", "errorCode": "forbidden",
+      "expected": "unreachable", "needsAttention": false
+    },
     {
       "name": "a fresh stored token, fetch worked",
       "tokenState": "valid", "errorCode": null,

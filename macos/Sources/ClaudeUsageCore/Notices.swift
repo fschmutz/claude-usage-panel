@@ -1,9 +1,10 @@
 import Foundation
 
 // Inline notices, button-local outcomes and the switch rotation - the macOS
-// port. Mirrors claude-code/notices.js and the GNOME extension's
-// lib/pure/notices.js 1:1; tests/fixtures/notices.json pins every decision
-// below across the three. Foundation only, so it unit-tests on Linux CI.
+// port. Mirrors the GNOME extension's lib/pure/notices.js 1:1, and
+// claude-code/notices.js for the health and the notices (no Node client draws
+// a button); tests/fixtures/notices.json pins every leg. Foundation only, so
+// it unit-tests on Linux CI.
 //
 // The rule these three share: a problem with a saved login belongs next to
 // that login, with the ONE thing that repairs it attached, and the answer to
@@ -25,13 +26,15 @@ public enum AccountHealth: String, Sendable, CaseIterable {
     /// The refresh token is gone or spent: only a new `claude auth login` on
     /// that account helps.
     case expired
-    /// The exchange was tried and refused, or the usage endpoint turned the
-    /// token down. The saved credentials are finished even though their dates
+    /// The exchange was tried and refused, or the usage endpoint turned a
+    /// STORED token down. The saved credentials are finished even though their dates
     /// say otherwise, so the UI must stop drawing that account's bars as if
     /// they were current.
     case refreshFailed = "refresh-failed"
     /// Nothing is known to be wrong with the login; the reading is simply
-    /// missing (a 429, a 5xx, no network).
+    /// missing (a 429, a 5xx, no network, a live login that could not be
+    /// read, or a live token the endpoint turned down: that one is Claude
+    /// Code's to refresh, not the profile's).
     case unreachable
 
     /// A state the user has to act on - the ones that earn a notice row.
@@ -78,11 +81,16 @@ public struct AccountNotice: Identifiable, Equatable, Sendable {
 
 public enum Notices {
     /// `errorCode` is the code the usage result carries ("refresh_failed",
-    /// "login_expired", "auth_expired", "transient", "http_error",
+    /// "login_expired", "auth_expired", "forbidden", "transient", "http_error",
     /// "network_error", "parse_error", "no_token"), or nil when the fetch
-    /// worked.
-    public static func health(tokenState: TokenState, errorCode: String? = nil) -> AccountHealth {
-        if errorCode == "refresh_failed" || errorCode == "auth_expired" { return .refreshFailed }
+    /// worked. `live` is true when the token that was used is the live
+    /// login's (AccountStore.TokenSource.live).
+    public static func health(
+        tokenState: TokenState, errorCode: String? = nil, live: Bool = false
+    ) -> AccountHealth {
+        if errorCode == "refresh_failed" || (errorCode == "auth_expired" && !live) {
+            return .refreshFailed
+        }
         if errorCode == "login_expired" || tokenState == .expired { return .expired }
         if errorCode != nil { return .unreachable }
         return tokenState == .valid ? .valid : .stale
@@ -201,7 +209,4 @@ public enum Rotation {
         guard let active, let i = ordered.firstIndex(of: active) else { return ordered[0] }
         return ordered[(i + 1) % ordered.count]
     }
-
-    /// Whether the rotation line and its button have anything to describe.
-    public static func enabled(_ names: [String]) -> Bool { order(names).count >= minimum }
 }

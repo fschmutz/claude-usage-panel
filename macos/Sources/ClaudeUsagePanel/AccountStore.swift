@@ -14,7 +14,8 @@ import Foundation
 // the live login is written back into its own profile BEFORE anything is
 // overwritten; an idle profile is refreshed with its refresh token when it is
 // needed, and the result goes to OUR store only. The live login is Claude
-// Code's to refresh.
+// Code's to refresh. The token and usage half (refresh under the per-profile
+// lock, accessTokenFor, usageFor, the usage cache) is AccountUsage.swift.
 
 struct SwitchResult: Sendable {
     let from: String?
@@ -44,18 +45,6 @@ enum AccountError: LocalizedError {
     }
 }
 
-/// What one saved account's usage came back as. Never a thrown error: a row
-/// for an account that cannot be read is still a row, and the code is what
-/// decides whether that row says "login expired", "refresh failed" or just
-/// "no reading right now" (Notices.health).
-struct AccountUsage: Sendable {
-    let cards: [LimitCard]?
-    let errorCode: String?
-    let message: String?
-
-    static let unread = AccountUsage(cards: nil, errorCode: nil, message: nil)
-}
-
 enum AccountStore {
     static let tokenEndpoint = URL(string: "https://platform.claude.com/v1/oauth/token")!
     /// Claude Code's public OAuth client - the same id the CLI refreshes with.
@@ -69,7 +58,7 @@ enum AccountStore {
             SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
         }
     }
-    private static let usageCacheFile = ".usage-cache.json"
+    static let usageCacheFile = ".usage-cache.json"
     private static let lastSwitchFile = ".last-switch.json"
     // A switch in progress: {at, from, to}, written before the live login is
     // touched and removed once both halves are installed. While it is there no
@@ -106,9 +95,9 @@ enum AccountStore {
         directory.appendingPathComponent("\(name).json")
     }
 
-    private static func nowMs() -> Double { Date().timeIntervalSince1970 * 1000 }
+    static func nowMs() -> Double { Date().timeIntervalSince1970 * 1000 }
 
-    private static func stamp() -> String {
+    static func stamp() -> String {
         ISO8601DateFormatter().string(from: Date())
     }
 
@@ -116,7 +105,7 @@ enum AccountStore {
 
     // Atomic, private write: a tmp file in the same dir CREATED 0600 (never a
     // world-readable instant), then moved over the target.
-    private static func writePrivate(_ data: Data, to url: URL) throws {
+    static func writePrivate(_ data: Data, to url: URL) throws {
         let fm = FileManager.default
         let dir = url.deletingLastPathComponent()
         try fm.createDirectory(
@@ -134,7 +123,7 @@ enum AccountStore {
         }
     }
 
-    private static func readJSON(_ url: URL) -> Any? {
+    static func readJSON(_ url: URL) -> Any? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONSerialization.jsonObject(with: data)
     }
@@ -291,7 +280,7 @@ enum AccountStore {
         return cfg
     }
 
-    private static func liveToken(_ creds: [String: Any]?) -> String? {
+    static func liveToken(_ creds: [String: Any]?) -> String? {
         (creds?["claudeAiOauth"] as? [String: Any])?["accessToken"] as? String
     }
 
@@ -396,100 +385,6 @@ enum AccountStore {
         }.count
     }
 
-    // MARK: token refresh (our store only)
-
-    /// Never the shared session: the exchange carries a refresh token in and
-    /// its replacement back out, and URLSession.shared caches on disk.
-    private static let refreshSession: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
-        config.urlCache = nil
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.httpCookieStorage = nil
-        config.httpShouldSetCookies = false
-        config.timeoutIntervalForRequest = 10
-        return URLSession(configuration: config)
-    }()
-
-    /// Exchange the profile's refresh token for a new access token and store
-    /// the result. Never touches the live login.
-    static func refresh(_ profile: AccountProfile) async throws -> AccountProfile {
-        guard let refreshToken = profile.refreshToken else {
-            throw AccountError.coded(
-                code: "login_expired",
-                message: "\(profile.name): no refresh token - log in again and save it")
-        }
-        var req = URLRequest(url: tokenEndpoint)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "content-type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "grant_type": "refresh_token", "refresh_token": refreshToken, "client_id": clientId,
-        ])
-        req.timeoutInterval = 10
-        let data: Data
-        let response: URLResponse
-        do {
-            // Ephemeral, like the usage fetch: the request carries a refresh
-            // token and the answer carries its replacement, and neither
-            // belongs in the shared on-disk URL cache.
-            (data, response) = try await Self.refreshSession.data(for: req)
-        } catch {
-            throw AccountError.coded(
-                code: "refresh_failed",
-                message: "\(profile.name): token refresh failed - \(error.localizedDescription)")
-        }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            let hint = (status == 400 || status == 401) ? " - log in again and save it" : ""
-            throw AccountError.coded(
-                code: "refresh_failed",
-                message: "\(profile.name): token refresh rejected (HTTP \(status))\(hint)")
-        }
-        guard
-            let oauth = Accounts.refreshedOauth(
-                profile.oauth, body: try? JSONSerialization.jsonObject(with: data), nowMs: nowMs())
-        else {
-            throw AccountError.coded(
-                code: "refresh_failed",
-                message: "\(profile.name): token refresh returned no access token")
-        }
-        var credentials = profile.credentials
-        credentials["claudeAiOauth"] = oauth
-        return try write(profile.with(credentials: credentials, savedAt: stamp()))
-    }
-
-    /// Where a saved account's access token came from. `live` means Claude
-    /// Code's own credentials, which this app never writes; the other two come
-    /// out of OUR store, and a refresh writes only there.
-    enum TokenSource { case live, store, refreshed }
-
-    /// A usable access token for a saved account: the live one when that
-    /// account is the active login (Claude Code keeps it fresh), else the
-    /// stored one, refreshed first when stale.
-    ///
-    /// THE RULE: the live branch returns before any refresh can happen, so
-    /// polling a parked account never rotates the credentials Claude Code is
-    /// running on. A refresh from here writes one profile file and nothing
-    /// else - never ~/.claude/.credentials.json, never the Keychain item.
-    static func accessTokenFor(_ name: String) async throws -> (
-        token: String, source: TokenSource
-    ) {
-        guard let profile = read(name) else {
-            throw AccountError.coded(
-                code: "no_account", message: "no saved account named \(name)")
-        }
-        if liveAccountName() == name, let token = liveToken(readLiveCredentials()) {
-            return (token, .live)
-        }
-        switch profile.tokenState(nowMs: nowMs()) {
-        case .valid: return (profile.accessToken, .store)
-        case .stale: return (try await refresh(profile).accessToken, .refreshed)
-        case .expired:
-            throw AccountError.coded(
-                code: "login_expired",
-                message: "\(name): login expired - run `claude auth login` on it and save it again")
-        }
-    }
-
     // MARK: switch
 
     /// Install `target` as the live login: the config is validated and the
@@ -519,6 +414,14 @@ enum AccountStore {
     static func switchTo(_ name: String) async throws -> SwitchResult {
         guard var target = read(name) else {
             throw AccountError.message("no saved account named \(name)")
+        }
+        // The live login by its account block, with credentials we cannot
+        // read: refreshing or reinstalling the stored copy would spend or
+        // overwrite the refresh token Claude Code is running on.
+        if readLiveCredentials() == nil, liveAccountName() == name {
+            throw AccountError.coded(
+                code: "no_token",
+                message: "\(name): the live login cannot be read right now - try again")
         }
         let synced = try syncBack()
         let plan = Accounts.switchPlan(
@@ -562,52 +465,5 @@ enum AccountStore {
     /// When the last switch happened (any client), or nil if never.
     static func readLastSwitchMs() -> Double? {
         ((readJSON(lastSwitchURL) as? [String: Any])?["at"] as? NSNumber)?.doubleValue
-    }
-
-    // MARK: per-account usage
-
-    /// Normalized usage for one saved account, with the code a row needs to
-    /// say WHY there is none. A token taken from the live login is Claude
-    /// Code's to keep fresh, so its refusal is reported as the live login's
-    /// (no label, so the message keeps the "run any Claude Code command"
-    /// hint); a stored or refreshed token is the profile's, so its failure
-    /// names the profile. Same rule as claude-code/login-usage.js.
-    static func usageFor(_ name: String, endpoint: any UsageEndpoint = ClaudeUsage.live)
-        async -> AccountUsage
-    {
-        let token: String
-        let source: TokenSource
-        do {
-            (token, source) = try await accessTokenFor(name)
-        } catch {
-            return AccountUsage(
-                cards: nil, errorCode: (error as? AccountError)?.code ?? "no_token",
-                message: error.localizedDescription)
-        }
-        do {
-            let result = try await endpoint.usage(
-                token: token, label: source == .live ? nil : name)
-            return AccountUsage(cards: result.cards, errorCode: nil, message: nil)
-        } catch let e as UsageError {
-            return AccountUsage(cards: nil, errorCode: e.code, message: e.localizedDescription)
-        } catch {
-            return AccountUsage(
-                cards: nil, errorCode: "network_error", message: error.localizedDescription)
-        }
-    }
-
-    // The panels drop the latest per-account worst limit here so the status
-    // line (no network, no credentials) can hint at a freer account. Same file
-    // and shape as the node ports.
-    static var usageCacheURL: URL { directory.appendingPathComponent(usageCacheFile) }
-
-    static func writeUsageCache(_ usage: [String: [LimitCard]]) {
-        var accounts: [String: Any] = [:]
-        for (name, cards) in usage {
-            accounts[name] = Accounts.usageCacheEntry(cards).json
-        }
-        let obj: [String: Any] = ["at": nowMs(), "accounts": accounts]
-        guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
-        try? writePrivate(data, to: usageCacheURL)
     }
 }

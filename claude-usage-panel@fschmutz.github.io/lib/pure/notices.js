@@ -2,9 +2,10 @@
 // Re-exported by lib/pure.js; import from there.
 
 // ── Inline notices, button-local outcomes, switch rotation ───────────────────────
-// The GNOME copy of the shared contract (claude-code/notices.js and
-// ClaudeUsageCore/Notices.swift mirror it; tests/fixtures/notices.json pins all
-// three).
+// The GNOME copy of the shared contract. ClaudeUsageCore/Notices.swift mirrors
+// all of it; claude-code/notices.js mirrors the health and the notices only
+// (no Node client draws a button, so outcomes and the rotation have no Node
+// port). tests/fixtures/notices.json pins every leg.
 //
 // The rule these three share: a problem with a saved login belongs next to that
 // login, with the ONE thing that repairs it attached, and the answer to pressing
@@ -16,28 +17,30 @@
 // port. What is pinned is which notice appears, in what order, how loud it is,
 // and what its single repair action does.
 
-/** How usable a saved login is right now. */
-export const ACCOUNT_HEALTH = ['valid', 'stale', 'expired', 'refresh-failed', 'unreachable'];
-
 /**
+ * How usable a saved login is right now: one of
  * valid          - the stored access token is good as it stands
  * stale          - it is (about to be) expired, and the refresh token can mint
  *                  a new one on next use. Not a problem; not worth a notice.
  * expired        - the refresh token is gone or spent: only a new
  *                  `claude auth login` on that account helps.
  * refresh-failed - the exchange was tried and refused, or the usage endpoint
- *                  turned the token down. The saved credentials are finished
- *                  even though their dates say otherwise, so the UI must stop
- *                  drawing that account's bars as if they were current.
+ *                  turned a STORED token down. The saved credentials are
+ *                  finished even though their dates say otherwise, so the UI
+ *                  must stop drawing that account's bars as if they were current.
  * unreachable    - nothing is known to be wrong with the login; the reading is
- *                  simply missing (a 429, a 5xx, no network).
+ *                  simply missing (a 429, a 5xx, no network, a live login that
+ *                  could not be read, or a live token the endpoint turned down:
+ *                  that one is Claude Code's to refresh, not the profile's).
  *
  * `errorCode` is the code the usage result carries ('refresh_failed',
- * 'login_expired', 'auth_expired', 'transient', 'http_error', 'network_error',
- * 'parse_error', 'no_token'), or null when the fetch worked.
+ * 'login_expired', 'auth_expired', 'forbidden', 'transient', 'http_error',
+ * 'network_error', 'parse_error', 'no_token'), or null when the fetch worked. `live` is true
+ * when the token that was used is the live login's (accessTokenFor source
+ * 'live').
  */
-export function accountHealth({tokenState = 'stale', errorCode = null} = {}) {
-    if (errorCode === 'refresh_failed' || errorCode === 'auth_expired')
+export function accountHealth({tokenState = 'stale', errorCode = null, live = false} = {}) {
+    if (errorCode === 'refresh_failed' || (errorCode === 'auth_expired' && !live))
         return 'refresh-failed';
     if (errorCode === 'login_expired' || tokenState === 'expired')
         return 'expired';
@@ -50,15 +53,6 @@ export function accountHealth({tokenState = 'stale', errorCode = null} = {}) {
 export function needsAttention(health) {
     return health === 'expired' || health === 'refresh-failed';
 }
-
-/** The notices, in the order they are rendered. */
-export const NOTICE_KINDS = [
-    'pending-switch', 'torn-login', 'unsaved-login',
-    'login-expired', 'refresh-failed', 'unreachable',
-];
-/** The single repair each notice offers. `relogin` is the one that cannot be
- *  done for the user - no client ever runs a login - so it only says how. */
-export const NOTICE_ACTIONS = ['finish-switch', 'repair', 'save', 'relogin', 'retry'];
 
 /**
  * What the accounts list must say out loud, each with one repair button.
@@ -125,8 +119,8 @@ export function outcomeVisible(o, nowMs, ttlMs = OUTCOME_TTL_MS) {
 // switch control describes exactly what the button does - and the line is only
 // shown when there is a rotation to describe.
 
-/** Fewer saved logins than this and there is no rotation to speak of. */
-export const ROTATION_MIN = 2;
+// Fewer saved logins than this and there is no rotation to speak of.
+const ROTATION_MIN = 2;
 
 /** The saved names in the order a rotation walks them. */
 export function rotationOrder(names) {
@@ -144,9 +138,4 @@ export function nextInRotation(names, active) {
         return null;
     const i = order.indexOf(active);
     return i < 0 ? order[0] : order[(i + 1) % order.length];
-}
-
-/** Whether the rotation line and its button have anything to describe. */
-export function rotationEnabled(names) {
-    return rotationOrder(names).length >= ROTATION_MIN;
 }

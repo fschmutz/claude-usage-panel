@@ -364,3 +364,117 @@ test('syncBack does not rewrite a profile when Claude Code only reordered its ke
     assert.equal(openStore(io).syncBack(), 'PRO');
     assert.equal(fs.readFileSync(file, 'utf8'), before);
 });
+
+// ── The live login is never refreshed; one refresh per refresh token ────────────
+
+const TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
+
+test('a saved name that is the live login is never refreshed, even when its credentials cannot be read', async () => {
+    const {home, io, s} = world();
+    s.writeProfile({version: 1, name: 'PRO', account: account('pro'), credentials: creds('pro', {expiresAt: NOW - 1000})});
+    // Claude Code's file is gone for a moment (mid-rewrite, a locked Keychain):
+    // the account block still says PRO, and PRO's stored copy holds the very
+    // refresh token Claude Code runs on. Spending it would kill both.
+    fs.rmSync(path.join(home, '.claude', '.credentials.json'));
+    const urls = [];
+    io.fetchImpl = async (url) => {
+        urls.push(url);
+        return {ok: true, status: 200, json: async () => ({access_token: 'at-x', refresh_token: 'rt-x', expires_in: 60})};
+    };
+    assert.equal(s.liveAccountName(), 'PRO');
+    await assert.rejects(s.accessTokenFor('PRO'), {code: 'no_token'});
+    const {accounts} = await s.listAccounts({usage: true});
+    assert.deepEqual(accounts.map((a) => [a.name, a.health]), [['PRO', 'unreachable']]);
+    assert.deepEqual(urls, [], 'no token exchange, no usage call');
+    assert.equal(s.readProfile('PRO').credentials.claudeAiOauth.refreshToken, 'rt-pro');
+});
+
+test('a live token the usage endpoint refuses is Claude Code\'s to refresh: unreachable, not refresh-failed', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    io.fetchImpl = async () => ({ok: false, status: 401, json: async () => ({})});
+    const {accounts, notices} = await s.listAccounts({usage: true});
+    assert.deepEqual(accounts.map((a) => [a.name, a.health]), [['PRO', 'unreachable']]);
+    assert.match(accounts[0].error, /Run any Claude Code command/);
+    assert.deepEqual(notices.map((n) => [n.kind, n.action]), [['unreachable', 'retry']]);
+});
+
+// A server that honours each refresh token once, slowly enough for two
+// callers to overlap: the second spend of one token is invalid_grant.
+function singleUseTokenServer({delayMs = 30} = {}) {
+    const spent = new Set();
+    let minted = 0;
+    const exchanges = [];
+    const fetchImpl = async (url, init) => {
+        if (url !== TOKEN_URL) {
+            return {ok: true, status: 200, json: async () => ({limits: [{kind: 'session', percent: 5}]})};
+        }
+        const rt = JSON.parse(init.body).refresh_token;
+        exchanges.push(rt);
+        await new Promise((resolve) => { setTimeout(resolve, delayMs); });
+        if (spent.has(rt)) return {ok: false, status: 400, json: async () => ({error: 'invalid_grant'})};
+        spent.add(rt);
+        minted += 1;
+        return {ok: true, status: 200, json: async () => ({
+            access_token: `at-new-${minted}`, refresh_token: `rt-new-${minted}`, expires_in: 3600,
+        })};
+    };
+    return {fetchImpl, exchanges};
+}
+
+test('concurrent refreshes of one profile spend its refresh token once, and every caller gets the result', async () => {
+    const {io} = world();
+    const server = singleUseTokenServer();
+    io.fetchImpl = server.fetchImpl;
+    const seed = openStore(io);
+    seed.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso', {expiresAt: NOW - 1000})});
+    // Three processes polling one store: the panel, two MCP servers.
+    const results = await Promise.all([openStore(io), openStore(io), openStore(io)].map((st) => st.usageFor('PERSO')));
+    assert.deepEqual(results.map((r) => r.ok), [true, true, true]);
+    assert.deepEqual(server.exchanges, ['rt-perso'], 'one exchange, never a second spend of the same token');
+    assert.equal(seed.readProfile('PERSO').credentials.claudeAiOauth.refreshToken, 'rt-new-1');
+    assert.deepEqual(fs.readdirSync(seed.dir).filter((f) => f.endsWith('.lock')), [], 'the lock is released');
+});
+
+test('a lock a crashed holder left behind is taken over once it is stale', async () => {
+    const {calls, s} = world();
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso', {expiresAt: NOW - 1000})});
+    const lock = path.join(s.dir, '.refresh-PERSO.lock');
+    fs.writeFileSync(lock, 'someone', {mode: 0o600});
+    const old = (Date.now() - 31_000) / 1000;
+    fs.utimesSync(lock, old, old);
+    assert.equal((await s.accessTokenFor('PERSO')).token, 'at-fresh');
+    assert.equal(calls.length, 1);
+    assert.equal(fs.existsSync(lock), false);
+});
+
+test('a 400 whose replacement is already on disk (a lock-less writer spent it) is a success', async () => {
+    const {io, s} = world();
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso', {expiresAt: NOW - 1000})});
+    io.fetchImpl = async () => {
+        // Another tool refreshed PERSO while our request was in flight.
+        s.writeProfile({version: 1, name: 'PERSO', account: account('perso'),
+            credentials: creds('perso', {accessToken: 'at-other', refreshToken: 'rt-other'})});
+        return {ok: false, status: 400, json: async () => ({error: 'invalid_grant'})};
+    };
+    assert.deepEqual(await s.accessTokenFor('PERSO'), {token: 'at-other', source: 'refreshed'});
+});
+
+test('a refresh that failed for a reason other than the login leaves it unreachable, not refresh-failed', async () => {
+    const cases = [
+        ['503', async () => ({ok: false, status: 503, json: async () => ({})}), 'transient', 'unreachable'],
+        ['thrown fetch', async () => { throw new Error('ECONNRESET'); }, 'network_error', 'unreachable'],
+        ['403', async () => ({ok: false, status: 403, json: async () => ({})}), 'http_error', 'unreachable'],
+        ['401', async () => ({ok: false, status: 401, json: async () => ({})}), 'refresh_failed', 'refresh-failed'],
+        ['200 without a token', async () => ({ok: true, status: 200, json: async () => ({})}), 'refresh_failed', 'refresh-failed'],
+    ];
+    for (const [label, fetchImpl, code, health] of cases) {
+        const {io, s} = world({live: null});
+        s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso', {expiresAt: NOW - 1000})});
+        io.fetchImpl = fetchImpl;
+        assert.equal((await s.usageFor('PERSO')).code, code, label);
+        const {accounts} = await s.listAccounts({usage: true});
+        assert.equal(accounts[0].health, health, label);
+        assert.equal(s.readProfile('PERSO').credentials.claudeAiOauth.refreshToken, 'rt-perso', `${label}: profile untouched`);
+    }
+});

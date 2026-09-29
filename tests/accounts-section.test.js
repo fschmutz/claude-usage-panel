@@ -36,12 +36,15 @@ const liveLogin = (name, uuid) => ({
  * real lib/accounts.js reads it, so the store's own decisions (which profile
  * is live, whether a login is torn) are the ones under test.
  */
-async function controller(t, {enabled = true, files = {}, usage = null} = {}) {
+async function controller(t, {enabled = true, files = {}, usage = null, token = null, tokenDelayMs = 0} = {}) {
     const encode = new TextEncoder();
     const decode = new TextDecoder();
     const notes = [];
     const clipboard = [];
     const writes = [];
+    const timers = new Map();
+    const removed = [];
+    let nextTimer = 1;
     stub.overrides['gi://GLib'] = {
         PRIORITY_DEFAULT: 0,
         SOURCE_REMOVE: false,
@@ -53,7 +56,20 @@ async function controller(t, {enabled = true, files = {}, usage = null} = {}) {
         get_real_time: () => 1,
         FileSetContentsFlags: {CONSISTENT: 0},
         timeout_add_seconds: () => 1,
-        Source: {remove: () => {}},
+        // Timers are kept, not run: a test fires one with fire(id). The
+        // refresh lock's poll sleep is the exception - it really waits.
+        timeout_add: (_prio, ms, fn) => {
+            const id = nextTimer++;
+            timers.set(id, fn);
+            if (ms < 1000)
+                setTimeout(() => timers.get(id)?.(), ms);
+            return id;
+        },
+        Source: {remove: id => { removed.push(id); timers.delete(id); }},
+        uuid_string_random: () => `id-${nextTimer++}`,
+        Bytes: class {
+            constructor(data) { this.data = data; }
+        },
         file_get_contents: path => {
             if (!(path in files)) throw new Error(`no such file: ${path}`);
             return [true, encode.encode(files[path])];
@@ -71,8 +87,11 @@ async function controller(t, {enabled = true, files = {}, usage = null} = {}) {
     // delete drops. Enough for the real store's atomic write and its listing.
     // Subprocess answers `ps` with no Claude running, so a switch does not
     // wait forever on a callback the generic stub never makes.
+    const exists = {matches: (_domain, code) => code === 'EXISTS'};
     stub.overrides['gi://Gio'] = {
         FileQueryInfoFlags: {NONE: 0},
+        FileCreateFlags: {PRIVATE: 1},
+        IOErrorEnum: {EXISTS: 'EXISTS', NOT_FOUND: 'NOT_FOUND'},
         FileCopyFlags: {OVERWRITE: 0},
         SubprocessFlags: {STDOUT_PIPE: 1, STDERR_PIPE: 2},
         Cancellable: class {
@@ -105,6 +124,19 @@ async function controller(t, {enabled = true, files = {}, usage = null} = {}) {
                     writes.push(target.path);
                 },
                 delete: () => { delete files[path]; },
+                // O_EXCL: the refresh lock.
+                create() {
+                    if (path in files)
+                        throw exists;
+                    files[path] = '';
+                    return {
+                        write_all: bytes => { files[path] = decode.decode(bytes); },
+                        close() {},
+                    };
+                },
+                query_info: () => ({
+                    get_modification_date_time: () => ({to_unix: () => Math.floor(Date.now() / 1000)}),
+                }),
             }),
         },
     };
@@ -124,24 +156,38 @@ async function controller(t, {enabled = true, files = {}, usage = null} = {}) {
     // the body the endpoint would have given that account.
     stub.overrides['gi://Soup'] = {
         Message: {
-            new: () => {
+            new: method => {
                 const headers = {};
                 return {
+                    method,
                     headers,
                     request_headers: {append: (k, v) => { headers[k] = v; }},
+                    set_request_body_from_bytes(_type, bytes) { this.body = decode.decode(bytes.data); },
                     get_status() { return this._status ?? 200; },
                 };
             },
         },
     };
+    // `usage(token)` answers the usage GET per bearer token; `token(rt)` the
+    // refresh POST per refresh token (after `tokenDelayMs`, so two refreshes
+    // can overlap). Every refresh token sent is recorded in `exchanges`.
     const answer = usage ?? (() => ({status: 200, body: {limits: []}}));
+    const exchanges = [];
     const session = {
         send_and_read_async(message, _priority, _cancellable, cb) {
-            const token = (message.headers.authorization ?? '').replace('Bearer ', '');
-            const {status, body} = answer(token);
-            message._status = status;
-            cb({send_and_read_finish: () => ({get_data: () => encode.encode(JSON.stringify(body))})},
-                null);
+            const reply = ({status, body}) => {
+                message._status = status;
+                cb({send_and_read_finish: () => ({get_data: () => encode.encode(JSON.stringify(body))})},
+                    null);
+            };
+            if (message.method === 'POST') {
+                const rt = JSON.parse(message.body).refresh_token;
+                exchanges.push(rt);
+                const r = (token ?? (() => ({status: 500, body: {}})))(rt);
+                setTimeout(() => reply(r), tokenDelayMs);
+                return;
+            }
+            reply(answer((message.headers.authorization ?? '').replace('Bearer ', '')));
         },
     };
 
@@ -158,7 +204,12 @@ async function controller(t, {enabled = true, files = {}, usage = null} = {}) {
         syncAutoSwitch: () => {},
         isDestroyed: () => false,
     });
-    return {c, notes, clipboard, files, writes};
+    const fire = id => {
+        const fn = timers.get(id);
+        timers.delete(id);
+        return fn?.();
+    };
+    return {c, notes, clipboard, files, writes, exchanges, session, timers, removed, fire};
 }
 
 test('a live login nobody saved gets a notice naming what a switch would park it as', async t => {
@@ -254,4 +305,93 @@ test('accounts off means nothing is read and nothing is drawn', async t => {
     await c.refresh([]);
     assert.equal(c._item.visible, false);
     assert.deepEqual(c._state.notices, []);
+});
+
+test('the outcome timer repaints with the real save-as name, and destroy() removes it', async t => {
+    const {c, timers, removed, fire} = await controller(t, {
+        files: {
+            [`${HOME}/.claude/.credentials.json`]:
+                JSON.stringify({claudeAiOauth: {accessToken: 'at-live'}}),
+            [`${HOME}/.claude.json`]:
+                JSON.stringify({oauthAccount: {emailAddress: 'admin@example.com'}}),
+        },
+    });
+    await c.refresh([]);
+    const painted = [];
+    c._section.update = state => painted.push(state);
+    c._setOutcome('rotate', true, 'done');
+    const [timer] = [...timers.keys()];
+    fire(timer);
+    // The repaint after the TTL is the same state the notice was drawn from:
+    // "Save as admin", never "Save as " with an empty name.
+    assert.deepEqual(painted.map(p => p.saveAs('admin@example.com')), ['admin', 'admin']);
+
+    c._setOutcome('rotate', true, 'again');
+    const [pending] = [...timers.keys()];
+    c.destroy();
+    assert.ok(removed.includes(pending), 'no timer may fire into a destroyed dropdown');
+    assert.equal(timers.size, 0);
+});
+
+test('the store never refreshes the live login, even when its credentials cannot be read', async t => {
+    const stale = JSON.stringify({
+        version: 1, name: 'PRO', savedAt: null,
+        account: {accountUuid: 'u-pro', emailAddress: 'pro@example.com'},
+        credentials: {claudeAiOauth: {accessToken: 'at-PRO', refreshToken: 'rt-PRO', expiresAt: 1}},
+    });
+    const {exchanges, session, files} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PRO.json`]: stale,
+            [`${HOME}/.claude.json`]: JSON.stringify({oauthAccount: {accountUuid: 'u-pro'}}),
+        },
+        token: () => ({status: 200, body: {access_token: 'x', refresh_token: 'y', expires_in: 60}}),
+    });
+    const store = await load('lib/accounts.js');
+    assert.equal(store.liveAccountName(), 'PRO');
+    await assert.rejects(store.accessTokenFor(session, 'PRO'), {code: 'no_token'});
+    await assert.rejects(store.switchTo(session, 'PRO'), {code: 'no_token'});
+    assert.deepEqual(exchanges, [], 'the refresh token Claude Code holds was not spent');
+    assert.match(files[`${ACCOUNTS}/PRO.json`], /rt-PRO/);
+});
+
+test('concurrent refreshes of one profile spend its refresh token once', async t => {
+    const spent = new Set();
+    const {exchanges, session, files} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PERSO.json`]: JSON.stringify({
+                version: 1, name: 'PERSO', savedAt: null, account: {accountUuid: 'u-perso'},
+                credentials: {claudeAiOauth: {accessToken: 'at-PERSO', refreshToken: 'rt-PERSO', expiresAt: 1}},
+            }),
+        },
+        tokenDelayMs: 20,
+        token: rt => {
+            if (spent.has(rt))
+                return {status: 400, body: {error: 'invalid_grant'}};
+            spent.add(rt);
+            return {status: 200, body: {access_token: 'at-new', refresh_token: 'rt-new', expires_in: 3600}};
+        },
+    });
+    const store = await load('lib/accounts.js');
+    const got = await Promise.all([1, 2, 3].map(() => store.accessTokenFor(session, 'PERSO')));
+    assert.deepEqual(got.map(g => g.token), ['at-new', 'at-new', 'at-new']);
+    assert.deepEqual(exchanges, ['rt-PERSO']);
+    assert.equal(files[`${ACCOUNTS}/.refresh-PERSO.lock`], undefined, 'the lock is released');
+});
+
+test('a refresh the token endpoint answers 503 leaves the row unreachable, not refresh-failed', async t => {
+    const {c} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PRO.json`]: profile('PRO', 'u-pro'),
+            [`${ACCOUNTS}/OLD.json`]: JSON.stringify({
+                version: 1, name: 'OLD', savedAt: null, account: {accountUuid: 'u-old'},
+                credentials: {claudeAiOauth: {accessToken: 'at-OLD', refreshToken: 'rt-OLD', expiresAt: 1}},
+            }),
+            ...liveLogin('PRO', 'u-pro'),
+        },
+        token: () => ({status: 503, body: {}}),
+    });
+    await c.refresh([]);
+    const row = c._state.rows.find(r => r.name === 'OLD');
+    assert.equal(row.health, 'unreachable');
+    assert.deepEqual(c._state.notices.map(n => [n.kind, n.action]), [['unreachable', 'retry']]);
 });

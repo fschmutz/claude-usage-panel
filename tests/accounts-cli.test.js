@@ -60,6 +60,19 @@ test('CLI: use warns about running sessions; list --usage shows percents and fil
     assert.deepEqual(worstFromCache(s.readUsageCache()), {PERSO: 34, PRO: 34});
 });
 
+test('CLI: list --usage prints the no-reading dash for a window that already rolled over', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    const past = new Date(NOW - 60_000).toISOString();
+    io.fetchImpl = async () => ({ok: true, status: 200, json: async () => ({limits: [
+        {kind: 'session', percent: 96, resets_at: past}, {kind: 'weekly_all', percent: 34},
+    ]})});
+    const list = await run(['list', '--usage'], io);
+    assert.match(list.text, /PRO.*S – {2}W 34%/);
+    // ...and the stale 96 % is not what the status line ranks accounts on.
+    assert.deepEqual(worstFromCache(s.readUsageCache()), {PRO: 34});
+});
+
 test('CLI: refresh goes on past a dead login and exits 1', async () => {
     const {io, s} = world();
     s.saveCurrent('PRO');
@@ -92,4 +105,15 @@ test('CLI: current reports an unsaved login with exit 1', async () => {
     const r = await run(['current'], io);
     assert.equal(r.code, 1);
     assert.match(r.text, /not saved: someone@example.com/);
+});
+
+test('MCP renderAccounts prints the honest reading, never a stale or placeholder percent', async () => {
+    const {renderAccounts} = await import('../mcp/tools.js');
+    const past = new Date(NOW - 60_000).toISOString();
+    const text = renderAccounts({active: 'PRO', accounts: [{name: 'PRO', active: true, tokenState: 'valid', limits: [
+        {label: 'Current session', percent: 96, percentKnown: true, resetsAt: past},
+        {label: 'Weekly', percent: 0, percentKnown: false, resetsAt: null},
+        {label: 'Weekly · all', percent: 34, percentKnown: true, resetsAt: null},
+    ]}]}, NOW);
+    assert.equal(text, '- ● **PRO** · Current session – · Weekly – · Weekly · all 34%');
 });

@@ -4,6 +4,7 @@
 
 import {openStore} from './accounts.js';
 import {tokenState} from './accounts-contract.js';
+import {usageReading} from './normalize.js';
 
 export const HELP = `claudectl account - named Claude Code accounts, switch without a browser
 
@@ -21,11 +22,15 @@ kept, mode 0600, in the accounts directory below.`;
 // The store's directory is the caller's (io), so it is added at print time.
 const helpText = (store) => `${HELP}\n  ${store.dir}`;
 
-// "S 42%  W 12%" from normalized cards; "-" for a window the account lacks.
-function fmtUsage(cards) {
-  const pct = (key) => cards.find((c) => c.key === key)?.percent;
-  const cell = (label, p) => (p === undefined ? '-' : `${label} ${p}%`);
-  return `${cell('S', pct('session'))}  ${cell('W', pct('weekly_all'))}`;
+// "S 42%  W 12%" from normalized cards; "-" for a window the account lacks,
+// and the no-reading dash for one with no honest reading (a placeholder, or a
+// window that already rolled over) - never its stale figure.
+function fmtUsage(cards, nowMs) {
+  const cell = (label, key) => {
+    const card = cards.find((c) => c.key === key);
+    return card ? `${label} ${usageReading(card, nowMs).text}` : '-';
+  };
+  return `${cell('S', 'session')}  ${cell('W', 'weekly_all')}`;
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -54,7 +59,7 @@ export async function main(argv, io = {}) {
         return 0;
       }
       for (const a of accounts) {
-        const tail = a.cards ? `  ${fmtUsage(a.cards)}` : (a.error ? `  ${a.error}` : '');
+        const tail = a.cards ? `  ${fmtUsage(a.cards, io.nowMs ?? Date.now())}` : (a.error ? `  ${a.error}` : '');
         out(`${a.active ? '*' : ' '} ${a.name.padEnd(12)} ${(a.email ?? '').padEnd(32)} ` +
           `${(a.plan ?? '?').padEnd(5)} ${a.tokenState}${tail}\n`);
       }

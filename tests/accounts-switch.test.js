@@ -258,3 +258,13 @@ test('CLAUDE_CONFIG_DIR on macOS reads and writes that dir\'s own Keychain item'
     assert.equal(JSON.parse(keychain.get('Claude Code-credentials')).claudeAiOauth.accessToken, 'at-default',
         'the default dir\'s login is untouched');
 });
+
+test('switching to the live login while its credentials cannot be read refreshes and writes nothing', async () => {
+    const {home, calls, s} = world();
+    s.writeProfile({version: 1, name: 'PRO', account: account('pro'), credentials: creds('pro', {expiresAt: NOW - 1000})});
+    fs.rmSync(path.join(home, '.claude', '.credentials.json'));
+    await assert.rejects(s.switchTo('PRO'), {code: 'no_token'});
+    assert.equal(calls.length, 0, 'the refresh token Claude Code holds was not spent');
+    assert.equal(fs.existsSync(path.join(home, '.claude', '.credentials.json')), false);
+    assert.equal(s.readPendingSwitch(), null);
+});

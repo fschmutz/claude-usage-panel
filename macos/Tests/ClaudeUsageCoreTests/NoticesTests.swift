@@ -4,7 +4,7 @@ import XCTest
 @testable import ClaudeUsageCore
 
 /// Inline notices, button-local outcomes and the switch rotation, against the
-/// same fixture the JS ports assert (tests/parity.test.js "notices").
+/// same fixture the JS ports assert (tests/notices.test.js).
 /// Sentences and button labels are per port and deliberately not asserted.
 final class NoticesTests: XCTestCase {
     private func fixture() throws -> [String: Any] { try Fixtures.load("notices.json") }
@@ -21,7 +21,7 @@ final class NoticesTests: XCTestCase {
             let name = c["name"] as! String
             let got = Notices.health(
                 tokenState: TokenState(rawValue: c["tokenState"] as! String)!,
-                errorCode: c["errorCode"] as? String)
+                errorCode: c["errorCode"] as? String, live: c["live"] as? Bool ?? false)
             XCTAssertEqual(got.rawValue, c["expected"] as! String, name)
             XCTAssertEqual(got.needsAttention, c["needsAttention"] as! Bool, name)
         }
@@ -76,7 +76,6 @@ final class NoticesTests: XCTestCase {
             let expected = c["expected"] as? String  // JSON null reads as NSNull, not nil
             let got = Rotation.next(names, active: c["active"] as? String)
             XCTAssertEqual(got, expected, name)
-            XCTAssertEqual(Rotation.enabled(names), expected != nil, name)
         }
     }
 }

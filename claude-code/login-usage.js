@@ -17,6 +17,9 @@ export function usageLabel(name, source) {
 
 /**
  * Normalized usage for one saved account, or {name, ok: false, code, message}.
+ * `source` says where the token came from (accessTokenFor: 'live', 'store',
+ * 'refreshed'; absent when there was none), so accountHealth can tell a live
+ * token's refusal - Claude Code's to refresh - from a stored one's.
  * `store` needs accessTokenFor and fetchUsageWith (openStore's).
  */
 export async function usageForLogin({accessTokenFor, fetchUsageWith}, name) {
@@ -24,12 +27,16 @@ export async function usageForLogin({accessTokenFor, fetchUsageWith}, name) {
   try {
     access = await accessTokenFor(name);
   } catch (e) {
-    // The store's own codes ('refresh_failed', 'login_expired', 'no_account')
+    // The store's own codes ('refresh_failed', 'login_expired', 'no_account',
+    // 'no_token', 'transient', 'http_error', 'network_error')
     // are what accountHealth() tells a broken login from an unreachable one
     // with; anything else never got as far as a token.
     return {name, ok: false, code: e.code ?? 'no_token', message: e.message};
   }
-  return {name, ...(await fetchUsageWith(access.token, {label: usageLabel(name, access.source)}))};
+  return {
+    name, source: access.source,
+    ...(await fetchUsageWith(access.token, {label: usageLabel(name, access.source)})),
+  };
 }
 
 /**

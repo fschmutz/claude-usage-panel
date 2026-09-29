@@ -20,7 +20,7 @@ import {
 } from './accounts.js';
 import {
     OUTCOME_TTL_MS, accountHealth, accountNotices, accountSummary, autoSwitchTarget,
-    formatAccountUsage, isTorn, nextInRotation, outcome, outcomeVisible, parkName,
+    formatAccountUsage, isTorn, needsAttention, nextInRotation, outcome, outcomeVisible, parkName,
     rotationOrder, rowError, severityClass, usageSeverity, worstPercent,
 } from './pure.js';
 import {NoticeList, OutcomeLabel} from './noticeRow.js';
@@ -42,8 +42,10 @@ async function collectAccountRows(session, profiles, active, activeCards) {
             error: r && !r.ok ? rowError(profile.name, r.message) : null,
             // The stored dates alone call a refused token "valid"; health folds
             // in what the fetch actually said, so the row stops looking fine.
+            // A live token's refusal is Claude Code's to refresh, not the row's.
             health: accountHealth({
                 tokenState: summary.tokenState, errorCode: r && !r.ok ? r.code : null,
+                live: r?.source === 'live',
             }),
         });
         if (profile.name === active) {
@@ -235,7 +237,7 @@ class AccountsSection extends St.BoxLayout {
     }
 
     _metaClass(row) {
-        if (row.health === 'expired' || row.health === 'refresh-failed')
+        if (needsAttention(row.health))
             return 'cu-critical';
         return severityClass(usageSeverity(worstPercent(row.cards)));
     }
@@ -278,8 +280,12 @@ export class AccountsController {
          *  One at a time: the previous answer is not about this action. */
         this._outcome = null;
         this._outcomeTimer = null;
-        /** What the last refresh found, so a repair can repaint without a poll. */
-        this._state = {rows: [], activeName: null, notices: [], rotationTarget: null};
+        /** What the last refresh found, so a repair or the outcome timer can
+         *  repaint without a poll. Everything update() draws, saveAs included. */
+        this._state = {
+            rows: [], activeName: null, notices: [], rotationTarget: null,
+            saveAs: email => parkName(email, []),
+        };
 
         this._item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         this._section = new AccountsSection({
@@ -397,15 +403,28 @@ export class AccountsController {
             pending: readPendingSwitch(),
             torn: activeName !== null && isTorn(profiles, activeName, live),
         });
+        const names = rows.map(r => r.name);
         this._state = {
             rows, activeName, notices,
-            rotationTarget: nextInRotation(rows.map(r => r.name), activeName),
+            rotationTarget: nextInRotation(names, activeName),
+            saveAs: email => parkName(email, names),
         };
         this._item.visible = rows.length > 0 || notices.length > 0;
-        this._section.update({
-            ...this._state,
-            saveAs: email => parkName(email, this._state.rows.map(r => r.name)),
-        });
+        this._paint();
+    }
+
+    /** The one path that draws the section: whatever the last _render found. */
+    _paint() {
+        if (!this._isDestroyed())
+            this._section.update(this._state);
+    }
+
+    /** The dropdown is going away: no timer may fire into it afterwards. */
+    destroy() {
+        if (this._outcomeTimer) {
+            GLib.Source.remove(this._outcomeTimer);
+            this._outcomeTimer = null;
+        }
     }
 
     // ── Button-local outcomes ───────────────────────────────────────────────
@@ -420,21 +439,15 @@ export class AccountsController {
     _setOutcome(control, ok, text) {
         this._outcome = outcome(control, ok, text, Date.now());
         if (this._outcomeTimer)
-            GLib.source_remove(this._outcomeTimer);
+            GLib.Source.remove(this._outcomeTimer);
         this._outcomeTimer = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, OUTCOME_TTL_MS, () => {
                 this._outcomeTimer = null;
                 this._outcome = null;
-                if (!this._isDestroyed())
-                    this._section.update({...this._state, saveAs: () => ''});
+                this._paint();
                 return GLib.SOURCE_REMOVE;
             });
-        if (!this._isDestroyed()) {
-            this._section.update({
-                ...this._state,
-                saveAs: email => parkName(email, this._state.rows.map(r => r.name)),
-            });
-        }
+        this._paint();
     }
 
     /** The header's "Next": walk the saved list in order, wrapping. */
@@ -461,8 +474,7 @@ export class AccountsController {
             break;
         case 'save':
             try {
-                const saved = saveCurrent(
-                    parkName(notice.arg, this._state.rows.map(r => r.name)));
+                const saved = saveCurrent(this._state.saveAs(notice.arg));
                 this._setOutcome(control, true, _('saved as %s').format(saved.name));
                 this._refreshSoon();
             } catch (e) {

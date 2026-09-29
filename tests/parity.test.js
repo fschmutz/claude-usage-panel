@@ -18,7 +18,6 @@ import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import * as normalize from '../claude-code/normalize.js';
 import * as pace from '../claude-code/pace.js';
 import * as accounts from '../claude-code/accounts-contract.js';
-import * as notices from '../claude-code/notices.js';
 import {resetHint} from '../claude-code/stamps.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -169,7 +168,10 @@ for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]])
     for (const c of endpointFix.cases) {
         test(`${portName} usageFailure - ${c.name}`, () => {
             assert.deepEqual(
-                port.usageFailure(c.status, c.body, {label: c.label}),
+                port.usageFailure(c.status, c.body, {
+                    label: c.label, retryAfter: c.retryAfter ?? null,
+                    nowMs: Date.parse(endpointFix.now),
+                }),
                 {ok: false, ...c.expected});
         });
     }
@@ -200,6 +202,11 @@ for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]])
     for (const c of readingFix.cases) {
         test(`${portName} usageReading - ${c.name}`, () => {
             assert.deepEqual(port.usageReading(c.card, readingNow), c.expected);
+        });
+    }
+    for (const c of readingFix.panelCard) {
+        test(`${portName} panelCard - ${c.name}`, () => {
+            assert.equal(port.panelCard(c.cards, c.mode, readingNow)?.key ?? null, c.expected);
         });
     }
 }
@@ -248,48 +255,6 @@ for (const [portName, port] of [['pure.js', pure], ['accounts-contract.js', acco
                 nowMs: accountsFix.now, threshold: accountsFix.threshold,
                 margin: accountsFix.margin, cooldownMs: accountsFix.cooldownMs,
             }), c.expected);
-        });
-    }
-}
-
-// ── Inline notices, button-local outcomes, switch rotation ──────────────────────
-// Which inline row appears next to which account, in what order, how loud, and
-// what its one repair button does. Sentences and button labels are per port
-// (they are translated) and are NOT asserted. The Swift twin is NoticesTests.
-const noticesFix = fixture('notices.json');
-
-for (const [portName, port] of [['pure.js', pure], ['notices.js', notices]]) {
-    test(`${portName} notices - constants`, () => {
-        assert.equal(port.OUTCOME_TTL_MS, noticesFix.outcomeTtlMs);
-        assert.equal(port.ROTATION_MIN, noticesFix.rotationMin);
-    });
-    for (const c of noticesFix.health) {
-        test(`${portName} accountHealth - ${c.name}`, () => {
-            const health = port.accountHealth({tokenState: c.tokenState, errorCode: c.errorCode});
-            assert.equal(health, c.expected);
-            assert.ok(port.ACCOUNT_HEALTH.includes(health), health);
-            assert.equal(port.needsAttention(health), c.needsAttention);
-        });
-    }
-    for (const c of noticesFix.notices) {
-        test(`${portName} accountNotices - ${c.name}`, () => {
-            const got = port.accountNotices(c.state);
-            assert.deepEqual(got, c.expected);
-            for (const n of got) {
-                assert.ok(port.NOTICE_KINDS.includes(n.kind), n.kind);
-                assert.ok(port.NOTICE_ACTIONS.includes(n.action), n.action);
-            }
-        });
-    }
-    for (const c of noticesFix.outcomes) {
-        test(`${portName} outcomeVisible - ${c.name}`, () => {
-            assert.equal(port.outcomeVisible(c.outcome, c.nowMs), c.expected);
-        });
-    }
-    for (const c of noticesFix.rotation) {
-        test(`${portName} nextInRotation - ${c.name}`, () => {
-            assert.equal(port.nextInRotation(c.names, c.active), c.expected);
-            assert.equal(port.rotationEnabled(c.names), c.expected !== null);
         });
     }
 }
