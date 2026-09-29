@@ -115,3 +115,74 @@ for (const [portName, port] of [['pure/codex.js', pure], ['codex-contract.js', c
         }
     });
 }
+
+// ── The switch guard and the transcript walk ────────────────────────────────
+
+/** A fake store for codexSwitch: the fixture case scripts the codex CLI. */
+function switchWorld(c) {
+    const w = {version: 0, syncs: 0, writes: 0};
+    const blob = () => (c.hasLive ? {tokens: {v: w.version}} : null);
+    const ops = {
+        syncBack: () => {
+            const synced = {name: c.hasLive ? c.live : null, auth: blob()};
+            if (c.rotations[w.syncs++])
+                w.version++;
+            return synced;
+        },
+        readLive: blob,
+        write: () => w.writes++,
+    };
+    return {w, ops};
+}
+
+/** The directory listing codexSessionScan asks for, from a fixture tree. */
+function treeLister(tree, visited) {
+    return (segments) => {
+        visited.push(segments.join('/'));
+        let node = tree;
+        for (const s of segments)
+            node = node?.[s];
+        if (!node || typeof node !== 'object')
+            return null;
+        return Object.entries(node).map(([name, v]) => ({
+            name, dir: typeof v === 'object' && v !== null, mtimeMs: typeof v === 'number' ? v : null,
+        }));
+    };
+}
+
+for (const [portName, port] of [['pure/codex.js', pure], ['codex-contract.js', codex]]) {
+    test(`${portName} - the switch and scan constants are the fixture's`, () => {
+        assert.equal(port.CODEX_SWITCH_SYNC_TRIES, FIX.switchSyncTries);
+        assert.equal(port.CODEX_SESSION_SCAN_LIMIT, USAGE.sessionScanLimit);
+        assert.equal(port.CODEX_SESSIONS_MAX_DEPTH, USAGE.sessionsMaxDepth);
+    });
+
+    test(`${portName} - a token the codex CLI rotates mid-switch is synced, never overwritten`, () => {
+        for (const c of FIX.switchGuard.cases) {
+            const {w, ops} = switchWorld(c);
+            const r = port.codexSwitch(c.target, ops);
+            assert.deepEqual(
+                {outcome: r.outcome, from: r.from ?? null, syncs: w.syncs, writes: w.writes},
+                c.expected, c.name);
+        }
+    });
+
+    test(`${portName} - the transcript walk: newest day first, bounded depth, stops at the limit`, () => {
+        for (const c of USAGE.sessionScan.cases) {
+            const visited = [];
+            const got = port.scanCodexSessions(treeLister(c.tree, visited), c.limit);
+            assert.deepEqual(got.map((f) => f.path), c.expected, c.name);
+            assert.deepEqual(visited, c.visited, c.name);
+        }
+    });
+}
+
+test('pure/codex.js - the async walk (the GNOME shell drives it) matches the sync one', async () => {
+    for (const c of USAGE.sessionScan.cases) {
+        const visited = [];
+        const lister = treeLister(c.tree, visited);
+        const got = await pure.scanCodexSessionsAsync((s) => Promise.resolve(lister(s)), c.limit);
+        assert.deepEqual(got.map((f) => f.path), c.expected, c.name);
+        assert.deepEqual(visited, c.visited, c.name);
+    }
+});

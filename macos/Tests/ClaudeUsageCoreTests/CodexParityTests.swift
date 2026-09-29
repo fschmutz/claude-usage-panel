@@ -199,4 +199,69 @@ final class CodexParityTests: XCTestCase {
             }
         }
     }
+
+    func testSwitchAndScanConstantsArePinned() throws {
+        XCTAssertEqual(Codex.switchSyncTries, try fixture()["switchSyncTries"] as! Int)
+        XCTAssertEqual(Codex.sessionScanLimit, try usage()["sessionScanLimit"] as! Int)
+        XCTAssertEqual(Codex.sessionsMaxDepth, try usage()["sessionsMaxDepth"] as! Int)
+    }
+
+    func testARotationMidSwitchIsSyncedNeverOverwritten() throws {
+        let guardCases =
+            (try fixture()["switchGuard"] as! [String: Any])["cases"] as! [[String: Any]]
+        for c in guardCases {
+            let name = c["name"] as! String
+            let hasLive = c["hasLive"] as! Bool
+            let live = c["live"] as? String
+            let rotations = c["rotations"] as! [Bool]
+            var version = 0
+            var syncs = 0
+            var writes = 0
+            let blob = { () -> [String: Any]? in hasLive ? ["tokens": ["v": version]] : nil }
+            let outcome = Codex.guardedSwitch(
+                to: c["target"] as! String,
+                syncBack: {
+                    let synced = (name: hasLive ? live : nil, auth: blob())
+                    if syncs < rotations.count, rotations[syncs] { version += 1 }
+                    syncs += 1
+                    return synced
+                },
+                readLive: blob, write: { writes += 1 })
+            let (kind, from): (String, String?) =
+                switch outcome {
+                case .unsaved: ("unsaved", nil)
+                case .already(let f): ("already", f)
+                case .switched(let f): ("switched", f)
+                case .busy(let f): ("busy", f)
+                }
+            let want = c["expected"] as! [String: Any]
+            XCTAssertEqual(kind, want["outcome"] as! String, name)
+            XCTAssertEqual(from, want["from"] as? String, name)
+            XCTAssertEqual(syncs, want["syncs"] as! Int, name)
+            XCTAssertEqual(writes, want["writes"] as! Int, name)
+        }
+    }
+
+    func testTheTranscriptWalkNewestDayFirstBoundedDepth() throws {
+        let scan = try usage()["sessionScan"] as! [String: Any]
+        for c in scan["cases"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            var visited: [String] = []
+            let tree = c["tree"] as? [String: Any]
+            let list = { (segments: [String]) -> [CodexDirEntry] in
+                visited.append(segments.joined(separator: "/"))
+                var node: [String: Any]? = tree
+                for s in segments { node = node?[s] as? [String: Any] }
+                return (node ?? [:]).map { key, value in
+                    CodexDirEntry(
+                        name: key, isDirectory: value is [String: Any],
+                        mtimeMs: (value as? NSNumber)?.doubleValue)
+                }
+            }
+            let got = Codex.scanSessions(
+                limit: c["limit"] as? Int ?? Codex.sessionScanLimit, list: list)
+            XCTAssertEqual(got.map(\.path), c["expected"] as! [String], name)
+            XCTAssertEqual(visited, c["visited"] as! [String], name)
+        }
+    }
 }

@@ -21,8 +21,9 @@ enum CodexStore {
     /// Tail of a session transcript read when looking for the last rate-limit
     /// snapshot; the newest events are at the end.
     static let sessionTailBytes = 256 * 1024
-    /// How many recent transcripts to look through before giving up.
-    static let sessionScanLimit = 8
+    /// How many recent transcripts to look through before giving up: the
+    /// contract's, one rule for every port.
+    static let sessionScanLimit = Codex.sessionScanLimit
 
     // MARK: paths
 
@@ -53,21 +54,36 @@ enum CodexStore {
 
     // MARK: private, atomic files
 
-    /// A 0600 tmp file renamed over `url` with rename(2), as the Node port
-    /// does: the inode is swapped, so the result is 0600 even when the file it
+    /// A tmp file renamed over `url` with rename(2), as the Node port does:
+    /// the inode is swapped, so the result is 0600 even when the file it
     /// replaces (an auth.json the codex CLI wrote 0644) was not.
-    /// `replaceItemAt` would keep the replaced file's permissions.
+    /// `replaceItemAt` would keep the replaced file's permissions. The tmp is
+    /// CREATED 0600 with open(O_CREAT | O_EXCL): `createFile(attributes:)`
+    /// applies the mode after writing, leaving the token in a wider-moded file
+    /// for an instant in ~/.codex, and O_EXCL fails on a planted tmp or symlink
+    /// instead of writing through it.
     private static func writePrivate(_ data: Data, to url: URL) throws {
         let fm = FileManager.default
         let dir = url.deletingLastPathComponent()
         try fm.createDirectory(
             at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).\(getpid()).tmp")
-        guard
-            fm.createFile(atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600])
-        else { throw AccountError.message("could not write \(url.path)") }
+        unlink(tmp.path)
+        let fd = open(tmp.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        guard fd >= 0 else { throw AccountError.message("could not write \(url.path)") }
+        // Through FileHandle: plain write(2) is shadowed by this type's own
+        // `write(_:)`.
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: false)
+        do {
+            try handle.write(contentsOf: data)
+            try handle.close()
+        } catch {
+            try? handle.close()
+            unlink(tmp.path)
+            throw AccountError.message("could not write \(url.path)")
+        }
         guard rename(tmp.path, url.path) == 0 else {
-            try? fm.removeItem(at: tmp)
+            unlink(tmp.path)
             throw AccountError.message("could not replace \(url.path)")
         }
     }
@@ -130,26 +146,37 @@ enum CodexStore {
         Codex.activeName(profiles: list(), live: readLiveAuth())
     }
 
+    /// Save `auth` (the live login, as read once) under `name`; nil reads it.
     @discardableResult
-    private static func snapshotLive(_ name: String) throws -> CodexProfile {
-        guard let auth = readLiveAuth() else {
+    private static func snapshotLive(_ name: String, auth given: [String: Any]? = nil) throws
+        -> CodexProfile
+    {
+        guard let auth = given ?? readLiveAuth() else {
             throw AccountError.message("no Codex login to save - run `codex login` first")
         }
         return try write(CodexProfile(name: name, savedAt: stamp(), auth: auth))
+    }
+
+    /// `syncBack`, also returning the auth.json it read (and saved).
+    private static func syncBackLive() throws -> (name: String?, auth: [String: Any]?) {
+        guard let auth = readLiveAuth() else { return (nil, nil) }
+        let profiles = list()
+        guard let name = Codex.activeName(profiles: profiles, live: auth) else {
+            return (nil, auth)
+        }
+        let stored = profiles.first { $0.name == name }
+        // The blob read above, never a second read: the CLI may rotate between.
+        if stored == nil || !Accounts.sameJSON(stored!.auth, auth) {
+            try snapshotLive(name, auth: auth)
+        }
+        return (name, auth)
     }
 
     /// Write the live login back into its own profile, so the tokens the codex
     /// CLI rotated since the last switch are the ones we keep.
     @discardableResult
     static func syncBack() throws -> String? {
-        guard let auth = readLiveAuth() else { return nil }
-        let profiles = list()
-        guard let name = Codex.activeName(profiles: profiles, live: auth) else { return nil }
-        let stored = profiles.first { $0.name == name }
-        if stored == nil || !Accounts.sameJSON(stored!.auth, auth) {
-            try snapshotLive(name)
-        }
-        return name
+        try syncBackLive().name
     }
 
     @discardableResult
@@ -193,25 +220,33 @@ enum CodexStore {
 
     /// Make `name` the live Codex login. The live one is written back into its
     /// own profile first; an unsaved live login is refused rather than
-    /// silently overwritten.
+    /// silently overwritten, and a token the codex CLI rotates mid-switch is
+    /// synced, not lost (`Codex.guardedSwitch`).
     @discardableResult
     static func switchTo(_ name: String) throws -> SwitchResult {
         guard let target = read(name) else {
             throw AccountError.message("no saved Codex account named \(name)")
         }
-        let from = try syncBack()
-        if readLiveAuth() != nil, from == nil {
-            let id = Codex.identity(readLiveAuth())
+        let body = try pretty(target.auth)
+        let outcome = try Codex.guardedSwitch(
+            to: name, syncBack: syncBackLive, readLive: readLiveAuth,
+            write: { try writePrivate(body, to: authURL) })
+        let state = target.tokenState(nowMs: nowMs())
+        switch outcome {
+        case .unsaved(let live):
+            let id = Codex.identity(live)
             throw AccountError.message(
                 "the current Codex login (\(id.email ?? "unknown account")) is not saved - "
                     + "save it first, or it would be lost")
-        }
-        let state = target.tokenState(nowMs: nowMs())
-        if from == name {
+        case .busy:
+            throw AccountError.message(
+                "the codex CLI kept rewriting auth.json during the switch - "
+                    + "nothing was changed, try again")
+        case .already(let from):
             return SwitchResult(from: from, to: name, changed: false, tokenState: state)
+        case .switched(let from):
+            return SwitchResult(from: from, to: name, changed: true, tokenState: state)
         }
-        try writePrivate(pretty(target.auth), to: authURL)
-        return SwitchResult(from: from, to: name, changed: true, tokenState: state)
     }
 
     // MARK: usage, honestly
@@ -230,20 +265,35 @@ enum CodexStore {
         return String(decoding: data, as: UTF8.self)
     }
 
-    private static func recentSessions() -> [(url: URL, modified: Date)] {
-        let fm = FileManager.default
+    /// One directory under sessions/, as `Codex.scanSessions` asks for it.
+    private static func listSessionDir(_ segments: [String]) -> [CodexDirEntry] {
+        let dir = segments.reduce(sessionsURL) { $0.appendingPathComponent($1) }
+        let keys: [URLResourceKey] = [
+            .isDirectoryKey, .isRegularFileKey, .contentModificationDateKey,
+        ]
         guard
-            let walker = fm.enumerator(
-                at: sessionsURL, includingPropertiesForKeys: [.contentModificationDateKey])
+            let urls = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: keys)
         else { return [] }
-        var files: [(url: URL, modified: Date)] = []
-        for case let url as URL in walker where url.pathExtension == "jsonl" {
-            let modified =
-                (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            files.append((url, modified))
+        return urls.map { url in
+            let values = try? url.resourceValues(forKeys: Set(keys))
+            let isDir = values?.isDirectory ?? false
+            let mtime =
+                values?.isRegularFile == true
+                ? values?.contentModificationDate.map { $0.timeIntervalSince1970 * 1000 } : nil
+            return CodexDirEntry(name: url.lastPathComponent, isDirectory: isDir, mtimeMs: mtime)
         }
-        return files.sorted { $0.modified > $1.modified }.prefix(sessionScanLimit).map { $0 }
+    }
+
+    /// The newest session transcripts, newest first, capped: the contract's
+    /// newest-day-first walk (`Codex.scanSessions`), never the whole tree.
+    private static func recentSessions() -> [(url: URL, modified: Date)] {
+        Codex.scanSessions(limit: sessionScanLimit, list: listSessionDir).map { file in
+            let url = file.path.split(separator: "/").reduce(sessionsURL) {
+                $0.appendingPathComponent(String($1))
+            }
+            return (url, Date(timeIntervalSince1970: file.mtimeMs / 1000))
+        }
     }
 
     /// The freshest usage Codex has recorded locally: the tails of the newest

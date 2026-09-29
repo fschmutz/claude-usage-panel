@@ -368,3 +368,104 @@ public enum Codex {
         return CodexRecordedUsage(cards: [], capturedAt: nil, reason: .noSnapshot)
     }
 }
+
+// MARK: switching without losing a rotated token
+
+/// What `Codex.guardedSwitch` did. `busy`: the live auth.json changed on
+/// every try, and nothing was written.
+public enum CodexSwitchOutcome {
+    case unsaved(live: [String: Any])
+    case already(from: String)
+    case switched(from: String?)
+    case busy(from: String?)
+}
+
+/// One entry of a directory under sessions/, as `Codex.scanSessions` asks.
+public struct CodexDirEntry: Sendable {
+    public let name: String
+    public let isDirectory: Bool
+    public let mtimeMs: Double?
+
+    public init(name: String, isDirectory: Bool, mtimeMs: Double?) {
+        self.name = name
+        self.isDirectory = isDirectory
+        self.mtimeMs = mtimeMs
+    }
+}
+
+extension Codex {
+    /// How many times a switch re-syncs a live login that keeps changing
+    /// before it gives up rather than overwrite a token it has not kept.
+    public static let switchSyncTries = 3
+
+    /// The switch sequence, over the store's own I/O. The codex CLI refreshes
+    /// its tokens in place, without a lock: a refresh landing between the
+    /// sync-back and the write would leave the rotated refresh token only in
+    /// the file being overwritten. So the live file is read again right before
+    /// the write, and when it moved the new one is synced first.
+    /// `syncBack` writes the live login into its profile and returns which one
+    /// it was and the blob it read; `write` installs the target.
+    public static func guardedSwitch(
+        to target: String, tries: Int = switchSyncTries,
+        syncBack: () throws -> (name: String?, auth: [String: Any]?),
+        readLive: () -> [String: Any]?, write: () throws -> Void
+    ) rethrows -> CodexSwitchOutcome {
+        var from: String?
+        for _ in 0..<tries {
+            let synced = try syncBack()
+            from = synced.name
+            if let live = synced.auth, from == nil { return .unsaved(live: live) }
+            if let from, from == target { return .already(from: from) }
+            let now = readLive()
+            let unchanged =
+                now == nil && synced.auth == nil
+                || now.map { n in synced.auth.map { Accounts.sameJSON(n, $0) } ?? false } ?? false
+            if !unchanged { continue }
+            try write()
+            return .switched(from: from)
+        }
+        return .busy(from: from)
+    }
+
+    // MARK: which transcripts to read
+
+    /// How many recent transcripts to look through before giving up.
+    public static let sessionScanLimit = 8
+    /// How many directories below sessions/ a transcript may sit: the three
+    /// date levels (YYYY/MM/DD) plus one spare.
+    public static let sessionsMaxDepth = 4
+
+    /// The newest transcripts under sessions/, newest mtime first (ties by
+    /// path), at most `limit`. Directories are descended in descending name
+    /// order (the newest day first), descent stops once `limit` files are in
+    /// hand, and never goes more than `maxDepth` directories deep. `list` is
+    /// handed the path segments below sessions/ and returns that directory's
+    /// entries ([] when unreadable). Paths come back '/'-joined, relative.
+    public static func scanSessions(
+        limit: Int = sessionScanLimit, maxDepth: Int = sessionsMaxDepth,
+        list: ([String]) -> [CodexDirEntry]
+    ) -> [(path: String, mtimeMs: Double)] {
+        var found: [(path: String, mtimeMs: Double)] = []
+        func codePoint(_ a: String, _ b: String) -> Bool {
+            a.unicodeScalars.lexicographicallyPrecedes(b.unicodeScalars)
+        }
+        func visit(_ segments: [String]) {
+            let entries = list(segments).filter { !$0.name.isEmpty }
+            for e in entries where !e.isDirectory && e.name.hasSuffix(".jsonl") {
+                guard let m = e.mtimeMs, m.isFinite else { continue }
+                found.append(((segments + [e.name]).joined(separator: "/"), m))
+            }
+            guard segments.count < maxDepth else { return }
+            let dirs = entries.filter(\.isDirectory).map(\.name).sorted(by: codePoint)
+            for name in dirs.reversed() {
+                if found.count >= limit { return }
+                visit(segments + [name])
+            }
+        }
+        visit([])
+        let sorted = found.sorted {
+            $0.mtimeMs != $1.mtimeMs ? $0.mtimeMs > $1.mtimeMs : codePoint($0.path, $1.path)
+        }
+        return Array(sorted.prefix(limit))
+    }
+}

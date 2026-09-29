@@ -413,5 +413,49 @@
         "resetsAt": ["2026-09-13T14:00:00.000Z"]
       }
     }
-  ]
+  ],
+  "sessionScanLimit": 8,
+  "sessionsMaxDepth": 4,
+  "sessionScan": {
+    "_comment": "Which transcripts every port reads (codexSessionScan / Codex.scanSessions). A tree is a directory: an object is a subdirectory, a number is a file and its mtime in ms, null is an unreadable directory. visited is every directory the walk asked to list, in order, '/'-joined below sessions/ ('' is sessions/ itself). limit, when absent, is sessionScanLimit.",
+    "cases": [
+      {
+        "name": "a rollout at YYYY/MM/DD is found",
+        "tree": {"2026": {"09": {"13": {"rollout-a.jsonl": 1789299000000}}}},
+        "expected": ["2026/09/13/rollout-a.jsonl"],
+        "visited": ["", "2026", "2026/09", "2026/09/13"]
+      },
+      {
+        "name": "a file 4 directories deep is found; a 5th level is never listed",
+        "tree": {"a": {"b": {"c": {"d": {"deep4.jsonl": 100, "e": {"deep5.jsonl": 200}}}}}, "top.jsonl": 50},
+        "expected": ["a/b/c/d/deep4.jsonl", "top.jsonl"],
+        "visited": ["", "a", "a/b", "a/b/c", "a/b/c/d"]
+      },
+      {
+        "name": "the newest day first; descent stops once the limit is in hand",
+        "limit": 2,
+        "tree": {"2025": {"12": {"31": {"old.jsonl": 9999999999999}}}, "2026": {"08": {"30": {"x.jsonl": 10}}, "09": {"12": {"resumed.jsonl": 5000}, "13": {"r1.jsonl": 3000, "r2.jsonl": 4000}}}},
+        "expected": ["2026/09/13/r2.jsonl", "2026/09/13/r1.jsonl"],
+        "visited": ["", "2026", "2026/09", "2026/09/13"]
+      },
+      {
+        "name": "only .jsonl files count, a directory named x.jsonl is walked, and an mtime tie goes by path",
+        "tree": {"notes.txt": 9, "b.jsonl": 7, "a.jsonl": 7, "x.jsonl": {"inner.jsonl": 8}},
+        "expected": ["x.jsonl/inner.jsonl", "a.jsonl", "b.jsonl"],
+        "visited": ["", "x.jsonl"]
+      },
+      {
+        "name": "the default limit keeps the 8 newest",
+        "tree": {"2026": {"09": {"13": {"f00.jsonl": 1, "f01.jsonl": 2, "f02.jsonl": 3, "f03.jsonl": 4, "f04.jsonl": 5, "f05.jsonl": 6, "f06.jsonl": 7, "f07.jsonl": 8, "f08.jsonl": 9, "f09.jsonl": 10}}}},
+        "expected": ["2026/09/13/f09.jsonl", "2026/09/13/f08.jsonl", "2026/09/13/f07.jsonl", "2026/09/13/f06.jsonl", "2026/09/13/f05.jsonl", "2026/09/13/f04.jsonl", "2026/09/13/f03.jsonl", "2026/09/13/f02.jsonl"],
+        "visited": ["", "2026", "2026/09", "2026/09/13"]
+      },
+      {
+        "name": "no sessions directory: nothing, and no error",
+        "tree": null,
+        "expected": [],
+        "visited": [""]
+      }
+    ]
+  }
 }

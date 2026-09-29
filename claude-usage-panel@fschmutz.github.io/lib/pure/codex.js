@@ -17,6 +17,7 @@
 // transcript), and those are reported as ESTIMATED, with the instant they were
 // captured, or not at all.
 
+import {sameJSON} from './accounts.js';
 import {clampPercent} from './usage.js';
 
 export const CODEX_PROFILE_VERSION = 1;
@@ -382,4 +383,113 @@ export function pickRecordedCodexUsage(files, nowMs) {
         return {cards, capturedAt, reason: cards.length ? null : 'stale'};
     }
     return {cards: [], capturedAt: null, reason: 'no_snapshot'};
+}
+
+// ── Switching without losing a rotated token ────────────────────────────────────
+// The codex CLI refreshes its tokens in place, without a lock. A switch reads
+// auth.json, writes it back into its profile, then overwrites it with the
+// target: a refresh that lands in between would leave the rotated refresh
+// token only in the file being overwritten. So the live file is read again
+// right before the write, and when it moved the new one is synced first.
+
+/** How many times a switch re-syncs a live login that keeps changing before it
+ *  gives up rather than overwrite a token it has not kept. */
+export const CODEX_SWITCH_SYNC_TRIES = 3;
+
+/**
+ * The switch sequence, over the store's own I/O.
+ * @param {string} target the profile name to make live
+ * @param {{syncBack: () => {name: ?string, auth: ?object}, readLive: () => ?object,
+ *   write: () => void}} ops syncBack writes the live login into its profile and
+ *   says which one it was and what it read; write installs the target.
+ * @param {number} tries
+ * @returns {{outcome: 'unsaved', live: object} | {outcome: 'already', from: string}
+ *   | {outcome: 'switched', from: ?string} | {outcome: 'busy', from: ?string}}
+ *   `busy`: the live file changed on every try, nothing was written.
+ */
+export function codexSwitch(target, {syncBack, readLive, write}, tries = CODEX_SWITCH_SYNC_TRIES) {
+    let from = null;
+    for (let i = 0; i < tries; i++) {
+        const synced = syncBack();
+        from = synced.name;
+        if (synced.auth && !from)
+            return {outcome: 'unsaved', live: synced.auth};
+        if (from === target)
+            return {outcome: 'already', from};
+        if (!sameJSON(readLive() ?? null, synced.auth ?? null))
+            continue;
+        write();
+        return {outcome: 'switched', from};
+    }
+    return {outcome: 'busy', from};
+}
+
+// ── Which transcripts to read ───────────────────────────────────────────────────
+// The codex CLI files rollouts as sessions/YYYY/MM/DD/rollout-*.jsonl. A heavy
+// user has thousands; only the newest few can carry a fresh reading. So the
+// walk descends directories in descending name order (the newest day first),
+// stops descending once CODEX_SESSION_SCAN_LIMIT files are in hand, and never
+// goes more than CODEX_SESSIONS_MAX_DEPTH directories below sessions/ (the
+// three date levels, plus one spare). The walk is a generator over the
+// listings it asks for, so the shell drives it asynchronously (never blocking
+// the main loop) and the CLI synchronously, on one rule.
+
+/** How many recent transcripts to look through before giving up. */
+export const CODEX_SESSION_SCAN_LIMIT = 8;
+/** How many directories below sessions/ a transcript may sit. */
+export const CODEX_SESSIONS_MAX_DEPTH = 4;
+
+const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Yields the path segments (below sessions/) of each directory it wants
+ * listed; is sent back that listing, `[{name, dir, mtimeMs}]` (anything that
+ * is not an array reads as empty: an unreadable directory). Returns the chosen
+ * transcripts, newest mtime first (ties by path), at most `limit`.
+ * @param {number} limit
+ * @param {number} maxDepth
+ * @returns {Generator<string[], Array<{path: string, mtimeMs: number}>, ?Array>}
+ */
+export function* codexSessionScan(limit = CODEX_SESSION_SCAN_LIMIT,
+    maxDepth = CODEX_SESSIONS_MAX_DEPTH) {
+    const found = [];
+    function* visit(segments) {
+        const listed = yield segments;
+        const entries = Array.isArray(listed)
+            ? listed.filter(e => e && typeof e.name === 'string' && e.name) : [];
+        for (const e of entries) {
+            if (e.dir !== true && e.name.endsWith('.jsonl') && num(e.mtimeMs) !== null)
+                found.push({path: [...segments, e.name].join('/'), mtimeMs: e.mtimeMs});
+        }
+        if (segments.length >= maxDepth)
+            return;
+        const dirs = entries.filter(e => e.dir === true).map(e => e.name).sort(byCodePoint);
+        for (const name of dirs.reverse()) {
+            if (found.length >= limit)
+                return;
+            yield* visit([...segments, name]);
+        }
+    }
+    yield* visit([]);
+    return found.sort((a, b) => b.mtimeMs - a.mtimeMs || byCodePoint(a.path, b.path))
+        .slice(0, limit);
+}
+
+/** Drive codexSessionScan with a synchronous `list(segments)`. */
+export function scanCodexSessions(list, limit, maxDepth) {
+    const walk = codexSessionScan(limit, maxDepth);
+    let step = walk.next();
+    while (!step.done)
+        step = walk.next(list(step.value));
+    return step.value;
+}
+
+/** Drive codexSessionScan with an asynchronous `list(segments)`: one awaited
+ *  listing at a time, so the caller's main loop runs between them. */
+export async function scanCodexSessionsAsync(list, limit, maxDepth) {
+    const walk = codexSessionScan(limit, maxDepth);
+    let step = walk.next();
+    while (!step.done)
+        step = walk.next(await list(step.value));
+    return step.value;
 }

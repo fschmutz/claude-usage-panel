@@ -24,8 +24,9 @@ import path from 'node:path';
 
 import {isValidName, sameJSON, sameName} from './accounts-contract.js';
 import {
-  CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexTokenState,
-  parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin,
+  CODEX_PROFILE_VERSION, CODEX_SESSION_SCAN_LIMIT, activeCodexName, codexIdentity, codexSummary,
+  codexSwitch, codexTokenState, parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin,
+  scanCodexSessions,
 } from './codex-contract.js';
 import {codexAccountsDir, codexAuthPath, codexSessionsDir} from './paths.js';
 import {readJSON, writePrivate} from './private-fs.js';
@@ -34,8 +35,9 @@ import {readJSON, writePrivate} from './private-fs.js';
  *  snapshot. A rollout file grows with the conversation; the newest events are
  *  at the end, and nothing older than the tail would be fresh enough to show. */
 export const SESSION_TAIL_BYTES = 256 * 1024;
-/** How many recent transcripts to look through before giving up. */
-export const SESSION_SCAN_LIMIT = 8;
+/** How many recent transcripts to look through before giving up (the
+ *  contract's CODEX_SESSION_SCAN_LIMIT, one rule for every port). */
+export const SESSION_SCAN_LIMIT = CODEX_SESSION_SCAN_LIMIT;
 
 /** The last SESSION_TAIL_BYTES of a file, as text; '' when unreadable. */
 function readTail(file, bytes = SESSION_TAIL_BYTES) {
@@ -64,7 +66,9 @@ function readTail(file, bytes = SESSION_TAIL_BYTES) {
  * Bind the Codex store to one environment. `io` overrides, all optional:
  * homedir, platform, env, nowMs, dir, authPath, sessionsDir. Defaults are the
  * real process - the same shape openStore(io) takes, so a caller that already
- * has one passes it straight through.
+ * has one passes it straight through. `io.afterSyncBack(name)`, test-only, runs
+ * between a switch's sync-back and its re-read of auth.json: the window in
+ * which the codex CLI may rotate the tokens in place.
  */
 export function openCodexStore(io = {}) {
   const now = () => io.nowMs ?? Date.now();
@@ -121,10 +125,23 @@ export function openCodexStore(io = {}) {
     return activeCodexName(listProfiles(), readLiveAuth());
   }
 
-  function snapshotLive(name) {
-    const auth = readLiveAuth();
+  /** Save `auth` (the live login, as read once) under `name`. */
+  function snapshotLive(name, auth = readLiveAuth()) {
     if (!auth) throw new Error('no Codex login to save - run `codex login` first');
     return writeProfile({version: CODEX_PROFILE_VERSION, name, savedAt: stamp(), auth});
+  }
+
+  /** syncBack, also returning the auth.json it read (and saved, if saved). */
+  function syncBackLive() {
+    const auth = readLiveAuth();
+    if (!auth) return {name: null, auth: null};
+    const profiles = listProfiles();
+    const name = activeCodexName(profiles, auth);
+    if (!name) return {name: null, auth};
+    const stored = profiles.find((p) => p.name === name);
+    // The blob read above, never a second read: the CLI may rotate in between.
+    if (!stored || !sameJSON(stored.auth, auth)) snapshotLive(name, auth);
+    return {name, auth};
   }
 
   /**
@@ -133,14 +150,7 @@ export function openCodexStore(io = {}) {
    * profile name, or null when the live login is not a saved one.
    */
   function syncBack() {
-    const auth = readLiveAuth();
-    if (!auth) return null;
-    const profiles = listProfiles();
-    const name = activeCodexName(profiles, auth);
-    if (!name) return null;
-    const stored = profiles.find((p) => p.name === name);
-    if (!stored || !sameJSON(stored.auth, auth)) snapshotLive(name);
-    return name;
+    return syncBackLive().name;
   }
 
   /** Save the live Codex login as `name`. Refuses a case variant outright and
@@ -183,42 +193,60 @@ export function openCodexStore(io = {}) {
   function switchTo(name) {
     const target = readProfile(name);
     if (!target) throw new Error(`no saved Codex account named ${name}`);
-    const from = syncBack();
-    const live = readLiveAuth();
-    if (live && !from) {
-      const id = codexIdentity(live);
+    // codexSwitch (codex-contract.js) re-reads auth.json right before the
+    // write and syncs a token the CLI rotated meanwhile, rather than lose it.
+    const r = codexSwitch(name, {
+      syncBack: () => {
+        const synced = syncBackLive();
+        io.afterSyncBack?.(synced.name);
+        return synced;
+      },
+      readLive: readLiveAuth,
+      write: () => writePrivate(authFile, `${JSON.stringify(target.auth, null, 2)}\n`),
+    });
+    if (r.outcome === 'unsaved') {
+      const id = codexIdentity(r.live);
       throw new Error(
         `the current Codex login (${id.email ?? 'unknown account'}) is not saved - ` +
         '`claudectl codex save <NAME>` it first, or it would be lost');
     }
-    if (from === name) {
-      return {from, to: name, changed: false, tokenState: codexTokenState(target, now())};
+    if (r.outcome === 'busy') {
+      throw new Error('the codex CLI kept rewriting auth.json during the switch - ' +
+        'nothing was changed, try again');
     }
-    writePrivate(authFile, `${JSON.stringify(target.auth, null, 2)}\n`);
-    return {from, to: name, changed: true, tokenState: codexTokenState(target, now())};
+    const changed = r.outcome === 'switched';
+    return {from: r.from, to: name, changed, tokenState: codexTokenState(target, now())};
   }
 
   // ── Usage, honestly ───────────────────────────────────────────────────────
 
-  /** The newest session transcripts, newest first, capped. */
-  function recentSessions(limit = SESSION_SCAN_LIMIT) {
+  /** One directory under sessions/, as codexSessionScan asks for it. */
+  function listSessionDir(segments) {
+    const dirPath = path.join(sessionsDir, ...segments);
     let entries;
     try {
-      entries = fs.readdirSync(sessionsDir, {withFileTypes: true, recursive: true});
+      entries = fs.readdirSync(dirPath, {withFileTypes: true});
     } catch {
       return [];
     }
-    const files = [];
-    for (const e of entries) {
-      if (!e.isFile() || !e.name.endsWith('.jsonl')) continue;
-      const full = path.join(e.parentPath ?? e.path ?? sessionsDir, e.name);
-      try {
-        files.push({full, mtimeMs: fs.statSync(full).mtimeMs});
-      } catch {
-        // gone between the listing and the stat
+    return entries.map((e) => {
+      let mtimeMs = null;
+      if (e.isFile() && e.name.endsWith('.jsonl')) {
+        try {
+          mtimeMs = fs.statSync(path.join(dirPath, e.name)).mtimeMs;
+        } catch {
+          // gone between the listing and the stat
+        }
       }
-    }
-    return files.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
+      return {name: e.name, dir: e.isDirectory(), mtimeMs};
+    });
+  }
+
+  /** The newest session transcripts, newest first, capped: the contract's
+   *  newest-day-first walk (codexSessionScan), never the whole tree. */
+  function recentSessions(limit = SESSION_SCAN_LIMIT) {
+    return scanCodexSessions(listSessionDir, limit)
+      .map((f) => ({full: path.join(sessionsDir, ...f.path.split('/')), mtimeMs: f.mtimeMs}));
   }
 
   /**

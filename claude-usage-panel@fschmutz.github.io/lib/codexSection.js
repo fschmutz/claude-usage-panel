@@ -35,6 +35,9 @@ export class CodexController {
         this._settings = settings;
         this._isDestroyed = isDestroyed;
         this._outcome = null;
+        this._generation = 0;
+        this._scanning = false;
+        this._rescan = false;
 
         this._item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         const box = vbox({x_expand: true, style_class: 'cu-accounts'});
@@ -65,19 +68,21 @@ export class CodexController {
     }
 
     /** Rebuild the section. Off (the default) means off: with the setting
-     *  unset, nothing under the Codex home is opened at all. */
+     *  unset, nothing under the Codex home is opened at all. The accounts are
+     *  a few small files and draw at once; the transcript scan is async, so a
+     *  sessions tree of thousands of rollouts never stalls the shell. */
     refresh() {
         if (!this._settings.get_boolean('codex-enabled')) {
+            this._generation++;
             this._item.visible = false;
             return;
         }
-        let state, usage;
+        let state;
         try {
             // The codex CLI rotates its tokens as it runs; keep the saved copy
             // of the live login current before listing.
             syncBackCodex();
             state = listCodexAccounts();
-            usage = recordedCodexUsage();
         } catch (e) {
             logError(e, 'claude-usage-panel: could not read the Codex store');
             this._item.visible = false;
@@ -96,7 +101,34 @@ export class CodexController {
                 style_class: 'cu-account-meta',
             })));
         }
+        this._outcomeLabel.set(this._outcome);
+        this._scanUsage();
+    }
 
+    /** One transcript scan at a time: a refresh during a scan asks for one
+     *  more after it, and a result that a newer refresh (or disabling the
+     *  section, or destroying the button) has overtaken is dropped. */
+    _scanUsage() {
+        if (this._scanning) {
+            this._rescan = true;
+            return;
+        }
+        this._scanning = true;
+        this._rescan = false;
+        const generation = this._generation;
+        recordedCodexUsage().then(usage => {
+            if (generation === this._generation && !this._isDestroyed())
+                this._showUsage(usage);
+        }).catch(e => {
+            logError(e, 'claude-usage-panel: could not read the Codex sessions');
+        }).finally(() => {
+            this._scanning = false;
+            if (this._rescan && !this._isDestroyed() && this._item.visible)
+                this._scanUsage();
+        });
+    }
+
+    _showUsage(usage) {
         this._usage.destroy_all_children();
         for (const card of usage.cards) {
             const line = new St.BoxLayout({x_expand: true, style_class: 'cu-account-row'});
@@ -113,7 +145,6 @@ export class CodexController {
         this._note.text = usage.reason
             ? WHY[usage.reason]?.() ?? usage.reason
             : _('Recorded by the codex CLI at %s, not read now.').format(usage.capturedAt);
-        this._outcomeLabel.set(this._outcome);
     }
 
     _row(account) {

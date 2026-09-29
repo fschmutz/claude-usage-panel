@@ -284,3 +284,65 @@ test('the claudectl root help names the codex group', async () => {
   const {io} = world();
   assert.match((await run(io, 'help')).text, /claudectl codex \.\.\./);
 });
+
+test('a token the codex CLI rotates between the sync-back and the write lands in its profile', () => {
+  const {io, s} = world();
+  s.saveCurrent('PLUS');
+  fs.writeFileSync(codexAuthPath(io), JSON.stringify(auth('pro')));
+  s.saveCurrent('PRO');
+  const rotated = auth('pro', {last_refresh: new Date(NOW).toISOString()});
+  rotated.tokens.refresh_token = 'rt-pro-rotated';
+  let rotations = 0;
+  const raced = openCodexStore({...io, afterSyncBack: () => {
+    // The CLI refreshes PRO in place, once, right after our sync-back read it.
+    if (rotations++ === 0) fs.writeFileSync(codexAuthPath(io), JSON.stringify(rotated));
+  }});
+  const r = raced.switchTo('PLUS');
+  assert.deepEqual({from: r.from, changed: r.changed}, {from: 'PRO', changed: true});
+  assert.equal(raced.readProfile('PRO').auth.tokens.refresh_token, 'rt-pro-rotated');
+  assert.equal(JSON.parse(fs.readFileSync(codexAuthPath(io), 'utf8')).tokens.account_id, 'acct-plus');
+});
+
+test('a live file rewritten on every try is not overwritten: the switch gives up', () => {
+  const {io, s} = world();
+  s.saveCurrent('PLUS');
+  fs.writeFileSync(codexAuthPath(io), JSON.stringify(auth('pro')));
+  s.saveCurrent('PRO');
+  let n = 0;
+  const raced = openCodexStore({...io, afterSyncBack: () => {
+    const next = auth('pro');
+    next.tokens.refresh_token = `rt-pro-${++n}`;
+    fs.writeFileSync(codexAuthPath(io), JSON.stringify(next));
+  }});
+  assert.throws(() => raced.switchTo('PLUS'), /kept rewriting auth\.json/);
+  assert.equal(JSON.parse(fs.readFileSync(codexAuthPath(io), 'utf8')).tokens.refresh_token, 'rt-pro-3');
+});
+
+test('a rollout 4 directories below sessions/ is read; a 5th level is never walked', () => {
+  const {home, s} = world();
+  const put = (segments, name) => {
+    const dir = path.join(home, '.codex', 'sessions', ...segments);
+    fs.mkdirSync(dir, {recursive: true});
+    fs.writeFileSync(path.join(dir, name), '');
+    return path.join(dir, name);
+  };
+  const deep4 = put(['a', 'b', 'c', 'd'], 'deep4.jsonl');
+  put(['a', 'b', 'c', 'd', 'e'], 'deep5.jsonl');
+  assert.deepEqual(s.recentSessions().map((f) => f.full), [deep4]);
+});
+
+test('the private write creates its tmp 0600 and never writes through a planted tmp', () => {
+  const {home, io, s} = world();
+  s.saveCurrent('PLUS');
+  fs.writeFileSync(codexAuthPath(io), JSON.stringify(auth('pro')));
+  s.saveCurrent('PRO');
+  // A symlink where the tmp goes: a write that follows it would put the token
+  // in a file somebody else chose.
+  const bait = path.join(home, 'bait');
+  fs.writeFileSync(bait, 'untouched');
+  fs.symlinkSync(bait, `${codexAuthPath(io)}.${process.pid}.tmp`);
+  s.switchTo('PLUS');
+  assert.equal(fs.readFileSync(bait, 'utf8'), 'untouched');
+  assert.equal(fs.statSync(codexAuthPath(io)).mode & 0o777, 0o600);
+  assert.equal(JSON.parse(fs.readFileSync(codexAuthPath(io), 'utf8')).tokens.account_id, 'acct-plus');
+});

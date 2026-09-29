@@ -485,5 +485,95 @@
         "expected": "valid"
       }
     ]
+  },
+  "switchSyncTries": 3,
+  "switchGuard": {
+    "_comment": "codexSwitch / Codex.guardedSwitch over a fake store. live: the saved profile the live auth.json is (null: an unsaved login), hasLive: whether auth.json exists at all, rotations[i]: whether the codex CLI rewrites auth.json between the i-th sync-back and the re-read before the write.",
+    "cases": [
+      {
+        "name": "a quiet live file: synced once, written once",
+        "live": "A",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "switched",
+          "from": "A",
+          "syncs": 1,
+          "writes": 1
+        }
+      },
+      {
+        "name": "rotated once mid-switch: synced again before the write",
+        "live": "A",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [
+          true
+        ],
+        "expected": {
+          "outcome": "switched",
+          "from": "A",
+          "syncs": 2,
+          "writes": 1
+        }
+      },
+      {
+        "name": "rotated on every try: nothing is written",
+        "live": "A",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [
+          true,
+          true,
+          true
+        ],
+        "expected": {
+          "outcome": "busy",
+          "from": "A",
+          "syncs": 3,
+          "writes": 0
+        }
+      },
+      {
+        "name": "an unsaved live login is refused",
+        "live": null,
+        "hasLive": true,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "unsaved",
+          "from": null,
+          "syncs": 1,
+          "writes": 0
+        }
+      },
+      {
+        "name": "already the live login",
+        "live": "B",
+        "hasLive": true,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "already",
+          "from": "B",
+          "syncs": 1,
+          "writes": 0
+        }
+      },
+      {
+        "name": "no live login at all: the target is written",
+        "live": null,
+        "hasLive": false,
+        "target": "B",
+        "rotations": [],
+        "expected": {
+          "outcome": "switched",
+          "from": null,
+          "syncs": 1,
+          "writes": 1
+        }
+      }
+    ]
   }
 }

@@ -21,15 +21,26 @@ import Gio from 'gi://Gio';
 import {readJSON, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {
-    CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexTokenState,
-    isValidName, parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin, sameJSON, sameName,
+    CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexSwitch,
+    codexTokenState, isValidName, parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin,
+    sameJSON, sameName, scanCodexSessionsAsync,
 } from './pure.js';
+
+// The transcript scan runs on the shell's main loop: every call on the way is
+// the async variant, so a tree of thousands of rollouts never stalls a frame.
+Gio._promisify(Gio.File.prototype, 'enumerate_children_async', 'enumerate_children_finish');
+Gio._promisify(Gio.File.prototype, 'query_info_async', 'query_info_finish');
+Gio._promisify(Gio.File.prototype, 'read_async', 'read_finish');
+Gio._promisify(Gio.FileEnumerator.prototype, 'next_files_async', 'next_files_finish');
+Gio._promisify(Gio.FileEnumerator.prototype, 'close_async', 'close_finish');
+Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async', 'read_bytes_finish');
+Gio._promisify(Gio.InputStream.prototype, 'close_async', 'close_finish');
 
 /** Tail of a session transcript read when looking for the last rate-limit
  *  snapshot: the newest events are at the end of a rollout file. */
 const SESSION_TAIL_BYTES = 256 * 1024;
-/** How many recent transcripts to look through before giving up. */
-const SESSION_SCAN_LIMIT = 8;
+/** Children fetched per next_files_async round trip. */
+const ENUMERATE_BATCH = 64;
 
 const writePrivate = (path, text) => writeText(path, text, {mode: 0o600});
 
@@ -114,8 +125,8 @@ export function liveCodexName() {
     return activeCodexName(listCodexProfiles(), readLiveCodexAuth());
 }
 
-function snapshotLiveCodex(name) {
-    const auth = readLiveCodexAuth();
+/** Save `auth` (the live login, as read once) under `name`. */
+function snapshotLiveCodex(name, auth = readLiveCodexAuth()) {
     if (!auth)
         throw new Error('no Codex login to save - run `codex login` first');
     return writeCodexProfile({
@@ -123,20 +134,26 @@ function snapshotLiveCodex(name) {
     });
 }
 
-/** Write the live login back into its own profile, so the tokens the codex CLI
- *  rotated since the last switch are the ones we keep. */
-export function syncBackCodex() {
+/** syncBackCodex, also returning the auth.json it read (and saved). */
+function syncBackLiveCodex() {
     const auth = readLiveCodexAuth();
     if (!auth)
-        return null;
+        return {name: null, auth: null};
     const profiles = listCodexProfiles();
     const name = activeCodexName(profiles, auth);
     if (!name)
-        return null;
+        return {name: null, auth};
     const stored = profiles.find(p => p.name === name);
+    // The blob read above, never a second read: the CLI may rotate in between.
     if (!stored || !sameJSON(stored.auth, auth))
-        snapshotLiveCodex(name);
-    return name;
+        snapshotLiveCodex(name, auth);
+    return {name, auth};
+}
+
+/** Write the live login back into its own profile, so the tokens the codex CLI
+ *  rotated since the last switch are the ones we keep. */
+export function syncBackCodex() {
+    return syncBackLiveCodex().name;
 }
 
 /** Save the live Codex login as `name`. */
@@ -171,86 +188,117 @@ export function saveCurrentCodex(name, {force = false} = {}) {
 
 /**
  * Make `name` the live Codex login. The live one is written back into its own
- * profile first; an unsaved live login is refused rather than overwritten.
+ * profile first; an unsaved live login is refused rather than overwritten, and
+ * a token the codex CLI rotates mid-switch is synced, not lost (codexSwitch).
  */
 export function switchCodexTo(name) {
     const target = readCodexProfile(name);
     if (!target)
         throw new Error(`no saved Codex account named ${name}`);
-    const from = syncBackCodex();
-    const live = readLiveCodexAuth();
-    if (live && !from) {
-        const id = codexIdentity(live);
+    const r = codexSwitch(name, {
+        syncBack: syncBackLiveCodex,
+        readLive: readLiveCodexAuth,
+        write: () => writePrivate(codexAuthPath(), `${JSON.stringify(target.auth, null, 2)}\n`),
+    });
+    if (r.outcome === 'unsaved') {
+        const id = codexIdentity(r.live);
         throw new Error(
             `the current Codex login (${id.email ?? 'unknown account'}) is not saved - ` +
             'save it first, or it would be lost');
     }
-    const tokenState = codexTokenState(target);
-    if (from === name)
-        return {from, to: name, changed: false, tokenState};
-    writePrivate(codexAuthPath(), `${JSON.stringify(target.auth, null, 2)}\n`);
-    return {from, to: name, changed: true, tokenState};
+    if (r.outcome === 'busy') {
+        throw new Error('the codex CLI kept rewriting auth.json during the switch - ' +
+            'nothing was changed, try again');
+    }
+    return {from: r.from, to: name, changed: r.outcome === 'switched', tokenState: codexTokenState(target)};
 }
 
 // ── Usage, honestly ─────────────────────────────────────────────────────────────
 
-/** The last SESSION_TAIL_BYTES of a file as text; '' when unreadable. */
-function readTail(path) {
+/** The last SESSION_TAIL_BYTES of a file as text; '' when unreadable. Every
+ *  read is async; the seek is an lseek, no I/O. */
+async function readTail(path) {
     try {
         const file = Gio.File.new_for_path(path);
-        const size = file.query_info('standard::size', Gio.FileQueryInfoFlags.NONE, null)
-            .get_size();
-        const stream = file.read(null);
-        const offset = Math.max(0, size - SESSION_TAIL_BYTES);
-        if (offset > 0)
-            stream.seek(offset, GLib.SeekType.SET, null);
-        const bytes = stream.read_bytes(Math.min(size, SESSION_TAIL_BYTES), null);
-        stream.close(null);
-        return new TextDecoder().decode(bytes.get_data() ?? new Uint8Array());
+        const info = await file.query_info_async(
+            'standard::size', Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_LOW, null);
+        const size = info.get_size();
+        const stream = await file.read_async(GLib.PRIORITY_LOW, null);
+        try {
+            const offset = Math.max(0, size - SESSION_TAIL_BYTES);
+            if (offset > 0)
+                stream.seek(offset, GLib.SeekType.SET, null);
+            const bytes = await stream.read_bytes_async(
+                Math.min(size, SESSION_TAIL_BYTES), GLib.PRIORITY_LOW, null);
+            return new TextDecoder().decode(bytes.get_data() ?? new Uint8Array());
+        } finally {
+            await stream.close_async(GLib.PRIORITY_LOW, null).catch(() => {});
+        }
     } catch {
         return '';
     }
 }
 
-/** The newest session transcripts, newest first, capped. */
-function recentCodexSessions() {
-    const root = Gio.File.new_for_path(codexSessionsDir());
-    const files = [];
-    const walk = (dir, depth) => {
-        if (depth > 4)
-            return;
-        let children;
-        try {
-            children = dir.enumerate_children(
-                'standard::name,standard::type,time::modified', Gio.FileQueryInfoFlags.NONE, null);
-        } catch {
-            return;
+/** One directory under sessions/, as codexSessionScan asks for it; [] when
+ *  unreadable. */
+async function listSessionDir(segments) {
+    const dir = Gio.File.new_for_path(GLib.build_filenamev([codexSessionsDir(), ...segments]));
+    const out = [];
+    let children;
+    try {
+        children = await dir.enumerate_children_async(
+            'standard::name,standard::type,time::modified', Gio.FileQueryInfoFlags.NONE,
+            GLib.PRIORITY_LOW, null);
+    } catch {
+        return out;
+    }
+    try {
+        for (;;) {
+            const batch = await children.next_files_async(ENUMERATE_BATCH, GLib.PRIORITY_LOW, null);
+            if (!batch.length)
+                break;
+            for (const info of batch) {
+                const dirType = info.get_file_type() === Gio.FileType.DIRECTORY;
+                out.push({
+                    name: info.get_name(),
+                    dir: dirType,
+                    mtimeMs: dirType ? null : info.get_attribute_uint64('time::modified') * 1000,
+                });
+            }
         }
-        let info;
-        while ((info = children.next_file(null)) !== null) {
-            const child = dir.get_child(info.get_name());
-            if (info.get_file_type() === Gio.FileType.DIRECTORY)
-                walk(child, depth + 1);
-            else if (info.get_name().endsWith('.jsonl'))
-                files.push({path: child.get_path(), mtime: info.get_attribute_uint64('time::modified')});
-        }
-    };
-    walk(root, 0);
-    return files.sort((a, b) => b.mtime - a.mtime).slice(0, SESSION_SCAN_LIMIT);
+    } catch {
+        // a directory that vanished mid-listing keeps what was read
+    } finally {
+        await children.close_async(GLib.PRIORITY_LOW, null).catch(() => {});
+    }
+    return out;
+}
+
+/** The newest session transcripts, newest first, capped: the contract's
+ *  newest-day-first walk, one awaited listing at a time. */
+async function recentCodexSessions() {
+    const picked = await scanCodexSessionsAsync(listSessionDir);
+    return picked.map(f => ({
+        path: GLib.build_filenamev([codexSessionsDir(), ...f.path.split('/')]),
+        mtimeMs: f.mtimeMs,
+    }));
 }
 
 /**
  * The freshest usage Codex has recorded locally, as cards: the tails of the
  * newest transcripts, handed to pickRecordedCodexUsage (lib/pure/codex.js),
  * which owns every decision. OpenAI publishes no plan-limit endpoint, so this
- * is the whole Codex usage story.
- * @returns {{cards: object[], capturedAt: ?string,
- *            reason: ?('no_sessions'|'no_snapshot'|'stale')}}
+ * is the whole Codex usage story. Async end to end: it never blocks the shell.
+ * @param {number} [nowMs] the clock; read when the scan finishes by default
+ * @returns {Promise<{cards: object[], capturedAt: ?string,
+ *            reason: ?('no_sessions'|'no_snapshot'|'stale')}>}
  */
-export function recordedCodexUsage(nowMs = Date.now()) {
-    const files = recentCodexSessions()
-        .map(({path, mtime}) => ({text: readTail(path), mtimeMs: mtime * 1000}));
-    return pickRecordedCodexUsage(files, nowMs);
+export async function recordedCodexUsage(nowMs) {
+    const sessions = await recentCodexSessions();
+    const files = [];
+    for (const {path, mtimeMs} of sessions)
+        files.push({text: await readTail(path), mtimeMs});
+    return pickRecordedCodexUsage(files, nowMs ?? Date.now());
 }
 
 /** Every saved Codex login with the active one marked, plus the summaries.
