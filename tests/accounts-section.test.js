@@ -36,7 +36,8 @@ const liveLogin = (name, uuid) => ({
  * real lib/accounts.js reads it, so the store's own decisions (which profile
  * is live, whether a login is torn) are the ones under test.
  */
-async function controller(t, {enabled = true, files = {}, usage = null, token = null, tokenDelayMs = 0} = {}) {
+async function controller(t, {enabled = true, files = {}, usage = null, token = null, tokenDelayMs = 0,
+    mtimes = {}, onQueryInfo = null, onRead = null} = {}) {
     const encode = new TextEncoder();
     const decode = new TextDecoder();
     const notes = [];
@@ -71,6 +72,9 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
             constructor(data) { this.data = data; }
         },
         file_get_contents: path => {
+            const early = onRead?.(path);
+            if (typeof early === 'string')
+                return [true, encode.encode(early)];
             if (!(path in files)) throw new Error(`no such file: ${path}`);
             return [true, encode.encode(files[path])];
         },
@@ -88,11 +92,12 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
     // Subprocess answers `ps` with no Claude running, so a switch does not
     // wait forever on a callback the generic stub never makes.
     const exists = {matches: (_domain, code) => code === 'EXISTS'};
+    const notFound = {matches: (_domain, code) => code === 'NOT_FOUND'};
     stub.overrides['gi://Gio'] = {
         FileQueryInfoFlags: {NONE: 0},
         FileCreateFlags: {PRIVATE: 1},
         IOErrorEnum: {EXISTS: 'EXISTS', NOT_FOUND: 'NOT_FOUND'},
-        FileCopyFlags: {OVERWRITE: 0},
+        FileCopyFlags: {NONE: 0, OVERWRITE: 1},
         SubprocessFlags: {STDOUT_PIPE: 1, STDERR_PIPE: 2},
         Cancellable: class {
             cancel() {}
@@ -109,6 +114,7 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
         File: {
             new_for_path: path => ({
                 path,
+                get_path: () => path,
                 enumerate_children() {
                     const names = Object.keys(files)
                         .filter(f => f.startsWith(`${path}/`))
@@ -119,24 +125,40 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
                         ? {get_name: () => names[i++]} : null)};
                 },
                 move(target) {
+                    if (!(path in files))
+                        throw notFound;
                     files[target.path] = files[path];
+                    mtimes[target.path] = mtimes[path];
                     delete files[path];
+                    delete mtimes[path];
                     writes.push(target.path);
                 },
-                delete: () => { delete files[path]; },
+                delete: () => {
+                    delete files[path];
+                    delete mtimes[path];
+                },
                 // O_EXCL: the refresh lock.
                 create() {
                     if (path in files)
                         throw exists;
                     files[path] = '';
+                    mtimes[path] = Date.now();
                     return {
                         write_all: bytes => { files[path] = decode.decode(bytes); },
                         close() {},
                     };
                 },
-                query_info: () => ({
-                    get_modification_date_time: () => ({to_unix: () => Math.floor(Date.now() / 1000)}),
-                }),
+                // mtimes[path] in ms (default: now); onQueryInfo(path) may
+                // stand in for the answer, as a waiter's earlier look would.
+                query_info: () => {
+                    const early = onQueryInfo?.(path);
+                    if (early)
+                        return early;
+                    if (!(path in files))
+                        throw notFound;
+                    const ms = mtimes[path] ?? Date.now();
+                    return {get_modification_date_time: () => ({to_unix: () => Math.floor(ms / 1000)})};
+                },
             }),
         },
     };
@@ -376,6 +398,58 @@ test('concurrent refreshes of one profile spend its refresh token once', async t
     assert.deepEqual(got.map(g => g.token), ['at-new', 'at-new', 'at-new']);
     assert.deepEqual(exchanges, ['rt-PERSO']);
     assert.equal(files[`${ACCOUNTS}/.refresh-PERSO.lock`], undefined, 'the lock is released');
+});
+
+test('two waiters that judged one lock stale: only one takes it over, the token is spent once', async t => {
+    const lock = `${ACCOUNTS}/.refresh-PERSO.lock`;
+    const spent = new Set();
+    // B's one look at the lock, taken before A replaced it: the crashed
+    // holder's mtime and id, answered once each.
+    const early = {query: false, read: false};
+    const crashedAt = Date.now() - 31_000;
+    const {exchanges, session, files} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PERSO.json`]: JSON.stringify({
+                version: 1, name: 'PERSO', savedAt: null, account: {accountUuid: 'u-perso'},
+                credentials: {claudeAiOauth: {accessToken: 'at-PERSO', refreshToken: 'rt-PERSO', expiresAt: 1}},
+            }),
+            [lock]: 'crashed',
+        },
+        mtimes: {[lock]: crashedAt},
+        onQueryInfo: p => {
+            if (p !== lock || !early.query)
+                return null;
+            early.query = false;
+            return {get_modification_date_time: () => ({to_unix: () => Math.floor(crashedAt / 1000)})};
+        },
+        onRead: p => {
+            if (p !== lock || !early.read)
+                return null;
+            early.read = false;
+            return 'crashed';
+        },
+        tokenDelayMs: 20,
+        token: rt => {
+            if (spent.has(rt))
+                return {status: 400, body: {error: 'invalid_grant'}};
+            spent.add(rt);
+            return {status: 200, body: {access_token: 'at-new', refresh_token: 'rt-new', expires_in: 3600}};
+        },
+    });
+    const store = await load('lib/accounts.js');
+    // A takes the stale lock over and holds it through its exchange.
+    const first = store.accessTokenFor(session, 'PERSO');
+    while (exchanges.length === 0)
+        await new Promise(resolve => setTimeout(resolve, 0));
+    assert.notEqual(files[lock], 'crashed', 'A holds its own lock');
+    early.query = true;
+    early.read = true;
+    const second = store.accessTokenFor(session, 'PERSO');
+    const got = await Promise.all([first, second]);
+    assert.deepEqual(early, {query: false, read: false}, 'B judged the stale lock');
+    assert.deepEqual(got.map(g => g.token), ['at-new', 'at-new']);
+    assert.deepEqual(exchanges, ['rt-PERSO'], 'one exchange: B never removed the lock A holds');
+    assert.deepEqual(Object.keys(files).filter(f => f.includes('.lock')), [], 'no lock, no moved-aside copy left');
 });
 
 test('a refresh the token endpoint answers 503 leaves the row unreachable, not refresh-failed', async t => {

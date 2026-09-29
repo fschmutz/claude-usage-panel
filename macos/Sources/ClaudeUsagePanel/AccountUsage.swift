@@ -47,6 +47,45 @@ extension AccountStore {
 
     // MARK: the refresh lock
 
+    /// O_EXCL create, 0600: false when the file already exists (errno says).
+    private static func createLock(_ url: URL, _ text: String) -> Bool {
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        guard fd >= 0 else { return false }
+        let bytes = Array(text.utf8)
+        _ = bytes.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
+        close(fd)
+        return true
+    }
+
+    /// The lock as a waiter judged it: its id and mtime, or nil once it is gone.
+    private static func lockSnapshot(_ url: URL) -> (text: String, modified: Date)? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+            let modified = attributes[.modificationDate] as? Date,
+            let text = try? String(contentsOf: url, encoding: .utf8)
+        else { return nil }
+        return (text, modified)
+    }
+
+    /// A stale lock is moved aside, never removed in place: a rename is
+    /// atomic, so of two waiters that judged one lock stale only one moves it
+    /// (the other gets ENOENT and waits again). The mover checks it moved the
+    /// lock it judged; one a faster waiter had already replaced is put back
+    /// with O_EXCL, so it never lands over a newer holder's.
+    private static func takeOverStale(_ url: URL, judged: (text: String, modified: Date)) throws {
+        let aside = URL(fileURLWithPath: url.path + ".stale-" + UUID().uuidString)
+        guard rename(url.path, aside.path) == 0 else {
+            if errno == ENOENT { return }
+            throw AccountError.message(
+                "could not take over the stale refresh lock \(url.lastPathComponent)")
+        }
+        if let moved = lockSnapshot(aside),
+            moved.text != judged.text || moved.modified != judged.modified
+        {
+            _ = createLock(url, moved.text)  // false: a newer holder is already in
+        }
+        unlink(aside.path)
+    }
+
     /// O_EXCL create, 0600. The lock carries a random id so a holder only
     /// ever removes its own lock, never one a waiter took over after it went
     /// stale.
@@ -58,21 +97,14 @@ extension AccountStore {
             attributes: [.posixPermissions: 0o700])
         let start = Date()
         while true {
-            let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
-            if fd >= 0 {
-                let bytes = Array(id.utf8)
-                _ = bytes.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
-                close(fd)
-                return (url, id)
-            }
+            if createLock(url, id) { return (url, id) }
             guard errno == EEXIST else {
                 throw AccountError.message("could not lock \(name) for its token refresh")
             }
-            let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
             // Released between the two calls: try again at once.
-            guard let modified = attributes?[.modificationDate] as? Date else { continue }
-            if Date().timeIntervalSince(modified) * 1000 > Accounts.RefreshLock.staleMs {
-                try? FileManager.default.removeItem(at: url)  // a crashed holder
+            guard let judged = lockSnapshot(url) else { continue }
+            if Date().timeIntervalSince(judged.modified) * 1000 > Accounts.RefreshLock.staleMs {
+                try takeOverStale(url, judged: judged)  // a crashed holder
                 continue
             }
             if Date().timeIntervalSince(start) * 1000 > Accounts.RefreshLock.waitMs {

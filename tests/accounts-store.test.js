@@ -448,6 +448,50 @@ test('a lock a crashed holder left behind is taken over once it is stale', async
     assert.equal(fs.existsSync(lock), false);
 });
 
+test('two waiters that judged one lock stale: only one takes it over, the token is spent once', async () => {
+    const {io} = world();
+    const server = singleUseTokenServer();
+    let releaseFetch;
+    const gate = new Promise((resolve) => { releaseFetch = resolve; });
+    io.fetchImpl = async (url, init) => { await gate; return server.fetchImpl(url, init); };
+    const a = openStore(io);
+    a.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso', {expiresAt: NOW - 1000})});
+    const lock = path.join(a.dir, '.refresh-PERSO.lock');
+    fs.writeFileSync(lock, 'crashed', {mode: 0o600});
+    const old = (Date.now() - 31_000) / 1000;
+    fs.utimesSync(lock, old, old);
+    const staleStat = fs.statSync(lock);
+    // A takes the stale lock over and holds it through its exchange.
+    const first = a.usageFor('PERSO');
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    assert.notEqual(fs.readFileSync(lock, 'utf8'), 'crashed', 'A holds its own lock');
+    // B looked at the lock before A replaced it: its one stat and one read of
+    // the lock still see the crashed holder's.
+    const {statSync, readFileSync} = fs;
+    let stale = {stat: true, read: true};
+    fs.statSync = (p, ...rest) => {
+        if (p === lock && stale.stat) { stale.stat = false; return staleStat; }
+        return statSync(p, ...rest);
+    };
+    fs.readFileSync = (p, ...rest) => {
+        if (p === lock && stale.read) { stale.read = false; return 'crashed'; }
+        return readFileSync(p, ...rest);
+    };
+    let second;
+    try {
+        second = openStore(io).usageFor('PERSO');
+    } finally {
+        fs.statSync = statSync;
+        fs.readFileSync = readFileSync;
+        stale = {};
+    }
+    releaseFetch();
+    const results = await Promise.all([first, second]);
+    assert.deepEqual(results.map((r) => r.ok), [true, true]);
+    assert.deepEqual(server.exchanges, ['rt-perso'], 'one exchange: B never removed the lock A holds');
+    assert.deepEqual(fs.readdirSync(a.dir).filter((f) => f.includes('.lock')), [], 'no lock, no moved-aside copy left');
+});
+
 test('a 400 whose replacement is already on disk (a lock-less writer spent it) is a success', async () => {
     const {io, s} = world();
     s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso', {expiresAt: NOW - 1000})});

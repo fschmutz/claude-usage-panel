@@ -63,6 +63,40 @@ export function bindUsage(ctx) {
   // removes its own lock, never one a waiter took over after it went stale.
   // Wall-clock time, not the store's clock: io.nowMs may be pinned (tests).
 
+  // The lock as a waiter judged it: its id and mtime, or null once it is gone.
+  function lockSnapshot(file) {
+    try {
+      const {mtimeMs} = fs.statSync(file);
+      return {text: fs.readFileSync(file, 'utf8'), mtimeMs};
+    } catch {
+      return null;
+    }
+  }
+
+  // A stale lock is moved aside, never removed in place: a rename is atomic,
+  // so of two waiters that judged one lock stale only one moves it (the other
+  // gets ENOENT and waits again). The mover checks it moved the lock it
+  // judged; one a faster waiter had already replaced is put back with O_EXCL,
+  // so it never lands over a newer holder's.
+  function takeOverStale(file, judged) {
+    const aside = `${file}.stale-${crypto.randomUUID()}`;
+    try {
+      fs.renameSync(file, aside);
+    } catch (e) {
+      if (e.code === 'ENOENT') return;
+      throw e;
+    }
+    const moved = lockSnapshot(aside);
+    if (moved && (moved.text !== judged.text || moved.mtimeMs !== judged.mtimeMs)) {
+      try {
+        fs.writeFileSync(file, moved.text, {flag: 'wx', mode: 0o600});
+      } catch {
+        // a newer holder is already in
+      }
+    }
+    fs.rmSync(aside, {force: true});
+  }
+
   async function acquireLock(name) {
     const file = path.join(dir, refreshLockFile(name));
     const id = crypto.randomUUID();
@@ -80,14 +114,10 @@ export function bindUsage(ctx) {
       } catch (e) {
         if (e.code !== 'EEXIST') throw e;
       }
-      let age;
-      try {
-        age = Date.now() - fs.statSync(file).mtimeMs;
-      } catch {
-        continue; // released between the two calls: try again at once
-      }
-      if (age > REFRESH_LOCK.staleMs) {
-        fs.rmSync(file, {force: true}); // a crashed holder
+      const judged = lockSnapshot(file);
+      if (!judged) continue; // released between the two calls: try again at once
+      if (Date.now() - judged.mtimeMs > REFRESH_LOCK.staleMs) {
+        takeOverStale(file, judged); // a crashed holder
         continue;
       }
       if (Date.now() - start > REFRESH_LOCK.waitMs) {

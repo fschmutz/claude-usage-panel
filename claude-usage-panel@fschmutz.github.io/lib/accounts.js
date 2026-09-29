@@ -246,6 +246,54 @@ const sleep = ms => new Promise(resolve => {
 // O_EXCL create, 0600 (G_FILE_CREATE_PRIVATE). The lock carries a random id so
 // a holder only ever removes its own lock, never one a waiter took over after
 // it went stale.
+function createLock(file, text) {
+    const stream = file.create(Gio.FileCreateFlags.PRIVATE, null);
+    stream.write_all(new TextEncoder().encode(text), null);
+    stream.close(null);
+}
+
+// The lock as a waiter judged it: its id and mtime, or null once it is gone.
+function lockSnapshot(path) {
+    try {
+        const info = Gio.File.new_for_path(path)
+            .query_info('time::modified', Gio.FileQueryInfoFlags.NONE, null);
+        const mtimeMs = info.get_modification_date_time().to_unix() * 1000;
+        const text = readText(path);
+        return text === null ? null : {text, mtimeMs};
+    } catch {
+        return null;
+    }
+}
+
+// A stale lock is moved aside, never deleted in place: a rename is atomic, so
+// of two waiters that judged one lock stale only one moves it (the other gets
+// NOT_FOUND and waits again). The mover checks it moved the lock it judged;
+// one a faster waiter had already replaced is put back with O_EXCL, so it
+// never lands over a newer holder's.
+function takeOverStale(path, file, judged) {
+    const aside = Gio.File.new_for_path(`${path}.stale-${GLib.uuid_string_random()}`);
+    try {
+        file.move(aside, Gio.FileCopyFlags.NONE, null, null);
+    } catch (e) {
+        if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
+            return;
+        throw e;
+    }
+    const moved = lockSnapshot(aside.get_path());
+    if (moved && (moved.text !== judged.text || moved.mtimeMs !== judged.mtimeMs)) {
+        try {
+            createLock(file, moved.text);
+        } catch {
+            // a newer holder is already in
+        }
+    }
+    try {
+        aside.delete(null);
+    } catch {
+        // already gone
+    }
+}
+
 async function acquireRefreshLock(name) {
     const path = GLib.build_filenamev([accountsDir(), refreshLockFile(name)]);
     const file = Gio.File.new_for_path(path);
@@ -254,27 +302,17 @@ async function acquireRefreshLock(name) {
     const start = Date.now();
     for (;;) {
         try {
-            const stream = file.create(Gio.FileCreateFlags.PRIVATE, null);
-            stream.write_all(new TextEncoder().encode(id), null);
-            stream.close(null);
+            createLock(file, id);
             return {path, file, id};
         } catch (e) {
             if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS))
                 throw e;
         }
-        let age;
-        try {
-            const info = file.query_info('time::modified', Gio.FileQueryInfoFlags.NONE, null);
-            age = Date.now() - info.get_modification_date_time().to_unix() * 1000;
-        } catch {
+        const judged = lockSnapshot(path);
+        if (!judged)
             continue; // released between the two calls: try again at once
-        }
-        if (age > REFRESH_LOCK.staleMs) {
-            try {
-                file.delete(null); // a crashed holder
-            } catch {
-                // another waiter took it first
-            }
+        if (Date.now() - judged.mtimeMs > REFRESH_LOCK.staleMs) {
+            takeOverStale(path, file, judged); // a crashed holder
             continue;
         }
         if (Date.now() - start > REFRESH_LOCK.waitMs) {
