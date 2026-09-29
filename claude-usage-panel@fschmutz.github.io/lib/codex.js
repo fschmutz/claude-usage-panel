@@ -21,8 +21,8 @@ import Gio from 'gi://Gio';
 import {readJSON, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {
-    CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSnapshotAge, codexSummary,
-    codexTokenState, isValidName, normalizeCodexLimits, parseCodexProfile, sameJSON, sameName,
+    CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexTokenState,
+    isValidName, parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin, sameJSON, sameName,
 } from './pure.js';
 
 /** Tail of a session transcript read when looking for the last rate-limit
@@ -156,7 +156,7 @@ export function saveCurrentCodex(name, {force = false} = {}) {
     const existing = profiles.find(p => p.name === name);
     if (existing && !force) {
         const held = codexIdentity(existing.auth);
-        if (held.accountId && live.accountId && held.accountId !== live.accountId) {
+        if (!sameCodexLogin(held, live)) {
             throw new Error(
                 `${name} is already ${held.email ?? 'another account'} - pick another name`);
         }
@@ -239,62 +239,24 @@ function recentCodexSessions() {
     return files.sort((a, b) => b.mtime - a.mtime).slice(0, SESSION_SCAN_LIMIT);
 }
 
-/** The last `rate_limits` object in one transcript, with when it was written. */
-function codexSnapshotIn(path) {
-    const lines = readTail(path).split('\n');
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const line = lines[i].trim();
-        if (!line.startsWith('{') || !line.includes('rate_limits'))
-            continue;
-        let event;
-        try {
-            event = JSON.parse(line);
-        } catch {
-            continue; // a truncated first line of the tail, or a partial write
-        }
-        const limits = event?.payload?.rate_limits ?? event?.rate_limits;
-        if (!limits || typeof limits !== 'object')
-            continue;
-        const at = Date.parse(event.timestamp ?? event.payload?.timestamp ?? '');
-        return {limits, capturedAtMs: Number.isFinite(at) ? at : null};
-    }
-    return null;
-}
-
 /**
- * The freshest usage Codex has recorded locally, as cards.
- *
- * This is the whole Codex usage story, and it is deliberately small: OpenAI
- * publishes no plan-limit endpoint, so there is nothing to poll. What the
- * codex CLI does record, in its own session transcript, is the rate limits the
- * API returned with a turn - a real reading, from whenever that turn was.
- * Those are reported as ESTIMATED and stamped, or not at all.
- *
+ * The freshest usage Codex has recorded locally, as cards: the tails of the
+ * newest transcripts, handed to pickRecordedCodexUsage (lib/pure/codex.js),
+ * which owns every decision. OpenAI publishes no plan-limit endpoint, so this
+ * is the whole Codex usage story.
  * @returns {{cards: object[], capturedAt: ?string,
  *            reason: ?('no_sessions'|'no_snapshot'|'stale')}}
  */
 export function recordedCodexUsage(nowMs = Date.now()) {
-    const files = recentCodexSessions();
-    if (!files.length)
-        return {cards: [], capturedAt: null, reason: 'no_sessions'};
-    for (const {path, mtime} of files) {
-        const found = codexSnapshotIn(path);
-        if (!found)
-            continue;
-        const capturedAtMs = found.capturedAtMs ?? mtime * 1000;
-        if (!codexSnapshotAge(capturedAtMs, nowMs).show)
-            return {cards: [], capturedAt: new Date(capturedAtMs).toISOString(), reason: 'stale'};
-        const cards = normalizeCodexLimits(found.limits, capturedAtMs);
-        if (!cards.length)
-            continue;
-        return {cards, capturedAt: new Date(capturedAtMs).toISOString(), reason: null};
-    }
-    return {cards: [], capturedAt: null, reason: 'no_snapshot'};
+    const files = recentCodexSessions()
+        .map(({path, mtime}) => ({text: readTail(path), mtimeMs: mtime * 1000}));
+    return pickRecordedCodexUsage(files, nowMs);
 }
 
-/** Every saved Codex login with the active one marked, plus the summaries. */
+/** Every saved Codex login with the active one marked, plus the summaries.
+ *  Read-only; the section runs syncBackCodex() before it, as every port's
+ *  panel refresh does. */
 export function listCodexAccounts(nowMs = Date.now()) {
-    syncBackCodex();
     const profiles = listCodexProfiles();
     const active = liveCodexName();
     return {

@@ -53,6 +53,10 @@ enum CodexStore {
 
     // MARK: private, atomic files
 
+    /// A 0600 tmp file renamed over `url` with rename(2), as the Node port
+    /// does: the inode is swapped, so the result is 0600 even when the file it
+    /// replaces (an auth.json the codex CLI wrote 0644) was not.
+    /// `replaceItemAt` would keep the replaced file's permissions.
     private static func writePrivate(_ data: Data, to url: URL) throws {
         let fm = FileManager.default
         let dir = url.deletingLastPathComponent()
@@ -62,10 +66,9 @@ enum CodexStore {
         guard
             fm.createFile(atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600])
         else { throw AccountError.message("could not write \(url.path)") }
-        if fm.fileExists(atPath: url.path) {
-            _ = try fm.replaceItemAt(url, withItemAt: tmp)
-        } else {
-            try fm.moveItem(at: tmp, to: url)
+        guard rename(tmp.path, url.path) == 0 else {
+            try? fm.removeItem(at: tmp)
+            throw AccountError.message("could not replace \(url.path)")
         }
     }
 
@@ -168,7 +171,7 @@ enum CodexStore {
         let live = Codex.identity(auth)
         if !force, let existing = profiles.first(where: { $0.name == name }) {
             let held = Codex.identity(existing.auth)
-            if let a = held.accountId, let b = live.accountId, a != b {
+            if !Codex.sameLogin(held, live) {
                 throw AccountError.message(
                     "\(name) is already \(held.email ?? "another account") - pick another name")
             }
@@ -213,18 +216,8 @@ enum CodexStore {
 
     // MARK: usage, honestly
 
-    /// Why there are no Codex figures. Never "0%".
-    enum Unavailable: String, Sendable {
-        case noSessions = "no_sessions"
-        case noSnapshot = "no_snapshot"
-        case stale
-    }
-
-    struct RecordedUsage: Sendable {
-        let cards: [LimitCard]
-        let capturedAt: Date?
-        let reason: Unavailable?
-    }
+    typealias Unavailable = CodexUnavailable
+    typealias RecordedUsage = CodexRecordedUsage
 
     /// The last `sessionTailBytes` of a file, as text.
     private static func readTail(_ url: URL) -> String {
@@ -253,44 +246,15 @@ enum CodexStore {
         return files.sorted { $0.modified > $1.modified }.prefix(sessionScanLimit).map { $0 }
     }
 
-    private static func snapshotIn(_ url: URL) -> (limits: [String: Any], at: Date?)? {
-        for line in readTail(url).split(separator: "\n").reversed() {
-            let text = line.trimmingCharacters(in: .whitespaces)
-            guard text.hasPrefix("{"), text.contains("rate_limits"),
-                let event = try? JSONSerialization.jsonObject(with: Data(text.utf8))
-                    as? [String: Any]
-            else { continue }
-            let payload = event["payload"] as? [String: Any]
-            guard
-                let limits = (payload?["rate_limits"] ?? event["rate_limits"]) as? [String: Any]
-            else { continue }
-            let iso = (event["timestamp"] ?? payload?["timestamp"]) as? String
-            return (limits, UsageNormalizer.parseDate(iso))
-        }
-        return nil
-    }
-
-    /// The freshest usage Codex has recorded locally. OpenAI publishes no
-    /// plan-limit endpoint, so this is the whole story: the rate limits the
-    /// codex CLI wrote down when the API last returned them, or an honest
-    /// reason there are none.
+    /// The freshest usage Codex has recorded locally: the tails of the newest
+    /// transcripts, handed to `Codex.pickRecorded` (ClaudeUsageCore), which
+    /// owns every decision. OpenAI publishes no plan-limit endpoint, so this
+    /// is the whole story.
     static func recordedUsage(now: Date = Date()) -> RecordedUsage {
-        let files = recentSessions()
-        guard !files.isEmpty else {
-            return RecordedUsage(cards: [], capturedAt: nil, reason: .noSessions)
+        let tails = recentSessions().map {
+            CodexTranscriptTail(
+                text: readTail($0.url), mtimeMs: $0.modified.timeIntervalSince1970 * 1000)
         }
-        let nowMs = now.timeIntervalSince1970 * 1000
-        for file in files {
-            guard let found = snapshotIn(file.url) else { continue }
-            let captured = found.at ?? file.modified
-            let capturedMs = captured.timeIntervalSince1970 * 1000
-            guard Codex.snapshotIsFresh(capturedAtMs: capturedMs, nowMs: nowMs) else {
-                return RecordedUsage(cards: [], capturedAt: captured, reason: .stale)
-            }
-            let cards = Codex.normalizeLimits(found.limits, capturedAtMs: capturedMs)
-            if cards.isEmpty { continue }
-            return RecordedUsage(cards: cards, capturedAt: captured, reason: nil)
-        }
-        return RecordedUsage(cards: [], capturedAt: nil, reason: .noSnapshot)
+        return Codex.pickRecorded(tails, nowMs: now.timeIntervalSince1970 * 1000)
     }
 }

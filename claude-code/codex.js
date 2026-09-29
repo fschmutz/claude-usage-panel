@@ -24,10 +24,11 @@ import path from 'node:path';
 
 import {isValidName, sameJSON, sameName} from './accounts-contract.js';
 import {
-  CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSnapshotAge, codexSummary,
-  codexTokenState, normalizeCodexLimits, parseCodexProfile,
+  CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexTokenState,
+  parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin,
 } from './codex-contract.js';
 import {codexAccountsDir, codexAuthPath, codexSessionsDir} from './paths.js';
+import {readJSON, writePrivate} from './private-fs.js';
 
 /** Tail of a session transcript read when looking for the last rate-limit
  *  snapshot. A rollout file grows with the conversation; the newest events are
@@ -35,22 +36,6 @@ import {codexAccountsDir, codexAuthPath, codexSessionsDir} from './paths.js';
 export const SESSION_TAIL_BYTES = 256 * 1024;
 /** How many recent transcripts to look through before giving up. */
 export const SESSION_SCAN_LIMIT = 8;
-
-function readJSON(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-// Atomic, private write: tmp file in the same dir, created 0600, renamed over.
-function writePrivate(file, text) {
-  fs.mkdirSync(path.dirname(file), {recursive: true, mode: 0o700});
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, text, {mode: 0o600});
-  fs.renameSync(tmp, file);
-}
 
 /** The last SESSION_TAIL_BYTES of a file, as text; '' when unreadable. */
 function readTail(file, bytes = SESSION_TAIL_BYTES) {
@@ -175,7 +160,7 @@ export function openCodexStore(io = {}) {
     const existing = profiles.find((p) => p.name === name);
     if (existing && !force) {
       const held = codexIdentity(existing.auth);
-      if (held.accountId && live.accountId && held.accountId !== live.accountId) {
+      if (!sameCodexLogin(held, live)) {
         throw new Error(
           `${name} is already ${held.email ?? 'another account'} - pick another name or --force`);
       }
@@ -236,62 +221,23 @@ export function openCodexStore(io = {}) {
     return files.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
   }
 
-  /** The last `rate_limits` object in one transcript, with when it was written. */
-  function snapshotIn(file) {
-    const lines = readTail(file).split('\n');
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i].trim();
-      if (!line.startsWith('{') || !line.includes('rate_limits')) continue;
-      let event;
-      try {
-        event = JSON.parse(line);
-      } catch {
-        continue; // a truncated first line of the tail, or a partial write
-      }
-      const limits = event?.payload?.rate_limits ?? event?.rate_limits;
-      if (!limits || typeof limits !== 'object') continue;
-      const at = Date.parse(event.timestamp ?? event.payload?.timestamp ?? '');
-      return {limits, capturedAtMs: Number.isFinite(at) ? at : null};
-    }
-    return null;
-  }
-
   /**
-   * The freshest usage Codex has recorded locally, as cards.
-   *
-   * This is the whole Codex usage story, and it is deliberately small: OpenAI
-   * publishes no plan-limit endpoint, so there is nothing to poll. What the
-   * Codex CLI does record, in its own session transcript, is the rate limits
-   * the API returned with a turn - a real reading, from whenever that turn
-   * was. Those are reported as ESTIMATED and stamped, or not at all.
-   *
+   * The freshest usage Codex has recorded locally, as cards: the tails of the
+   * newest transcripts, handed to pickRecordedCodexUsage (codex-contract.js),
+   * which owns every decision. OpenAI publishes no plan-limit endpoint, so
+   * this is the whole Codex usage story.
    * @returns {{cards: object[], capturedAt: ?string, reason: ?string}}
-   *   `reason` says why there are no cards: 'no_sessions' (the CLI has not
-   *   written any, or the directory is unreadable), 'no_snapshot' (nothing in
-   *   the recent ones carried rate limits), 'stale' (the newest reading is old
-   *   enough that its window has almost certainly rolled over).
    */
   function recordedUsage() {
-    const files = recentSessions();
-    if (!files.length) return {cards: [], capturedAt: null, reason: 'no_sessions'};
-    for (const {full, mtimeMs} of files) {
-      const found = snapshotIn(full);
-      if (!found) continue;
-      const capturedAtMs = found.capturedAtMs ?? mtimeMs;
-      if (!codexSnapshotAge(capturedAtMs, now()).show) {
-        return {cards: [], capturedAt: new Date(capturedAtMs).toISOString(), reason: 'stale'};
-      }
-      const cards = normalizeCodexLimits(found.limits, capturedAtMs);
-      if (!cards.length) continue;
-      return {cards, capturedAt: new Date(capturedAtMs).toISOString(), reason: null};
-    }
-    return {cards: [], capturedAt: null, reason: 'no_snapshot'};
+    const files = recentSessions().map(({full, mtimeMs}) => ({text: readTail(full), mtimeMs}));
+    return pickRecordedCodexUsage(files, now());
   }
 
   /** What every "list" shows: the saved Codex logins with the active one
-   *  marked, and - once - the newest recorded reading. */
+   *  marked, and - once - the newest recorded reading. Read-only: it writes
+   *  nothing (the MCP tool says so), so a caller that wants the rotated live
+   *  tokens kept first runs syncBack() itself, as `claudectl codex list` does. */
   function listAccounts({usage = false} = {}) {
-    syncBack();
     const profiles = listProfiles();
     const active = liveCodexName();
     const accounts = profiles.map((p) => ({

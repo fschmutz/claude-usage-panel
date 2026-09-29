@@ -13,14 +13,21 @@ import * as codex from '../claude-code/codex-contract.js';
 import {isValidName} from '../claude-code/accounts-contract.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const FIX = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'codex.json'), 'utf8'));
+const load = (name) => JSON.parse(fs.readFileSync(path.join(here, 'fixtures', name), 'utf8'));
+const FIX = load('codex.json');
+const USAGE = load('codex-usage.json');
 
 for (const [portName, port] of [['pure/codex.js', pure], ['codex-contract.js', codex]]) {
     test(`${portName} - the constants are the fixture's`, () => {
         assert.equal(port.CODEX_REFRESH_LEAD_MS, FIX.refreshLeadMs);
         assert.equal(port.CODEX_REFRESH_MAX_AGE_MS, FIX.refreshMaxAgeMs);
-        assert.equal(port.CODEX_SNAPSHOT_MAX_AGE_MS, FIX.snapshotMaxAgeMs);
+        assert.equal(port.CODEX_SNAPSHOT_MAX_AGE_MS, USAGE.snapshotMaxAgeMs);
         assert.equal(port.CODEX_AUTH_CLAIM, FIX.authClaim);
+    });
+
+    test(`${portName} - token state reads exp and last_refresh strictly`, () => {
+        for (const c of FIX.tokenStateStrict.cases)
+            assert.equal(port.codexTokenState({auth: c.auth}, FIX.now), c.expected, c.name);
     });
 
     test(`${portName} - JWT claims are read, never verified`, () => {
@@ -52,14 +59,24 @@ for (const [portName, port] of [['pure/codex.js', pure], ['codex-contract.js', c
             assert.equal(port.activeCodexName(profiles, c.live), c.expected, c.name);
     });
 
+    test(`${portName} - one Team workspace, two members: the user id tells them apart`, () => {
+        const profiles = FIX.team.profiles.map((raw) => port.parseCodexProfile(raw, isValidName));
+        for (const c of FIX.team.active)
+            assert.equal(port.activeCodexName(profiles, c.live), c.expected, c.name);
+        for (const c of FIX.team.identities) {
+            const {email, accountId, userId, plan} = port.codexIdentity(c.auth);
+            assert.deepEqual({email, accountId, userId, plan}, c.expected, c.name);
+        }
+    });
+
     test(`${portName} - window labels`, () => {
-        for (const c of FIX.windowLabels)
+        for (const c of USAGE.windowLabels)
             assert.equal(port.codexWindowLabel(c.minutes), c.expected, String(c.minutes));
     });
 
     test(`${portName} - a recorded snapshot becomes cards, and nothing else does`, () => {
-        for (const c of FIX.limits) {
-            const got = port.normalizeCodexLimits(c.rateLimits, c.capturedAtMs);
+        for (const c of USAGE.limits) {
+            const got = port.normalizeCodexLimits(c.rateLimits, c.capturedAtMs, c.nowMs ?? null);
             assert.deepEqual(
                 got.map((x) => ({
                     key: x.key, label: x.label, group: x.group, percent: x.percent,
@@ -75,9 +92,26 @@ for (const [portName, port] of [['pure/codex.js', pure], ['codex-contract.js', c
     });
 
     test(`${portName} - a snapshot too old to mean anything is not shown`, () => {
-        for (const c of FIX.snapshotAge) {
+        for (const c of USAGE.snapshotAge) {
             assert.equal(
-                port.codexSnapshotAge(c.capturedAtMs, FIX.now).show, c.expected, c.name);
+                port.codexSnapshotAge(c.capturedAtMs, USAGE.now).show, c.expected, c.name);
+        }
+    });
+
+    test(`${portName} - the last rate-limit reading in a transcript tail`, () => {
+        for (const c of USAGE.transcripts)
+            assert.deepEqual(port.lastRateLimits(c.text), c.expected, c.name);
+    });
+
+    test(`${portName} - the freshest recorded usage, or why there is none`, () => {
+        for (const c of USAGE.recorded) {
+            const got = port.pickRecordedCodexUsage(c.files, USAGE.now);
+            assert.deepEqual(
+                {reason: got.reason, capturedAt: got.capturedAt, keys: got.cards.map((x) => x.key)},
+                {reason: c.expected.reason, capturedAt: c.expected.capturedAt, keys: c.expected.keys},
+                c.name);
+            if (c.expected.resetsAt)
+                assert.deepEqual(got.cards.map((x) => x.resetsAt), c.expected.resetsAt, c.name);
         }
     });
 }

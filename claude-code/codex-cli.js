@@ -39,99 +39,111 @@ const WHY = {
   stale: 'the newest recorded reading is too old to mean anything now',
 };
 
+function printList({store, out, json}) {
+  // The CLI keeps the tokens the codex CLI rotated before it lists, as it
+  // always has; the store's listAccounts itself stays read-only (MCP).
+  store.syncBack();
+  const {active, accounts, live} = store.listAccounts();
+  if (json) {
+    out(`${JSON.stringify({active, accounts}, null, 2)}\n`);
+    return 0;
+  }
+  if (!accounts.length) {
+    out('no saved Codex logins - `claudectl codex save NAME` saves the current one\n');
+    return 0;
+  }
+  for (const a of accounts) {
+    out(`${a.active ? '*' : ' '} ${a.name.padEnd(12)} ${(a.email ?? '').padEnd(32)} ` +
+      `${(a.planLabel || '?').padEnd(8)} ${a.tokenState}\n`);
+  }
+  if (!active && live) {
+    const id = codexIdentity(live);
+    out(`  (current Codex login ${id.email ?? 'unknown'} is not saved yet)\n`);
+  }
+  return 0;
+}
+
+function printCurrent({store, out, json}) {
+  const active = store.liveCodexName();
+  const id = codexIdentity(store.readLiveAuth());
+  out(json
+    ? `${JSON.stringify({name: active, email: id.email, plan: id.plan})}\n`
+    : `${active ?? `(not saved: ${id.email ?? 'no Codex login'})`}\n`);
+  return active ? 0 : 1;
+}
+
+function save({store, out, json, name, flags}) {
+  if (!name) throw new Error('save needs a NAME');
+  const p = store.saveCurrent(name, {force: flags.has('--force')});
+  const id = codexIdentity(p.auth);
+  out(json ? `${JSON.stringify({name: p.name, email: id.email, plan: id.plan})}\n`
+    : `saved ${p.name} (${id.email ?? 'unknown account'})\n`);
+  return 0;
+}
+
+function use({store, out, json, name}) {
+  if (!name) throw new Error('use needs a NAME');
+  const r = store.switchTo(name);
+  if (json) {
+    out(`${JSON.stringify(r)}\n`);
+  } else if (!r.changed) {
+    out(`${name} is already the current Codex login\n`);
+  } else {
+    out(`switched ${r.from ?? '?'} -> ${r.to}\n`);
+    if (r.tokenState === 'expired') {
+      out(`${r.to} needs a new sign-in - run \`codex login\`, then \`claudectl codex save ${r.to} --force\`\n`);
+    } else if (r.tokenState === 'stale') {
+      out(`${r.to}'s token is due a refresh - the codex CLI will do it on the next turn\n`);
+    }
+  }
+  return 0;
+}
+
+function remove({store, out, name}) {
+  if (!name) throw new Error('remove needs a NAME');
+  store.removeProfile(name);
+  out(`removed ${name}\n`);
+  return 0;
+}
+
+function printUsage({store, out, json, nowMs}) {
+  const {cards, capturedAt, reason} = store.recordedUsage();
+  if (json) {
+    out(`${JSON.stringify({cards, capturedAt, reason, provenance: 'estimated'}, null, 2)}\n`);
+    return reason ? 1 : 0;
+  }
+  if (reason) {
+    out(`Codex usage unavailable: ${WHY[reason] ?? reason}\n`);
+    return 1;
+  }
+  for (const c of cards) {
+    const reset = resetHint(c.resetsAt, nowMs);
+    out(`${c.label.padEnd(14)} ${String(c.percent).padStart(3)}%` +
+      `${reset ? `  resets in ${reset}` : ''}\n`);
+  }
+  out(`est. - recorded by the codex CLI at ${capturedAt}, not read now\n`);
+  return 0;
+}
+
+function help({store, out}) {
+  out(`${helpText(store)}\n`);
+  return 0;
+}
+
+const COMMANDS = {
+  help, '-h': help, list: printList, current: printCurrent, save, use, remove, usage: printUsage,
+};
+
 export async function main(argv, io = {}) {
   const store = openCodexStore(io);
-  const out = io.stdout ?? ((s) => process.stdout.write(s));
   const args = argv.filter((a) => !a.startsWith('--'));
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
-  const json = flags.has('--json');
-  const [cmd, name] = args;
-  const nowMs = io.nowMs ?? Date.now();
-
-  switch (cmd) {
-    case undefined:
-    case 'help':
-    case '-h':
-      out(`${helpText(store)}\n`);
-      return 0;
-    case 'list': {
-      const {active, accounts, live} = store.listAccounts();
-      if (json) {
-        out(`${JSON.stringify({active, accounts}, null, 2)}\n`);
-        return 0;
-      }
-      if (!accounts.length) {
-        out('no saved Codex logins - `claudectl codex save NAME` saves the current one\n');
-        return 0;
-      }
-      for (const a of accounts) {
-        out(`${a.active ? '*' : ' '} ${a.name.padEnd(12)} ${(a.email ?? '').padEnd(32)} ` +
-          `${(a.planLabel || '?').padEnd(8)} ${a.tokenState}\n`);
-      }
-      if (!active && live) {
-        const id = codexIdentity(live);
-        out(`  (current Codex login ${id.email ?? 'unknown'} is not saved yet)\n`);
-      }
-      return 0;
-    }
-    case 'current': {
-      const active = store.liveCodexName();
-      const id = codexIdentity(store.readLiveAuth());
-      out(json
-        ? `${JSON.stringify({name: active, email: id.email, plan: id.plan})}\n`
-        : `${active ?? `(not saved: ${id.email ?? 'no Codex login'})`}\n`);
-      return active ? 0 : 1;
-    }
-    case 'save': {
-      if (!name) throw new Error('save needs a NAME');
-      const p = store.saveCurrent(name, {force: flags.has('--force')});
-      const id = codexIdentity(p.auth);
-      out(json ? `${JSON.stringify({name: p.name, email: id.email, plan: id.plan})}\n`
-        : `saved ${p.name} (${id.email ?? 'unknown account'})\n`);
-      return 0;
-    }
-    case 'use': {
-      if (!name) throw new Error('use needs a NAME');
-      const r = store.switchTo(name);
-      if (json) {
-        out(`${JSON.stringify(r)}\n`);
-      } else if (!r.changed) {
-        out(`${name} is already the current Codex login\n`);
-      } else {
-        out(`switched ${r.from ?? '?'} -> ${r.to}\n`);
-        if (r.tokenState === 'expired') {
-          out(`${r.to} needs a new sign-in - run \`codex login\`, then \`claudectl codex save ${r.to} --force\`\n`);
-        } else if (r.tokenState === 'stale') {
-          out(`${r.to}'s token is due a refresh - the codex CLI will do it on the next turn\n`);
-        }
-      }
-      return 0;
-    }
-    case 'remove': {
-      if (!name) throw new Error('remove needs a NAME');
-      store.removeProfile(name);
-      out(`removed ${name}\n`);
-      return 0;
-    }
-    case 'usage': {
-      const {cards, capturedAt, reason} = store.recordedUsage();
-      if (json) {
-        out(`${JSON.stringify({cards, capturedAt, reason, provenance: 'estimated'}, null, 2)}\n`);
-        return reason ? 1 : 0;
-      }
-      if (reason) {
-        out(`Codex usage unavailable: ${WHY[reason] ?? reason}\n`);
-        return 1;
-      }
-      for (const c of cards) {
-        const reset = resetHint(c.resetsAt, nowMs);
-        out(`${c.label.padEnd(14)} ${String(c.percent).padStart(3)}%` +
-          `${reset ? `  resets in ${reset}` : ''}\n`);
-      }
-      out(`est. - recorded by the codex CLI at ${capturedAt}, not read now\n`);
-      return 0;
-    }
-    default:
-      throw new Error(`unknown command ${cmd}\n${helpText(store)}`);
-  }
+  const [cmd = 'help', name] = args;
+  const run = Object.hasOwn(COMMANDS, cmd) ? COMMANDS[cmd] : null;
+  if (!run) throw new Error(`unknown command ${cmd}\n${helpText(store)}`);
+  return run({
+    store, name, flags, json: flags.has('--json'),
+    out: io.stdout ?? ((s) => process.stdout.write(s)),
+    nowMs: io.nowMs ?? Date.now(),
+  });
 }

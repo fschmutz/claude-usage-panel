@@ -8,6 +8,7 @@ import XCTest
 /// pure function of an auth blob, a clock, and a recorded snapshot.
 final class CodexParityTests: XCTestCase {
     private func fixture() throws -> [String: Any] { try Fixtures.load("codex.json") }
+    private func usage() throws -> [String: Any] { try Fixtures.load("codex-usage.json") }
 
     private func profiles(_ fix: [String: Any]) -> [CodexProfile] {
         (fix["profiles"] as! [Any]).compactMap(CodexProfile.parse)
@@ -17,7 +18,8 @@ final class CodexParityTests: XCTestCase {
         let fix = try fixture()
         XCTAssertEqual(Codex.refreshLeadMs, (fix["refreshLeadMs"] as! NSNumber).doubleValue)
         XCTAssertEqual(Codex.refreshMaxAgeMs, (fix["refreshMaxAgeMs"] as! NSNumber).doubleValue)
-        XCTAssertEqual(Codex.snapshotMaxAgeMs, (fix["snapshotMaxAgeMs"] as! NSNumber).doubleValue)
+        XCTAssertEqual(
+            Codex.snapshotMaxAgeMs, (try usage()["snapshotMaxAgeMs"] as! NSNumber).doubleValue)
         XCTAssertEqual(Codex.authClaim, fix["authClaim"] as! String)
     }
 
@@ -37,6 +39,17 @@ final class CodexParityTests: XCTestCase {
         XCTAssertEqual(
             (Codex.jwtClaims(tokens["accessValid"])?["exp"] as? NSNumber)?.doubleValue,
             1_789_310_000)
+    }
+
+    func testTokenStateReadsStrictly() throws {
+        let fix = try fixture()
+        let now = (fix["now"] as! NSNumber).doubleValue
+        let strict = fix["tokenStateStrict"] as! [String: Any]
+        for c in strict["cases"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Codex.tokenState(auth: c["auth"] as? [String: Any], nowMs: now).rawValue,
+                c["expected"] as! String, c["name"] as! String)
+        }
     }
 
     func testPlanLabels() throws {
@@ -81,22 +94,43 @@ final class CodexParityTests: XCTestCase {
         }
     }
 
+    func testOneTeamWorkspaceTwoMembers() throws {
+        let team = try fixture()["team"] as! [String: Any]
+        let ps = (team["profiles"] as! [Any]).compactMap(CodexProfile.parse)
+        XCTAssertEqual(ps.count, (team["profiles"] as! [Any]).count)
+        for c in team["active"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Codex.activeName(profiles: ps, live: c["live"] as? [String: Any]),
+                c["expected"] as? String, c["name"] as! String)
+        }
+        for c in team["identities"] as! [[String: Any]] {
+            let id = Codex.identity(c["auth"] as? [String: Any])
+            let want = c["expected"] as! [String: Any]
+            let name = c["name"] as! String
+            XCTAssertEqual(id.email, want["email"] as? String, name)
+            XCTAssertEqual(id.accountId, want["accountId"] as? String, name)
+            XCTAssertEqual(id.userId, want["userId"] as? String, name)
+            XCTAssertEqual(id.plan, want["plan"] as? String, name)
+        }
+    }
+
     func testWindowLabels() throws {
-        let fix = try fixture()
+        let fix = try usage()
         for c in fix["windowLabels"] as! [[String: Any]] {
             XCTAssertEqual(
-                Codex.windowLabel((c["minutes"] as? NSNumber)?.doubleValue),
+                Codex.windowLabel(Codex.number(c["minutes"])),
                 c["expected"] as! String, "\(c["minutes"] ?? "nil")")
         }
     }
 
     func testRecordedSnapshotsBecomeCardsAndNothingElseDoes() throws {
-        let fix = try fixture()
+        let fix = try usage()
         for c in fix["limits"] as! [[String: Any]] {
             let name = c["name"] as! String
             let captured = (c["capturedAtMs"] as! NSNumber).doubleValue
             let got = Codex.normalizeLimits(
-                c["rateLimits"] as? [String: Any], capturedAtMs: captured)
+                c["rateLimits"] as? [String: Any], capturedAtMs: captured,
+                nowMs: (c["nowMs"] as? NSNumber)?.doubleValue)
             let want = c["expected"] as! [[String: Any]]
             XCTAssertEqual(got.count, want.count, name)
             for (card, e) in zip(got, want) {
@@ -116,13 +150,53 @@ final class CodexParityTests: XCTestCase {
     }
 
     func testAnOldSnapshotIsNotShown() throws {
-        let fix = try fixture()
+        let fix = try usage()
         let now = (fix["now"] as! NSNumber).doubleValue
         for c in fix["snapshotAge"] as! [[String: Any]] {
             XCTAssertEqual(
                 Codex.snapshotIsFresh(
                     capturedAtMs: (c["capturedAtMs"] as! NSNumber).doubleValue, nowMs: now),
                 c["expected"] as! Bool, c["name"] as! String)
+        }
+    }
+
+    func testLastRateLimitsInATranscriptTail() throws {
+        for c in try usage()["transcripts"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            let got = Codex.lastRateLimits(c["text"] as! String)
+            guard let want = c["expected"] as? [String: Any] else {
+                XCTAssertNil(got, name)
+                continue
+            }
+            let found = try XCTUnwrap(got, name)
+            XCTAssertTrue(Accounts.sameJSON(found.limits, want["limits"] as Any), name)
+            XCTAssertEqual(
+                found.capturedAtMs, (want["capturedAtMs"] as? NSNumber)?.doubleValue, name)
+        }
+    }
+
+    func testTheFreshestRecordedUsageOrWhyThereIsNone() throws {
+        let fix = try usage()
+        let now = (fix["now"] as! NSNumber).doubleValue
+        for c in fix["recorded"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            let files = (c["files"] as! [[String: Any]]).map {
+                CodexTranscriptTail(
+                    text: $0["text"] as! String, mtimeMs: ($0["mtimeMs"] as! NSNumber).doubleValue)
+            }
+            let got = Codex.pickRecorded(files, nowMs: now)
+            let want = c["expected"] as! [String: Any]
+            XCTAssertEqual(got.reason?.rawValue, want["reason"] as? String, name)
+            XCTAssertEqual(got.cards.map(\.id), want["keys"] as! [String], name)
+            XCTAssertEqual(
+                got.capturedAt.map { ($0.timeIntervalSince1970 * 1000).rounded() },
+                UsageNormalizer.parseDate(want["capturedAt"] as? String)
+                    .map { ($0.timeIntervalSince1970 * 1000).rounded() }, name)
+            if let resets = want["resetsAt"] as? [String] {
+                XCTAssertEqual(
+                    got.cards.map { $0.resetsAt?.timeIntervalSince1970 },
+                    resets.map { UsageNormalizer.parseDate($0)?.timeIntervalSince1970 }, name)
+            }
         }
     }
 }

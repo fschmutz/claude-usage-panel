@@ -70,17 +70,56 @@ public struct CodexProfile: @unchecked Sendable {
     }
 }
 
+/// `accountId` is the ChatGPT WORKSPACE: every member of a Team workspace
+/// shares it, so it never identifies a login on its own. `userId` is the
+/// person. A login is the pair (see `Codex.sameLogin`).
 public struct CodexIdentity: Equatable, Sendable {
     public let email: String?
     public let accountId: String?
+    public let userId: String?
     public let plan: String?
     public let planLabel: String
 
-    public init(email: String?, accountId: String?, plan: String?, planLabel: String) {
+    public init(
+        email: String?, accountId: String?, userId: String? = nil, plan: String?,
+        planLabel: String
+    ) {
         self.email = email
         self.accountId = accountId
+        self.userId = userId
         self.plan = plan
         self.planLabel = planLabel
+    }
+}
+
+/// Why there are no Codex figures. Never "0%".
+public enum CodexUnavailable: String, Sendable {
+    case noSessions = "no_sessions"
+    case noSnapshot = "no_snapshot"
+    case stale
+}
+
+/// The freshest usage Codex recorded, or the reason there is none.
+public struct CodexRecordedUsage: Sendable {
+    public let cards: [LimitCard]
+    public let capturedAt: Date?
+    public let reason: CodexUnavailable?
+
+    public init(cards: [LimitCard], capturedAt: Date?, reason: CodexUnavailable?) {
+        self.cards = cards
+        self.capturedAt = capturedAt
+        self.reason = reason
+    }
+}
+
+/// One transcript tail, and its modification time as the fallback stamp.
+public struct CodexTranscriptTail: Sendable {
+    public let text: String
+    public let mtimeMs: Double
+
+    public init(text: String, mtimeMs: Double) {
+        self.text = text
+        self.mtimeMs = mtimeMs
     }
 }
 
@@ -146,11 +185,15 @@ public enum Codex {
             + p.dropFirst().replacingOccurrences(of: "_", with: " ")
     }
 
-    /// Who a Codex auth blob belongs to, from the id token's claims.
+    /// Who a Codex auth blob belongs to, from the token claims: the user id
+    /// is chatgpt_user_id, else user_id, from the id token, else from the
+    /// access token.
     public static func identity(_ auth: [String: Any]?) -> CodexIdentity {
         let tokens = auth?["tokens"] as? [String: Any] ?? [:]
         let claims = jwtClaims(tokens["id_token"] as? String) ?? [:]
         let ns = claims[authClaim] as? [String: Any] ?? [:]
+        let accessNs =
+            jwtClaims(tokens["access_token"] as? String)?[authClaim] as? [String: Any] ?? [:]
         let str = { (v: Any?) -> String? in
             guard let s = v as? String, !s.isEmpty else { return nil }
             return s
@@ -159,7 +202,20 @@ public enum Codex {
         return CodexIdentity(
             email: str(claims["email"]),
             accountId: str(tokens["account_id"]) ?? str(ns["chatgpt_account_id"]),
+            userId: str(ns["chatgpt_user_id"]) ?? str(ns["user_id"])
+                ?? str(accessNs["chatgpt_user_id"]) ?? str(accessNs["user_id"]),
             plan: plan, planLabel: planLabel(plan))
+    }
+
+    /// Whether two identities are the same login. Two different workspaces
+    /// never are. Within one, the user id decides when both carry one; the
+    /// email only when one of them has no user id. An account id alone
+    /// matches nothing: it names a workspace, not a person.
+    public static func sameLogin(_ a: CodexIdentity, _ b: CodexIdentity) -> Bool {
+        if let x = a.accountId, let y = b.accountId, x != y { return false }
+        if let x = a.userId, let y = b.userId { return x == y }
+        guard let x = a.email, let y = b.email else { return false }
+        return x.lowercased() == y.lowercased()
     }
 
     /// valid / stale / expired, as in the Claude store. Note what this does
@@ -180,30 +236,18 @@ public enum Codex {
         {
             return .expired
         }
-        if let exp = (jwtClaims(tokens["access_token"] as? String)?["exp"] as? NSNumber)?
-            .doubleValue, exp * 1000 - nowMs > leadMs
+        if let exp = UsageNormalizer.number(jwtClaims(tokens["access_token"] as? String)?["exp"]),
+            exp * 1000 - nowMs > leadMs
         {
             return .valid
         }
         return .stale
     }
 
-    /// Which saved Codex profile a live auth blob is - by account id, else email.
+    /// Which saved Codex profile a live auth blob is (see `sameLogin`).
     public static func activeName(profiles: [CodexProfile], live: [String: Any]?) -> String? {
         let id = identity(live)
-        if let accountId = id.accountId,
-            let hit = profiles.first(where: { identity($0.auth).accountId == accountId })
-        {
-            return hit.name
-        }
-        if let email = id.email?.lowercased(),
-            let hit = profiles.first(where: {
-                (identity($0.auth).email ?? "").lowercased() == email
-            })
-        {
-            return hit.name
-        }
-        return nil
+        return profiles.first(where: { sameLogin(identity($0.auth), id) })?.name
     }
 
     public static func sortedByName(_ profiles: [CodexProfile]) -> [CodexProfile] {
@@ -211,6 +255,14 @@ public enum Codex {
     }
 
     // MARK: usage, honestly
+
+    /// A JSON number, or nil: strings, booleans and non-finite values are not.
+    static func number(_ v: Any?) -> Double? {
+        guard let n = v as? NSNumber, !Accounts.isJSONBool(n), n.doubleValue.isFinite else {
+            return nil
+        }
+        return n.doubleValue
+    }
 
     /// Label for a limit window of `minutes`: "5h limit", "Weekly limit".
     public static func windowLabel(_ minutes: Double?) -> String {
@@ -228,26 +280,33 @@ public enum Codex {
         return Double(mins) == m ? "\(mins)m limit" : "\(m)m limit"
     }
 
+    /// When one window resets, in epoch ms: `resets_at` (epoch seconds)
+    /// first, else the legacy `resets_in_seconds` from the capture.
+    static func slotResetMs(_ slot: [String: Any], capturedAtMs: Double) -> Double? {
+        if let at = number(slot["resets_at"]) { return at * 1000 }
+        return number(slot["resets_in_seconds"]).map { capturedAtMs + $0 * 1000 }
+    }
+
     /// The cards for one rate-limit snapshot the Codex CLI recorded. Empty
     /// when the snapshot carries nothing usable - there is no third option in
-    /// which a number is made up.
-    public static func normalizeLimits(_ rateLimits: [String: Any]?, capturedAtMs: Double)
-        -> [LimitCard]
-    {
+    /// which a number is made up. With `nowMs`, a window that has reset by
+    /// then is dropped: its percent measured a window that no longer exists.
+    public static func normalizeLimits(
+        _ rateLimits: [String: Any]?, capturedAtMs: Double, nowMs: Double? = nil
+    ) -> [LimitCard] {
         var out: [LimitCard] = []
         for (key, group) in [("primary", "session"), ("secondary", "weekly")] {
             guard let slot = rateLimits?[key] as? [String: Any],
-                let used = (slot["used_percent"] as? NSNumber), !Accounts.isJSONBool(used)
+                let used = number(slot["used_percent"])
             else { continue }
-            let resets = (slot["resets_in_seconds"] as? NSNumber)?.doubleValue
+            let resetMs = slotResetMs(slot, capturedAtMs: capturedAtMs)
+            if let nowMs, let resetMs, resetMs <= nowMs { continue }
             out.append(
                 LimitCard(
                     id: "codex_\(key)",
-                    label: windowLabel((slot["window_minutes"] as? NSNumber)?.doubleValue),
-                    percent: UsageNormalizer.clampPercent(used.doubleValue), severity: .normal,
-                    resetsAt: resets.map {
-                        Date(timeIntervalSince1970: (capturedAtMs + $0 * 1000) / 1000)
-                    },
+                    label: windowLabel(number(slot["window_minutes"])),
+                    percent: UsageNormalizer.clampPercent(used), severity: .normal,
+                    resetsAt: resetMs.map { Date(timeIntervalSince1970: $0 / 1000) },
                     active: key == "primary", group: group, scoped: false, percentKnown: true))
         }
         return out
@@ -259,5 +318,53 @@ public enum Codex {
     ) -> Bool {
         let age = nowMs - capturedAtMs
         return age >= 0 && age <= maxAgeMs
+    }
+
+    /// The last `rate_limits` object in the tail of one transcript, and when
+    /// its event was written. Lines are scanned from the end; one that is not
+    /// JSON (the cut first line of a tail, a partial write) is skipped, and
+    /// so is one whose `rate_limits` is not an object.
+    public static func lastRateLimits(_ text: String) -> (
+        limits: [String: Any], capturedAtMs: Double?
+    )? {
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false).reversed() {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.hasPrefix("{"), trimmed.contains("rate_limits"),
+                let event = try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))
+                    as? [String: Any]
+            else { continue }
+            let payload = event["payload"] as? [String: Any] ?? [:]
+            let raw = payload["rate_limits"] ?? event["rate_limits"]
+            guard let limits = raw as? [String: Any] else { continue }
+            let stamp = event["timestamp"] as? String ?? payload["timestamp"] as? String
+            let at = UsageNormalizer.parseDate(stamp).map { $0.timeIntervalSince1970 * 1000 }
+            return (limits, at)
+        }
+        return nil
+    }
+
+    /// The freshest usage Codex has recorded, from the tails of its newest
+    /// transcripts (newest first). `stale`: the newest reading is older than
+    /// `snapshotMaxAgeMs`, or every window it measured has reset since.
+    public static func pickRecorded(_ files: [CodexTranscriptTail], nowMs: Double)
+        -> CodexRecordedUsage
+    {
+        guard !files.isEmpty else {
+            return CodexRecordedUsage(cards: [], capturedAt: nil, reason: .noSessions)
+        }
+        for file in files {
+            guard let found = lastRateLimits(file.text) else { continue }
+            let capturedMs = found.capturedAtMs ?? file.mtimeMs
+            let captured = Date(timeIntervalSince1970: capturedMs / 1000)
+            guard snapshotIsFresh(capturedAtMs: capturedMs, nowMs: nowMs) else {
+                return CodexRecordedUsage(cards: [], capturedAt: captured, reason: .stale)
+            }
+            // Nothing readable in it: an older transcript may still have one.
+            if normalizeLimits(found.limits, capturedAtMs: capturedMs).isEmpty { continue }
+            let cards = normalizeLimits(found.limits, capturedAtMs: capturedMs, nowMs: nowMs)
+            return CodexRecordedUsage(
+                cards: cards, capturedAt: captured, reason: cards.isEmpty ? .stale : nil)
+        }
+        return CodexRecordedUsage(cards: [], capturedAt: nil, reason: .noSnapshot)
     }
 }

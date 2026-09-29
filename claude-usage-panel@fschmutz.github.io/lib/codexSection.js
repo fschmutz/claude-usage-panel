@@ -12,7 +12,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {codexIdentity, formatResets} from './pure.js';
-import {listCodexAccounts, recordedCodexUsage, switchCodexTo} from './codex.js';
+import {listCodexAccounts, recordedCodexUsage, switchCodexTo, syncBackCodex} from './codex.js';
 import {OutcomeLabel} from './noticeRow.js';
 import {vbox, clipLabel, wrapLabel} from './widgets.js';
 
@@ -73,6 +73,9 @@ export class CodexController {
         }
         let state, usage;
         try {
+            // The codex CLI rotates its tokens as it runs; keep the saved copy
+            // of the live login current before listing.
+            syncBackCodex();
             state = listCodexAccounts();
             usage = recordedCodexUsage();
         } catch (e) {

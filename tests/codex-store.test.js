@@ -133,6 +133,73 @@ test('the live login is synced back before a switch, so a rotated token is not l
   assert.equal(s.readProfile('PRO').auth.last_refresh, new Date(NOW).toISOString());
 });
 
+/** A live auth.json for one of the fixture's Team members (ANA, BEN). */
+const teamAuth = (name, extra = {}) => ({
+  ...FIX.team.profiles.find((p) => p.name === name).auth, ...extra,
+});
+
+test('two members of one Team workspace are two logins: list never writes, switch never mixes them', () => {
+  const {io, s} = world({live: null});
+  fs.mkdirSync(path.dirname(codexAuthPath(io)), {recursive: true});
+  fs.writeFileSync(codexAuthPath(io), JSON.stringify(teamAuth('ANA')));
+  s.saveCurrent('ANA');
+  const anaSaved = fs.readFileSync(path.join(s.dir, 'ANA.json'), 'utf8');
+
+  // Ben signs in on the same workspace (same account_id).
+  fs.writeFileSync(codexAuthPath(io), JSON.stringify(teamAuth('BEN')));
+  assert.equal(s.liveCodexName(), null, 'ben is not ana');
+  s.listAccounts();
+  s.syncBack();
+  assert.equal(fs.readFileSync(path.join(s.dir, 'ANA.json'), 'utf8'), anaSaved,
+    'ANA keeps her own tokens');
+  assert.throws(() => s.saveCurrent('ANA'), /ANA is already ana@team\.example/,
+    'ben cannot be saved over ana without --force');
+  s.saveCurrent('BEN');
+  assert.equal(s.switchTo('ANA').from, 'BEN');
+  assert.equal(JSON.parse(fs.readFileSync(codexAuthPath(io), 'utf8')).tokens.refresh_token, 'rt-ana');
+  assert.equal(s.readProfile('BEN').auth.tokens.refresh_token, 'rt-ben');
+});
+
+test('listAccounts is read-only (the MCP tool says so); the CLI list syncs first', async () => {
+  const {io, s} = world();
+  s.saveCurrent('PLUS');
+  const file = path.join(s.dir, 'PLUS.json');
+  const before = fs.readFileSync(file, 'utf8');
+  const rotated = JSON.stringify(auth('plus', {last_refresh: new Date(NOW).toISOString()}));
+  fs.writeFileSync(codexAuthPath(io), rotated);
+  assert.equal(s.listAccounts().active, 'PLUS');
+  assert.equal(fs.readFileSync(file, 'utf8'), before, 'list wrote nothing');
+  await run(io, 'codex', 'list');
+  assert.equal(s.readProfile('PLUS').auth.last_refresh, new Date(NOW).toISOString(),
+    '`claudectl codex list` keeps the rotated tokens');
+});
+
+test('a switch leaves auth.json 0600 even when the codex CLI wrote it 0644', () => {
+  const {io, s} = world();
+  s.saveCurrent('PLUS');
+  fs.writeFileSync(codexAuthPath(io), JSON.stringify(auth('pro')));
+  s.saveCurrent('PRO');
+  fs.chmodSync(codexAuthPath(io), 0o644);
+  s.switchTo('PLUS');
+  assert.equal(fs.statSync(codexAuthPath(io)).mode & 0o777, 0o600);
+});
+
+test('the real rollout shape reads: resets_at in epoch seconds becomes the countdown', () => {
+  const {home, s} = world();
+  const at = NOW - 600_000;
+  const resetsAt = Math.floor((NOW + 3_600_000) / 1000);
+  writeSession(home, 'rollout-real.jsonl', [tokenCount(at, {
+    primary: {used_percent: 23.0, window_minutes: 300, resets_at: resetsAt},
+    secondary: {used_percent: 7.0, window_minutes: 10080, resets_at: resetsAt + 86_400},
+    credits: {has_credits: false, unlimited: false, balance: null},
+    plan_type: null,
+  })]);
+  const got = s.recordedUsage();
+  assert.equal(got.reason, null);
+  assert.deepEqual(got.cards.map((c) => c.resetsAt),
+    [new Date(resetsAt * 1000).toISOString(), new Date((resetsAt + 86_400) * 1000).toISOString()]);
+});
+
 test('usage is whatever the Codex CLI last recorded - or an honest reason there is none', () => {
   const {home, s} = world();
   assert.deepEqual(s.recordedUsage(), {cards: [], capturedAt: null, reason: 'no_sessions'});

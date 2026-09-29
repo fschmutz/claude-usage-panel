@@ -1,0 +1,417 @@
+{
+  "_comment": "The ONLY usage numbers this project shows for OpenAI Codex, pinned across lib/pure/codex.js (GNOME), claude-code/codex-contract.js (CLI + MCP) and ClaudeUsageCore/Codex.swift (macOS): the rate limits the codex CLI itself recorded in a session transcript (an event_msg token_count) when the API last told it, marked estimated and stamped with when they were captured. codex-cli writes resets_at in epoch SECONDS; older builds wrote resets_in_seconds relative to the event, still read as a fallback. A window whose reset has passed is no reading. There is no case in which a number is invented. transcripts pins lastRateLimits (the tail of one rollout file), recorded pins pickRecordedCodexUsage (the newest tails, newest first, at now).",
+  "now": 1789300000000,
+  "snapshotMaxAgeMs": 43200000,
+  "windowLabels": [
+    {"minutes": 300, "expected": "5h limit"},
+    {"minutes": 60, "expected": "1h limit"},
+    {"minutes": 10080, "expected": "Weekly limit"},
+    {"minutes": 20160, "expected": "2-week limit"},
+    {"minutes": 1440, "expected": "Daily limit"},
+    {"minutes": 4320, "expected": "3-day limit"},
+    {"minutes": 45, "expected": "45m limit"},
+    {"minutes": 0, "expected": "Codex limit"},
+    {"minutes": null, "expected": "Codex limit"},
+    {"minutes": "300", "expected": "Codex limit"},
+    {"minutes": true, "expected": "Codex limit"}
+  ],
+  "limits": [
+    {
+      "name": "both windows, rounded and stamped",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {
+        "primary": {"used_percent": 12.4, "window_minutes": 300, "resets_in_seconds": 9000},
+        "secondary": {"used_percent": 3.6, "window_minutes": 10080, "resets_in_seconds": 500000}
+      },
+      "expected": [
+        {
+          "key": "codex_primary", "label": "5h limit", "group": "session", "percent": 12,
+          "percentKnown": true, "resetsAt": "2026-09-13T14:00:00.000Z", "active": true
+        },
+        {
+          "key": "codex_secondary", "label": "Weekly limit", "group": "weekly", "percent": 4,
+          "percentKnown": true, "resetsAt": "2026-09-19T06:23:20.000Z", "active": false
+        }
+      ]
+    },
+    {
+      "name": "a window with no reset still reads, it just has no countdown",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": 99.6, "window_minutes": 300}},
+      "expected": [
+        {
+          "key": "codex_primary", "label": "5h limit", "group": "session", "percent": 100,
+          "percentKnown": true, "resetsAt": null, "active": true
+        }
+      ]
+    },
+    {
+      "name": "a non-numeric percent is no reading, so there is no card",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": "12", "window_minutes": 300}},
+      "expected": []
+    },
+    {
+      "name": "nothing recorded at all",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": null,
+      "expected": []
+    },
+    {
+      "name": "the real codex-cli shape: resets_at is epoch seconds; credits and plan_type are not windows",
+      "capturedAtMs": 1789299000000,
+      "nowMs": 1789300000000,
+      "rateLimits": {
+        "primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000},
+        "secondary": {"used_percent": 7, "window_minutes": 10080, "resets_at": 1789700000},
+        "credits": {"has_credits": false, "unlimited": false, "balance": null},
+        "plan_type": null
+      },
+      "expected": [
+        {
+          "key": "codex_primary",
+          "label": "5h limit",
+          "group": "session",
+          "percent": 23,
+          "percentKnown": true,
+          "resetsAt": "2026-09-13T14:00:00.000Z",
+          "active": true
+        },
+        {
+          "key": "codex_secondary",
+          "label": "Weekly limit",
+          "group": "weekly",
+          "percent": 7,
+          "percentKnown": true,
+          "resetsAt": "2026-09-18T02:53:20.000Z",
+          "active": false
+        }
+      ]
+    },
+    {
+      "name": "resets_at wins over the legacy resets_in_seconds",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {
+        "primary": {
+          "used_percent": 5,
+          "window_minutes": 300,
+          "resets_at": 1789308000,
+          "resets_in_seconds": 60
+        }
+      },
+      "expected": [
+        {
+          "key": "codex_primary",
+          "label": "5h limit",
+          "group": "session",
+          "percent": 5,
+          "percentKnown": true,
+          "resetsAt": "2026-09-13T14:00:00.000Z",
+          "active": true
+        }
+      ]
+    },
+    {
+      "name": "a window whose reset has passed by now is not a current reading",
+      "capturedAtMs": 1789299000000,
+      "nowMs": 1789300000000,
+      "rateLimits": {
+        "primary": {"used_percent": 80, "window_minutes": 300, "resets_at": 1789299500},
+        "secondary": {"used_percent": 7, "window_minutes": 10080, "resets_at": 1789700000}
+      },
+      "expected": [
+        {
+          "key": "codex_secondary",
+          "label": "Weekly limit",
+          "group": "weekly",
+          "percent": 7,
+          "percentKnown": true,
+          "resetsAt": "2026-09-18T02:53:20.000Z",
+          "active": false
+        }
+      ]
+    },
+    {
+      "name": "the legacy resets_in_seconds rolls over too",
+      "capturedAtMs": 1789299000000,
+      "nowMs": 1789300000000,
+      "rateLimits": {"primary": {"used_percent": 80, "window_minutes": 300, "resets_in_seconds": 600}},
+      "expected": []
+    },
+    {
+      "name": "resets_in_seconds null is no countdown, not \"resets now\"",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": 10, "window_minutes": 300, "resets_in_seconds": null}},
+      "expected": [
+        {
+          "key": "codex_primary",
+          "label": "5h limit",
+          "group": "session",
+          "percent": 10,
+          "percentKnown": true,
+          "resetsAt": null,
+          "active": true
+        }
+      ]
+    },
+    {
+      "name": "resets_in_seconds as a string is no countdown",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": 10, "window_minutes": 300, "resets_in_seconds": "9000"}},
+      "expected": [
+        {
+          "key": "codex_primary",
+          "label": "5h limit",
+          "group": "session",
+          "percent": 10,
+          "percentKnown": true,
+          "resetsAt": null,
+          "active": true
+        }
+      ]
+    },
+    {
+      "name": "resets_at as a boolean is no countdown",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": 10, "window_minutes": 300, "resets_at": true}},
+      "expected": [
+        {
+          "key": "codex_primary",
+          "label": "5h limit",
+          "group": "session",
+          "percent": 10,
+          "percentKnown": true,
+          "resetsAt": null,
+          "active": true
+        }
+      ]
+    },
+    {
+      "name": "a boolean percent is no reading",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": true, "window_minutes": 300}},
+      "expected": []
+    },
+    {
+      "name": "window_minutes as a string is no window length",
+      "capturedAtMs": 1789299000000,
+      "rateLimits": {"primary": {"used_percent": 10, "window_minutes": "300"}},
+      "expected": [
+        {
+          "key": "codex_primary",
+          "label": "Codex limit",
+          "group": "session",
+          "percent": 10,
+          "percentKnown": true,
+          "resetsAt": null,
+          "active": true
+        }
+      ]
+    }
+  ],
+  "snapshotAge": [
+    {"name": "just now", "capturedAtMs": 1789300000000, "expected": true},
+    {"name": "an hour ago", "capturedAtMs": 1789296400000, "expected": true},
+    {"name": "exactly at the horizon", "capturedAtMs": 1789256800000, "expected": true},
+    {"name": "a minute past it", "capturedAtMs": 1789256740000, "expected": false},
+    {"name": "from the future, which is a broken clock", "capturedAtMs": 1789300060000, "expected": false}
+  ],
+  "transcripts": [
+    {
+      "name": "the real rollout shape: the token_count before a later message wins",
+      "text": "{\"timestamp\":\"2026-09-13T11:29:00.000Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[]}}\n{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}\n{\"timestamp\":\"2026-09-13T11:31:00.000Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[]}}\n",
+      "expected": {
+        "limits": {
+          "primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000},
+          "secondary": {"used_percent": 7, "window_minutes": 10080, "resets_at": 1789700000},
+          "credits": {"has_credits": false, "unlimited": false, "balance": null},
+          "plan_type": null
+        },
+        "capturedAtMs": 1789299000000
+      }
+    },
+    {
+      "name": "the newest of two readings",
+      "text": "{\"timestamp\":\"2026-09-13T11:00:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":1,\"window_minutes\":300},\"secondary\":null,\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}\n{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+      "expected": {
+        "limits": {
+          "primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000},
+          "secondary": {"used_percent": 7, "window_minutes": 10080, "resets_at": 1789700000},
+          "credits": {"has_credits": false, "unlimited": false, "balance": null},
+          "plan_type": null
+        },
+        "capturedAtMs": 1789299000000
+      }
+    },
+    {
+      "name": "a turn whose rate_limits is null is skipped, not the end of the scan",
+      "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}\n{\"timestamp\":\"2026-09-13T11:35:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":null,\"rate_limits\":null}}",
+      "expected": {
+        "limits": {
+          "primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000},
+          "secondary": {"used_percent": 7, "window_minutes": 10080, "resets_at": 1789700000},
+          "credits": {"has_credits": false, "unlimited": false, "balance": null},
+          "plan_type": null
+        },
+        "capturedAtMs": 1789299000000
+      }
+    },
+    {
+      "name": "the cut first line of a tail is skipped",
+      "text": "\"rate_limits\":{\"primary\":{\"used_percent\":9\n{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+      "expected": {
+        "limits": {
+          "primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000},
+          "secondary": {"used_percent": 7, "window_minutes": 10080, "resets_at": 1789700000},
+          "credits": {"has_credits": false, "unlimited": false, "balance": null},
+          "plan_type": null
+        },
+        "capturedAtMs": 1789299000000
+      }
+    },
+    {
+      "name": "CRLF line endings read the same",
+      "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}\r\n",
+      "expected": {
+        "limits": {
+          "primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000},
+          "secondary": {"used_percent": 7, "window_minutes": 10080, "resets_at": 1789700000},
+          "credits": {"has_credits": false, "unlimited": false, "balance": null},
+          "plan_type": null
+        },
+        "capturedAtMs": 1789299000000
+      }
+    },
+    {
+      "name": "no timestamp: the reading is kept, its instant is unknown",
+      "text": "{\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000}}}}",
+      "expected": {
+        "limits": {"primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000}},
+        "capturedAtMs": null
+      }
+    },
+    {
+      "name": "a non-string timestamp is no timestamp",
+      "text": "{\"timestamp\":1789299000,\"payload\":{\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000}}}}",
+      "expected": {
+        "limits": {"primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000}},
+        "capturedAtMs": null
+      }
+    },
+    {
+      "name": "the legacy top-level rate_limits",
+      "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000}}}",
+      "expected": {
+        "limits": {"primary": {"used_percent": 23, "window_minutes": 300, "resets_at": 1789308000}},
+        "capturedAtMs": 1789299000000
+      }
+    },
+    {
+      "name": "a JSON array that mentions rate_limits is not an event",
+      "text": "[\"rate_limits\", {\"primary\": {\"used_percent\": 5}}]",
+      "expected": null
+    },
+    {"name": "nothing at all", "text": "", "expected": null}
+  ],
+  "recorded": [
+    {
+      "name": "no transcripts",
+      "files": [],
+      "expected": {"reason": "no_sessions", "capturedAt": null, "keys": []}
+    },
+    {
+      "name": "transcripts with no reading",
+      "files": [
+        {
+          "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[]}}",
+          "mtimeMs": 1789299000000
+        }
+      ],
+      "expected": {"reason": "no_snapshot", "capturedAt": null, "keys": []}
+    },
+    {
+      "name": "a fresh real reading, with its countdowns from resets_at",
+      "files": [
+        {
+          "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+          "mtimeMs": 1789299500000
+        }
+      ],
+      "expected": {
+        "reason": null,
+        "capturedAt": "2026-09-13T11:30:00.000Z",
+        "keys": ["codex_primary", "codex_secondary"],
+        "resetsAt": ["2026-09-13T14:00:00.000Z", "2026-09-18T02:53:20.000Z"]
+      }
+    },
+    {
+      "name": "older than the horizon is stale, and says when it was",
+      "files": [
+        {
+          "text": "{\"timestamp\":\"2026-09-12T11:00:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+          "mtimeMs": 1789299500000
+        }
+      ],
+      "expected": {"reason": "stale", "capturedAt": "2026-09-12T11:00:00.000Z", "keys": []}
+    },
+    {
+      "name": "every window reset since the reading: stale, not a number from a window that is gone",
+      "files": [
+        {
+          "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":80,\"window_minutes\":300,\"resets_at\":1789299500},\"secondary\":{\"used_percent\":40,\"window_minutes\":10080,\"resets_at\":1789299900},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+          "mtimeMs": 1789299500000
+        }
+      ],
+      "expected": {"reason": "stale", "capturedAt": "2026-09-13T11:30:00.000Z", "keys": []}
+    },
+    {
+      "name": "one window reset since, the other still current",
+      "files": [
+        {
+          "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":80,\"window_minutes\":300,\"resets_at\":1789299500},\"secondary\":{\"used_percent\":7,\"window_minutes\":10080,\"resets_at\":1789700000},\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+          "mtimeMs": 1789299500000
+        }
+      ],
+      "expected": {
+        "reason": null,
+        "capturedAt": "2026-09-13T11:30:00.000Z",
+        "keys": ["codex_secondary"],
+        "resetsAt": ["2026-09-18T02:53:20.000Z"]
+      }
+    },
+    {
+      "name": "a newest reading with nothing usable falls back to an older transcript",
+      "files": [
+        {
+          "text": "{\"timestamp\":\"2026-09-13T11:30:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":\"12\",\"window_minutes\":300},\"secondary\":null,\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+          "mtimeMs": 1789299500000
+        },
+        {
+          "text": "{\"timestamp\":\"2026-09-13T11:20:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":90,\"reasoning_output_tokens\":40,\"total_tokens\":1290},\"last_token_usage\":{\"input_tokens\":300,\"cached_input_tokens\":200,\"output_tokens\":20,\"reasoning_output_tokens\":10,\"total_tokens\":320},\"model_context_window\":258400},\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000},\"secondary\":null,\"credits\":{\"has_credits\":false,\"unlimited\":false,\"balance\":null},\"plan_type\":null}}}",
+          "mtimeMs": 1789298500000
+        }
+      ],
+      "expected": {
+        "reason": null,
+        "capturedAt": "2026-09-13T11:20:00.000Z",
+        "keys": ["codex_primary"],
+        "resetsAt": ["2026-09-13T14:00:00.000Z"]
+      }
+    },
+    {
+      "name": "no timestamp: the file modification time stands in",
+      "files": [
+        {
+          "text": "{\"payload\":{\"rate_limits\":{\"primary\":{\"used_percent\":23,\"window_minutes\":300,\"resets_at\":1789308000}}}}",
+          "mtimeMs": 1789299600000
+        }
+      ],
+      "expected": {
+        "reason": null,
+        "capturedAt": "2026-09-13T11:40:00.000Z",
+        "keys": ["codex_primary"],
+        "resetsAt": ["2026-09-13T14:00:00.000Z"]
+      }
+    }
+  ]
+}
