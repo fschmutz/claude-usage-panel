@@ -495,17 +495,21 @@ public enum Accounts {
     /// included, must be shorter.
     public static let keychainLineMax = 4096
 
-    /// The fullest limit of a set of cards.
+    /// The fullest limit of a set of cards. A card the payload gave no number
+    /// for (`percentKnown == false`) is skipped, not counted as 0 %: it would
+    /// otherwise make every account look freer than it is, and drive an
+    /// auto-switch on it.
     public static func worstPercent(_ cards: [LimitCard]) -> Int? {
-        cards.map { max(0, min(100, $0.percent)) }.max()
+        cards.filter(\.percentKnown).map { max(0, min(100, $0.percent)) }.max()
     }
 
     /// One account's row of the usage cache: its worst limit, and its session
-    /// and weekly-all percents (nil for a card it does not have).
+    /// and weekly-all percents (nil for a card it does not have, or has no
+    /// reading for).
     public static func usageCacheEntry(_ cards: [LimitCard]) -> UsageCacheEntry {
-        UsageCacheEntry(
-            worst: worstPercent(cards), session: cards.first { $0.id == "session" }?.percent,
-            weekly: cards.first { $0.id == "weekly_all" }?.percent)
+        let pct = { (key: String) in cards.first { $0.id == key && $0.percentKnown }?.percent }
+        return UsageCacheEntry(
+            worst: worstPercent(cards), session: pct("session"), weekly: pct("weekly_all"))
     }
 
     /// The account to switch to, or nil to stay. `worst` maps each saved name
@@ -536,10 +540,15 @@ public enum Accounts {
     }
 
     /// "S 42% · W 12%" from the session / weekly-all cards, for a compact
-    /// row; a missing card is left out, and no card at all gives "".
+    /// row; a missing card is left out, and no card at all gives "". A card
+    /// with no honest reading prints the em dash rather than a number.
     public static func formatUsage(_ cards: [LimitCard]) -> String {
         let part = { (key: String, tag: String) -> String? in
-            cards.first { $0.id == key }.map { "\(tag) \(max(0, min(100, $0.percent)))%" }
+            cards.first { $0.id == key }.map {
+                $0.percentKnown
+                    ? "\(tag) \(max(0, min(100, $0.percent)))%"
+                    : "\(tag) \(UsageReading.noReading)"
+            }
         }
         return [part("session", "S"), part("weekly_all", "W")].compactMap { $0 }.joined(
             separator: " · ")

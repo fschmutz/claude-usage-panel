@@ -21,7 +21,7 @@ import {fileURLToPath} from 'node:url';
 
 import {openStore} from './accounts.js';
 import {accountKey, activeAccountName, autoSwitchTarget, usageSeverity, worstFromCache, worstPercent} from './accounts-contract.js';
-import {clampPercent} from './normalize.js';
+import {clampPercent, usageReading} from './normalize.js';
 import {clockPace, forecastMap} from './pace.js';
 import {lastPingPath, sessionIndexPath} from './paths.js';
 import {formatLastPing, localDay, resetHint} from './stamps.js';
@@ -101,6 +101,10 @@ export function cardsFromStdin(stdinText) {
       label,
       group: kind === 'session' ? 'session' : 'weekly',
       percent: p,
+      // stdin only carries a window it has a number for, so a card built here
+      // always has a reading - but its window can still have rolled over
+      // between the turn and this render (see usageReading in render()).
+      percentKnown: true,
       severity: usageSeverity(p),
       resetsAt: Number.isFinite(secs) ? new Date(secs * 1000).toISOString() : null,
       active: true,
@@ -143,11 +147,16 @@ export function render(cards, {forecasts = new Map(), nowMs = Date.now()} = {}) 
 
   return shown
     .map((c, i) => {
-      const color = SEV_COLOR[c.severity] ?? SEV_COLOR.normal;
+      // Once a window's reset instant has passed, the percentage stdin carried
+      // belongs to a window that is gone: draw the gauge empty and print `—`
+      // rather than a figure this line cannot stand behind. The projections
+      // go quiet with it - there is nothing to project from.
+      const reading = usageReading(c, nowMs);
+      const color = reading.known ? (SEV_COLOR[c.severity] ?? SEV_COLOR.normal) : DIM;
       const reset = lastWithHint.get(hints[i]) === i ? ` ${DIM}${hints[i]}${RESET}` : '';
-      const marker = exhaustionMarker(forecasts.get(c.key));
-      const clock = paceMarker(clockPace(c, nowMs));
-      return `${c.label} ${gauge(c.percent, color)} ${color}${c.percent}%${RESET}${reset}${clock}${marker}`;
+      const marker = reading.known ? exhaustionMarker(forecasts.get(c.key)) : '';
+      const clock = reading.known ? paceMarker(clockPace(c, nowMs)) : '';
+      return `${c.label} ${gauge(reading.fill, color)} ${color}${reading.text}${RESET}${reset}${clock}${marker}`;
     })
     .join('  ');
 }

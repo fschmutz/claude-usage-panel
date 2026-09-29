@@ -1,0 +1,107 @@
+{
+  "_comment": "Honest readings. A percentage is only worth printing while it still describes the window it is drawn under, so every port agrees on when it may NOT be printed. Two things end a reading: the payload carried no number for that limit (percentKnown false - the endpoint ships kinds nobody has enabled as null placeholders, and drawing them as 0 % reads as a full tank), and the window's reset instant has passed (the endpoint keeps the old figure until the next window opens). Both give `—` and an EMPTY bar - never a stale percentage that looks exactly like a fresh one. Pinned across lib/pure/usage.js (GNOME), claude-code/normalize.js (CLI + MCP + status line) and ClaudeUsageCore/Model.swift (macOS).",
+  "now": "2026-07-20T12:00:00Z",
+  "noReading": "—",
+  "normalize": [
+    {
+      "name": "a number is a reading",
+      "input": {"limits": [{"kind": "session", "percent": 42, "is_active": true}]},
+      "expected": [{"kind": "session", "percent": 42, "percentKnown": true}]
+    },
+    {
+      "name": "a null placeholder is no reading, not 0 %",
+      "input": {
+        "limits": [
+          {"kind": "session", "percent": 42},
+          {"kind": "weekly_cowork", "percent": null}
+        ]
+      },
+      "expected": [
+        {"kind": "session", "percent": 42, "percentKnown": true},
+        {"kind": "weekly_cowork", "percent": 0, "percentKnown": false}
+      ]
+    },
+    {
+      "name": "a percent of the wrong JSON type is no reading either",
+      "input": {"limits": [{"kind": "session", "percent": "42"}]},
+      "expected": [{"kind": "session", "percent": 0, "percentKnown": false}]
+    },
+    {
+      "name": "a missing percent key is no reading",
+      "input": {"limits": [{"kind": "session", "is_active": true}]},
+      "expected": [{"kind": "session", "percent": 0, "percentKnown": false}]
+    },
+    {
+      "name": "the legacy fields only produce a card when they carry a number, so it is always a reading",
+      "input": {"five_hour": {"utilization": 12}, "seven_day": {"utilization": 34}},
+      "expected": [
+        {"kind": "session", "percent": 12, "percentKnown": true},
+        {"kind": "weekly_all", "percent": 34, "percentKnown": true}
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "a live window reads its percentage",
+      "card": {"percent": 42, "percentKnown": true, "resetsAt": "2026-07-20T15:00:00Z"},
+      "expected": {
+        "known": true, "percent": 42, "fill": 42, "text": "42%", "reason": null
+      }
+    },
+    {
+      "name": "no reset at all is still a reading - nothing says the window is gone",
+      "card": {"percent": 7, "percentKnown": true, "resetsAt": null},
+      "expected": {"known": true, "percent": 7, "fill": 7, "text": "7%", "reason": null}
+    },
+    {
+      "name": "an unparseable reset is not a rolled-over window",
+      "card": {"percent": 7, "percentKnown": true, "resetsAt": "soon"},
+      "expected": {"known": true, "percent": 7, "fill": 7, "text": "7%", "reason": null}
+    },
+    {
+      "name": "percent is clamped, like everywhere else",
+      "card": {"percent": 140, "percentKnown": true, "resetsAt": null},
+      "expected": {"known": true, "percent": 100, "fill": 100, "text": "100%", "reason": null}
+    },
+    {
+      "name": "no number in the payload: em dash and an empty bar, never 0 %",
+      "card": {"percent": 0, "percentKnown": false, "resetsAt": "2026-07-20T15:00:00Z"},
+      "expected": {
+        "known": false, "percent": null, "fill": 0, "text": "—", "reason": "no_reading"
+      }
+    },
+    {
+      "name": "the window has reset: the stored percentage belongs to a window that is gone",
+      "card": {"percent": 96, "percentKnown": true, "resetsAt": "2026-07-20T11:59:00Z"},
+      "expected": {
+        "known": false, "percent": null, "fill": 0, "text": "—", "reason": "window_reset"
+      }
+    },
+    {
+      "name": "exactly at the reset instant the window is already gone",
+      "card": {"percent": 96, "percentKnown": true, "resetsAt": "2026-07-20T12:00:00Z"},
+      "expected": {
+        "known": false, "percent": null, "fill": 0, "text": "—", "reason": "window_reset"
+      }
+    },
+    {
+      "name": "sub-second before the reset the countdown already reads 0, so the reading is gone too",
+      "card": {"percent": 96, "percentKnown": true, "resetsAt": "2026-07-20T12:00:00.500Z"},
+      "expected": {
+        "known": false, "percent": null, "fill": 0, "text": "—", "reason": "window_reset"
+      }
+    },
+    {
+      "name": "a full second before the reset it is still a reading",
+      "card": {"percent": 96, "percentKnown": true, "resetsAt": "2026-07-20T12:00:01Z"},
+      "expected": {"known": true, "percent": 96, "fill": 96, "text": "96%", "reason": null}
+    },
+    {
+      "name": "both at once: the rolled-over window is the reason reported",
+      "card": {"percent": 0, "percentKnown": false, "resetsAt": "2026-07-20T10:00:00Z"},
+      "expected": {
+        "known": false, "percent": null, "fill": 0, "text": "—", "reason": "window_reset"
+      }
+    }
+  ]
+}

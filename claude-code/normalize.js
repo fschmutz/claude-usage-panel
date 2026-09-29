@@ -91,12 +91,16 @@ function normalizeLimit(entry) {
   let label = kindLabel(kind);
   const model = str(entry?.scope?.model?.display_name);
   if (model) label = `${label} · ${model}`;
+  // A limit the payload gave no number for is not a limit at 0 %: the endpoint
+  // ships kinds nobody has enabled as null placeholders (see usageReading).
+  const percent = num(entry?.percent);
   return {
     key: kind + (model ? `:${model}` : ''),
     label,
     group: groupOf(kind, entry?.group),
     scoped: Boolean(model),
-    percent: clampPercent(num(entry?.percent) ?? 0),
+    percent: clampPercent(percent ?? 0),
+    percentKnown: percent !== null,
     severity: SEVERITIES.includes(entry?.severity) ? entry.severity : 'normal',
     resetsAt: str(entry?.resets_at),
     active: entry?.is_active === true,
@@ -133,7 +137,7 @@ export function normalizeUsage(payload) {
     cards.push({
       key: 'session', label: KIND_LABELS.session,
       group: 'session', scoped: false,
-      percent: clampPercent(five),
+      percent: clampPercent(five), percentKnown: true,
       severity: 'normal', resetsAt: str(payload.five_hour.resets_at), active: true,
     });
   }
@@ -142,7 +146,7 @@ export function normalizeUsage(payload) {
     cards.push({
       key: 'weekly_all', label: KIND_LABELS.weekly_all,
       group: 'weekly', scoped: false,
-      percent: clampPercent(seven),
+      percent: clampPercent(seven), percentKnown: true,
       severity: 'normal', resetsAt: str(payload.seven_day.resets_at), active: false,
     });
   }
@@ -154,6 +158,43 @@ export function normalizeUsage(payload) {
 // extra headroom - every Fable token also moves `weekly_all`.
 export function poolNote(card) {
   return card?.scoped && card.group === 'weekly' ? 'share of the weekly all-models limit' : '';
+}
+
+// ── Honest readings ─────────────────────────────────────────────────────────────
+// A percentage is only worth printing while it still describes the window it is
+// drawn under. Two things end that: a payload that carried no number for the
+// limit (percentKnown: false - the endpoint ships kinds nobody has enabled as
+// null placeholders, and "0 %" reads as a full tank), and a window whose reset
+// instant has passed (the endpoint keeps the old figure until the next window
+// opens). Both give `—`. Mirrors lib/pure/usage.js and Swift `UsageReading`;
+// tests/fixtures/reading.json pins all three.
+
+/** What a reading shows in place of a percentage nobody can stand behind. */
+export const NO_READING = '—';
+
+/** The window this card measures has already rolled over. Whole seconds
+ *  floored, exactly like the reset countdown, so the two never disagree by a
+ *  rounding step. */
+export function windowRolledOver(resetsAt, nowMs = Date.now()) {
+  const target = Date.parse(resetsAt ?? '');
+  return Number.isFinite(target) && Math.floor((target - nowMs) / 1000) <= 0;
+}
+
+/**
+ * @returns {{known: boolean, percent: ?number, fill: number, text: string,
+ *            reason: ?('no_reading'|'window_reset')}}
+ */
+export function usageReading(card, nowMs = Date.now()) {
+  const rolledOver = windowRolledOver(card?.resetsAt, nowMs);
+  const known = card?.percentKnown !== false && !rolledOver;
+  const percent = known ? clampPercent(card?.percent) : null;
+  return {
+    known,
+    percent,
+    fill: percent ?? 0,
+    text: known ? `${percent}%` : NO_READING,
+    reason: known ? null : (rolledOver ? 'window_reset' : 'no_reading'),
+  };
 }
 
 // ── HTTP failures from the usage endpoint ───────────────────────────────────────
@@ -188,5 +229,39 @@ export function httpFailure(status, body = null) {
     ok: false,
     code: isTransientStatus(status) ? 'transient' : 'http_error',
     message: detail ? `HTTP ${status} ${detail}` : `HTTP ${status}`,
+  };
+}
+
+/** What every client says when the endpoint refuses the LIVE login's token.
+ *  Clients never write that token, so the only cure is Claude Code's own. */
+export const AUTH_EXPIRED_MESSAGE =
+  'Claude session expired. Run any Claude Code command to refresh it.';
+
+/**
+ * The whole non-2xx contract in one call, so no port has to remember which
+ * status means what. 401/403 is the only answer that says the credentials
+ * themselves are finished (`signInAgain`: retrying cannot help, and a panel
+ * must stop drawing that account's bars as if they were current); the
+ * transient statuses keep the last reading up; everything else is a plain
+ * failure. `label` names a saved account in the message - without one the
+ * message is the live login's and carries the refresh hint.
+ *
+ * @returns {{ok: false, code: 'auth_expired'|'transient'|'http_error',
+ *            signInAgain: boolean, retryable: boolean, message: string}}
+ */
+export function usageFailure(status, body = null, {label = null} = {}) {
+  const s = Number(status);
+  if (s === 401 || s === 403) {
+    return {
+      ok: false, code: 'auth_expired', signInAgain: true, retryable: false,
+      message: label ? `${label}: usage endpoint refused the token` : AUTH_EXPIRED_MESSAGE,
+    };
+  }
+  const failure = httpFailure(s, body);
+  return {
+    ...failure,
+    signInAgain: false,
+    retryable: failure.code === 'transient',
+    message: label ? `${label}: ${failure.message}` : failure.message,
   };
 }

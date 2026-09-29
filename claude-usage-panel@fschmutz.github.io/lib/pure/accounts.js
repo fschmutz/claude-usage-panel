@@ -8,6 +8,8 @@
 // usable, and when to move to another account - are pinned by one fixture
 // across the GNOME, Node and Swift ports. The I/O lives in lib/accounts.js.
 
+import {NO_READING} from './usage.js';
+
 /** Refresh an access token this close to its expiry rather than use it. */
 export const REFRESH_LEAD_MS = 5 * 60_000;
 /** Auto-switch contract: threshold the active account must reach, how far
@@ -282,10 +284,14 @@ export function parkName(email, taken = []) {
     return name;
 }
 
-/** The fullest limit of a set of cards. */
+/** The fullest limit of a set of cards. A card the payload gave no number for
+ *  (percentKnown false) is skipped, not counted as 0 %: it would otherwise
+ *  make every account look freer than it is, and drive an auto-switch on it. */
 export function worstPercent(cards) {
     let worst = null;
     for (const c of cards ?? []) {
+        if (c?.percentKnown === false)
+            continue;
         const p = Number(c?.percent);
         if (!Number.isFinite(p))
             continue;
@@ -296,9 +302,13 @@ export function worstPercent(cards) {
 }
 
 /** One account's row of the usage cache: its worst limit, and its session
- *  and weekly-all percents (null for a card it does not have). */
+ *  and weekly-all percents (null for a card it does not have, or has no
+ *  reading for). */
 export function usageCacheEntry(cards) {
-    const pct = key => (cards ?? []).find(c => c?.key === key)?.percent ?? null;
+    const pct = key => {
+        const c = (cards ?? []).find(x => x?.key === key);
+        return c && c.percentKnown !== false ? c.percent : null;
+    };
     return {worst: worstPercent(cards), session: pct('session'), weekly: pct('weekly_all')};
 }
 
@@ -336,11 +346,15 @@ export function autoSwitchTarget({
     return {from: active, to: best.name, activePercent, targetPercent: best.percent};
 }
 
-/** "S 42% · W 12%" from the session / weekly-all cards; '' without cards. */
+/** "S 42% · W 12%" from the session / weekly-all cards; '' without cards. A
+ *  card with no honest reading prints the em dash rather than a number. */
 export function formatAccountUsage(cards) {
     const pick = key => {
         const c = (cards ?? []).find(x => x?.key === key);
-        return c ? `${Math.max(0, Math.min(100, Math.round(Number(c.percent) || 0)))}%` : null;
+        if (!c)
+            return null;
+        return c.percentKnown === false
+            ? NO_READING : `${Math.max(0, Math.min(100, Math.round(Number(c.percent) || 0)))}%`;
     };
     const s = pick('session');
     const w = pick('weekly_all');

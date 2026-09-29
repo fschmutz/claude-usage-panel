@@ -35,6 +35,11 @@ private struct CardView: View {
     /// Week-over-week peak - the one thing the 6-hour forecast cannot say.
     let trend: WeekOverWeek?
     var body: some View {
+        // A percentage the endpoint cannot currently stand behind draws as `—`
+        // with an empty bar, never as the last one it gave: after a window
+        // resets the figure on file belongs to a window that is gone, and a
+        // limit the payload never carried a number for is not a limit at 0 %.
+        let reading = UsageReading.of(card)
         let color = Color.severity(card.severity)
         let pace = UsageClock.pace(card)
         VStack(alignment: .leading, spacing: 6) {
@@ -43,10 +48,13 @@ private struct CardView: View {
                     .foregroundColor(.primary.opacity(0.85))
                 if card.active { Circle().fill(color).frame(width: 6, height: 6) }
                 Spacer()
-                Text("\(card.percent)%").font(.system(size: 15, weight: .heavy))
-                    .foregroundColor(color).monospacedDigit()
+                Text(reading.text).font(.system(size: 15, weight: .heavy))
+                    .foregroundColor(reading.known ? color : .secondary).monospacedDigit()
+                    .help(Self.readingNote(reading))
             }
-            ProgressBar(percent: card.percent, color: color, elapsedPercent: pace?.elapsedPercent)
+            ProgressBar(
+                percent: reading.fill, color: reading.known ? color : .secondary,
+                elapsedPercent: pace?.elapsedPercent)
             HStack {
                 // A per-model card (Fable) caps a share of the weekly pool rather
                 // than adding one, so its reset line carries that note - same
@@ -54,7 +62,7 @@ private struct CardView: View {
                 Text(
                     [
                         ResetCountdown.text(card.resetsAt), UsageNormalizer.poolNote(card),
-                        UsageClock.format(pace),
+                        UsageClock.format(pace), Self.readingNote(reading),
                     ]
                     .filter { !$0.isEmpty }.joined(separator: " · ")
                 ).font(.system(size: 11))
@@ -82,6 +90,16 @@ private struct CardView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
                     card.severity == .critical ? color.opacity(0.35) : Color.primary.opacity(0.08)))
+    }
+
+    /// Why the card shows `—`. Silence when it shows a percentage: the number
+    /// is its own explanation.
+    static func readingNote(_ reading: UsageReading) -> String {
+        switch reading.reason {
+        case .windowReset: return "window reset - waiting for the first reading of the new one"
+        case .noReading: return "the endpoint reported no figure for this limit"
+        case nil: return ""
+        }
     }
 }
 

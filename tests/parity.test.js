@@ -18,6 +18,7 @@ import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import * as normalize from '../claude-code/normalize.js';
 import * as pace from '../claude-code/pace.js';
 import * as accounts from '../claude-code/accounts-contract.js';
+import * as notices from '../claude-code/notices.js';
 import {resetHint} from '../claude-code/stamps.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -154,6 +155,55 @@ for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]])
     });
 }
 
+// ── The usage endpoint's non-2xx contract ───────────────────────────────────────
+// One call per port turns a status into the three things a client acts on:
+// whether the credentials are finished (nothing retries out of that), whether
+// the last reading may stay up, and what to put on screen. The Swift twin is
+// UsageFailureTests.
+const endpointFix = fixture('usage-endpoint.json');
+
+for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
+    test(`${portName} usageFailure - the live-login message is the fixture's`, () => {
+        assert.equal(port.AUTH_EXPIRED_MESSAGE, endpointFix.authExpiredMessage);
+    });
+    for (const c of endpointFix.cases) {
+        test(`${portName} usageFailure - ${c.name}`, () => {
+            assert.deepEqual(
+                port.usageFailure(c.status, c.body, {label: c.label}),
+                {ok: false, ...c.expected});
+        });
+    }
+}
+
+// ── Honest readings ─────────────────────────────────────────────────────────────
+// When a percentage may NOT be printed: no number in the payload, or a window
+// that has already rolled over. The Swift twin is UsageReadingTests.
+const readingFix = fixture('reading.json');
+const readingNow = Date.parse(readingFix.now);
+
+for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
+    test(`${portName} - the em dash is the fixture's`, () => {
+        assert.equal(port.NO_READING, readingFix.noReading);
+    });
+    for (const c of readingFix.normalize) {
+        test(`${portName} percentKnown - ${c.name}`, () => {
+            assert.deepEqual(
+                port.normalizeUsage(c.input).map(
+                    (card) => ({
+                        kind: card.key.split(':')[0],
+                        percent: card.percent,
+                        percentKnown: card.percentKnown,
+                    })),
+                c.expected);
+        });
+    }
+    for (const c of readingFix.cases) {
+        test(`${portName} usageReading - ${c.name}`, () => {
+            assert.deepEqual(port.usageReading(c.card, readingNow), c.expected);
+        });
+    }
+}
+
 // ── Named accounts ──────────────────────────────────────────────────────────────
 // What a valid profile is, which saved login is the live one, whether a stored
 // token is still usable, and when to move to another account.
@@ -198,6 +248,48 @@ for (const [portName, port] of [['pure.js', pure], ['accounts-contract.js', acco
                 nowMs: accountsFix.now, threshold: accountsFix.threshold,
                 margin: accountsFix.margin, cooldownMs: accountsFix.cooldownMs,
             }), c.expected);
+        });
+    }
+}
+
+// ── Inline notices, button-local outcomes, switch rotation ──────────────────────
+// Which inline row appears next to which account, in what order, how loud, and
+// what its one repair button does. Sentences and button labels are per port
+// (they are translated) and are NOT asserted. The Swift twin is NoticesTests.
+const noticesFix = fixture('notices.json');
+
+for (const [portName, port] of [['pure.js', pure], ['notices.js', notices]]) {
+    test(`${portName} notices - constants`, () => {
+        assert.equal(port.OUTCOME_TTL_MS, noticesFix.outcomeTtlMs);
+        assert.equal(port.ROTATION_MIN, noticesFix.rotationMin);
+    });
+    for (const c of noticesFix.health) {
+        test(`${portName} accountHealth - ${c.name}`, () => {
+            const health = port.accountHealth({tokenState: c.tokenState, errorCode: c.errorCode});
+            assert.equal(health, c.expected);
+            assert.ok(port.ACCOUNT_HEALTH.includes(health), health);
+            assert.equal(port.needsAttention(health), c.needsAttention);
+        });
+    }
+    for (const c of noticesFix.notices) {
+        test(`${portName} accountNotices - ${c.name}`, () => {
+            const got = port.accountNotices(c.state);
+            assert.deepEqual(got, c.expected);
+            for (const n of got) {
+                assert.ok(port.NOTICE_KINDS.includes(n.kind), n.kind);
+                assert.ok(port.NOTICE_ACTIONS.includes(n.action), n.action);
+            }
+        });
+    }
+    for (const c of noticesFix.outcomes) {
+        test(`${portName} outcomeVisible - ${c.name}`, () => {
+            assert.equal(port.outcomeVisible(c.outcome, c.nowMs), c.expected);
+        });
+    }
+    for (const c of noticesFix.rotation) {
+        test(`${portName} nextInRotation - ${c.name}`, () => {
+            assert.equal(port.nextInRotation(c.names, c.active), c.expected);
+            assert.equal(port.rotationEnabled(c.names), c.expected !== null);
         });
     }
 }

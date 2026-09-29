@@ -313,10 +313,14 @@ export function keychainWriteLine(account, service, secret) {
   return utf8Hex(line).length / 2 < KEYCHAIN_LINE_MAX ? line : null; // bytes, not code units
 }
 
-/** The fullest limit of a set of normalized cards; null without cards. */
+/** The fullest limit of a set of normalized cards; null without cards. A card
+ *  the payload gave no number for (percentKnown false) is skipped, not counted
+ *  as 0 %: it would otherwise make every account look freer than it is, and
+ *  drive an auto-switch on it. */
 export function worstPercent(cards) {
   let worst = null;
   for (const c of cards ?? []) {
+    if (c?.percentKnown === false) continue;
     const p = Number(c?.percent);
     if (!Number.isFinite(p)) continue;
     worst = worst === null ? clampPercent(p) : Math.max(worst, clampPercent(p));
@@ -325,9 +329,13 @@ export function worstPercent(cards) {
 }
 
 /** One account's row of the usage cache: its worst limit, and its session
- *  and weekly-all percents (null for a card it does not have). */
+ *  and weekly-all percents (null for a card it does not have, or has no
+ *  reading for). */
 export function usageCacheEntry(cards) {
-  const pct = (key) => (cards ?? []).find((c) => c?.key === key)?.percent ?? null;
+  const pct = (key) => {
+    const c = (cards ?? []).find((x) => x?.key === key);
+    return c && c.percentKnown !== false ? c.percent : null;
+  };
   return {worst: worstPercent(cards), session: pct('session'), weekly: pct('weekly_all')};
 }
 

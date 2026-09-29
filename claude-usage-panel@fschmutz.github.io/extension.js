@@ -39,7 +39,7 @@ import {
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
-    formatLastPing, nextPing, compactTokens, formatClock, panelText, popupWidth,
+    formatLastPing, nextPing, compactTokens, formatClock, panelText, popupWidth, usageReading,
 } from './lib/pure.js';
 
 // How long to let a resume or a network change settle before polling: DNS and
@@ -579,10 +579,19 @@ class ClaudeUsageButton extends PanelMenu.Button {
         }
         const mode = this._settings.get_string('panel-mode'); // 'worst' | 'session'
         let card;
-        if (mode === 'session')
+        if (mode === 'session') {
             card = this._latest.find(c => c.key.startsWith('session')) ?? this._latest[0];
-        else
-            card = [...this._latest].sort((a, b) => b.percent - a.percent)[0];
+        } else {
+            // Rank on what the cards may honestly show. A window that has just
+            // reset still carries the old percentage, and picking by that
+            // would park a stale 96% in the top bar until the endpoint opens
+            // the new window - a limit with no honest reading only wins when
+            // nothing else has one.
+            const honest = this._latest.filter(c => usageReading(c).known);
+            card = [...(honest.length ? honest : this._latest)]
+                .sort((a, b) => usageReading(b).fill - usageReading(a).fill)[0];
+        }
+        const reading = usageReading(card);
 
         // The saved name of the live login leads the readout, so a glance at
         // the bar says which account is being spent - but only once there is
@@ -594,11 +603,13 @@ class ClaudeUsageButton extends PanelMenu.Button {
             account: showAccount ? this._accounts.activeName ?? '' : '',
             label: card.label,
             percent: card.percent,
+            known: reading.known,
         });
         // Predictive tint: a limit reading normal but on pace to run out before
         // its reset shows amber in the top bar - trouble at 50%, not at 90%.
-        let sev = severityClass(card.severity);
-        if (sev === 'cu-normal' && this._forecasts.get(card.key)?.exhaustsBeforeReset)
+        let sev = reading.known ? severityClass(card.severity) : 'cu-normal';
+        if (sev === 'cu-normal' && reading.known &&
+            this._forecasts.get(card.key)?.exhaustsBeforeReset)
             sev = 'cu-warning';
         this._panelLabel.style_class = `cu-panel-label ${sev}`;
         this._panelIcon.style_class = `cu-panel-icon ${sev}`;

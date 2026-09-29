@@ -425,18 +425,28 @@ final class UsageModel: ObservableObject {
     /// but on pace to run out before its reset shows the warning dot -
     /// trouble at 50%, not at 90%.
     var titleText: String {
-        guard let worst = cards.max(by: { $0.percent < $1.percent }) else {
+        // Rank on what the cards may honestly show. A window that has just
+        // reset still carries the old percentage, and picking by that would
+        // park a stale 96% in the menu bar for as long as the endpoint takes
+        // to open the new window - a limit with no honest reading only wins
+        // when nothing else has one.
+        let readings = cards.map { ($0, UsageReading.of($0)) }
+        let honest = readings.filter { $0.1.known }
+        guard let (worst, reading) = (honest.isEmpty ? readings : honest)
+            .max(by: { $0.1.fill < $1.1.fill })
+        else {
             return errorText == nil ? "⚪️ …" : "⚪️ ?"
         }
-        var sev = worst.severity
-        if sev == .normal, forecasts[worst.id]?.exhaustsBeforeReset == true {
+        var sev = reading.known ? worst.severity : .normal
+        if sev == .normal, reading.known, forecasts[worst.id]?.exhaustsBeforeReset == true {
             sev = .warning
         }
         // "PRO · Session 42%" once there is more than one saved account to tell
         // apart - and only while the name fits the bar's character budget.
         let showAccount = showAccountInMenuBar && accounts.count > 1
         let name = showAccount ? activeAccount ?? "" : ""
-        let text = PanelReadout.text(account: name, label: worst.label, percent: worst.percent)
+        let text = PanelReadout.text(
+            account: name, label: worst.label, percent: worst.percent, known: reading.known)
         return "\(dot(sev)) \(text)"
     }
 

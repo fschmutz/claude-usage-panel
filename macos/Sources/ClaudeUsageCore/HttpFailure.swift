@@ -32,3 +32,52 @@ public struct HttpFailure: Equatable, Sendable {
         self.message = detail.isEmpty ? "HTTP \(status)" : "HTTP \(status) \(detail)"
     }
 }
+
+/// The whole non-2xx contract in one value, so no caller has to remember which
+/// status means what. Mirrors `usageFailure()` in lib/pure/usage.js and
+/// claude-code/normalize.js; tests/fixtures/usage-endpoint.json pins all three.
+public struct UsageFailure: Equatable, Sendable {
+    public enum Code: String, Sendable {
+        /// 401 / 403: the credentials themselves are finished. Retrying cannot
+        /// help, and the panels must stop drawing that account as current.
+        case authExpired = "auth_expired"
+        /// 408 / 424 / 425 / 429 / 5xx: not now. The last reading stays up.
+        case transient
+        case httpError = "http_error"
+    }
+
+    public let code: Code
+    public let signInAgain: Bool
+    public let retryable: Bool
+    public let message: String
+
+    public init(code: Code, signInAgain: Bool, retryable: Bool, message: String) {
+        self.code = code
+        self.signInAgain = signInAgain
+        self.retryable = retryable
+        self.message = message
+    }
+
+    /// What every client says when the endpoint refuses the LIVE login's
+    /// token. Clients never write that token, so the only cure is Claude
+    /// Code's own.
+    public static let authExpiredMessage =
+        "Claude session expired. Run any Claude Code command to refresh it."
+
+    /// `label` names a saved account in the message; without one the message
+    /// is the live login's and carries the refresh hint.
+    public init(status: Int, body: Data?, label: String? = nil) {
+        if status == 401 || status == 403 {
+            self.init(
+                code: .authExpired, signInAgain: true, retryable: false,
+                message: label.map { "\($0): usage endpoint refused the token" }
+                    ?? Self.authExpiredMessage)
+            return
+        }
+        let failure = HttpFailure(status: status, body: body)
+        self.init(
+            code: failure.transient ? .transient : .httpError,
+            signInAgain: false, retryable: failure.transient,
+            message: label.map { "\($0): \(failure.message)" } ?? failure.message)
+    }
+}
