@@ -5,7 +5,8 @@
 
 import os from 'node:os';
 
-import {AUTO_KEEP, AUTO_PREFIX, describeLaunch, openTabs, resumePrompt, stampLabel} from './tabs.js';
+import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
+import {AUTO_KEEP, describeLaunch, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {tabsDir} from './paths.js';
 
 export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as laid out
@@ -163,7 +164,7 @@ export async function main(argv, io = {}) {
       const all = tabs.snapshots();
       let doomed;
       if (opts.all) doomed = all;
-      else if (opts.auto) doomed = all.filter((s) => s.label.startsWith(AUTO_PREFIX));
+      else if (opts.auto) doomed = all.filter((s) => s.label.startsWith(AUTO_SNAPSHOT_PREFIX));
       else if (opts.keep !== undefined) doomed = all.slice(wholeNumber(opts.keep, 0));
       else if (rest.length) doomed = rest.map((ref) => tabs.resolve(ref));
       else throw new Error('purge needs SNAP..., --keep=N, --auto or --all');

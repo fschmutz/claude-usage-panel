@@ -3,8 +3,8 @@ import XCTest
 
 @testable import ClaudeUsageCore
 
-/// Named-account parity against the fixture claude-code/accounts-contract.js
-/// and lib/pure.js assert (tests/accounts-contract.test.js, tests/parity.test.js).
+/// Named-account parity against the fixture lib/pure/accounts.js asserts
+/// (tests/accounts-contract.test.js, tests/parity.test.js).
 final class AccountsParityTests: XCTestCase {
     private func fixture() throws -> [String: Any] { try Fixtures.load("accounts.json") }
 

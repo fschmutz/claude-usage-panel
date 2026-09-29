@@ -71,10 +71,11 @@ its `statusLine` entry, leaving any other settings alone).
 ### Manual install
 
 If you'd rather wire it up yourself, point `statusLine` at `statusline.js`
-**inside a complete `claude-code/` directory**. The script is an ES module that
-imports its sibling modules (`accounts.js`, `normalize.js`, `pace.js`,
-`paths.js`, `stamps.js`, ...), so a lone copy of the file fails with
-`ERR_MODULE_NOT_FOUND`. Either use the repo checkout directly (its root
+**inside a complete `claude-code/` directory that sits next to the GNOME
+extension's `lib/pure/`**. The script is an ES module that imports its sibling
+modules (`accounts.js`, `pace.js`, `paths.js`, `stamps.js`, ...) and the shared
+contract from `../claude-usage-panel@fschmutz.github.io/lib/pure/`, so a lone
+copy of the file fails with `ERR_MODULE_NOT_FOUND`. Either use the repo checkout directly (its root
 `package.json` declares `"type": "module"`):
 
 ```json
@@ -86,12 +87,15 @@ imports its sibling modules (`accounts.js`, `normalize.js`, `pace.js`,
 }
 ```
 
-or copy the whole directory next to a one-line `package.json`, which is the
-layout `./install.sh statusline` builds under `~/.claude/claude-usage-panel/`:
+or copy both directories, at the same relative paths, next to a one-line
+`package.json`, which is the layout `./install.sh statusline` builds under
+`~/.claude/claude-usage-panel/`:
 
 ```sh
-mkdir -p ~/.claude/claude-usage-panel
+mkdir -p ~/.claude/claude-usage-panel/claude-usage-panel@fschmutz.github.io/lib
 cp -R claude-code ~/.claude/claude-usage-panel/
+cp -R claude-usage-panel@fschmutz.github.io/lib/pure \
+    ~/.claude/claude-usage-panel/claude-usage-panel@fschmutz.github.io/lib/
 printf '{"type":"module"}\n' > ~/.claude/claude-usage-panel/package.json
 # then point statusLine at ~/.claude/claude-usage-panel/claude-code/statusline.js
 ```

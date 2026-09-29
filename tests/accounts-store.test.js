@@ -9,8 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {openStore} from '../claude-code/accounts.js';
-import {autoSwitchTarget, worstFromCache} from '../claude-code/accounts-contract.js';
-import {accountHealth} from '../claude-code/notices.js';
+import {autoSwitchTarget, worstFromCache} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {accountHealth} from '../claude-usage-panel@fschmutz.github.io/lib/pure/notices.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from '../claude-code/paths.js';
 import {NOW, account, creds, world} from './accounts-world.js';
 

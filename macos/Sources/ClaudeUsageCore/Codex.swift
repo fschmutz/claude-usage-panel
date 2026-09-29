@@ -1,8 +1,8 @@
 import Foundation
 
-// Named OpenAI Codex logins - the pure half. Mirrors
-// claude-code/codex-contract.js and the GNOME extension's lib/pure/codex.js
-// 1:1; tests/fixtures/codex.json pins every decision below across the three.
+// Named OpenAI Codex logins - the pure half. Mirrors lib/pure/codex.js (the
+// one JavaScript copy, which the GNOME extension and the Node CLI / MCP both
+// import) 1:1; tests/fixtures/codex.json pins every decision below across both.
 // Foundation only, so it unit-tests on Linux CI.
 //
 // Codex is a SIBLING of the Claude accounts, never a replacement: it is off by

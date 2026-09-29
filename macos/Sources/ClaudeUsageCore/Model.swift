@@ -48,8 +48,8 @@ public struct LimitCard: Identifiable, Equatable, Sendable {
 /// the endpoint keeps the old figure until the next window is opened, so for
 /// the minutes in between the number on file belongs to a window that is gone.
 /// Both give `–` and an empty bar rather than a stale percentage that looks
-/// exactly like a fresh one. Mirrors `usageReading()` in lib/pure/usage.js and
-/// claude-code/normalize.js; tests/fixtures/reading.json pins all three.
+/// exactly like a fresh one. Mirrors `usageReading()` in lib/pure/usage.js
+/// (GNOME + every Node client); tests/fixtures/reading.json pins both.
 public struct UsageReading: Equatable, Sendable {
     public enum Reason: String, Sendable {
         case noReading = "no_reading"
@@ -464,9 +464,9 @@ public enum UsageForecast {
 
 // MARK: - Top-bar readout
 
-/// The one card a single-reading surface shows. Mirrors pure.js `panelCard()`
-/// and claude-code/normalize.js; tests/fixtures/reading.json "panelCard" pins
-/// all three.
+/// The one card a single-reading surface shows. Mirrors lib/pure/usage.js
+/// `panelCard()` (GNOME + every Node client); tests/fixtures/reading.json
+/// "panelCard" pins both.
 public enum PanelCard {
     public enum Mode: String, Sendable {
         case worst, session

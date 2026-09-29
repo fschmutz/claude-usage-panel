@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {main} from '../claude-code/account-cli.js';
-import {worstFromCache} from '../claude-code/accounts-contract.js';
+import {worstFromCache} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {accountsDir} from '../claude-code/paths.js';
 import {NOW, account, creds, world} from './accounts-world.js';
 

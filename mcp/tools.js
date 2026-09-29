@@ -2,8 +2,8 @@
 // content, and the account tool calls. server.js owns the transport and the
 // get_usage assembly; everything that describes or renders a tool lives here.
 
-import {NAME_RE, accountSummary} from '../claude-code/accounts-contract.js';
-import {poolNote, usageReading} from '../claude-code/normalize.js';
+import {NAME_RE, accountSummary} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {poolNote, usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 import {resetHint} from '../claude-code/stamps.js';
 
 // One markdown line per limit: label, percent, severity, reset countdown, and -
@@ -24,8 +24,9 @@ export function renderCards(cards, now = Date.now()) {
     const parts = [`**${c.label}** - ${reading.text}`];
     if (c.severity !== 'normal') parts.push(c.severity.toUpperCase());
     if (reset) parts.push(`resets in ${reset}`);
+    // Mid-sentence here: the panels' capitalised sub-line, lower-cased.
     const note = poolNote(c);
-    if (note) parts.push(note);
+    if (note) parts.push(note[0].toLowerCase() + note.slice(1));
     if (c.vsClock?.state === 'ahead') {
       parts.push(
         `⏱ ${c.vsClock.elapsedPercent}% of the window gone - ` +

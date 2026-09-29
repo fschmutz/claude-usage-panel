@@ -204,8 +204,9 @@ is valid / stale / expired, and the auto-switch rule). The usage snapshot the
 panels write for the status line is one small JSON file next to the profiles.
 
 The row states, the inline notices, the button-local answers and the rotation
-are their own shared contract - `claude-code/notices.js`, `lib/pure/notices.js`
-and `ClaudeUsageCore/Notices.swift` - pinned by `tests/fixtures/notices.json`.
+are their own shared contract - `lib/pure/notices.js` (the GNOME panel, the CLI
+and the MCP server all import it) and `ClaudeUsageCore/Notices.swift` - pinned
+by `tests/fixtures/notices.json`.
 The sentences and button labels are deliberately per-port, because they are
 translated; what the fixture pins is which notice appears, in what order, how
 loud it is, and what its one repair does.

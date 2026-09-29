@@ -1,119 +1,28 @@
-// Today's sessions and the last session ping for the MCP server (mirrors
-// lib/pure.js; tests/fixtures/sessions.json). scripts/session-ping.sh writes
-// its last successful ping under the state dir; the panels and the status line
-// read the same file. The session index is likewise shared with the desktop
-// clients - one machine, one set of transcripts, one incremental index - so
-// whichever client runs keeps it warm for the others.
+// Today's sessions and the last session ping for the MCP server.
+// scripts/session-ping.sh writes its last successful ping under the state
+// dir; the panels and the status line read the same file. The session index
+// is likewise shared with the desktop clients - one machine, one set of
+// transcripts, one incremental index - so whichever client runs keeps it warm
+// for the others. The folding, ranking and resume rules are
+// lib/pure/sessions.js, the one JavaScript copy GNOME's lib/sessionIndex.js
+// uses too (tests/fixtures/sessions.json); this file is the Node I/O around it.
 
 import fs from 'node:fs';
 import {Buffer} from 'node:buffer';
 import path from 'node:path';
 
+import {formatLastPing, localDay, parseStamp} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {
-  formatClock, formatLastPing, localDay, parseStamp, shiftLocalDay,
-} from '../claude-code/stamps.js';
+  foldSessionLine, indexMtime, newSessionAcc, pruneByDay, rankSessions, resumeCommand,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {lastPingPath, projectsDir, sessionIndexPath} from '../claude-code/paths.js';
-import {turnTokens} from '../claude-code/transcript-tokens.js';
 
 const INDEX_VERSION = 1;
 const SESSION_BUDGET_BYTES = 16 << 20; // per call: a cold index warms over a few
 // A newline-less run this long is not a line (lib/sessionIndex.js CARRY_MAX):
 // it is skipped, not re-read on every call with the offset stuck before it.
 const CARRY_MAX = 1 << 20;
-const SEEN_IDS_MAX = 32;
 const SESSION_LIMIT = 5;
-
-/** Tokens billed for one assistant turn - cache READS excluded, they bill at a
- *  fraction and would rank every long session first. */
-// One per-turn token rule for every Node reader (claude-code/transcript-tokens.js).
-export {turnTokens};
-
-export function newSessionAcc() {
-  return {sessionId: null, cwd: null, title: null, lastMs: 0, byDay: {}, ids: []};
-}
-
-export function foldSessionLine(line, acc, defaultDay) {
-  if (!line) return acc;
-  // skip the parse unless the line can change something: a usage turn, or a
-  // rename (the LAST custom title wins)
-  const hasUsage = line.indexOf('"usage"') >= 0;
-  const hasTitle = line.indexOf('"customTitle"') >= 0;
-  if (!hasUsage && !hasTitle && acc.sessionId && acc.cwd) return acc;
-  let o;
-  try {
-    o = JSON.parse(line);
-  } catch {
-    return acc;
-  }
-  if (!acc.sessionId && typeof o.sessionId === 'string') acc.sessionId = o.sessionId;
-  if (!acc.cwd && typeof o.cwd === 'string') acc.cwd = o.cwd;
-  if (typeof o.customTitle === 'string' && o.customTitle) acc.title = o.customTitle;
-  const usage = o.message?.usage;
-  if (!usage) return acc;
-  const id = o.message?.id;
-  if (id) {
-    if (acc.ids.includes(id)) return acc;
-    acc.ids.push(id);
-    if (acc.ids.length > SEEN_IDS_MAX) acc.ids.shift();
-  }
-  const at = o.timestamp ? parseStamp(o.timestamp) : null;
-  if (at !== null && at > acc.lastMs) acc.lastMs = at;
-  const day = at !== null ? localDay(at) : defaultDay;
-  acc.byDay[day] = (acc.byDay[day] ?? 0) + turnTokens(usage);
-  return acc;
-}
-
-/** The mtime an index entry records: whole seconds, in ms - the precision
- *  every port can stat (GIO gives seconds), so an entry one port wrote
- *  compares equal to another port's stat of the same file. */
-export function indexMtime(ms) {
-  return Math.floor(Number(ms) / 1000) * 1000;
-}
-
-export function pruneByDay(byDay, nowMs) {
-  const keep = new Set([localDay(nowMs), localDay(shiftLocalDay(nowMs, -1).getTime())]);
-  const out = {};
-  for (const [day, n] of Object.entries(byDay ?? {})) if (keep.has(day)) out[day] = n;
-  return out;
-}
-
-export function sessionTitle(entry) {
-  if (entry.title) return entry.title;
-  const base = (entry.cwd ?? '').replace(/\/+$/, '').split('/').pop();
-  return base || (entry.sessionId ?? '').slice(0, 8) || 'session';
-}
-
-export function rankSessions(entries, {nowMs = Date.now(), limit = SESSION_LIMIT} = {}) {
-  const today = localDay(nowMs);
-  return (entries ?? [])
-    .filter((e) => e.sessionId)
-    .map((e) => ({
-      sessionId: e.sessionId,
-      cwd: e.cwd ?? '',
-      title: e.title ?? null,
-      lastMs: e.lastMs ?? 0,
-      tokens: (e.byDay ?? {})[today] ?? 0,
-    }))
-    .filter((e) => e.tokens > 0 || (e.lastMs > 0 && localDay(e.lastMs) === today))
-    .sort((a, b) => b.tokens - a.tokens || b.lastMs - a.lastMs)
-    .slice(0, Math.max(0, limit))
-    .map((e) => ({
-      ...e,
-      label: sessionTitle(e),
-      when: e.lastMs ? formatClock(e.lastMs) : '',
-      resumeCommand: resumeCommand(e),
-    }));
-}
-
-export function shellQuote(s) {
-  return `'${String(s ?? '').replace(/'/g, `'\\''`)}'`;
-}
-
-/** The command that resumes one session where it was left. */
-export function resumeCommand(entry, {claudeBin = 'claude'} = {}) {
-  const cd = entry.cwd ? `cd ${shellQuote(entry.cwd)} && ` : '';
-  return `${cd}${claudeBin} --resume ${shellQuote(entry.sessionId)}`;
-}
 
 function readIndex(indexPath) {
   try {
@@ -267,7 +176,9 @@ export function refreshSessions(io = {}) {
     }
   }
   if (dirty) writeIndex(indexPath, index);
-  return rankSessions(Object.values(index.files), {nowMs, limit});
+  // The tool prints the command itself, so each row carries it.
+  return rankSessions(Object.values(index.files), {nowMs, limit})
+    .map((e) => ({...e, resumeCommand: resumeCommand(e)}));
 }
 
 /** The last scheduled ping, or null when pings were never set up. */

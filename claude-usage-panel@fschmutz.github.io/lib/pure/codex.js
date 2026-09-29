@@ -1,8 +1,9 @@
 // Pure logic - no GJS/gi imports, so it is unit-testable under plain `node`.
 // Re-exported by lib/pure.js; import from there.
 
-// ── Named OpenAI Codex logins (mirrors claude-code/codex-contract.js and
-// ClaudeUsageCore/Codex.swift; tests/fixtures/codex.json pins all three)
+// ── Named OpenAI Codex logins (the one JavaScript copy: GNOME and the Node
+// CLI / MCP import it; ClaudeUsageCore/Codex.swift is the Swift twin, and
+// tests/fixtures/codex.json pins both)
 //
 // Codex is a SIBLING of the Claude accounts, never a replacement: it is off by
 // default in both panels, it has its own store directory, and nothing here can

@@ -8,11 +8,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-    AUTO_PREFIX, flagValue, isValidLabel, openTabs, resumePrompt, sameSessions, stampLabel, transcriptPath,
+    flagValue, isValidLabel, openTabs, resumePrompt, sameSessions, stampLabel, transcriptPath,
 } from '../claude-code/tabs.js';
 import {HELP, main} from '../claude-code/session-cli.js';
 import {tabsDir} from '../claude-code/paths.js';
 import {TMUX_SESSION} from '../claude-code/terminals.js';
+import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
 import {binDir, sandboxHome} from './helpers.js';
 
 // A HOME holding Claude Code's session registry, the matching transcripts and
@@ -229,7 +230,7 @@ test('autosave writes only when the set changed, and keeps the newest N autos', 
     const tabs = openTabs(io);
     tabs.save('manual');
     const first = tabs.autosave({keep: 2});
-    assert.ok(first.saved.label.startsWith(AUTO_PREFIX));
+    assert.ok(first.saved.label.startsWith(AUTO_SNAPSHOT_PREFIX));
     const again = tabs.autosave({keep: 2});
     assert.equal(again.saved, null);
     assert.match(again.reason, /unchanged since auto-/);
@@ -240,7 +241,7 @@ test('autosave writes only when the set changed, and keeps the newest N autos', 
     }
     assert.equal(tabs.autosave({keep: 2}).reason, 'no running session');
     const labels = tabs.snapshots().map((s) => s.label);
-    assert.equal(labels.filter((l) => l.startsWith(AUTO_PREFIX)).length, 2);
+    assert.equal(labels.filter((l) => l.startsWith(AUTO_SNAPSHOT_PREFIX)).length, 2);
     assert.ok(labels.includes('manual'));
 });
 

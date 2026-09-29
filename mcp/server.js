@@ -7,14 +7,16 @@
 // This file is the transport and the get_usage assembly. Everything else has
 // an owner: claude-code/accounts.js reads the live login and fetches usage
 // (the one reader for every Node client), claude-code/login-usage.js picks
-// which login's usage and how its failure is labelled, claude-code/normalize.js /
-// pace.js / stamps.js are the Node port of the shared contract, tools.js the
-// tool schemas + renderers + account tool calls, sessions.js the session/ping
-// index, warehouse.js the 90-day history read.
+// which login's usage and how its failure is labelled, the shared contract is
+// lib/pure/ (imported as is - the GNOME extension's own copy), claude-code/pace.js
+// the sample history, tools.js the tool schemas + renderers + account tool
+// calls, sessions.js the session/ping index, warehouse.js the 90-day history
+// read.
 
 import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
+import {warehouseAccount} from '../claude-usage-panel@fschmutz.github.io/lib/pure/warehouse.js';
 import {openStore} from '../claude-code/accounts.js';
 import {openCodexStore} from '../claude-code/codex.js';
 import {liveLoginUsage} from '../claude-code/login-usage.js';
@@ -26,7 +28,7 @@ import {
   ACCOUNT_TOOL_NAMES, ACCOUNT_TOOLS, GET_USAGE_TOOL, callAccountTool, currentAccount,
   renderAccount, renderCards, renderExtraUsage,
 } from './tools.js';
-import {warehouseAccount, withTrend} from './warehouse.js';
+import {withTrend} from './warehouse.js';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
 export const VERSION = '2.2.0';

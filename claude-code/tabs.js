@@ -36,9 +36,10 @@ import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
 import {launchSteps, resolveTerminal, sessionFreeEnv} from './terminals.js';
 import {onPath, query, toolEnv} from './tools.js';
 import {captureLayout} from './layout.js';
-import {formatClock, resetHint} from './stamps.js';
+import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
+import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
+import {resetHint} from './stamps.js';
 
-export const AUTO_PREFIX = 'auto-';
 /** Autosaves kept by default: 48 half-hourly runs = one day of history. */
 export const AUTO_KEEP = 48;
 const LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -119,7 +120,7 @@ export function sameSessions(a, b) {
 export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = ''}) {
   // Under a minute the countdown floors to "0m" (or '' when not past):
   // "(moments ago)" reads right, "(0m ago)" does not.
-  const hint = resetHint(nowMs, savedAt);
+  const hint = resetHint(new Date(nowMs).toISOString(), savedAt);
   const ago = hint && hint !== '0m' ? hint : 'moments';
   return `Resumed by claudectl after a restart: this session was saved in snapshot ${label} ` +
     `at ${formatClock(savedAt)} (${ago} ago) and reopened at ${formatClock(nowMs)}. ` +
@@ -407,16 +408,16 @@ export function openTabs(io = {}) {
     const live = captureLayout(liveSessions(), io);
     let saved = null;
     let reason;
-    const lastAuto = snapshots().find((s) => s.label.startsWith(AUTO_PREFIX));
+    const lastAuto = snapshots().find((s) => s.label.startsWith(AUTO_SNAPSHOT_PREFIX));
     if (!live.length) {
       reason = 'no running session';
     } else if (lastAuto && sameSessions(lastAuto.sessions, live)) {
       reason = `unchanged since ${lastAuto.label}`;
     } else {
-      saved = write(`${AUTO_PREFIX}${stampLabel(now())}`, live);
+      saved = write(`${AUTO_SNAPSHOT_PREFIX}${stampLabel(now())}`, live);
       reason = `${live.length} sessions`;
     }
-    const pruned = snapshots().filter((s) => s.label.startsWith(AUTO_PREFIX)).slice(keep);
+    const pruned = snapshots().filter((s) => s.label.startsWith(AUTO_SNAPSHOT_PREFIX)).slice(keep);
     for (const s of pruned) fs.rmSync(s.file, {force: true});
     return {saved, reason, pruned: pruned.map((s) => s.label), missed: unaccounted()};
   }

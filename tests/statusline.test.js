@@ -151,7 +151,8 @@ test('parseConfig picks segments/order and token mode, dropping unknowns', () =>
 
 // ── Burn-rate forecast + shared history ─────────────────────────────────────────
 import fs from 'node:fs';
-import {forecast, recordHistory} from '../claude-code/pace.js';
+import {forecast} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pace.js';
+import {recordHistory} from '../claude-code/pace.js';
 import {exhaustionMarker} from '../claude-code/statusline.js';
 
 test('recordHistory appends per-key samples to the shared file and caps them', () => {

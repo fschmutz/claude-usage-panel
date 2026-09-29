@@ -1,5 +1,6 @@
-// The Codex contract, asserted against the shared fixture in both JS ports
-// (the Swift twin is macos/Tests/ClaudeUsageCoreTests/CodexParityTests.swift).
+// The Codex contract, asserted against the shared fixture in lib/pure/codex.js,
+// the one JS copy (GNOME and the Node CLI / MCP import it; the Swift twin is
+// macos/Tests/ClaudeUsageCoreTests/CodexParityTests.swift).
 // Nothing here touches the disk or the network: every decision is a pure
 // function of an auth blob, a clock, and a recorded rate-limit snapshot.
 import {test} from 'node:test';
@@ -8,113 +9,110 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
-import * as codex from '../claude-code/codex-contract.js';
-import {isValidName} from '../claude-code/accounts-contract.js';
+import * as codex from '../claude-usage-panel@fschmutz.github.io/lib/pure/codex.js';
+import {isValidName} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const load = (name) => JSON.parse(fs.readFileSync(path.join(here, 'fixtures', name), 'utf8'));
 const FIX = load('codex.json');
 const USAGE = load('codex-usage.json');
 
-for (const [portName, port] of [['pure/codex.js', pure], ['codex-contract.js', codex]]) {
-    test(`${portName} - the constants are the fixture's`, () => {
-        assert.equal(port.CODEX_REFRESH_LEAD_MS, FIX.refreshLeadMs);
-        assert.equal(port.CODEX_REFRESH_MAX_AGE_MS, FIX.refreshMaxAgeMs);
-        assert.equal(port.CODEX_SNAPSHOT_MAX_AGE_MS, USAGE.snapshotMaxAgeMs);
-        assert.equal(port.CODEX_AUTH_CLAIM, FIX.authClaim);
-    });
+test(`the constants are the fixture's`, () => {
+    assert.equal(codex.CODEX_REFRESH_LEAD_MS, FIX.refreshLeadMs);
+    assert.equal(codex.CODEX_REFRESH_MAX_AGE_MS, FIX.refreshMaxAgeMs);
+    assert.equal(codex.CODEX_SNAPSHOT_MAX_AGE_MS, USAGE.snapshotMaxAgeMs);
+    assert.equal(codex.CODEX_AUTH_CLAIM, FIX.authClaim);
+});
 
-    test(`${portName} - token state reads exp and last_refresh strictly`, () => {
-        for (const c of FIX.tokenStateStrict.cases)
-            assert.equal(port.codexTokenState({auth: c.auth}, FIX.now), c.expected, c.name);
-    });
+test('token state reads exp and last_refresh strictly', () => {
+    for (const c of FIX.tokenStateStrict.cases)
+        assert.equal(codex.codexTokenState({auth: c.auth}, FIX.now), c.expected, c.name);
+});
 
-    test(`${portName} - JWT claims are read, never verified`, () => {
-        for (const c of FIX.jwt)
-            assert.deepEqual(port.jwtClaims(c.token), c.expected, c.name);
-        // The real tokens in the fixture carry what the identity is built from.
-        assert.equal(port.jwtClaims(FIX.tokens.idPlus).email, 'plus@example.com');
-        assert.equal(port.jwtClaims(FIX.tokens.accessValid).exp, 1789310000);
-    });
+test('JWT claims are read, never verified', () => {
+    for (const c of FIX.jwt)
+        assert.deepEqual(codex.jwtClaims(c.token), c.expected, c.name);
+    // The real tokens in the fixture carry what the identity is built from.
+    assert.equal(codex.jwtClaims(FIX.tokens.idPlus).email, 'plus@example.com');
+    assert.equal(codex.jwtClaims(FIX.tokens.accessValid).exp, 1789310000);
+});
 
-    test(`${portName} - plan labels`, () => {
-        for (const c of FIX.planLabels)
-            assert.equal(port.codexPlanLabel(c.plan), c.expected, JSON.stringify(c.plan));
-    });
+test('plan labels', () => {
+    for (const c of FIX.planLabels)
+        assert.equal(codex.codexPlanLabel(c.plan), c.expected, JSON.stringify(c.plan));
+});
 
-    test(`${portName} - profiles parse and summarize`, () => {
-        const profiles = FIX.profiles.map((raw) => port.parseCodexProfile(raw, isValidName));
-        for (const [i, p] of profiles.entries())
-            assert.ok(p, FIX.profiles[i].name);
-        assert.deepEqual(profiles.map((p) => port.codexSummary(p, FIX.now)), FIX.summaries);
-        for (const raw of FIX.invalidProfiles) {
-            assert.equal(port.parseCodexProfile(raw, isValidName), null, JSON.stringify(raw));
+test('profiles parse and summarize', () => {
+    const profiles = FIX.profiles.map((raw) => codex.parseCodexProfile(raw, isValidName));
+    for (const [i, p] of profiles.entries())
+        assert.ok(p, FIX.profiles[i].name);
+    assert.deepEqual(profiles.map((p) => codex.codexSummary(p, FIX.now)), FIX.summaries);
+    for (const raw of FIX.invalidProfiles) {
+        assert.equal(codex.parseCodexProfile(raw, isValidName), null, JSON.stringify(raw));
+    }
+});
+
+test('which saved login is live', () => {
+    const profiles = FIX.profiles.map((raw) => codex.parseCodexProfile(raw, isValidName));
+    for (const c of FIX.active)
+        assert.equal(codex.activeCodexName(profiles, c.live), c.expected, c.name);
+});
+
+test('one Team workspace, two members: the user id tells them apart', () => {
+    const profiles = FIX.team.profiles.map((raw) => codex.parseCodexProfile(raw, isValidName));
+    for (const c of FIX.team.active)
+        assert.equal(codex.activeCodexName(profiles, c.live), c.expected, c.name);
+    for (const c of FIX.team.identities) {
+        const {email, accountId, userId, plan} = codex.codexIdentity(c.auth);
+        assert.deepEqual({email, accountId, userId, plan}, c.expected, c.name);
+    }
+});
+
+test('window labels', () => {
+    for (const c of USAGE.windowLabels)
+        assert.equal(codex.codexWindowLabel(c.minutes), c.expected, String(c.minutes));
+});
+
+test('a recorded snapshot becomes cards, and nothing else does', () => {
+    for (const c of USAGE.limits) {
+        const got = codex.normalizeCodexLimits(c.rateLimits, c.capturedAtMs, c.nowMs ?? null);
+        assert.deepEqual(
+            got.map((x) => ({
+                key: x.key, label: x.label, group: x.group, percent: x.percent,
+                percentKnown: x.percentKnown, resetsAt: x.resetsAt, active: x.active,
+            })),
+            c.expected, c.name);
+        // Every Codex figure this project shows says where it came from.
+        for (const card of got) {
+            assert.equal(card.provenance, 'estimated');
+            assert.equal(card.capturedAt, new Date(c.capturedAtMs).toISOString());
         }
-    });
+    }
+});
 
-    test(`${portName} - which saved login is live`, () => {
-        const profiles = FIX.profiles.map((raw) => port.parseCodexProfile(raw, isValidName));
-        for (const c of FIX.active)
-            assert.equal(port.activeCodexName(profiles, c.live), c.expected, c.name);
-    });
+test('a snapshot too old to mean anything is not shown', () => {
+    for (const c of USAGE.snapshotAge) {
+        assert.equal(
+            codex.codexSnapshotAge(c.capturedAtMs, USAGE.now).show, c.expected, c.name);
+    }
+});
 
-    test(`${portName} - one Team workspace, two members: the user id tells them apart`, () => {
-        const profiles = FIX.team.profiles.map((raw) => port.parseCodexProfile(raw, isValidName));
-        for (const c of FIX.team.active)
-            assert.equal(port.activeCodexName(profiles, c.live), c.expected, c.name);
-        for (const c of FIX.team.identities) {
-            const {email, accountId, userId, plan} = port.codexIdentity(c.auth);
-            assert.deepEqual({email, accountId, userId, plan}, c.expected, c.name);
-        }
-    });
+test('the last rate-limit reading in a transcript tail', () => {
+    for (const c of USAGE.transcripts)
+        assert.deepEqual(codex.lastRateLimits(c.text), c.expected, c.name);
+});
 
-    test(`${portName} - window labels`, () => {
-        for (const c of USAGE.windowLabels)
-            assert.equal(port.codexWindowLabel(c.minutes), c.expected, String(c.minutes));
-    });
-
-    test(`${portName} - a recorded snapshot becomes cards, and nothing else does`, () => {
-        for (const c of USAGE.limits) {
-            const got = port.normalizeCodexLimits(c.rateLimits, c.capturedAtMs, c.nowMs ?? null);
-            assert.deepEqual(
-                got.map((x) => ({
-                    key: x.key, label: x.label, group: x.group, percent: x.percent,
-                    percentKnown: x.percentKnown, resetsAt: x.resetsAt, active: x.active,
-                })),
-                c.expected, c.name);
-            // Every Codex figure this project shows says where it came from.
-            for (const card of got) {
-                assert.equal(card.provenance, 'estimated');
-                assert.equal(card.capturedAt, new Date(c.capturedAtMs).toISOString());
-            }
-        }
-    });
-
-    test(`${portName} - a snapshot too old to mean anything is not shown`, () => {
-        for (const c of USAGE.snapshotAge) {
-            assert.equal(
-                port.codexSnapshotAge(c.capturedAtMs, USAGE.now).show, c.expected, c.name);
-        }
-    });
-
-    test(`${portName} - the last rate-limit reading in a transcript tail`, () => {
-        for (const c of USAGE.transcripts)
-            assert.deepEqual(port.lastRateLimits(c.text), c.expected, c.name);
-    });
-
-    test(`${portName} - the freshest recorded usage, or why there is none`, () => {
-        for (const c of USAGE.recorded) {
-            const got = port.pickRecordedCodexUsage(c.files, USAGE.now);
-            assert.deepEqual(
-                {reason: got.reason, capturedAt: got.capturedAt, keys: got.cards.map((x) => x.key)},
-                {reason: c.expected.reason, capturedAt: c.expected.capturedAt, keys: c.expected.keys},
-                c.name);
-            if (c.expected.resetsAt)
-                assert.deepEqual(got.cards.map((x) => x.resetsAt), c.expected.resetsAt, c.name);
-        }
-    });
-}
+test('the freshest recorded usage, or why there is none', () => {
+    for (const c of USAGE.recorded) {
+        const got = codex.pickRecordedCodexUsage(c.files, USAGE.now);
+        assert.deepEqual(
+            {reason: got.reason, capturedAt: got.capturedAt, keys: got.cards.map((x) => x.key)},
+            {reason: c.expected.reason, capturedAt: c.expected.capturedAt, keys: c.expected.keys},
+            c.name);
+        if (c.expected.resetsAt)
+            assert.deepEqual(got.cards.map((x) => x.resetsAt), c.expected.resetsAt, c.name);
+    }
+});
 
 // ── The switch guard and the transcript walk ────────────────────────────────
 
@@ -150,38 +148,36 @@ function treeLister(tree, visited) {
     };
 }
 
-for (const [portName, port] of [['pure/codex.js', pure], ['codex-contract.js', codex]]) {
-    test(`${portName} - the switch and scan constants are the fixture's`, () => {
-        assert.equal(port.CODEX_SWITCH_SYNC_TRIES, FIX.switchSyncTries);
-        assert.equal(port.CODEX_SESSION_SCAN_LIMIT, USAGE.sessionScanLimit);
-        assert.equal(port.CODEX_SESSIONS_MAX_DEPTH, USAGE.sessionsMaxDepth);
-    });
+test(`the switch and scan constants are the fixture's`, () => {
+    assert.equal(codex.CODEX_SWITCH_SYNC_TRIES, FIX.switchSyncTries);
+    assert.equal(codex.CODEX_SESSION_SCAN_LIMIT, USAGE.sessionScanLimit);
+    assert.equal(codex.CODEX_SESSIONS_MAX_DEPTH, USAGE.sessionsMaxDepth);
+});
 
-    test(`${portName} - a token the codex CLI rotates mid-switch is synced, never overwritten`, () => {
-        for (const c of FIX.switchGuard.cases) {
-            const {w, ops} = switchWorld(c);
-            const r = port.codexSwitch(c.target, ops);
-            assert.deepEqual(
-                {outcome: r.outcome, from: r.from ?? null, syncs: w.syncs, writes: w.writes},
-                c.expected, c.name);
-        }
-    });
+test('a token the codex CLI rotates mid-switch is synced, never overwritten', () => {
+    for (const c of FIX.switchGuard.cases) {
+        const {w, ops} = switchWorld(c);
+        const r = codex.codexSwitch(c.target, ops);
+        assert.deepEqual(
+            {outcome: r.outcome, from: r.from ?? null, syncs: w.syncs, writes: w.writes},
+            c.expected, c.name);
+    }
+});
 
-    test(`${portName} - the transcript walk: newest day first, bounded depth, stops at the limit`, () => {
-        for (const c of USAGE.sessionScan.cases) {
-            const visited = [];
-            const got = port.scanCodexSessions(treeLister(c.tree, visited), c.limit);
-            assert.deepEqual(got.map((f) => f.path), c.expected, c.name);
-            assert.deepEqual(visited, c.visited, c.name);
-        }
-    });
-}
+test('the transcript walk: newest day first, bounded depth, stops at the limit', () => {
+    for (const c of USAGE.sessionScan.cases) {
+        const visited = [];
+        const got = codex.scanCodexSessions(treeLister(c.tree, visited), c.limit);
+        assert.deepEqual(got.map((f) => f.path), c.expected, c.name);
+        assert.deepEqual(visited, c.visited, c.name);
+    }
+});
 
-test('pure/codex.js - the async walk (the GNOME shell drives it) matches the sync one', async () => {
+test('the async walk (the GNOME shell drives it) matches the sync one', async () => {
     for (const c of USAGE.sessionScan.cases) {
         const visited = [];
         const lister = treeLister(c.tree, visited);
-        const got = await pure.scanCodexSessionsAsync((s) => Promise.resolve(lister(s)), c.limit);
+        const got = await codex.scanCodexSessionsAsync((s) => Promise.resolve(lister(s)), c.limit);
         assert.deepEqual(got.map((f) => f.path), c.expected, c.name);
         assert.deepEqual(visited, c.visited, c.name);
     }

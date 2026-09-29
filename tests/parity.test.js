@@ -1,13 +1,13 @@
-// Cross-port parity. Every contract lives in hand-written copies - lib/pure.js
-// (GNOME, GJS), the Node modules under claude-code/ (the MCP server, the status
-// line, the CLI all import those), and ClaudeUsageCore (macOS, Swift) - and
-// every copy is asserted against ONE shared fixture per contract; the Swift
-// twins assert the same files in ClaudeUsageCoreTests. If a port drifts on the
-// semantic core, this test and its Swift twin go red.
+// Cross-port parity. Every contract has ONE JavaScript copy - lib/pure/ -
+// which the GNOME extension, the status line, the MCP server and the CLI all
+// import, and one Swift copy in ClaudeUsageCore (macOS). The JS copy is
+// asserted here against ONE shared fixture per contract; the Swift twins
+// assert the same files in ClaudeUsageCoreTests. If the ports drift on the
+// semantic core, this test or its Swift twin goes red.
 //
-// The Node side has exactly one copy of each contract: normalize.js, pace.js,
-// stamps.js (sessions.test.js), accounts-contract.js. The status line and the
-// MCP server import them; they are not ports of their own.
+// Labels are per port: the reset countdown below pins both the panel's
+// "Resets in 3h 06m" and the terminal clients' compact "3h06m"
+// (claude-code/stamps.js resetHint, rendered from the same resetParts).
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,9 +15,6 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
-import * as normalize from '../claude-code/normalize.js';
-import * as pace from '../claude-code/pace.js';
-import * as accounts from '../claude-code/accounts-contract.js';
 import {resetHint} from '../claude-code/stamps.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -36,24 +33,20 @@ const core = (c) => ({
     active: c.active,
 });
 
-for (const [portName, fn] of [['pure.js', pure.normalizeUsage], ['normalize.js', normalize.normalizeUsage]]) {
-    for (const {name, input, expected} of fixture('normalize.json').cases) {
-        test(`${portName} normalize - ${name}`, () => {
-            assert.deepEqual(fn(input).map(core), expected);
-        });
-    }
+for (const {name, input, expected} of fixture('normalize.json').cases) {
+    test(`normalize - ${name}`, () => {
+        assert.deepEqual(pure.normalizeUsage(input).map(core), expected);
+    });
 }
 
 // ── Burn-rate forecast ──────────────────────────────────────────────────────────
 // One fixture pins the numbers: pace, projected-full instant, and the
 // exhausts-before-reset call.
 const forecastFix = fixture('forecast.json');
-for (const [portName, fn] of [['pure.js', pure.forecast], ['pace.js', pace.forecast]]) {
-    for (const c of forecastFix.cases) {
-        test(`${portName} forecast - ${c.name}`, () => {
-            assert.deepEqual(fn(c.samples, c.resetsAt, forecastFix.now), c.expected);
-        });
-    }
+for (const c of forecastFix.cases) {
+    test(`forecast - ${c.name}`, () => {
+        assert.deepEqual(pure.forecast(c.samples, c.resetsAt, forecastFix.now), c.expected);
+    });
 }
 
 // The lead the alarming sub-line prints ("1d10h before reset"). Only the
@@ -96,15 +89,12 @@ const paceFix = fixture('pace.json');
 
 test('the tolerance itself is part of the pinned contract', () => {
     assert.equal(pure.PACE_TOLERANCE, paceFix.tolerance);
-    assert.equal(pace.PACE_TOLERANCE, paceFix.tolerance);
 });
 
-for (const [portName, fn] of [['pure.js', pure.clockPace], ['pace.js', pace.clockPace]]) {
-    for (const c of paceFix.cases) {
-        test(`${portName} clockPace - ${c.name}`, () => {
-            assert.deepEqual(fn(c.card, paceFix.now), c.expected);
-        });
-    }
+for (const c of paceFix.cases) {
+    test(`clockPace - ${c.name}`, () => {
+        assert.deepEqual(pure.clockPace(c.card, paceFix.now), c.expected);
+    });
 }
 
 // ── Extra usage + unknown-kind labels ───────────────────────────────────────────
@@ -120,39 +110,32 @@ const extraCore = (e) => e && {
     limitAmount: e.limitAmount ?? null, currency: e.currency, detail: e.detail,
 };
 
-for (const [portName, extra, label] of [
-    ['pure.js', pure.normalizeExtraUsage, pure.kindLabel],
-    ['normalize.js', normalize.normalizeExtraUsage, normalize.kindLabel],
-]) {
-    for (const c of extraFix.cases) {
-        test(`${portName} extra usage - ${c.name}`, () => {
-            assert.deepEqual(extraCore(extra(c.payload)), c.expected);
-        });
-    }
-    test(`${portName} labels unknown kinds`, () => {
-        for (const l of extraFix.labels)
-            assert.equal(label(l.kind), l.expected, l.kind);
+for (const c of extraFix.cases) {
+    test(`extra usage - ${c.name}`, () => {
+        assert.deepEqual(extraCore(pure.normalizeExtraUsage(c.payload)), c.expected);
     });
 }
+test('labels unknown kinds', () => {
+    for (const l of extraFix.labels)
+        assert.equal(pure.kindLabel(l.kind), l.expected, l.kind);
+});
 
 // ── HTTP failures ───────────────────────────────────────────────────────────────
 // What a non-2xx answer from the usage endpoint becomes: which statuses keep
 // the last reading up and retry, and how the server's own words reach the UI.
 const httpFix = fixture('httpfailure.json');
 
-for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
-    for (const c of httpFix.cases) {
-        test(`${portName} httpFailure - ${c.name}`, () => {
-            assert.deepEqual(port.httpFailure(c.status, c.body), {ok: false, ...c.expected});
-        });
-    }
-    test(`${portName} isTransientStatus`, () => {
-        for (const s of httpFix.transient)
-            assert.equal(port.isTransientStatus(s), true, String(s));
-        for (const s of httpFix.notTransient)
-            assert.equal(port.isTransientStatus(s), false, String(s));
+for (const c of httpFix.cases) {
+    test(`httpFailure - ${c.name}`, () => {
+        assert.deepEqual(pure.httpFailure(c.status, c.body), {ok: false, ...c.expected});
     });
 }
+test('isTransientStatus', () => {
+    for (const s of httpFix.transient)
+        assert.equal(pure.isTransientStatus(s), true, String(s));
+    for (const s of httpFix.notTransient)
+        assert.equal(pure.isTransientStatus(s), false, String(s));
+});
 
 // ── The usage endpoint's non-2xx contract ───────────────────────────────────────
 // One call per port turns a status into the three things a client acts on:
@@ -161,20 +144,18 @@ for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]])
 // UsageFailureTests.
 const endpointFix = fixture('usage-endpoint.json');
 
-for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
-    test(`${portName} usageFailure - the live-login message is the fixture's`, () => {
-        assert.equal(port.AUTH_EXPIRED_MESSAGE, endpointFix.authExpiredMessage);
+test(`usageFailure - the live-login message is the fixture's`, () => {
+    assert.equal(pure.AUTH_EXPIRED_MESSAGE, endpointFix.authExpiredMessage);
+});
+for (const c of endpointFix.cases) {
+    test(`usageFailure - ${c.name}`, () => {
+        assert.deepEqual(
+            pure.usageFailure(c.status, c.body, {
+                label: c.label, retryAfter: c.retryAfter ?? null,
+                nowMs: Date.parse(endpointFix.now),
+            }),
+            {ok: false, ...c.expected});
     });
-    for (const c of endpointFix.cases) {
-        test(`${portName} usageFailure - ${c.name}`, () => {
-            assert.deepEqual(
-                port.usageFailure(c.status, c.body, {
-                    label: c.label, retryAfter: c.retryAfter ?? null,
-                    nowMs: Date.parse(endpointFix.now),
-                }),
-                {ok: false, ...c.expected});
-        });
-    }
 }
 
 // ── Honest readings ─────────────────────────────────────────────────────────────
@@ -183,32 +164,30 @@ for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]])
 const readingFix = fixture('reading.json');
 const readingNow = Date.parse(readingFix.now);
 
-for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]]) {
-    test(`${portName} - the em dash is the fixture's`, () => {
-        assert.equal(port.NO_READING, readingFix.noReading);
+test(`the em dash is the fixture's`, () => {
+    assert.equal(pure.NO_READING, readingFix.noReading);
+});
+for (const c of readingFix.normalize) {
+    test(`percentKnown - ${c.name}`, () => {
+        assert.deepEqual(
+            pure.normalizeUsage(c.input).map(
+                (card) => ({
+                    kind: card.key.split(':')[0],
+                    percent: card.percent,
+                    percentKnown: card.percentKnown,
+                })),
+            c.expected);
     });
-    for (const c of readingFix.normalize) {
-        test(`${portName} percentKnown - ${c.name}`, () => {
-            assert.deepEqual(
-                port.normalizeUsage(c.input).map(
-                    (card) => ({
-                        kind: card.key.split(':')[0],
-                        percent: card.percent,
-                        percentKnown: card.percentKnown,
-                    })),
-                c.expected);
-        });
-    }
-    for (const c of readingFix.cases) {
-        test(`${portName} usageReading - ${c.name}`, () => {
-            assert.deepEqual(port.usageReading(c.card, readingNow), c.expected);
-        });
-    }
-    for (const c of readingFix.panelCard) {
-        test(`${portName} panelCard - ${c.name}`, () => {
-            assert.equal(port.panelCard(c.cards, c.mode, readingNow)?.key ?? null, c.expected);
-        });
-    }
+}
+for (const c of readingFix.cases) {
+    test(`usageReading - ${c.name}`, () => {
+        assert.deepEqual(pure.usageReading(c.card, readingNow), c.expected);
+    });
+}
+for (const c of readingFix.panelCard) {
+    test(`panelCard - ${c.name}`, () => {
+        assert.equal(pure.panelCard(c.cards, c.mode, readingNow)?.key ?? null, c.expected);
+    });
 }
 
 // ── Named accounts ──────────────────────────────────────────────────────────────
@@ -216,47 +195,45 @@ for (const [portName, port] of [['pure.js', pure], ['normalize.js', normalize]])
 // token is still usable, and when to move to another account.
 const accountsFix = fixture('accounts.json');
 
-for (const [portName, port] of [['pure.js', pure], ['accounts-contract.js', accounts]]) {
-    test(`${portName} accounts - constants`, () => {
-        assert.equal(port.REFRESH_LEAD_MS, accountsFix.refreshLeadMs);
-        assert.equal(port.AUTO_SWITCH.threshold, accountsFix.threshold);
-        assert.equal(port.AUTO_SWITCH.margin, accountsFix.margin);
-        assert.equal(port.AUTO_SWITCH.cooldownMs, accountsFix.cooldownMs);
-    });
-    test(`${portName} accounts - profile validity and names`, () => {
-        for (const raw of accountsFix.profiles) {
-            const p = port.parseProfile(raw);
-            assert.ok(p, raw.name);
-            assert.equal(p.name, raw.name);
-            assert.deepEqual(p.credentials, raw.credentials);
-        }
-        for (const raw of accountsFix.invalidProfiles)
-            assert.equal(port.parseProfile(raw), null, JSON.stringify(raw));
-        for (const n of accountsFix.validNames) assert.ok(port.isValidName(n), n);
-        for (const n of accountsFix.invalidNames) assert.ok(!port.isValidName(n), n);
-    });
-    const profiles = accountsFix.profiles.map(port.parseProfile);
-    test(`${portName} accounts - summaries and token state`, () => {
-        assert.deepEqual(profiles.map(p => port.accountSummary(p, accountsFix.now)), accountsFix.summaries);
-        for (const s of accountsFix.summaries) {
-            assert.equal(port.tokenState(profiles.find((p) => p.name === s.name), accountsFix.now),
-                s.tokenState, s.name);
-        }
-    });
-    for (const c of accountsFix.active) {
-        test(`${portName} accounts - active: ${c.name}`, () => {
-            assert.equal(port.activeAccountName(profiles, c.live), c.expected);
-        });
+test('accounts - constants', () => {
+    assert.equal(pure.REFRESH_LEAD_MS, accountsFix.refreshLeadMs);
+    assert.equal(pure.AUTO_SWITCH.threshold, accountsFix.threshold);
+    assert.equal(pure.AUTO_SWITCH.margin, accountsFix.margin);
+    assert.equal(pure.AUTO_SWITCH.cooldownMs, accountsFix.cooldownMs);
+});
+test('accounts - profile validity and names', () => {
+    for (const raw of accountsFix.profiles) {
+        const p = pure.parseProfile(raw);
+        assert.ok(p, raw.name);
+        assert.equal(p.name, raw.name);
+        assert.deepEqual(p.credentials, raw.credentials);
     }
-    for (const c of accountsFix.autoSwitch) {
-        test(`${portName} accounts - auto-switch: ${c.name}`, () => {
-            assert.deepEqual(port.autoSwitchTarget({
-                active: c.active, worst: c.worst, lastSwitchMs: c.lastSwitchMs,
-                nowMs: accountsFix.now, threshold: accountsFix.threshold,
-                margin: accountsFix.margin, cooldownMs: accountsFix.cooldownMs,
-            }), c.expected);
-        });
+    for (const raw of accountsFix.invalidProfiles)
+        assert.equal(pure.parseProfile(raw), null, JSON.stringify(raw));
+    for (const n of accountsFix.validNames) assert.ok(pure.isValidName(n), n);
+    for (const n of accountsFix.invalidNames) assert.ok(!pure.isValidName(n), n);
+});
+const profiles = accountsFix.profiles.map(pure.parseProfile);
+test('accounts - summaries and token state', () => {
+    assert.deepEqual(profiles.map(p => pure.accountSummary(p, accountsFix.now)), accountsFix.summaries);
+    for (const s of accountsFix.summaries) {
+        assert.equal(pure.tokenState(profiles.find((p) => p.name === s.name), accountsFix.now),
+            s.tokenState, s.name);
     }
+});
+for (const c of accountsFix.active) {
+    test(`accounts - active: ${c.name}`, () => {
+        assert.equal(pure.activeAccountName(profiles, c.live), c.expected);
+    });
+}
+for (const c of accountsFix.autoSwitch) {
+    test(`accounts - auto-switch: ${c.name}`, () => {
+        assert.deepEqual(pure.autoSwitchTarget({
+            active: c.active, worst: c.worst, lastSwitchMs: c.lastSwitchMs,
+            nowMs: accountsFix.now, threshold: accountsFix.threshold,
+            margin: accountsFix.margin, cooldownMs: accountsFix.cooldownMs,
+        }), c.expected);
+    });
 }
 
 // ── Top-bar readout ─────────────────────────────────────────────────────────────
@@ -286,4 +263,32 @@ test('snapshots: every case of the shared fixture', () => {
         };
         assert.deepEqual({count: got.count, autos: got.autos, newest}, c.expect, c.name);
     }
+});
+
+// ── One JS copy ─────────────────────────────────────────────────────────────────
+// The Node clients import lib/pure/; they never carry a copy of it. A top-level
+// definition under claude-code/, mcp/, linux/ or scripts/ that reuses the name
+// of a lib/pure export is how a second copy starts (normalize.js,
+// accounts-contract.js, notices.js and codex-contract.js each began that way),
+// so it fails here: import the pure one, or give a genuinely different thing a
+// different name.
+test('no Node file redefines a lib/pure export', () => {
+    const root = path.join(here, '..');
+    const pureDir = path.join(root, 'claude-usage-panel@fschmutz.github.io', 'lib', 'pure');
+    const exported = new Set();
+    for (const f of fs.readdirSync(pureDir)) {
+        const src = fs.readFileSync(path.join(pureDir, f), 'utf8');
+        for (const m of src.matchAll(/^export (?:async )?(?:function\*? ?|const |let |class )([\w$]+)/gm))
+            exported.add(m[1]);
+    }
+    assert.ok(exported.size > 100, `only ${exported.size} pure exports found`);
+    const copies = [];
+    for (const dir of ['claude-code', 'mcp', 'linux', 'scripts']) {
+        for (const f of fs.readdirSync(path.join(root, dir)).filter((n) => /\.m?js$/.test(n))) {
+            const src = fs.readFileSync(path.join(root, dir, f), 'utf8');
+            for (const m of src.matchAll(/^(?:export )?(?:async )?(?:function\*? ?|const |let |class )([\w$]+)/gm))
+                if (exported.has(m[1])) copies.push(`${dir}/${f}: ${m[1]}`);
+        }
+    }
+    assert.deepEqual(copies, []);
 });

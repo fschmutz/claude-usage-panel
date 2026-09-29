@@ -115,6 +115,6 @@ API last returned them.
 ## Details
 
 See [mcp/README.md](https://github.com/fschmutz/claude-usage-panel/blob/main/mcp/README.md).
-The server is not a port of its own: it imports the Node copy of the shared
-normalization contract (`claude-code/normalize.js`, `claude-code/pace.js`) -
-see [[Architecture]].
+The server is not a port of its own: it imports the shared normalization
+contract straight from the GNOME extension's `lib/pure/` (`usage.js`,
+`pace.js`), the one JavaScript copy - see [[Architecture]].

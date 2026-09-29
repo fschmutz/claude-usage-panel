@@ -1,6 +1,7 @@
 // claude-code/terminals.js: `claudectl session open` must open the terminal
-// the panels are configured to use, the way they open it. Parity with the
-// GNOME port's TERMINALS / terminalArgv, the resolution order on both
+// the panels are configured to use, the way they open it. TERMINALS,
+// terminalArgv and pickTerminal are lib/pure/sessions.js, which the CLI and
+// the GNOME panel both import; this pins them, the resolution order on both
 // platforms, and the steps per terminal kind (native tabs, tmux in one
 // window, a window each).
 import {test} from 'node:test';
@@ -9,11 +10,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import * as gnome from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {
-    GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TERMINALS, TMUX_SESSION, appleScript, launchSteps, pickTerminal,
-    resolveTerminal, sessionCommand, sessionFreeEnv, tabsArgv, terminalArgv, terminalForAlternative,
-    terminalForDesktopId, tmuxCalls, tmuxSessionNames, windowGroups,
+    interactiveResume, pickTerminal, terminalArgv, terminalForAlternative, terminalForDesktopId,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
+import {
+    GNOME_TERMINAL_KEY, MAC_DEFAULTS_DOMAIN, TMUX_SESSION, appleScript, launchSteps,
+    resolveTerminal, sessionCommand, sessionFreeEnv, tabsArgv, tmuxCalls, tmuxSessionNames, windowGroups,
 } from '../claude-code/terminals.js';
 import {onPath, toolPath} from '../claude-code/tools.js';
 import {binDir, run, sandboxHome} from './helpers.js';
@@ -23,43 +25,35 @@ const rows = [
     {name: "it's", cwd: '/r/web', session_id: 'id-b'},
 ];
 
-// ── Parity with the panel ───────────────────────────────────────────────────────
-
-test('TERMINALS and terminalArgv match the GNOME port entry for entry', () => {
-    assert.deepEqual(TERMINALS.map((t) => [t.bin, t.desktop]), gnome.TERMINALS.map((t) => [t.bin, t.desktop]));
-    for (const bin of [...gnome.TERMINALS.map((t) => t.bin), '/usr/bin/kitty', 'my-term', '']) {
-        assert.deepEqual(terminalArgv(bin, '/r/a b', 'cmd x'), gnome.terminalArgv(bin, '/r/a b', 'cmd x'), bin);
-    }
-});
+// ── The panel's terminal table ──────────────────────────────────────────────────
 
 // The cwd of a -e terminal reaches `bash -lc` inside a `cd` string. It comes
 // from a transcript or a snapshot file, so a space must not split it and
 // `$(...)` / `;` / a quote must not run: bash has to land in exactly that dir.
-test('xterm and x-terminal-emulator hand bash -lc the cwd as ONE literal word, in both ports', (t) => {
+test('xterm and x-terminal-emulator hand bash -lc the cwd as ONE literal word', (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-term-'));
     t.after(() => fs.rmSync(root, {recursive: true, force: true}));
     const dir = path.join(root, "a b;touch PWNED_SEMI $(touch PWNED_SUB) it's");
     fs.mkdirSync(dir);
-    for (const port of [{terminalArgv}, gnome]) {
-        for (const bin of ['xterm', 'x-terminal-emulator']) {
-            const argv = port.terminalArgv(bin, dir, 'pwd');
-            assert.deepEqual(argv.slice(0, 4), [bin, '-e', 'bash', '-lc'], bin);
-            const r = run('bash', ['-c', argv[4]], {cwd: root});
-            assert.equal(r.status, 0, `${bin}: ${r.stderr}`);
-            assert.equal(r.stdout.trim(), dir, bin);
-        }
+    for (const bin of ['xterm', 'x-terminal-emulator']) {
+        const argv = terminalArgv(bin, dir, 'pwd');
+        assert.deepEqual(argv.slice(0, 4), [bin, '-e', 'bash', '-lc'], bin);
+        const r = run('bash', ['-c', argv[4]], {cwd: root});
+        assert.equal(r.status, 0, `${bin}: ${r.stderr}`);
+        assert.equal(r.stdout.trim(), dir, bin);
     }
     assert.deepEqual(fs.readdirSync(root), [path.basename(dir)], 'nothing injected ran');
 });
 
 test('the tab command resumes by name then leaves a shell, like the panel click', () => {
     assert.equal(sessionCommand(rows[1]), `claude --name 'it'\\''s' --resume 'id-b'; exec "$SHELL" -i`);
-    assert.match(gnome.interactiveResume({cwd: '', sessionId: 'x'}), /; exec "\$SHELL" -i$/);
+    assert.match(interactiveResume({cwd: '', sessionId: 'x'}), /; exec "\$SHELL" -i$/);
 });
 
 // ── Choosing: the user's setting, then the desktop's default ───────────────────
 
-// [inputs, installed binaries, expected] - run through BOTH ports.
+// [inputs, installed binaries, expected]. The CLI resolves through this same
+// function (resolveTerminal below), so the CLI and the panel cannot disagree.
 const PICKS = [
     [{configured: 'kitty', envTerminal: 'foot', desktopId: 'org.gnome.Terminal.desktop'}, [], 'kitty'],
     [{envTerminal: 'foot', desktopId: 'org.gnome.Terminal.desktop'}, ['foot', 'gnome-terminal'], 'foot'],
@@ -79,23 +73,18 @@ test('pickTerminal: same choice in the CLI and the GNOME panel, for every case',
     for (const [inputs, bins, want] of PICKS) {
         const installed = (b) => bins.includes(b);
         assert.equal(pickTerminal(inputs, installed), want, JSON.stringify(inputs));
-        assert.equal(gnome.pickTerminal(inputs, installed), want, JSON.stringify(inputs));
     }
 });
 
 test('desktop ids and the Debian alternative map to the binaries we drive', () => {
-    for (const f of [terminalForDesktopId, gnome.terminalForDesktopId]) {
-        assert.equal(f('org.gnome.Terminal.desktop'), 'gnome-terminal');
-        assert.equal(f('com.mitchellh.ghostty.desktop:new-window'), 'ghostty');
-        assert.equal(f('org.gnome.Ptyxis.desktop'), null);
-        assert.equal(f(''), null);
-    }
-    for (const f of [terminalForAlternative, gnome.terminalForAlternative]) {
-        assert.equal(f('/usr/bin/gnome-terminal.wrapper'), 'gnome-terminal');
-        assert.equal(f('/usr/bin/xterm'), 'xterm');
-        assert.equal(f('/usr/bin/x-terminal-emulator'), null);
-        assert.equal(f(null), null);
-    }
+    assert.equal(terminalForDesktopId('org.gnome.Terminal.desktop'), 'gnome-terminal');
+    assert.equal(terminalForDesktopId('com.mitchellh.ghostty.desktop:new-window'), 'ghostty');
+    assert.equal(terminalForDesktopId('org.gnome.Ptyxis.desktop'), null);
+    assert.equal(terminalForDesktopId(''), null);
+    assert.equal(terminalForAlternative('/usr/bin/gnome-terminal.wrapper'), 'gnome-terminal');
+    assert.equal(terminalForAlternative('/usr/bin/xterm'), 'xterm');
+    assert.equal(terminalForAlternative('/usr/bin/x-terminal-emulator'), null);
+    assert.equal(terminalForAlternative(null), null);
 });
 
 // ── Resolution I/O ──────────────────────────────────────────────────────────────

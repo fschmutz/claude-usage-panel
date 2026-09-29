@@ -4,24 +4,16 @@
 // (transcriptTotals), because Claude Code re-runs the status line on every
 // refresh and a long transcript is tens of MB.
 //
-// turnTokens is the per-turn rule every port shares (mcp/sessions.js,
-// lib/pure/sessions.js, Sessions.swift, tests/fixtures/sessions.json): what one
-// assistant turn billed, cache reads excluded. The status line's `all` figure
-// adds the cache reads back on top of it.
+// turnTokens is the per-turn rule every port shares (lib/pure/sessions.js,
+// imported here and by mcp/sessions.js; Sessions.swift;
+// tests/fixtures/sessions.json): what one assistant turn billed, cache reads
+// excluded. The status line's `all` figure adds the cache reads back on top.
 
 import {Buffer} from 'node:buffer';
 import fs from 'node:fs';
 
+import {turnTokens} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {tokensCachePath} from './paths.js';
-
-/** Tokens billed for one assistant turn - cache READS excluded, they bill at a
- *  fraction and would rank every long session first. */
-export function turnTokens(usage) {
-  if (!usage) return 0;
-  return (Number(usage.input_tokens) || 0) +
-    (Number(usage.output_tokens) || 0) +
-    (Number(usage.cache_creation_input_tokens) || 0);
-}
 
 // Fold the complete JSONL lines of `text` into `acc` ({all, fresh, ids}),
 // deduping by message id against `ids` (mutated). Unparseable lines (a partial

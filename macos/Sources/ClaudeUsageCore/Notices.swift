@@ -1,10 +1,10 @@
 import Foundation
 
 // Inline notices, button-local outcomes and the switch rotation - the macOS
-// port. Mirrors the GNOME extension's lib/pure/notices.js 1:1, and
-// claude-code/notices.js for the health and the notices (no Node client draws
-// a button); tests/fixtures/notices.json pins every leg. Foundation only, so
-// it unit-tests on Linux CI.
+// port. Mirrors lib/pure/notices.js 1:1 (the one JavaScript copy: the GNOME
+// extension imports all of it, the Node CLI / MCP the health and the notices,
+// since no Node client draws a button); tests/fixtures/notices.json pins
+// every leg. Foundation only, so it unit-tests on Linux CI.
 //
 // The rule these three share: a problem with a saved login belongs next to
 // that login, with the ONE thing that repairs it attached, and the answer to

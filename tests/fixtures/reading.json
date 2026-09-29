@@ -1,5 +1,5 @@
 {
-  "_comment": "Honest readings. A percentage is only worth printing while it still describes the window it is drawn under, so every port agrees on when it may NOT be printed. Two things end a reading: the payload carried no number for that limit (percentKnown false - the endpoint ships kinds nobody has enabled as null placeholders, and drawing them as 0 % reads as a full tank), and the window's reset instant has passed (the endpoint keeps the old figure until the next window opens). Both give `–` and an EMPTY bar - never a stale percentage that looks exactly like a fresh one. Pinned across lib/pure/usage.js (GNOME), claude-code/normalize.js (CLI + MCP + status line) and ClaudeUsageCore/Model.swift (macOS).",
+  "_comment": "Honest readings. A percentage is only worth printing while it still describes the window it is drawn under, so every port agrees on when it may NOT be printed. Two things end a reading: the payload carried no number for that limit (percentKnown false - the endpoint ships kinds nobody has enabled as null placeholders, and drawing them as 0 % reads as a full tank), and the window's reset instant has passed (the endpoint keeps the old figure until the next window opens). Both give `–` and an EMPTY bar - never a stale percentage that looks exactly like a fresh one. Pinned across lib/pure/usage.js (GNOME, and the CLI + MCP + status line, which import it) and ClaudeUsageCore/Model.swift (macOS).",
   "now": "2026-07-20T12:00:00Z",
   "noReading": "–",
   "normalize": [
@@ -119,7 +119,7 @@
       }
     }
   ],
-  "panelCardComment": "The one card a single-reading surface shows (GNOME top bar, macOS menu-bar title, Linux status bar): `worst` ranks on the honest reading (fill), so a rolled-over window's stale figure never wins while another card has a reading; ties go to the first card in KIND_ORDER (then payload order), never to however a port's max() breaks them. `session` is the session card, else the first. Cards are listed in payload order on purpose. Pinned for lib/pure/usage.js, claude-code/normalize.js and Swift PanelCard.",
+  "panelCardComment": "The one card a single-reading surface shows (GNOME top bar, macOS menu-bar title, Linux status bar): `worst` ranks on the honest reading (fill), so a rolled-over window's stale figure never wins while another card has a reading; ties go to the first card in KIND_ORDER (then payload order), never to however a port's max() breaks them. `session` is the session card, else the first. Cards are listed in payload order on purpose. Pinned for lib/pure/usage.js and Swift PanelCard.",
   "panelCard": [
     {
       "name": "worst picks the highest honest reading",

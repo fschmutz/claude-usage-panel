@@ -36,7 +36,7 @@ public struct HttpFailure: Equatable, Sendable {
 /// Seconds a Retry-After header asks for, or nil when it says nothing usable.
 /// The header is either delta-seconds ("120") or an HTTP-date ("Wed, 21 Oct
 /// 2015 07:28:00 GMT"); a date already past is 0, never negative. Mirrors
-/// `parseRetryAfter()` in lib/pure/usage.js and claude-code/normalize.js.
+/// `parseRetryAfter()` in lib/pure/usage.js (GNOME + every Node client).
 public enum RetryAfter {
     static let httpDate: DateFormatter = {
         let f = DateFormatter()
@@ -57,8 +57,8 @@ public enum RetryAfter {
 }
 
 /// The whole non-2xx contract in one value, so no caller has to remember which
-/// status means what. Mirrors `usageFailure()` in lib/pure/usage.js and
-/// claude-code/normalize.js; tests/fixtures/usage-endpoint.json pins all three.
+/// status means what. Mirrors `usageFailure()` in lib/pure/usage.js (GNOME +
+/// every Node client); tests/fixtures/usage-endpoint.json pins both.
 public struct UsageFailure: Equatable, Sendable {
     public enum Code: String, Sendable {
         /// 401: the credentials themselves are finished. Retrying cannot

@@ -8,8 +8,8 @@ import {formatClock, localDay, parseStamp, shiftLocalDay} from './pings.js';
 // resume links point at the work that is costing the plan - not merely the last
 // window that was touched. Everything here is pure string/array work; the
 // platform layer walks ~/.claude/projects/*/*.jsonl and feeds it chunks
-// (lib/sessionIndex.js on GNOME, Sessions.swift on macOS, the node ports
-// inline). Twin of ClaudeUsageCore/Sessions.swift, pinned by
+// (lib/sessionIndex.js on GNOME, Sessions.swift on macOS, mcp/sessions.js
+// for the Node MCP server, which imports this file). Twin of ClaudeUsageCore/Sessions.swift, pinned by
 // tests/fixtures/sessions.json.
 
 /** Tokens billed for one assistant turn. Cache READS are excluded: they bill at
@@ -177,8 +177,8 @@ export function interactiveResume(entry, opts) {
 }
 
 // Terminals we know how to open at a directory with a command, best first.
-// Mirrored in claude-code/terminals.js (`claudectl session open` must open the
-// same terminal the same way); tests/terminals.test.js asserts the parity.
+// claude-code/terminals.js imports this list (`claudectl session open` must
+// open the same terminal the same way as a panel's resume click).
 // `argv(dir, cmd)` returns the full argv - no shell involved on our side, the
 // command string is handed to bash -lc by the terminal itself.
 export const TERMINALS = [
