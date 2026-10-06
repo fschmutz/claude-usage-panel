@@ -32,7 +32,7 @@ All paths register the exact same server - pick one:
 
 # 2. Claude Code plugin (inside a session, no clone)
 /plugin marketplace add fschmutz/claude-usage-panel
-/plugin install claude-usage@claude-usage-panel
+/plugin install usage-panel@claude-usage-panel
 
 # 3. Claude Code CLI, straight from GitHub (no clone). The unpinned spec
 #    tracks main; append #vX.Y.Z to run one release, as the plugin does.

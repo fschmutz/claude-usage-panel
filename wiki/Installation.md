@@ -86,7 +86,7 @@ The `get_usage` tool also installs without touching the repo:
 ```bash
 # Claude Code plugin (inside a session)
 /plugin marketplace add fschmutz/claude-usage-panel
-/plugin install claude-usage@claude-usage-panel
+/plugin install usage-panel@claude-usage-panel
 
 # or one CLI line (the unpinned spec tracks main; append #vX.Y.Z for one release)
 claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel

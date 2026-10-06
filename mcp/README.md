@@ -45,7 +45,7 @@ Pick whichever fits - all four register the exact same server:
 
 # 2. Claude Code plugin (inside a Claude Code session)
 /plugin marketplace add fschmutz/claude-usage-panel
-/plugin install claude-usage@claude-usage-panel
+/plugin install usage-panel@claude-usage-panel
 
 # 3. Claude Code CLI, straight from GitHub - no clone needed. The unpinned
 #    spec tracks main; append #vX.Y.Z to run one release, as the plugin does.

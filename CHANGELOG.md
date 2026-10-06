@@ -63,6 +63,12 @@ semantic versioning.
 
 ### Changed
 
+- **The Claude Code plugin is now `usage-panel`.** Claude Code 2.1.291 reserves
+  plugin names starting with `claude-`, so `claude-usage` no longer validates.
+  Existing installs: `/plugin uninstall claude-usage@claude-usage-panel`, then
+  `/plugin install usage-panel@claude-usage-panel`. The MCP server keeps its
+  `claude-usage` name, so `claude mcp` and Cursor registrations are unchanged.
+
 - **The Node clients import the GNOME extension's pure modules instead of
   carrying copies of them.** `claude-code/normalize.js`,
   `accounts-contract.js`, `notices.js` and `codex-contract.js` are gone, and
