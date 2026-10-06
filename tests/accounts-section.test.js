@@ -302,6 +302,32 @@ test('a login the endpoint refuses reads refresh-failed, shows no figures, and o
         assert.match(c._outcomeFor(`notice:${notice.id}`).text, /claude auth login/);
     });
 
+test('a login that stops answering keeps the weekly reset it last reported', async t => {
+    const reset = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    let refuse = false;
+    const {c, files} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PRO.json`]: profile('PRO', 'u-pro'),
+            [`${ACCOUNTS}/OLD.json`]: profile('OLD', 'u-old'),
+            ...liveLogin('PRO', 'u-pro'),
+        },
+        usage: token => (token === 'at-OLD' && refuse
+            ? {status: 401, body: {}}
+            : {status: 200, body: {limits: [{kind: 'weekly_all', percent: 20, resets_at: reset}]}}),
+    });
+    await c.refresh([{key: 'session', percent: 3}]);
+    const kept = Date.parse(reset);
+    assert.deepEqual(JSON.parse(files[`${ACCOUNTS}/.weekly-resets.json`]), {OLD: kept});
+    assert.match(c._section._metaText(c._state.rows.find(r => r.name === 'OLD')), /^W 20% ↻[23]d\d+h$/);
+
+    refuse = true;
+    await c.refresh([{key: 'session', percent: 3}]);
+    const row = c._state.rows.find(r => r.name === 'OLD');
+    assert.equal(row.cards, null);
+    assert.equal(row.weeklyResetMs, kept);
+    assert.match(c._section._metaText(row), /^\(refresh failed\) · W ↻[23]d\d+h$/);
+});
+
 test('the rotation target is the next saved name, wrapping; one login is no rotation', async t => {
     const both = {
         [`${ACCOUNTS}/PRO.json`]: profile('PRO', 'u-pro'),

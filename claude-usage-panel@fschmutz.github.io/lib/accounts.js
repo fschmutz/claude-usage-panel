@@ -23,7 +23,7 @@ import {run} from './proc.js';
 import {
     PROFILE_VERSION, REFRESH_LOCK, isTorn, isValidName, liveProfileName, parkName, parseProfile,
     refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, saveRefusal, sameJSON,
-    switchPlan, syncBackPlan, tokenState, usageCacheEntry,
+    switchPlan, syncBackPlan, tokenState, usageCacheEntry, keepWeeklyResets,
 } from './pure.js';
 
 export {readLiveAccount, readLiveCredentials};
@@ -37,6 +37,7 @@ export const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 // counts everywhere.
 const USAGE_CACHE_FILE = '.usage-cache.json';
 const LAST_SWITCH_FILE = '.last-switch.json';
+const WEEKLY_RESETS_FILE = '.weekly-resets.json';
 // A switch in progress: {at, from, to}, written before the live login is
 // touched and removed once both halves are installed. While it is there no
 // client snapshots the live login (see syncBackPlan in lib/pure.js).
@@ -544,4 +545,23 @@ export function writeUsageCache(results, nowMs = Date.now()) {
     } catch (e) {
         logError(e, 'claude-usage-panel: could not write the account usage cache');
     }
+}
+
+// Each account's weekly reset, kept past the poll that read it: a login that
+// cannot be read right now still shows when its week restarts. Same file and
+// shape as the macOS app ({NAME: epochMs}); keepWeeklyResets decides.
+export function updateWeeklyResets(results, names, nowMs = Date.now()) {
+    const path = GLib.build_filenamev([accountsDir(), WEEKLY_RESETS_FILE]);
+    const prev = readJSON(path);
+    const fresh = Object.fromEntries(
+        Object.entries(results).filter(([, r]) => r?.ok).map(([name, r]) => [name, r.cards]));
+    const kept = keepWeeklyResets(prev, fresh, names, nowMs);
+    if (!sameJSON(prev ?? {}, kept)) {
+        try {
+            writePrivate(path, JSON.stringify(kept));
+        } catch (e) {
+            logError(e, 'claude-usage-panel: could not write the weekly resets');
+        }
+    }
+    return kept;
 }

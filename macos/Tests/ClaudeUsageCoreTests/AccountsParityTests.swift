@@ -161,8 +161,22 @@ final class AccountsParityTests: XCTestCase {
         let fix = try fixture()
         for c in fix["formatUsage"] as! [[String: Any]] {
             XCTAssertEqual(
-                Accounts.formatUsage(cards(c["cards"] as! [[String: Any]]), now: now(fix)),
+                Accounts.formatUsage(
+                    cards(c["cards"] as! [[String: Any]]), now: now(fix),
+                    keptResetMs: (c["keptResetMs"] as? NSNumber)?.doubleValue),
                 c["expected"] as? String, c["name"] as! String)
+        }
+    }
+
+    func testKeepWeeklyResets() throws {
+        let fix = try fixture()
+        for c in fix["weeklyResets"] as! [[String: Any]] {
+            let fresh = (c["fresh"] as! [String: [[String: Any]]]).mapValues { cards($0) }
+            let got = Accounts.keepWeeklyResets(
+                c["prev"] as? [String: Any], fresh: fresh, names: c["names"] as! [String],
+                now: now(fix))
+            let want = (c["expected"] as! [String: NSNumber]).mapValues(\.doubleValue)
+            XCTAssertEqual(got, want, c["name"] as! String)
         }
     }
 

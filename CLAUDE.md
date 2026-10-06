@@ -181,7 +181,9 @@ credentials (file, or the macOS Keychain item) and the `oauthAccount` key;
 every port reads the live login from the same path (`CLAUDE_CONFIG_DIR` when
 set). The panels/MCP write `<accounts dir>/.usage-cache.json` (`{at, accounts:
 {NAME: {worst, session, weekly}}}`, 30 min validity) so the credential-less
-status line can hint at a freer account, and every `switchTo` writes
+status line can hint at a freer account; both panels keep
+`<accounts dir>/.weekly-resets.json` (`{NAME: epochMs}`, `keepWeeklyResets`)
+so a row whose login cannot be read still shows its weekly reset; and every `switchTo` writes
 `<accounts dir>/.last-switch.json` (`{at, from, to}`) - the auto-switch
 cooldown is store state, so a switch made by the CLI, the MCP tool or the
 other panel counts for everyone. Every `switchTo` also writes
