@@ -94,6 +94,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── sessionPing.js  # reads/writes the systemd units + the last-ping stamp
     ├── sessionPingUnit.js # the unit text itself (pure, shared with install.sh)
     ├── snapshots.js    # reads the claudectl snapshot store for the preferences
+    ├── savedSessions.js # the header's Reopen + Save buttons over claudectl session
     ├── warehouse.js    # the 90-day history file I/O
     ├── usageCard.js    # one limit row of the dropdown
     ├── bar.js          # progress bar + clock caret, sized from their allocation

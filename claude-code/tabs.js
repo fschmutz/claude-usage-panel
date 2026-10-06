@@ -402,16 +402,20 @@ export function openTabs(io = {}) {
   }
 
   /** The scheduled job: a new auto snapshot only when the set changed, then
-   *  prune autos beyond `keep`. Returns {saved, reason, pruned}. */
-  function autosave({keep = AUTO_KEEP} = {}) {
+   *  prune autos beyond `keep`. Returns {saved, reason, pruned}.
+   *  `force` (the panels' Save button) writes whatever is open right now,
+   *  none included: sessions closed since the last scheduled run, or all of
+   *  them, must not come back on the next Reopen. The schedule never writes
+   *  an empty set - at boot nothing runs yet, and that is not "closed". */
+  function autosave({keep = AUTO_KEEP, force = false} = {}) {
     // no AppleScript: a scheduled job must never raise the Automation prompt
     const live = captureLayout(liveSessions(), io);
     let saved = null;
     let reason;
     const lastAuto = snapshots().find((s) => s.label.startsWith(AUTO_SNAPSHOT_PREFIX));
-    if (!live.length) {
+    if (!live.length && !force) {
       reason = 'no running session';
-    } else if (lastAuto && sameSessions(lastAuto.sessions, live)) {
+    } else if (!force && lastAuto && sameSessions(lastAuto.sessions, live)) {
       reason = `unchanged since ${lastAuto.label}`;
     } else {
       saved = write(`${AUTO_SNAPSHOT_PREFIX}${stampLabel(now())}`, live);

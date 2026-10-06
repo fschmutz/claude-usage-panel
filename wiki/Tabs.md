@@ -20,6 +20,12 @@ dropdown's header (and the button in Settings ▸ Saved sessions) runs
 `claudectl session open` on the newest snapshot. It appears only when there is
 one - no claudectl, no snapshot, no button.
 
+Next to it, **Save** runs `claudectl session autosave --force`: what is open
+right now becomes the newest snapshot, even when nothing is open. Use it after
+closing threads, before shutting the lid: the 30-minute autosave never sees a
+close that happens between its ticks, and Reopen would bring those threads
+back. A forced save of nothing open hides Reopen until the next session starts.
+
 ## Install
 
 `./install.sh cli` puts `claudectl` on your PATH (`~/.local/bin`) and
@@ -43,7 +49,7 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `show [SNAP] [--json]` | What a snapshot holds, and which of its sessions are running |
 | `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux] [--prompt=TEXT\|--no-prompt]` | Reopen a snapshot in your terminal |
 | `purge SNAP... \| --keep=N \| --auto \| --all [--yes]` | Delete snapshots (asks first) |
-| `autosave [--keep=N]` | What the schedule runs |
+| `autosave [--keep=N] [--force]` | What the schedule runs; `--force` (the panels' **Save**) saves now, even unchanged or empty |
 
 `SNAP` is a label, a unique prefix of one, or its number in `store`; without
 one, the newest snapshot is used.

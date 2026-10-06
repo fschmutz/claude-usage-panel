@@ -17,10 +17,17 @@ const CLOCK_MARK_HALF = 4;
  * An actor's allocated width in CSS pixels. Allocations are device pixels
  * while inline `width:` styles are multiplied by the scale factor; everything
  * here is stated in CSS pixels so the two never get mixed.
+ *
+ * The allocation box, never get_width(): a poll lands while the menu is
+ * closed, and get_width() on an actor waiting for relayout answers its
+ * PREFERRED width - for the track, the old fill's own width. The fill was
+ * then painted as a share of itself, and since the real allocation came back
+ * unchanged on open, no notify::width ever repainted it: the percentage was
+ * right and the bar stayed wrong until a refresh with the menu open.
  */
-function cssWidth(actor) {
+export function cssWidth(actor) {
     const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
-    return actor.get_width() / scale;
+    return actor.get_allocation_box().get_width() / scale;
 }
 
 export const ProgressBar = GObject.registerClass(

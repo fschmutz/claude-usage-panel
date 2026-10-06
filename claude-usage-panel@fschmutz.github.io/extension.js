@@ -16,7 +16,7 @@ import Soup from 'gi://Soup';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import {Extension, gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {fetchUsage} from './lib/claudeUsage.js';
 import {readLiveAccount, readLiveCredentials} from './lib/claudeFiles.js';
@@ -32,9 +32,8 @@ import {HeaderBar} from './lib/headerBar.js';
 import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
 import {vbox} from './lib/widgets.js';
 import {writeText} from './lib/fs.js';
-import {run} from './lib/proc.js';
 import {stateDir} from './lib/paths.js';
-import {readSnapshots, claudectlPath} from './lib/snapshots.js';
+import {SavedSessionsController} from './lib/savedSessions.js';
 import {
     severityClass, formatResets, latchCrossings, latchPaceAlerts, refreshSections, isRetryableFailure,
     forecast, formatForecast, normalizeHistory,
@@ -111,7 +110,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this.menu.connectObject('open-state-changed', (_menu, open) => {
             if (open) {
                 this._applyWidth();
-                this._syncReopen();
+                this._saved.sync();
             } else {
                 hideTooltip();
             }
@@ -158,7 +157,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
             // Refresh is a plain button, not a menu item, so the poll happens
             // in place WITHOUT closing the popup.
             onRefresh: () => this.refresh(),
-            onReopen: () => this._reopenSessions(),
+            onReopen: () => this._saved.reopen(),
+            onSaveSessions: () => this._saved.save(),
             onSettings: () => {
                 this.menu.close();
                 this._extension.openPreferences();
@@ -168,6 +168,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
         });
         header.add_child(this._header);
         this.menu.addMenuItem(header);
+        this._saved = new SavedSessionsController({
+            header: this._header, menu: this.menu, isDestroyed: deps.isDestroyed});
 
         // One card per limit.
         const cardsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
@@ -213,41 +215,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // Codex last, and only when asked for: this extension is Claude-first,
         // and a sibling vault does not get to reorder the dropdown.
         this._codex = new CodexController(deps);
-    }
-
-    // The reopen button offers exactly one thing - the newest snapshot - and
-    // only when there is one. The store is written by `claudectl session` and
-    // by the 30-minute autosave, both outside this process, so it is re-read
-    // every time the menu opens rather than cached.
-    _syncReopen() {
-        const {newest} = readSnapshots();
-        const visible = Boolean(claudectlPath() && newest);
-        this._header.syncReopen({
-            visible,
-            title: visible
-                ? ngettext('Reopen %s (%d session)', 'Reopen %s (%d sessions)', newest.sessions.length)
-                    .format(newest.label, newest.sessions.length)
-                : '',
-        });
-    }
-
-    // `claudectl session open` with no argument: the newest snapshot, one tab
-    // per session. It skips a session that is still running, so pressing this
-    // after a crash reopens what died and leaves what survived alone.
-    _reopenSessions() {
-        const cli = claudectlPath();
-        if (!cli)
-            return;
-        this.menu.close();
-        run([cli, 'session', 'open']).then(({ok, stdout, stderr}) => {
-            if (this._destroyed)
-                return;
-            // The CLI's last line says what it opened, or why it opened nothing.
-            const lines = `${stdout}${stderr}`.trim().split('\n');
-            Main.notify(
-                ok ? _('Reopened your sessions') : _('Could not reopen the sessions'),
-                lines[lines.length - 1] || '');
-        });
     }
 
     // Disable the extension: unloads it now and keeps it off across logins

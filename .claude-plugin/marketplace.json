@@ -2,11 +2,11 @@
   "name": "claude-usage-panel",
   "owner": {"name": "Falco Schmutz"},
   "metadata": {
-    "description": "Claude Code plan usage and named-login switching, in any MCP client: the claude-usage plugin from claude-usage-panel."
+    "description": "Claude Code plan usage and named-login switching, in any MCP client: the usage-panel plugin from claude-usage-panel."
   },
   "plugins": [
     {
-      "name": "claude-usage",
+      "name": "usage-panel",
       "source": "./plugin",
       "description": "Ask Claude for your plan usage and switch accounts in-conversation: get_usage returns session, weekly, and per-model limits from the official Anthropic usage endpoint; list_accounts / save_account / switch_account manage named Claude Code logins (PRO, PERSO) without a browser.",
       "version": "2.2.0",

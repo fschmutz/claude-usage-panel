@@ -112,7 +112,7 @@ waits. `scripts/auto-update.sh --status` shows where you stand;
 
 The MCP tool also installs without any clone - as a Claude Code plugin
 (`/plugin marketplace add fschmutz/claude-usage-panel`, then
-`/plugin install claude-usage@claude-usage-panel`) or one CLI line
+`/plugin install usage-panel@claude-usage-panel`) or one CLI line
 (`claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel`;
 that unpinned spec tracks main, append `#vX.Y.Z` to run one release as the
 plugin does).

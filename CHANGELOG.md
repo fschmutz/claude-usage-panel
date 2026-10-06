@@ -8,6 +8,13 @@ semantic versioning.
 
 ### Added
 
+- **Save the open sessions from the header.** A new icon next to Reopen, in
+  the GNOME dropdown and the macOS popup, runs
+  `claudectl session autosave --force`: the sessions open right now become
+  the newest snapshot, none included, instead of waiting for the next
+  30-minute tick. Threads closed before a lid shut no longer come back on
+  Reopen. A forced save of nothing open hides Reopen until a session starts.
+
 - **A bar never shows a number it cannot stand behind.** A limit the payload
   carried no figure for, and a window whose reset instant has passed (the
   endpoint keeps returning the old window's percentage for a few minutes after
@@ -55,6 +62,12 @@ semantic versioning.
   `brew upgrade --cask claude-usage-panel`.
 
 ### Changed
+
+- **The Claude Code plugin is now `usage-panel`.** Claude Code 2.1.291 reserves
+  plugin names starting with `claude-`, so `claude-usage` no longer validates.
+  Existing installs: `/plugin uninstall claude-usage@claude-usage-panel`, then
+  `/plugin install usage-panel@claude-usage-panel`. The MCP server keeps its
+  `claude-usage` name, so `claude mcp` and Cursor registrations are unchanged.
 
 - **The Node clients import the GNOME extension's pure modules instead of
   carrying copies of them.** `claude-code/normalize.js`,
@@ -108,6 +121,11 @@ semantic versioning.
 
 ### Fixed
 
+- **The GNOME progress bars follow the poll again.** A poll that landed with
+  the dropdown closed sized the fill against the track's preferred width (the
+  old fill itself) instead of its allocation, and reopening the menu never
+  repainted it: the percentage was right, the bar was not, until a refresh
+  with the menu open. The bar and the clock caret now read the allocation box.
 - **A poll can no longer spend the refresh token Claude Code is running on.**
   A saved name that resolves to the live login is never refreshed, even when
   its credentials cannot be read at that moment (a locked Keychain, a

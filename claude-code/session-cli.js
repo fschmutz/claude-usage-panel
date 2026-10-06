@@ -22,8 +22,10 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
                                              reopen a snapshot, same windows and tabs
   claudectl session purge SNAP... | --keep=N | --auto | --all [--yes]
                                              delete snapshots
-  claudectl session autosave [--keep=N]      what the schedule runs: save only when
-                                             the set changed, keep the newest N autos
+  claudectl session autosave [--keep=N] [--force]
+                                             what the schedule runs: save only when
+                                             the set changed, keep the newest N autos;
+                                             --force saves now, even an empty set
 
 SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
 skips a session that is still running (--force to try anyway) and one whose
@@ -182,7 +184,7 @@ export async function main(argv, io = {}) {
     }
     case 'autosave': {
       const keep = opts.keep !== undefined ? wholeNumber(opts.keep, 1) : AUTO_KEEP;
-      const r = tabs.autosave({keep});
+      const r = tabs.autosave({keep, force: Boolean(opts.force)});
       out(`${r.saved ? `saved ${r.saved.label}` : 'no new snapshot'} (${r.reason})` +
         `${r.pruned.length ? `, pruned ${r.pruned.length}` : ''}\n`);
       // A session that cannot be saved is a failure, not a footnote: the

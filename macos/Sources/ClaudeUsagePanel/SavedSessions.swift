@@ -3,12 +3,14 @@ import Foundation
 
 /// The `claudectl session` snapshot store as the Settings window shows it. The
 /// CLI owns the store and the autosave agent (`./install.sh cli`); this reads
-/// both and runs `claudectl session open` for the Reopen button.
+/// both and runs `claudectl session open` for the Reopen button and
+/// `claudectl session autosave --force` for the Save button.
 @MainActor
 final class SavedSessions: ObservableObject {
     @Published private(set) var autosave = ""
     @Published private(set) var newestLine = ""
     @Published private(set) var canReopen = false
+    @Published private(set) var canSave = false
     private var busy = false
 
     /// The launchd agent `./install.sh cli` loads (scripts/install/cli.sh).
@@ -55,23 +57,41 @@ final class SavedSessions: ObservableObject {
         } else {
             newestLine = "None yet - run claudectl session save, or wait for the autosave"
         }
-        canReopen = Self.cli != nil && summary.newest != nil && !busy
+        // A forced save with nothing open writes an empty snapshot on purpose:
+        // the newest one then means "nothing to reopen", exactly as on GNOME.
+        canReopen = Self.cli != nil && !(summary.newest?.names.isEmpty ?? true) && !busy
+        canSave = Self.cli != nil && !busy
     }
 
     /// Run `claudectl session open` off the main actor and show the CLI's own
     /// last line: what it opened, or why it opened nothing.
     func reopen() {
+        run(["session", "open"]) { $0.last }
+    }
+
+    /// What is open right now becomes the newest snapshot, none included,
+    /// instead of at the next 30-minute autosave - which a lid shut in between
+    /// never reaches, so threads closed since then came back on Reopen.
+    /// Shows "saved auto-... (N sessions)", or the session it could not save.
+    func save() {
+        run(["session", "autosave", "--force"]) { lines in
+            lines.last(where: { $0.hasPrefix("NOT SAVED") }) ?? lines.first
+        }
+    }
+
+    private func run(_ args: [String], pick: @escaping @Sendable ([String]) -> String?) {
         guard let cli = Self.cli, !busy else { return }
         busy = true
         canReopen = false
+        canSave = false
         Task {
             let line = await Task.detached(priority: .userInitiated) { () -> String in
                 // A menu-bar app gets launchd's bare PATH; the CLI looks for
                 // tmux on it, and Homebrew installs it outside that.
                 var env = ProcessInfo.processInfo.environment
                 env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "/usr/bin:/bin")
-                let r = Shell.run(cli, ["session", "open"], env: env, mergeStderr: true)
-                return r.out.split(separator: "\n").last.map(String.init) ?? ""
+                let r = Shell.run(cli, args, env: env, mergeStderr: true)
+                return pick(r.out.split(separator: "\n").map(String.init)) ?? ""
             }.value
             busy = false
             reload()

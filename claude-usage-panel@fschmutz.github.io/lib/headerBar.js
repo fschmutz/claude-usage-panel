@@ -30,11 +30,12 @@ class HeaderBar extends St.BoxLayout {
      * @param {object} handlers
      * @param {() => void} handlers.onRefresh poll now, without closing the menu
      * @param {() => void} handlers.onReopen reopen the newest session snapshot
+     * @param {() => void} handlers.onSaveSessions snapshot the open sessions now
      * @param {() => void} handlers.onSettings open the preferences window
      * @param {() => void} handlers.onAutoSwitch flip the auto-switch setting
      * @param {() => void} handlers.onQuit turn the extension off
      */
-    _init({onRefresh, onReopen, onSettings, onAutoSwitch, onQuit}) {
+    _init({onRefresh, onReopen, onSaveSessions, onSettings, onAutoSwitch, onQuit}) {
         super._init({style_class: 'cu-header', x_expand: true});
 
         this.add_child(new St.Label({
@@ -65,6 +66,15 @@ class HeaderBar extends St.BoxLayout {
         this._reopen.visible = false;
         this.add_child(this._reopen);
 
+        // Snapshot the open sessions now, so threads closed since the last
+        // 30-minute autosave do not come back on the next Reopen. Hidden
+        // without claudectl, like Reopen.
+        this._saveSessions = iconButton(
+            'document-save-symbolic', _('Save the open sessions now (what Reopen opens)'),
+            () => onSaveSessions());
+        this._saveSessions.visible = false;
+        this.add_child(this._saveSessions);
+
         this.add_child(iconButton(
             'view-refresh-symbolic', _('Refresh now'), () => onRefresh()));
         this.add_child(iconButton(
@@ -82,9 +92,11 @@ class HeaderBar extends St.BoxLayout {
      * @param {object} state
      * @param {boolean} state.visible a snapshot exists and claudectl can open it
      * @param {string} state.title hover text: which snapshot, and from when
+     * @param {boolean} state.canSave claudectl is there to write a snapshot
      */
-    syncReopen({visible, title}) {
+    syncReopen({visible, title, canSave}) {
         this._reopen.visible = visible;
+        this._saveSessions.visible = canSave;
         setTooltip(this._reopen, title);
     }
 
