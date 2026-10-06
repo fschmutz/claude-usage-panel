@@ -17,7 +17,8 @@ again (`gnome-extensions enable claude-usage-panel@fschmutz.github.io`).
 The header's other icons, right to left: **Settings** (gear), **Refresh now**,
 **Reopen** - the newest `claudectl session` snapshot, one tab per session, the
 same thing Settings ▸ Saved sessions does and shown only when there is a
-snapshot to reopen (see [[Tabs]]) - and, when there is more than one saved
+snapshot to reopen (see [[Tabs]]) - **Save**, which makes the sessions open
+right now the newest snapshot (so closed threads do not come back), and, when there is more than one saved
 login, **auto-switch**. macOS has the same row in its dropdown.
 
 ## macOS

@@ -16,87 +16,73 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:183
+#: extension.js:185
 msgid "Extra usage"
 msgstr "额外用量"
 
-#: extension.js:228
-#, javascript-format
-msgid "Reopen %s (%d session)"
-msgid_plural "Reopen %s (%d sessions)"
-msgstr[0] "重新打开 %s（%d 个会话）"
-
-#: extension.js:248
-msgid "Reopened your sessions"
-msgstr "已重新打开会话"
-
-#: extension.js:248
-msgid "Could not reopen the sessions"
-msgstr "无法重新打开会话"
-
-#: extension.js:356
+#: extension.js:323
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - 正在重试，显示上次读数"
 
-#: extension.js:393
+#: extension.js:360
 #, javascript-format
 msgid "Updated %s"
 msgstr "已更新 %s"
 
-#: extension.js:426
+#: extension.js:393
 msgid "Session cost: computing…"
 msgstr "会话费用：计算中…"
 
-#: extension.js:431
+#: extension.js:398
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "会话费用：$%s · %s 个 token（估算）"
 
-#: extension.js:433
+#: extension.js:400
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "会话费用：不可用（请安装 ccusage）"
 
-#: extension.js:463
+#: extension.js:430
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s（上限的 %d%%）"
 
-#: extension.js:480
+#: extension.js:447
 #, javascript-format
 msgid "last %s"
 msgstr "上次 %s"
 
-#: extension.js:480 prefs/pings.js:96
+#: extension.js:447 prefs/pings.js:96
 msgid "never"
 msgstr "从未"
 
-#: extension.js:484
+#: extension.js:451
 #, javascript-format
 msgid "next %s"
 msgstr "下次 %s"
 
-#: extension.js:486
+#: extension.js:453
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "会话 ping：%s"
 
-#: extension.js:498 extension.js:502 lib/accountsSection.js:525
-#: lib/headerBar.js:41 lib/sessionsSection.js:159 lib/sessionsSection.js:169
+#: extension.js:465 extension.js:469 lib/accountsSection.js:525
+#: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Claude 用量"
 
-#: extension.js:499
+#: extension.js:466
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s 已达到 %d%%"
 
-#: extension.js:503
+#: extension.js:470
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "按当前速度，%s 将在重置前用尽"
 
-#: extension.js:627
+#: extension.js:594
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -247,38 +233,38 @@ msgstr "最近的 Codex 会话中没有速率限制记录。"
 msgid "The newest recorded Codex reading is too old to mean anything now."
 msgstr "最新记录的 Codex 读数过旧，已无参考意义。"
 
-#: lib/codexSection.js:43
+#: lib/codexSection.js:46
 msgid "OpenAI Codex"
 msgstr "OpenAI Codex"
 
-#: lib/codexSection.js:50
+#: lib/codexSection.js:53
 msgid "est."
 msgstr "估算"
 
-#: lib/codexSection.js:93
+#: lib/codexSection.js:98
 #, javascript-format
 msgid "Signed in as %s - `claudectl codex save NAME` keeps it."
 msgstr "已以 %s 登录 - 用 `claudectl codex save 名称` 保存它。"
 
-#: lib/codexSection.js:95
+#: lib/codexSection.js:100
 msgid "No Codex login found. Run `codex login` first."
 msgstr "未找到 Codex 登录。请先运行 `codex login`。"
 
-#: lib/codexSection.js:115
+#: lib/codexSection.js:147
 #, javascript-format
 msgid "Recorded by the codex CLI at %s, not read now."
 msgstr "由 codex CLI 于 %s 记录，并非此刻读取。"
 
-#: lib/codexSection.js:134
+#: lib/codexSection.js:165
 msgid "needs `codex login`"
 msgstr "需要 `codex login`"
 
-#: lib/codexSection.js:153
+#: lib/codexSection.js:184
 #, javascript-format
 msgid "now on %s - restart codex to use it"
 msgstr "已切换到 %s - 重启 codex 后生效"
 
-#: lib/codexSection.js:154
+#: lib/codexSection.js:185
 #, javascript-format
 msgid "%s was already the Codex login"
 msgstr "%s 已经是当前的 Codex 登录"
@@ -327,17 +313,43 @@ msgstr "Cursor API 密钥被拒绝"
 msgid "Cursor HTTP %d"
 msgstr "Cursor：HTTP %d"
 
-#: lib/headerBar.js:69
+#: lib/headerBar.js:73
+msgid "Save the open sessions now (what Reopen opens)"
+msgstr "立即保存打开的会话（重新打开时使用）"
+
+#: lib/headerBar.js:79
 msgid "Refresh now"
 msgstr "立即刷新"
 
-#: lib/headerBar.js:71
+#: lib/headerBar.js:81
 msgid "Settings"
 msgstr "设置"
 
-#: lib/headerBar.js:73
+#: lib/headerBar.js:83
 msgid "Quit"
 msgstr "退出"
+
+#: lib/savedSessions.js:45
+#, javascript-format
+msgid "Reopen %s (%d session)"
+msgid_plural "Reopen %s (%d sessions)"
+msgstr[0] "重新打开 %s（%d 个会话）"
+
+#: lib/savedSessions.js:64
+msgid "Reopened your sessions"
+msgstr "已重新打开会话"
+
+#: lib/savedSessions.js:64
+msgid "Could not reopen the sessions"
+msgstr "无法重新打开会话"
+
+#: lib/savedSessions.js:83
+msgid "Saved your open sessions"
+msgstr "已保存打开的会话"
+
+#: lib/savedSessions.js:83
+msgid "Could not save every session"
+msgstr "无法保存所有会话"
 
 #: lib/sessionPing.js:87
 msgid "systemctl failed"

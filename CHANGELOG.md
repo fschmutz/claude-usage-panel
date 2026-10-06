@@ -8,6 +8,13 @@ semantic versioning.
 
 ### Added
 
+- **Save the open sessions from the header.** A new icon next to Reopen, in
+  the GNOME dropdown and the macOS popup, runs
+  `claudectl session autosave --force`: the sessions open right now become
+  the newest snapshot, none included, instead of waiting for the next
+  30-minute tick. Threads closed before a lid shut no longer come back on
+  Reopen. A forced save of nothing open hides Reopen until a session starts.
+
 - **A bar never shows a number it cannot stand behind.** A limit the payload
   carried no figure for, and a window whose reset instant has passed (the
   endpoint keeps returning the old window's percentage for a few minutes after

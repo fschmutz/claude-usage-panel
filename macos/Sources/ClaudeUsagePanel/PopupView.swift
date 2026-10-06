@@ -139,6 +139,14 @@ struct PopupView: View {
                         title: "Reopen \(model.saved.newestLine)"
                     ) { model.saved.reopen() }
                 }
+                // Snapshot the open sessions now, so threads closed since the
+                // last autosave do not come back on the next Reopen.
+                if model.saved.canSave {
+                    HeaderIcon(
+                        systemImage: "square.and.arrow.down",
+                        title: "Save the open sessions now (what Reopen opens)"
+                    ) { model.saved.save() }
+                }
                 HeaderIcon(systemImage: "arrow.clockwise", title: "Refresh now") {
                     Task { await model.refresh() }
                 }

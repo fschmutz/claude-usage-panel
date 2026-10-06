@@ -16,87 +16,73 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:183
+#: extension.js:185
 msgid "Extra usage"
 msgstr "追加利用"
 
-#: extension.js:228
-#, javascript-format
-msgid "Reopen %s (%d session)"
-msgid_plural "Reopen %s (%d sessions)"
-msgstr[0] "%s を再度開く (%d セッション)"
-
-#: extension.js:248
-msgid "Reopened your sessions"
-msgstr "セッションを再度開きました"
-
-#: extension.js:248
-msgid "Could not reopen the sessions"
-msgstr "セッションを再度開けませんでした"
-
-#: extension.js:356
+#: extension.js:323
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - 再試行中、前回の値を表示しています"
 
-#: extension.js:393
+#: extension.js:360
 #, javascript-format
 msgid "Updated %s"
 msgstr "更新 %s"
 
-#: extension.js:426
+#: extension.js:393
 msgid "Session cost: computing…"
 msgstr "セッション費用: 計算中…"
 
-#: extension.js:431
+#: extension.js:398
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "セッション費用: $%s · %s トークン (推定)"
 
-#: extension.js:433
+#: extension.js:400
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "セッション費用: 利用不可 (ccusage をインストール)"
 
-#: extension.js:463
+#: extension.js:430
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (上限の %d%%)"
 
-#: extension.js:480
+#: extension.js:447
 #, javascript-format
 msgid "last %s"
 msgstr "前回 %s"
 
-#: extension.js:480 prefs/pings.js:96
+#: extension.js:447 prefs/pings.js:96
 msgid "never"
 msgstr "なし"
 
-#: extension.js:484
+#: extension.js:451
 #, javascript-format
 msgid "next %s"
 msgstr "次回 %s"
 
-#: extension.js:486
+#: extension.js:453
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
-#: extension.js:498 extension.js:502 lib/accountsSection.js:525
-#: lib/headerBar.js:41 lib/sessionsSection.js:159 lib/sessionsSection.js:169
+#: extension.js:465 extension.js:469 lib/accountsSection.js:525
+#: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Claude の使用状況"
 
-#: extension.js:499
+#: extension.js:466
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s が %d%% に達しました"
 
-#: extension.js:503
+#: extension.js:470
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s は現在のペースだとリセット前に上限に達します"
 
-#: extension.js:627
+#: extension.js:594
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -253,40 +239,40 @@ msgstr "最近の Codex セッションにはレート制限が記録されて�
 msgid "The newest recorded Codex reading is too old to mean anything now."
 msgstr "最後に記録された Codex の値は古すぎて、いまの状況を表していません。"
 
-#: lib/codexSection.js:43
+#: lib/codexSection.js:46
 msgid "OpenAI Codex"
 msgstr "OpenAI Codex"
 
-#: lib/codexSection.js:50
+#: lib/codexSection.js:53
 msgid "est."
 msgstr "推定"
 
-#: lib/codexSection.js:93
+#: lib/codexSection.js:98
 #, javascript-format
 msgid "Signed in as %s - `claudectl codex save NAME` keeps it."
 msgstr ""
 "%s としてサインインしています - `claudectl codex save NAME` で保存できます。"
 
-#: lib/codexSection.js:95
+#: lib/codexSection.js:100
 msgid "No Codex login found. Run `codex login` first."
 msgstr ""
 "Codex のログインが見つかりません。まず `codex login` を実行してください。"
 
-#: lib/codexSection.js:115
+#: lib/codexSection.js:147
 #, javascript-format
 msgid "Recorded by the codex CLI at %s, not read now."
 msgstr "codex CLI が %s に記録した値です。いま取得したものではありません。"
 
-#: lib/codexSection.js:134
+#: lib/codexSection.js:165
 msgid "needs `codex login`"
 msgstr "`codex login` が必要です"
 
-#: lib/codexSection.js:153
+#: lib/codexSection.js:184
 #, javascript-format
 msgid "now on %s - restart codex to use it"
 msgstr "%s に切り替えました - 反映には codex の再起動が必要です"
 
-#: lib/codexSection.js:154
+#: lib/codexSection.js:185
 #, javascript-format
 msgid "%s was already the Codex login"
 msgstr "%s はすでに現在の Codex ログインです"
@@ -335,17 +321,43 @@ msgstr "Cursor API キーが拒否されました"
 msgid "Cursor HTTP %d"
 msgstr "Cursor: HTTP %d"
 
-#: lib/headerBar.js:69
+#: lib/headerBar.js:73
+msgid "Save the open sessions now (what Reopen opens)"
+msgstr "開いているセッションを今すぐ保存（再度開くの対象）"
+
+#: lib/headerBar.js:79
 msgid "Refresh now"
 msgstr "今すぐ更新"
 
-#: lib/headerBar.js:71
+#: lib/headerBar.js:81
 msgid "Settings"
 msgstr "設定"
 
-#: lib/headerBar.js:73
+#: lib/headerBar.js:83
 msgid "Quit"
 msgstr "終了"
+
+#: lib/savedSessions.js:45
+#, javascript-format
+msgid "Reopen %s (%d session)"
+msgid_plural "Reopen %s (%d sessions)"
+msgstr[0] "%s を再度開く (%d セッション)"
+
+#: lib/savedSessions.js:64
+msgid "Reopened your sessions"
+msgstr "セッションを再度開きました"
+
+#: lib/savedSessions.js:64
+msgid "Could not reopen the sessions"
+msgstr "セッションを再度開けませんでした"
+
+#: lib/savedSessions.js:83
+msgid "Saved your open sessions"
+msgstr "開いているセッションを保存しました"
+
+#: lib/savedSessions.js:83
+msgid "Could not save every session"
+msgstr "一部のセッションを保存できませんでした"
 
 #: lib/sessionPing.js:87
 msgid "systemctl failed"

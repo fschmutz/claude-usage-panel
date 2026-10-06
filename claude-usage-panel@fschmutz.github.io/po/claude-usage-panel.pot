@@ -18,88 +18,73 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: extension.js:183
+#: extension.js:185
 msgid "Extra usage"
 msgstr ""
 
-#: extension.js:228
-#, javascript-format
-msgid "Reopen %s (%d session)"
-msgid_plural "Reopen %s (%d sessions)"
-msgstr[0] ""
-msgstr[1] ""
-
-#: extension.js:248
-msgid "Reopened your sessions"
-msgstr ""
-
-#: extension.js:248
-msgid "Could not reopen the sessions"
-msgstr ""
-
-#: extension.js:356
+#: extension.js:323
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr ""
 
-#: extension.js:393
+#: extension.js:360
 #, javascript-format
 msgid "Updated %s"
 msgstr ""
 
-#: extension.js:426
+#: extension.js:393
 msgid "Session cost: computing…"
 msgstr ""
 
-#: extension.js:431
+#: extension.js:398
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr ""
 
-#: extension.js:433
+#: extension.js:400
 msgid "Session cost: unavailable (install ccusage)"
 msgstr ""
 
-#: extension.js:463
+#: extension.js:430
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr ""
 
-#: extension.js:480
+#: extension.js:447
 #, javascript-format
 msgid "last %s"
 msgstr ""
 
-#: extension.js:480 prefs/pings.js:96
+#: extension.js:447 prefs/pings.js:96
 msgid "never"
 msgstr ""
 
-#: extension.js:484
+#: extension.js:451
 #, javascript-format
 msgid "next %s"
 msgstr ""
 
-#: extension.js:486
+#: extension.js:453
 #, javascript-format
 msgid "Session pings: %s"
 msgstr ""
 
-#: extension.js:498 extension.js:502 lib/accountsSection.js:525
-#: lib/headerBar.js:41 lib/sessionsSection.js:159 lib/sessionsSection.js:169
+#: extension.js:465 extension.js:469 lib/accountsSection.js:525
+#: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr ""
 
-#: extension.js:499
+#: extension.js:466
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr ""
 
-#: extension.js:503
+#: extension.js:470
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr ""
 
-#: extension.js:627
+#: extension.js:594
 msgid "Claude ?"
 msgstr ""
 
@@ -250,38 +235,38 @@ msgstr ""
 msgid "The newest recorded Codex reading is too old to mean anything now."
 msgstr ""
 
-#: lib/codexSection.js:43
+#: lib/codexSection.js:46
 msgid "OpenAI Codex"
 msgstr ""
 
-#: lib/codexSection.js:50
+#: lib/codexSection.js:53
 msgid "est."
 msgstr ""
 
-#: lib/codexSection.js:93
+#: lib/codexSection.js:98
 #, javascript-format
 msgid "Signed in as %s - `claudectl codex save NAME` keeps it."
 msgstr ""
 
-#: lib/codexSection.js:95
+#: lib/codexSection.js:100
 msgid "No Codex login found. Run `codex login` first."
 msgstr ""
 
-#: lib/codexSection.js:115
+#: lib/codexSection.js:147
 #, javascript-format
 msgid "Recorded by the codex CLI at %s, not read now."
 msgstr ""
 
-#: lib/codexSection.js:134
+#: lib/codexSection.js:165
 msgid "needs `codex login`"
 msgstr ""
 
-#: lib/codexSection.js:153
+#: lib/codexSection.js:184
 #, javascript-format
 msgid "now on %s - restart codex to use it"
 msgstr ""
 
-#: lib/codexSection.js:154
+#: lib/codexSection.js:185
 #, javascript-format
 msgid "%s was already the Codex login"
 msgstr ""
@@ -332,16 +317,43 @@ msgstr ""
 msgid "Cursor HTTP %d"
 msgstr ""
 
-#: lib/headerBar.js:69
+#: lib/headerBar.js:73
+msgid "Save the open sessions now (what Reopen opens)"
+msgstr ""
+
+#: lib/headerBar.js:79
 msgid "Refresh now"
 msgstr ""
 
-#: lib/headerBar.js:71
+#: lib/headerBar.js:81
 msgid "Settings"
 msgstr ""
 
-#: lib/headerBar.js:73
+#: lib/headerBar.js:83
 msgid "Quit"
+msgstr ""
+
+#: lib/savedSessions.js:45
+#, javascript-format
+msgid "Reopen %s (%d session)"
+msgid_plural "Reopen %s (%d sessions)"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/savedSessions.js:64
+msgid "Reopened your sessions"
+msgstr ""
+
+#: lib/savedSessions.js:64
+msgid "Could not reopen the sessions"
+msgstr ""
+
+#: lib/savedSessions.js:83
+msgid "Saved your open sessions"
+msgstr ""
+
+#: lib/savedSessions.js:83
+msgid "Could not save every session"
 msgstr ""
 
 #: lib/sessionPing.js:87

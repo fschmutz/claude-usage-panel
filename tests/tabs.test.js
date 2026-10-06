@@ -245,6 +245,19 @@ test('autosave writes only when the set changed, and keeps the newest N autos', 
     assert.ok(labels.includes('manual'));
 });
 
+test('autosave --force writes what is open now, even unchanged or nothing', (t) => {
+    const io = world(t, [A]);
+    const tabs = openTabs(io);
+    const first = tabs.autosave();
+    assert.ok(first.saved);
+    assert.equal(tabs.autosave({force: true}).reason, '1 sessions', 'unchanged still saved when forced');
+    fs.rmSync(path.join(io.procDir, String(A.pid)), {recursive: true});
+    assert.equal(tabs.autosave().reason, 'no running session', 'the schedule never writes an empty set');
+    const empty = tabs.autosave({force: true});
+    assert.equal(empty.reason, '0 sessions');
+    assert.deepEqual(tabs.resolve().sessions, [], 'the newest snapshot now says nothing was open');
+});
+
 // ── Open ────────────────────────────────────────────────────────────────────────
 
 test('plan skips running sessions (unless forced) and ones that cannot resume', (t) => {
@@ -494,10 +507,11 @@ test('CLI: autosave reports what it did and rejects a bad --keep', async (t) => 
     const io = world(t, [A]);
     assert.match((await cli(io, 'autosave')).text, /^saved auto-.* \(1 sessions\)/);
     assert.match((await cli(io, 'autosave')).text, /^no new snapshot \(unchanged/);
+    assert.match((await cli(io, 'autosave', '--force')).text, /^saved auto-.* \(1 sessions\)/);
     await assert.rejects(cli(io, 'autosave', '--keep=0'), /whole number/);
     await assert.rejects(cli(io, 'purge', '--keep=abc', '--yes'), /whole number/);
     await assert.rejects(cli(io, 'purge', '--keep', '--yes'), /whole number/);
-    assert.equal(openTabs(io).snapshots().length, 1);
+    assert.equal(openTabs(io).snapshots().length, 2, 'the forced save is the second');
 });
 
 // ── The GNOME preferences read the same store ───────────────────────────────────

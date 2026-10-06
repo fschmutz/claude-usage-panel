@@ -16,88 +16,73 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:183
+#: extension.js:185
 msgid "Extra usage"
 msgstr "Utilizzo extra"
 
-#: extension.js:228
-#, javascript-format
-msgid "Reopen %s (%d session)"
-msgid_plural "Reopen %s (%d sessions)"
-msgstr[0] "Riapri %s (%d sessione)"
-msgstr[1] "Riapri %s (%d sessioni)"
-
-#: extension.js:248
-msgid "Reopened your sessions"
-msgstr "Sessioni riaperte"
-
-#: extension.js:248
-msgid "Could not reopen the sessions"
-msgstr "Impossibile riaprire le sessioni"
-
-#: extension.js:356
+#: extension.js:323
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - nuovo tentativo, ultima lettura mostrata"
 
-#: extension.js:393
+#: extension.js:360
 #, javascript-format
 msgid "Updated %s"
 msgstr "Aggiornato %s"
 
-#: extension.js:426
+#: extension.js:393
 msgid "Session cost: computing…"
 msgstr "Costo sessione: calcolo…"
 
-#: extension.js:431
+#: extension.js:398
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "Costo sessione: $%s · %s token (stima)"
 
-#: extension.js:433
+#: extension.js:400
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "Costo sessione: non disponibile (installa ccusage)"
 
-#: extension.js:463
+#: extension.js:430
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (%d%% del limite)"
 
-#: extension.js:480
+#: extension.js:447
 #, javascript-format
 msgid "last %s"
 msgstr "ultimo %s"
 
-#: extension.js:480 prefs/pings.js:96
+#: extension.js:447 prefs/pings.js:96
 msgid "never"
 msgstr "mai"
 
-#: extension.js:484
+#: extension.js:451
 #, javascript-format
 msgid "next %s"
 msgstr "prossimo %s"
 
-#: extension.js:486
+#: extension.js:453
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "Ping di sessione: %s"
 
-#: extension.js:498 extension.js:502 lib/accountsSection.js:525
-#: lib/headerBar.js:41 lib/sessionsSection.js:159 lib/sessionsSection.js:169
+#: extension.js:465 extension.js:469 lib/accountsSection.js:525
+#: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
 msgid "Claude usage"
 msgstr "Utilizzo di Claude"
 
-#: extension.js:499
+#: extension.js:466
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s ha raggiunto il %d%%"
 
-#: extension.js:503
+#: extension.js:470
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s si esaurirà prima del reset al ritmo attuale"
 
-#: extension.js:627
+#: extension.js:594
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -256,38 +241,38 @@ msgid "The newest recorded Codex reading is too old to mean anything now."
 msgstr ""
 "L'ultima lettura Codex registrata è troppo vecchia per significare qualcosa."
 
-#: lib/codexSection.js:43
+#: lib/codexSection.js:46
 msgid "OpenAI Codex"
 msgstr "OpenAI Codex"
 
-#: lib/codexSection.js:50
+#: lib/codexSection.js:53
 msgid "est."
 msgstr "stim."
 
-#: lib/codexSection.js:93
+#: lib/codexSection.js:98
 #, javascript-format
 msgid "Signed in as %s - `claudectl codex save NAME` keeps it."
 msgstr "Accesso come %s: `claudectl codex save NOME` lo conserva."
 
-#: lib/codexSection.js:95
+#: lib/codexSection.js:100
 msgid "No Codex login found. Run `codex login` first."
 msgstr "Nessun accesso Codex trovato. Esegui `codex login`."
 
-#: lib/codexSection.js:115
+#: lib/codexSection.js:147
 #, javascript-format
 msgid "Recorded by the codex CLI at %s, not read now."
 msgstr "Registrato dalla CLI codex alle %s, non letto ora."
 
-#: lib/codexSection.js:134
+#: lib/codexSection.js:165
 msgid "needs `codex login`"
 msgstr "richiede `codex login`"
 
-#: lib/codexSection.js:153
+#: lib/codexSection.js:184
 #, javascript-format
 msgid "now on %s - restart codex to use it"
 msgstr "ora su %s: riavvia codex per usarlo"
 
-#: lib/codexSection.js:154
+#: lib/codexSection.js:185
 #, javascript-format
 msgid "%s was already the Codex login"
 msgstr "%s era già l'accesso Codex"
@@ -338,17 +323,44 @@ msgstr "Chiave API di Cursor rifiutata"
 msgid "Cursor HTTP %d"
 msgstr "Cursor: HTTP %d"
 
-#: lib/headerBar.js:69
+#: lib/headerBar.js:73
+msgid "Save the open sessions now (what Reopen opens)"
+msgstr "Salva ora le sessioni aperte (quelle che Riapri apre)"
+
+#: lib/headerBar.js:79
 msgid "Refresh now"
 msgstr "Aggiorna ora"
 
-#: lib/headerBar.js:71
+#: lib/headerBar.js:81
 msgid "Settings"
 msgstr "Impostazioni"
 
-#: lib/headerBar.js:73
+#: lib/headerBar.js:83
 msgid "Quit"
 msgstr "Esci"
+
+#: lib/savedSessions.js:45
+#, javascript-format
+msgid "Reopen %s (%d session)"
+msgid_plural "Reopen %s (%d sessions)"
+msgstr[0] "Riapri %s (%d sessione)"
+msgstr[1] "Riapri %s (%d sessioni)"
+
+#: lib/savedSessions.js:64
+msgid "Reopened your sessions"
+msgstr "Sessioni riaperte"
+
+#: lib/savedSessions.js:64
+msgid "Could not reopen the sessions"
+msgstr "Impossibile riaprire le sessioni"
+
+#: lib/savedSessions.js:83
+msgid "Saved your open sessions"
+msgstr "Sessioni aperte salvate"
+
+#: lib/savedSessions.js:83
+msgid "Could not save every session"
+msgstr "Impossibile salvare tutte le sessioni"
 
 #: lib/sessionPing.js:87
 msgid "systemctl failed"
