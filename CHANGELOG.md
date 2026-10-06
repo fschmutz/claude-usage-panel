@@ -108,6 +108,11 @@ semantic versioning.
 
 ### Fixed
 
+- **The GNOME progress bars follow the poll again.** A poll that landed with
+  the dropdown closed sized the fill against the track's preferred width (the
+  old fill itself) instead of its allocation, and reopening the menu never
+  repainted it: the percentage was right, the bar was not, until a refresh
+  with the menu open. The bar and the clock caret now read the allocation box.
 - **A poll can no longer spend the refresh token Claude Code is running on.**
   A saved name that resolves to the live login is never refreshed, even when
   its credentials cannot be read at that moment (a locked Keychain, a
