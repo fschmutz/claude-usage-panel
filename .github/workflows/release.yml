@@ -164,9 +164,12 @@ jobs:
   # fschmutz/tap/claude-usage-panel` and `brew upgrade` follow the releases.
   # A job of its own, fed by the release asset rather than a file passed
   # between jobs: a failed tap push re-runs alone, without rebuilding or
-  # re-notarizing the app. HOMEBREW_TAP_TOKEN (repo Settings > Secrets) is a
-  # fine-grained token with contents:write on fschmutz/homebrew-tap and
-  # nothing else; this repo's own token cannot write there. Without it the job
+  # re-notarizing the app. The tap is written with a GitHub App installation
+  # token minted for this job: contents:write on fschmutz/homebrew-tap only,
+  # valid about an hour, revoked when the job ends - no personal token to
+  # expire or mis-scope. The App's client id is the TAP_APP_CLIENT_ID variable,
+  # its key the TAP_APP_PRIVATE_KEY secret (scripts/setup-tap-app.sh creates
+  # both). This repo's own token cannot write there. Without them the job
   # fails: a release that brew users never see is not a success.
   homebrew-tap:
     needs: [release, macos-asset]
@@ -184,8 +187,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release.outputs.tag }}
         run: gh release download "$TAG" --pattern claude-usage-panel.rb --dir "$RUNNER_TEMP/cask"
+      - name: Mint a tap token (GitHub App, contents:write on homebrew-tap only)
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.TAP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+          owner: fschmutz
+          repositories: homebrew-tap
+          permission-contents: write
       - name: Publish it to fschmutz/homebrew-tap
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
           TAG: ${{ needs.release.outputs.tag }}
         run: ./scripts/publish-cask.sh "$TAG" "$RUNNER_TEMP/cask/claude-usage-panel.rb"

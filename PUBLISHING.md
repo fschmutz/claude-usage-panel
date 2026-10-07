@@ -125,10 +125,16 @@ The cask lives in the repo at `Casks/claude-usage-panel.rb`, and the release
 workflow attaches it to every release next to the zip, with `sha256` pinned to
 that zip (`scripts/make-cask.sh`, run right after the upload). Its
 `homebrew-tap` job then publishes that pinned cask to `fschmutz/homebrew-tap`
-(`scripts/publish-cask.sh`), with the `HOMEBREW_TAP_TOKEN` secret: a
-fine-grained token with `contents: write` on that repo only. Without it the
-job fails, since a release brew users never see is not a success; it re-runs
-alone, without rebuilding the app.
+(`scripts/publish-cask.sh`) with a GitHub App installation token that
+`actions/create-github-app-token` mints for the job: `contents: write` on that
+repo only, valid about an hour, revoked when the job ends. No personal token
+to expire or mis-scope. One-time setup, `scripts/setup-tap-app.sh`: it creates
+the App from a manifest (one click in the browser), stores its client id as
+the `TAP_APP_CLIENT_ID` variable and its private key as the
+`TAP_APP_PRIVATE_KEY` secret, opens the install page (pick `homebrew-tap`
+only), then mints a token locally and proves it can write there. Without
+them the job fails, since a release brew users never see is not a success;
+it re-runs alone, without rebuilding the app.
 
 ```bash
 brew install --cask fschmutz/tap/claude-usage-panel
