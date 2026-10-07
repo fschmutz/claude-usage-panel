@@ -27,6 +27,7 @@ uninstalls every client.
 | `./install.sh macos` | build + install the macOS `.app` |
 | `./install.sh autoupdate` | daily check for a new release + auto-install |
 | `./install.sh sessionping [HH:MM …] [--days=…]` | scheduled `claude` pings that open the 5h session window (opt-in) |
+| `./install.sh cost` | pinned `ccusage` + the session-cost line on (opt-in) |
 | `./install.sh update [target…]` | reinstall what's already installed (upgrade) |
 | `./install.sh update --pull` | `git pull` first, then upgrade |
 | `./install.sh --uninstall [target…]` | reverse an install (default: everything installed, sessionping included) |

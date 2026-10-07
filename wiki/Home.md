@@ -42,6 +42,26 @@ Session, weekly (all models), and **per-model** weekly limits (Fable, Opus…) f
 `api.anthropic.com/api/oauth/usage` endpoint - with severity colors, reset timers, limit-crossing
 alerts, a usage sparkline, and an optional session cost.
 
+### Reading a limit card
+
+```text
+Weekly · all models                          62%
+████████████████████░░░░░░░░░░░░   <- usage: share of the limit spent
+                ▲                  <- clock: share of the window gone
+Resets in 2d 21h · 53% of the window gone - 9 pts ahead of the clock
+↗ 4%/h - full ~Sat 21:24, 3d7h before reset
+▁▂▂▃▄▅▅▆▆▇▇█
+```
+
+| Element | Meaning |
+| --- | --- |
+| Bar | How much of this limit is spent, colored by the API's severity |
+| ▲ under the bar | How much of the **window** has elapsed (3.5 days into a week = 50%). Fill left of it: you are spending slower than time passes. Fill right of it: faster, and at this pace the limit runs out before the reset. The caret turns amber when usage is ahead of the clock |
+| Reset line | Countdown to the reset; when usage outruns the clock, how far ahead it is |
+| `↗` line | Burn-rate forecast (below) |
+| Sparkline | The last 12 readings |
+| `–` and an empty bar | No honest figure: the endpoint sent none, or the window has just reset |
+
 Each limit also carries a **burn-rate forecast**: from your recent pace it projects when the
 limit hits 100% and whether that lands *before* the reset - "↗ 4%/h - full ~Sat 21:24, 3d7h
 before reset". The top bar turns amber and a notification fires the moment a limit goes on pace

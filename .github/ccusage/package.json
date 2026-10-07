@@ -1,0 +1,8 @@
+{
+  "name": "claude-usage-panel-ccusage",
+  "private": true,
+  "description": "The ccusage version `./install.sh cost` installs, pinned to one exact release. Dependabot's npm ecosystem bumps it, so a new ccusage reaches users as a reviewed PR and then through `./install.sh update`, never as an unpinned download.",
+  "dependencies": {
+    "ccusage": "20.0.26"
+  }
+}

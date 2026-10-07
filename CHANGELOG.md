@@ -8,6 +8,14 @@ semantic versioning.
 
 ### Added
 
+- **`./install.sh cost`**: installs the `ccusage` release pinned in
+  `.github/ccusage/package.json` (Volta when present, else `npm install -g`)
+  and turns the session-cost line on in the installed panel(s). Dependabot
+  bumps the pin and `update` reinstalls it, keeping the user's cost toggle.
+  A ccusage the panels cannot reach (an nvm global) is refused.
+- **The wiki explains a limit card**: the bar, the clock caret ▲ under it, the
+  reset line, the forecast and the sparkline (Home ▸ Reading a limit card).
+
 - **Each account row says when its week restarts, and keeps saying it.**
   `S 42% · W 12% ↻4d2h` in the GNOME dropdown and the macOS popup. Both
   panels keep every account's last weekly reset in
