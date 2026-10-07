@@ -330,11 +330,17 @@ test('publish-cask: refuses the template, a version mismatch and a missing token
     assert.equal(tap.tapGit('rev-list', '--count', 'main').trim(), '1', 'nothing reached the tap');
 });
 
-test('release homebrew-tap: runs after the cask asset, secret only in the step env', () => {
+test('release homebrew-tap: runs after the cask asset, writes with a GitHub App token scoped to the tap', () => {
     const body = job('.github/workflows/release.yml', 'homebrew-tap');
     assert.match(body, /needs: \[release, macos-asset\]/);
     assert.match(body, /permissions:\n\s+contents: read/);
     assert.match(body, /gh release download "\$TAG" --pattern claude-usage-panel\.rb/);
-    assert.match(body, /HOMEBREW_TAP_TOKEN: \$\{\{ secrets\.HOMEBREW_TAP_TOKEN \}\}\n\s+TAG: [^\n]+\n\s+run: \.\/scripts\/publish-cask\.sh "\$TAG" /);
+    // A short-lived installation token, minted for the tap repo alone with
+    // contents:write - never a personal token in a secret.
+    assert.match(body, /uses: actions\/create-github-app-token@[0-9a-f]{40} # v\d/);
+    assert.match(body, /client-id: \$\{\{ vars\.TAP_APP_CLIENT_ID \}\}\n\s+private-key: \$\{\{ secrets\.TAP_APP_PRIVATE_KEY \}\}/);
+    assert.match(body, /owner: fschmutz\n\s+repositories: homebrew-tap\n\s+permission-contents: write\n/);
+    assert.doesNotMatch(body, /secrets\.HOMEBREW_TAP_TOKEN/);
+    assert.match(body, /HOMEBREW_TAP_TOKEN: \$\{\{ steps\.tap-token\.outputs\.token \}\}\n\s+TAG: [^\n]+\n\s+run: \.\/scripts\/publish-cask\.sh "\$TAG" /);
     assert.match(job('.github/workflows/release.yml', 'macos-asset'), /gh release upload "\$TAG" "Casks\/claude-usage-panel\.rb"/);
 });
