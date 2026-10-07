@@ -132,7 +132,10 @@ to expire or mis-scope. One-time setup, `scripts/setup-tap-app.sh`: it creates
 the App from a manifest (one click in the browser), stores its client id as
 the `TAP_APP_CLIENT_ID` variable and its private key as the
 `TAP_APP_PRIVATE_KEY` secret, opens the install page (pick `homebrew-tap`
-only), then mints a token locally and proves it can write there. Without
+only), then runs `.github/workflows/tap-check.yml`, which mints a token with
+the stored credentials exactly as the release does. Re-running it reuses the
+stored App (`--recreate` makes a new one), and `gh workflow run tap-check.yml`
+re-checks the credentials any time without cutting a release. Without
 them the job fails, since a release brew users never see is not a success;
 it re-runs alone, without rebuilding the app.
 
