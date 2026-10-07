@@ -14,7 +14,8 @@ semantic versioning.
   `fschmutz/homebrew-tap` only, about an hour long, revoked when the job ends.
   `scripts/setup-tap-app.sh` creates the App from a manifest, stores
   `TAP_APP_CLIENT_ID` / `TAP_APP_PRIVATE_KEY`, opens the install page, then
-  mints a token locally and proves it can write the tap.
+  runs the new `tap-check` workflow, which mints a token with the stored
+  credentials as the release does. Re-running it reuses a stored App.
 
 ## [3.0.0] - 2026-10-07
 
