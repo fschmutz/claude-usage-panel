@@ -190,7 +190,7 @@ install.sh              # installer entrypoint: argument loop + dispatch
 scripts/install/        # one file per target, sourced by install.sh
 ├── ui.sh               # info/ok/skip/act and the --dry-run wrapper
 ├── scheduler.sh        # the systemd-timer / launchd-agent / cron triple, once
-└── gnome.sh macos.sh node.sh cli.sh autoupdate.sh sessionping.sh targets.sh
+└── gnome.sh macos.sh node.sh cli.sh autoupdate.sh sessionping.sh cost.sh targets.sh
 scripts/auto-update.sh  # daily: newest released tag → ff-only → install.sh update
 scripts/session-ping.sh # scheduled: 1-turn haiku ping so the 5h window opens on time
 scripts/lib.sh          # log/say/die/lock, shared by the two standalone workers

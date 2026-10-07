@@ -20,8 +20,13 @@
 
 ## Cost shows "unavailable"
 
-Install `ccusage` on your PATH (`npm install -g ccusage`). The panels run only an
-installed copy and never download one. Cost is computed by `ccusage`, not the API.
+Run `./install.sh cost`: it installs the `ccusage` version pinned in
+`.github/ccusage/package.json` (through Volta when you have it, else
+`npm install -g`) and turns the cost line on; `./install.sh update` keeps it on
+the pin. The panels run only an installed copy and never download one, and
+they look in `~/.volta/bin`, `~/.npm-global/bin`, `/opt/homebrew/bin` and
+`/usr/local/bin` - an nvm global is on none of them, so the target refuses it.
+Cost is computed by `ccusage` from your local logs, not by the API.
 
 ## Cursor section errors
 

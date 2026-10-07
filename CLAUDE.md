@@ -44,6 +44,7 @@ pre-commit run zizmor --all-files   # workflow security audit (actionlint = vali
 ./install.sh macos           # build macos/ClaudeUsagePanel.app
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
+./install.sh cost            # pinned ccusage (.github/ccusage, Dependabot) + cost line on (opt-in)
 ./install.sh update [target...]        # reinstall installed targets (upgrade); --pull to git pull first
 ./install.sh --uninstall [target...]   # reverse it (default: all installed)   |   --list (detected + installed)   |   -h
 ./install.sh --dry-run [target...]     # print actions without touching anything

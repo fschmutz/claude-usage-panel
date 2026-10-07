@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Sourced by install.sh: what can be installed here, what already is.
 
-ALL_TARGETS="gnome statusline mcp cli macos autoupdate sessionping"
+ALL_TARGETS="gnome statusline mcp cli macos autoupdate sessionping cost"
 
 # Print the targets that make sense for this machine, one per line.
 detect_targets() {
@@ -40,6 +40,7 @@ installed_targets() {
     [ -d "/Applications/ClaudeUsagePanel.app" ] && echo macos
     _au_installed && echo autoupdate
     _sp_installed && echo sessionping
+    _cost_installed && echo cost
     return 0
 }
 
