@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-07
+
 ### Added
 
 - **`./install.sh cost`**: installs the `ccusage` release pinned in
