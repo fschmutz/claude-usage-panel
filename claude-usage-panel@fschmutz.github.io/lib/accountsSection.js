@@ -16,7 +16,7 @@ import {gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/ext
 
 import {
     listProfiles, liveAccountName, readLastSwitchMs, readLiveAccount, readPendingSwitch,
-    saveCurrent, switchTo, syncBack, usageFor, writeUsageCache,
+    saveCurrent, switchTo, syncBack, updateWeeklyResets, usageFor, writeUsageCache,
 } from './accounts.js';
 import {
     OUTCOME_TTL_MS, accountHealth, accountNotices, accountSummary, autoSwitchTarget,
@@ -62,6 +62,9 @@ async function collectAccountRows(session, profiles, active, activeCards) {
         return row(r.ok ? r.cards : null, r);
     }));
     writeUsageCache(results);
+    const kept = updateWeeklyResets(results, profiles.map(p => p.name));
+    for (const r of rows)
+        r.weeklyResetMs = kept[r.name] ?? null;
     const worst = Object.fromEntries(
         profiles.map(p => [p.name, results[p.name]?.ok ? worstPercent(results[p.name].cards) : null]));
     return {rows, worst};
@@ -223,7 +226,14 @@ class AccountsSection extends St.BoxLayout {
     // login broke must stop looking like a row that is fine.
     _metaText(row) {
         if (row.cards?.length)
-            return formatAccountUsage(row.cards);
+            return formatAccountUsage(row.cards, Date.now(), row.weeklyResetMs);
+        // The weekly reset outlives the login: it was read while the login
+        // worked and stays true until it passes.
+        return [this._reason(row), formatAccountUsage([], Date.now(), row.weeklyResetMs)]
+            .filter(Boolean).join(' · ');
+    }
+
+    _reason(row) {
         switch (row.health) {
         case 'expired':
             return _('(login expired)');

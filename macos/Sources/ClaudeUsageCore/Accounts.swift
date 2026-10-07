@@ -590,14 +590,57 @@ public enum Accounts {
             from: active, to: best.name, activePercent: activePercent, targetPercent: best.percent)
     }
 
-    /// "S 42% · W 12%" from the session / weekly-all cards, for a compact
-    /// row; a missing card is left out, and no card at all gives "". A card
-    /// with no honest reading at `now` prints UsageReading.noReading rather
-    /// than a number.
-    public static func formatUsage(_ cards: [LimitCard], now: Date = Date()) -> String {
-        [("session", "S"), ("weekly_all", "W")].compactMap { key, tag in
-            reading(cards, key, now: now).map { "\(tag) \($0.text)" }
-        }.joined(separator: " · ")
+    /// The weekly-all reset in epoch ms when it is still ahead at `now`.
+    static func weeklyResetMs(_ cards: [LimitCard], now: Date) -> Double? {
+        guard let at = cards.first(where: { $0.id == "weekly_all" })?.resetsAt, at > now
+        else { return nil }
+        return at.timeIntervalSince1970 * 1000
+    }
+
+    /// "S 42% · W 12% ↻4d2h" from the session / weekly-all cards, for a
+    /// compact row; a missing card is left out, and no card at all gives "".
+    /// A card with no honest reading at `now` prints UsageReading.noReading
+    /// rather than a number. The weekly reset comes from the card, else from
+    /// `keptResetMs` (keepWeeklyResets), so a row whose login cannot be read
+    /// still says when its week restarts: "W ↻4d2h". Mirrors pure
+    /// `formatAccountUsage()`.
+    public static func formatUsage(
+        _ cards: [LimitCard], now: Date = Date(), keptResetMs: Double? = nil
+    ) -> String {
+        let s = reading(cards, "session", now: now)
+        let w = reading(cards, "weekly_all", now: now)
+        let nowMs = now.timeIntervalSince1970 * 1000
+        let kept = keptResetMs.flatMap { $0.isFinite && $0 > nowMs ? $0 : nil }
+        let reset =
+            (weeklyResetMs(cards, now: now) ?? kept).map {
+                ResetCountdown.compact(Date(timeIntervalSince1970: $0 / 1000), now: now)
+            } ?? ""
+        let weekly = [
+            w.map { "W \($0.text)" } ?? (reset.isEmpty ? "" : "W"),
+            reset.isEmpty ? "" : "↻\(reset)",
+        ]
+        .filter { !$0.isEmpty }.joined(separator: " ")
+        return [s.map { "S \($0.text)" } ?? "", weekly].filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    /// The weekly reset kept per saved account (<accounts dir>/.weekly-resets.json,
+    /// {NAME: epochMs}): an account read this poll gives its own, one that
+    /// could not be read or reported none keeps the last one until it passes,
+    /// a name no longer saved drops out. Mirrors pure `keepWeeklyResets()`.
+    public static func keepWeeklyResets(
+        _ prev: [String: Any]?, fresh: [String: [LimitCard]], names: [String], now: Date = Date()
+    ) -> [String: Double] {
+        let nowMs = now.timeIntervalSince1970 * 1000
+        var out: [String: Double] = [:]
+        for name in names {
+            let kept = (prev?[name] as? NSNumber)?.doubleValue
+            let keptAhead = kept.flatMap { $0.isFinite && $0 > nowMs ? $0 : nil }
+            if let t = fresh[name].flatMap({ weeklyResetMs($0, now: now) }) ?? keptAhead {
+                out[name] = t
+            }
+        }
+        return out
     }
 
     /// A fetch/refresh error as an account ROW shows it: the store prefixes

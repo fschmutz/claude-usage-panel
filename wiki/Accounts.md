@@ -122,6 +122,12 @@ A row in one of the first two states shows its usage. A row in any of the
 others shows **why it has none** - never the figures from the last poll that
 worked, because a broken login must stop looking like a working one.
 
+Every row also says when that account's week restarts: `S 42% · W 12% ↻4d2h`.
+The reset is the one fact that stays true after a login breaks, so both panels
+keep each account's last one in `<accounts dir>/.weekly-resets.json`
+(`{NAME: epochMs}`) until it passes, and a row with no figures still shows it:
+`(refresh failed) · W ↻4d2h`.
+
 ## Inline notices
 
 Anything that needs doing is said next to the account it is about, with the one

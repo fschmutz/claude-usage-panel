@@ -16,6 +16,7 @@ final class ResetCountdownParityTests: XCTestCase {
             // "not-a-date" parses to nil, which is what the panel is handed.
             let date = UsageNormalizer.parseDate(raw)
             XCTAssertEqual(ResetCountdown.text(date, now: now), c["panel"] as? String, name)
+            XCTAssertEqual(ResetCountdown.compact(date, now: now), c["compact"] as? String, name)
         }
     }
 }

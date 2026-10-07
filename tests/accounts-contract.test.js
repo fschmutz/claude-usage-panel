@@ -36,7 +36,7 @@ test('parkName: a valid, free name from the email', () => {
 // Every card is read through usageReading at the fixture's `now`: a
 // placeholder or a window that already rolled over has no honest reading.
 test('formatAccountUsage matches the shared fixture', () => {
-    for (const c of FIX.formatUsage) assert.equal(accounts.formatAccountUsage(c.cards, NOW), c.expected, c.name);
+    for (const c of FIX.formatUsage) assert.equal(accounts.formatAccountUsage(c.cards, NOW, c.keptResetMs ?? null), c.expected, c.name);
 });
 test('worstPercent skips a card with no honest reading', () => {
     for (const c of FIX.worstPercent) assert.equal(accounts.worstPercent(c.cards, NOW), c.expected, c.name);
@@ -102,6 +102,10 @@ test('sameJSON: key order ignored, scalars strict', () => {
         assert.equal(accounts.sameJSON(b, a), expected, `${JSON.stringify(b)} / ${JSON.stringify(a)}`);
     }
 });
+test('keepWeeklyResets matches the shared fixture', () => {
+    for (const c of FIX.weeklyResets) assert.deepEqual(accounts.keepWeeklyResets(c.prev, c.fresh, c.names, NOW), c.expected, c.name);
+});
+
 test('usageCacheEntry: worst, session and weekly-all of one account', () => {
     for (const c of FIX.usageCacheEntry) assert.deepEqual(accounts.usageCacheEntry(c.cards, NOW), c.expected, c.name);
 });

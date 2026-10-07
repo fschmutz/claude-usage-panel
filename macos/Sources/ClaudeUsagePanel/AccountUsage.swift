@@ -290,4 +290,21 @@ extension AccountStore {
         guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
         try? writePrivate(data, to: usageCacheURL)
     }
+
+    // Each account's weekly reset, kept past the poll that read it, so a
+    // login that cannot be read right now still shows when its week restarts.
+    // Same file and shape as GNOME ({NAME: epochMs}); keepWeeklyResets decides.
+    static func updateWeeklyResets(
+        _ usage: [String: [LimitCard]], names: [String], now: Date = Date()
+    ) -> [String: Double] {
+        let url = directory.appendingPathComponent(".weekly-resets.json")
+        let prev = readJSON(url) as? [String: Any]
+        let kept = Accounts.keepWeeklyResets(prev, fresh: usage, names: names, now: now)
+        if !Accounts.sameJSON(prev ?? [:], kept),
+            let data = try? JSONSerialization.data(withJSONObject: kept)
+        {
+            try? writePrivate(data, to: url)
+        }
+        return kept
+    }
 }

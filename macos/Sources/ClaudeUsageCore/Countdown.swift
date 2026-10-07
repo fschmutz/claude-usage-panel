@@ -32,6 +32,16 @@ public enum ResetCountdown {
         if r.h > 0 { return String(format: "Resets in %dh %02dm", r.h, r.m) }
         return "Resets in \(r.m)m"
     }
+
+    /// The compact "3h06m" / "4d2h" / "12m" of the account rows; "" when
+    /// absent or due. Mirrors pure usage.js `compactResets()`, the status
+    /// line's label; the "compact" column of tests/fixtures/resets.json.
+    public static func compact(_ date: Date?, now: Date = Date()) -> String {
+        guard let r = parts(date, now: now), !r.past else { return "" }
+        if r.d > 0 { return "\(r.d)d\(r.h)h" }
+        if r.h > 0 { return String(format: "%dh%02dm", r.h, r.m) }
+        return "\(r.m)m"
+    }
 }
 
 // MARK: - Sparkline

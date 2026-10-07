@@ -17,6 +17,9 @@ struct AccountRow: Identifiable, Equatable, Sendable {
     /// stored token for the others; nil while unknown.
     let cards: [LimitCard]?
     let error: String?
+    /// The weekly reset this account last reported (keepWeeklyResets), kept
+    /// past the poll that read it; nil when none is known or it has passed.
+    var weeklyResetMs: Double? = nil
     /// The stored login's own dates folded together with what the last fetch
     /// said, so a token the endpoint refused does not read as valid.
     let health: AccountHealth
@@ -31,13 +34,20 @@ struct AccountRow: Identifiable, Equatable, Sendable {
     /// there are not. Never the previous poll's figures - a row whose login
     /// broke must stop looking like a row that is fine.
     var usageText: String {
-        if let cards, !cards.isEmpty { return Accounts.formatUsage(cards) }
-        switch health {
-        case .expired: return "login expired"
-        case .refreshFailed: return "refresh failed"
-        case .unreachable: return error ?? "no reading"
-        case .valid, .stale: return error ?? ""
+        if let cards, !cards.isEmpty {
+            return Accounts.formatUsage(cards, keptResetMs: weeklyResetMs)
         }
+        let reason: String
+        switch health {
+        case .expired: reason = "login expired"
+        case .refreshFailed: reason = "refresh failed"
+        case .unreachable: reason = error ?? "no reading"
+        case .valid, .stale: reason = error ?? ""
+        }
+        // The weekly reset outlives the login: read while it worked, true
+        // until it passes.
+        return [reason, Accounts.formatUsage([], keptResetMs: weeklyResetMs)]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 
@@ -93,10 +103,15 @@ extension UsageModel {
                         tokenState: summary.tokenState, errorCode: result.errorCode,
                         live: result.live)))
         }
-        accounts = rows
+        let kept = AccountStore.updateWeeklyResets(usage, names: profiles.map(\.name))
+        accounts = rows.map {
+            var row = $0
+            row.weeklyResetMs = kept[row.name]
+            return row
+        }
         accountsError = nil
         accountNotices = Notices.accountNotices(
-            rows: rows.map { (name: $0.name, health: $0.health) },
+            rows: accounts.map { (name: $0.name, health: $0.health) },
             liveEmail: liveLoginEmail, activeName: active,
             pendingTo: AccountStore.readPendingSwitch()?.to,
             torn: Accounts.isTorn(profiles: profiles, name: active ?? "", account: liveAccount)

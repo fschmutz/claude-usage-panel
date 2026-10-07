@@ -333,6 +333,22 @@ export function formatResets(iso, nowMs = Date.now()) {
     return `Resets in ${span}`;
 }
 
+// The compact countdown, "3h06m" / "4d2h" / "12m": the status line, the MCP
+// server, the CLI and the account rows of both panels. The two most
+// significant units; '' when past, absent or unparseable. Flooring (never
+// rounding to the nearest minute) keeps it from running a minute ahead of
+// formatResets and 23h59m40s from reading "1d0h".
+export function compactResets(iso, nowMs = Date.now()) {
+    const r = resetParts(iso, nowMs);
+    if (!r || r.past || !Number.isFinite(r.m))
+        return '';
+    if (r.d > 0)
+        return `${r.d}d${r.h}h`;
+    if (r.h > 0)
+        return `${r.h}h${String(r.m).padStart(2, '0')}m`;
+    return `${r.m}m`;
+}
+
 // Threshold a limit crossed (0 / 90 / 100), for alert logic.
 export function alertThreshold(percent) {
     return percent >= 100 ? 100 : (percent >= 90 ? 90 : 0);

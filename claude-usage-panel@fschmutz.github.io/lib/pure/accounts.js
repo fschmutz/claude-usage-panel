@@ -10,7 +10,7 @@
 // status line (I/O in claude-code/accounts.js) both import this file. The
 // Swift twin (ClaudeUsageCore/Accounts.swift) is pinned by the same fixture.
 
-import {isTransientStatus, usageReading} from './usage.js';
+import {compactResets, isTransientStatus, usageReading} from './usage.js';
 
 /** Refresh an access token this close to its expiry rather than use it. */
 export const REFRESH_LEAD_MS = 5 * 60_000;
@@ -421,12 +421,49 @@ export function worstFromCache(cache) {
     return out;
 }
 
-/** "S 42% · W 12%" from the session / weekly-all cards; '' without either.
- *  A card with no honest reading prints NO_READING rather than a number. */
-export function formatAccountUsage(cards, nowMs = Date.now()) {
+// Epoch ms of the weekly-all reset when it is still ahead at nowMs, else null.
+function weeklyResetMs(cards, nowMs) {
+    const c = (cards ?? []).find(x => x?.key === 'weekly_all');
+    const t = Date.parse(c?.resetsAt ?? '');
+    return Number.isFinite(t) && t > nowMs ? t : null;
+}
+
+/** "S 42% · W 12% ↻4d2h" from the session / weekly-all cards; '' without
+ *  either. A card with no honest reading prints NO_READING rather than a
+ *  number. The weekly reset comes from the card, else from `keptResetMs` -
+ *  the last one this account reported (keepWeeklyResets) - so a row whose
+ *  login cannot be read right now still says when its week restarts:
+ *  "W ↻4d2h". A reset already due prints nothing. */
+export function formatAccountUsage(cards, nowMs = Date.now(), keptResetMs = null) {
     const s = readingFor(cards, 'session', nowMs);
     const w = readingFor(cards, 'weekly_all', nowMs);
-    return [s && `S ${s.text}`, w && `W ${w.text}`].filter(Boolean).join(' · ');
+    const resetMs = weeklyResetMs(cards, nowMs)
+        ?? (Number.isFinite(keptResetMs) && keptResetMs > nowMs ? keptResetMs : null);
+    const reset = resetMs === null ? '' : compactResets(new Date(resetMs).toISOString(), nowMs);
+    const weekly = [w ? `W ${w.text}` : (reset ? 'W' : ''), reset && `↻${reset}`]
+        .filter(Boolean).join(' ');
+    return [s && `S ${s.text}`, weekly].filter(Boolean).join(' · ');
+}
+
+/**
+ * The weekly reset kept per saved account, <accounts dir>/.weekly-resets.json
+ * as {NAME: epochMs}. An account read this poll gives its own reset; one that
+ * could not be read (expired, unreachable) or reported none keeps the last one
+ * known until it passes. A name no longer saved drops out.
+ * @param {object|null} prev the file as read
+ * @param {Object<string, object[]>} fresh cards per account read OK this poll
+ * @param {string[]} names the saved profiles
+ */
+export function keepWeeklyResets(prev, fresh, names, nowMs = Date.now()) {
+    const out = {};
+    for (const name of names ?? []) {
+        const kept = prev && typeof prev === 'object' ? prev[name] : null;
+        const t = weeklyResetMs(fresh?.[name], nowMs)
+            ?? (Number.isFinite(kept) && kept > nowMs ? kept : null);
+        if (t !== null)
+            out[name] = t;
+    }
+    return out;
 }
 
 // ── Refreshing a stored login ───────────────────────────────────────────────────

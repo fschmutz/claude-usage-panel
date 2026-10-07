@@ -8,6 +8,16 @@ semantic versioning.
 
 ### Added
 
+- **Each account row says when its week restarts, and keeps saying it.**
+  `S 42% · W 12% ↻4d2h` in the GNOME dropdown and the macOS popup. Both
+  panels keep every account's last weekly reset in
+  `<accounts dir>/.weekly-resets.json` until it passes, so a login that is
+  expired, refused or unreachable still shows `(refresh failed) · W ↻4d2h`.
+  `keepWeeklyResets` and the reset in `formatUsage` are pinned by
+  `tests/fixtures/accounts.json`; the compact countdown moved into
+  `lib/pure/usage.js` (`compactResets`) and Swift `ResetCountdown.compact`,
+  both held to the `compact` column of `tests/fixtures/resets.json`.
+
 - **Save the open sessions from the header.** A new icon next to Reopen, in
   the GNOME dropdown and the macOS popup, runs
   `claudectl session autosave --force`: the sessions open right now become

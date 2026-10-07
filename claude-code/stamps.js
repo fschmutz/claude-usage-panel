@@ -6,15 +6,8 @@
 // labels, and Swift ResetCountdown against the same file. The ping stamps
 // live in lib/pure/pings.js.
 
-import {resetParts} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
+import {compactResets} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 
-// The two most significant units; '' when past, absent or unparseable.
-// Flooring (never rounding to the nearest minute) keeps the status line from
-// running a minute ahead of the panel and 23h59m40s from reading "1d0h".
-export function resetHint(resetsAt, nowMs = Date.now()) {
-  const r = resetParts(resetsAt, nowMs);
-  if (!r || r.past || !Number.isFinite(r.m)) return '';
-  if (r.d > 0) return `${r.d}d${r.h}h`;
-  if (r.h > 0) return `${r.h}h${String(r.m).padStart(2, '0')}m`;
-  return `${r.m}m`;
-}
+// The split and the label are lib/pure/usage.js compactResets, shared with the
+// panels' account rows; this name stays for the terminal clients.
+export const resetHint = compactResets;
