@@ -56,7 +56,8 @@ export function githubLatest(io, repo, track = null) {
 
 export function npmLatest(io, name, current) {
     return guard(async () => {
-        const doc = await getJson(io, `https://registry.npmjs.org/${name.replace('/', '%2F')}`);
+        // a scoped name's slash is encoded (@scope%2Fname), every one of them
+        const doc = await getJson(io, `https://registry.npmjs.org/${name.replaceAll('/', '%2F')}`);
         const latest = doc['dist-tags']?.latest ?? null;
         return {
             latest,
