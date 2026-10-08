@@ -14,7 +14,7 @@ export const WAITING_REASONS = Object.freeze(['permission', 'question', 'idle'])
 export const WAITING_HOOK_EVENTS = Object.freeze([
     'Notification', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SessionEnd',
 ]);
-export const WAITING_MARKER_SUFFIX = '.waiting.json';
+const WAITING_MARKER_SUFFIX = '.waiting.json';
 export const WAITING_MARKER_VERSION = 1;
 
 const REASON_SET = new Set(WAITING_REASONS);
@@ -106,7 +106,7 @@ export function waitingAge(atMs, nowMs) {
 }
 
 /** English reason word the terminal / MCP / Swift parity use. */
-export function waitingReasonLabel(reason) {
+function waitingReasonLabel(reason) {
     return REASON_SET.has(reason) ? reason : '';
 }
 
