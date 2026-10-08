@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-08
+
 ### Added
 
 - **Waiting on you.** Live Claude Code sessions that are blocked on a
