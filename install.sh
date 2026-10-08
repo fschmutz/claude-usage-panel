@@ -22,6 +22,9 @@
 #   ./install.sh waiting            Claude Code hooks that mark a session waiting on
 #                                   you, and the panels' "Waiting on you" section on
 #                                   (opt-in: PreToolUse/PostToolUse run node per tool call)
+#   ./install.sh pause              Claude Code hooks so `claudectl session pause|resume`
+#                                   reaches every live session, idle ones included, and
+#                                   reports per session (opt-in; needs cli, installs it)
 #   ./install.sh plan [--day HH:MM-HH:MM] [--pings N] [--compare a,b]
 #                                   recommend sessionping times for your working
 #                                   day, and score the schedule you already have
@@ -68,6 +71,8 @@ UUID="claude-usage-panel@fschmutz.github.io"
 . "$ROOT/scripts/install/cost.sh"
 # shellcheck source=scripts/install/waiting.sh
 . "$ROOT/scripts/install/waiting.sh"
+# shellcheck source=scripts/install/pause.sh
+. "$ROOT/scripts/install/pause.sh"
 # shellcheck source=scripts/install/targets.sh
 . "$ROOT/scripts/install/targets.sh"
 

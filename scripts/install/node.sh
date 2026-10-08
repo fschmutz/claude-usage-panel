@@ -82,6 +82,7 @@ _prune_node_tree() {
     _statusline_installed && return 0
     _mcp_installed && return 0
     _waiting_installed && return 0 # scripts/install/waiting.sh: the hook runs from it
+    _pause_installed && return 0   # scripts/install/pause.sh: same
     act rm -rf "$NODE_TREE"
 }
 

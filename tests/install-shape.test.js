@@ -399,6 +399,11 @@ test('the installed status line, MCP server and claudectl start from the tree, l
 
     assert.match(start('claude-code/claudectl.js', ['--help'], ''), /claudectl session/);
     assert.match(start('claude-code/claudectl.js', ['--help'], ''), /claudectl waiting/);
+    assert.match(start('claude-code/claudectl.js', ['session', 'help'], ''), /claudectl session pause/);
+    // the pause hook's fast path: no request, nothing on stdout, exit 0
+    assert.equal(start('claude-code/pause-hook.js', ['pretool'], JSON.stringify({
+        session_id: 'aaaa1111-0000-4000-8000-000000000001', hook_event_name: 'PreToolUse',
+    })), '');
     const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
-    assert.equal(settings.hooks, undefined, 'no Node client installs the waiting hooks: that is the waiting target');
+    assert.equal(settings.hooks, undefined, 'no Node client installs the waiting or pause hooks: those are opt-in targets');
 });
