@@ -144,7 +144,9 @@ export function parseHolds(text) {
         if (!line || line.startsWith('#'))
             continue;
         const m = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S.*)$/);
-        if (!m || !['action', 'hook', 'npm', 'pip', 'docker', 'node', 'audit'].includes(m[1])) {
+        // no `node` kind: a Node line is judged by its schedule (LTS, EOL),
+        // never held
+        if (!m || !['action', 'hook', 'npm', 'pip', 'docker', 'audit'].includes(m[1])) {
             errors.push(`dependency-holds:${i + 1}: expected <kind> <name> <version|track:prefix|advisory> <reason>`);
             continue;
         }

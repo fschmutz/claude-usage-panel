@@ -27,10 +27,12 @@ test('inventory: the real tree parses with no error, and every pin-shaped line i
     assert.deepEqual(new Set(pins.filter(p => p.kind === 'action').map(p => p.name)), actions);
     const revs = read('.pre-commit-config.yaml').match(/^\s+rev:/gm).length;
     assert.equal(pins.filter(p => p.kind === 'hook').length, revs);
-    for (const dir of ['.github/claude-cli', '.github/ccusage', '.github/knip'])
-        assert.ok(pins.some(p => p.kind === 'npm' && p.file === `${dir}/package.json`), dir);
-    assert.deepEqual(pins.filter(p => p.kind === 'docker').map(p => p.name).sort(), ['bash', 'swift']);
-    assert.ok(pins.some(p => p.kind === 'pip' && p.name === 'pre-commit'));
+    // every tool dir under .github is read, whatever it pins
+    const tools = fs.readdirSync(path.join(ROOT, '.github'), {withFileTypes: true}).filter(d => d.isDirectory());
+    const has = f => tools.filter(d => fs.existsSync(path.join(ROOT, '.github', d.name, f))).map(d => `.github/${d.name}/${f}`);
+    assert.deepEqual(new Set(pins.filter(p => p.kind === 'npm').map(p => p.file)), new Set(has('package.json')));
+    assert.deepEqual(new Set(pins.filter(p => p.kind === 'docker').map(p => p.file)), new Set(has('Dockerfile')));
+    assert.deepEqual(new Set(pins.filter(p => p.kind === 'pip').map(p => p.file)), new Set(has('requirements.txt')));
     const floor = pins.filter(p => p.kind === 'node' && p.floor).map(p => p.current);
     assert.deepEqual([...new Set(floor)], ['22'], 'the CI matrix floor is the engines floor');
 });
@@ -99,8 +101,9 @@ test('node: an end-of-life floor fails, CI must be on the active LTS once it set
     assert.equal(nodeVerdict({current: '24', file: 'ci'}, lines, NOW + 30 * DAY).level, 'fail');
 });
 
-test('holds: a line without a reason is malformed', () => {
+test('holds: a line without a reason is malformed, and a Node line cannot be held', () => {
     assert.equal(parseHolds('npm x 1.0.0\n').errors.length, 1);
+    assert.equal(parseHolds('node node 22 we like it\n').errors.length, 1);
     const {holds} = parseHolds('# c\ndocker bash track:3.2 the bash macOS ships\n');
     assert.deepEqual(holds, [{kind: 'docker', name: 'bash', version: null, track: '3.2', reason: 'the bash macOS ships', line: 2}]);
 });
@@ -120,9 +123,22 @@ test("dependabot.yml is the grace window: weekly, 7-day cooldown, and bash held 
 });
 
 test('dependabot PR titles find the bump they carry', () => {
-    const prs = [{number: 7, title: 'chore(deps): bump knip from 6.39.0 to 6.40.0 in /.github/knip'}];
+    const prs = [
+        {number: 7, title: 'chore(deps): bump knip from 6.39.0 to 6.40.0 in /.github/knip'},
+        {number: 8, title: 'chore(deps): bump eslint-plugin-knip from 1.0.0 to 6.40.0'},
+        {number: 9, title: 'chore(deps): bump bash from 3.2.5 to 3.2.57 in /.github/bash32'},
+        {number: 10, title: 'chore(deps): bump actions/setup-node from 7.0.0 to 7.1.0'},
+        {number: 11, title: 'chore(deps): bump the actions-minor group with 3 updates'},
+        {number: 12, title: 'chore(deps): bump https://github.com/gitleaks/gitleaks from v8.30.1 to v8.31.0'},
+        {number: 13, title: 'chore(deps): bump swift from `64bab76` to `9f3c2d1` in /.github/swift'},
+    ];
+    assert.equal(prFor(prs, 'gitleaks/gitleaks', 'v8.31.0'), 12, 'a hook is named by its repo URL');
+    assert.equal(prFor(prs, 'swift', `sha256:9f3c2d1${'0'.repeat(57)}`), 13, 'a digest bump');
     assert.equal(prFor(prs, 'knip', '6.40.0'), 7);
     assert.equal(prFor(prs, 'knip', '6.41.0'), null);
+    assert.equal(prFor(prs, 'bash', '3.2.5'), null, '3.2.5 is not 3.2.57');
+    assert.equal(prFor(prs, 'actions/setup-node', 'v7.1.0'), 10, 'a v-tag matches its bare version');
+    assert.equal(prFor(prs, 'actions/cache', 'v6.2.0'), null, 'a group PR names no single pin');
     assert.equal(prFor(null, 'knip', '6.40.0'), null);
 });
 
@@ -158,7 +174,9 @@ test('freshness: a hold that matches no pin fails - delete it', async () => {
 });
 
 test('audit: an advisory fails unless declared, and a declaration nothing hits fails too', async () => {
-    const npmPin = {kind: 'npm', name: 'x', current: '1.0.0', file: '.github/knip/package.json'};
+    // a tool dir that does not exist: npmAudit works on a scratch copy and
+    // asks the (fake) npm, so no real tree is read
+    const npmPin = {kind: 'npm', name: 'x', current: '1.0.0', file: 'tests/no-such-tool/package.json'};
     const auditJson = JSON.stringify({vulnerabilities: {y: {via: [
         {name: 'y', url: 'https://github.com/advisories/GHSA-aaaa-bbbb-cccc', severity: 'high', title: 'bad'},
     ]}}});
