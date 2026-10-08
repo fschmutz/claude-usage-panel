@@ -320,7 +320,17 @@ export function openPause(io = {}) {
     if (!record) throw new Error('report needs --request ID and --verdict SAFE|NOT_SAFE');
     ensureDir();
     writePrivate(file(sessionId, 'verdict'), `${JSON.stringify(record)}\n`);
+    for (const kind of ['checkpoint', 'reason']) tightenModelFile(file(sessionId, kind));
     return record;
+  }
+
+  /** The checkpoint and reason files are written by the model's own Write
+   *  tool, under its umask (0664 seen live): bring them to 0600 like every
+   *  other store file. A regular file only - lstat, so a symlink is never
+   *  followed to chmod its target. Absent = nothing to do. */
+  function tightenModelFile(p) {
+    const st = (() => { try { return fs.lstatSync(p); } catch { return null; } })();
+    if (st?.isFile() && (st.mode & 0o777) !== 0o600) fs.chmodSync(p, 0o600);
   }
 
   // ── the waiter lock: at most one live waiter per session ───────────────

@@ -315,7 +315,17 @@ test('report writes a 0600 verdict; status joins requests, deliveries, verdicts 
     assert.equal(st.summary.label, '0/2 safe');
     pause.claim(A, req, 'rewake');
     pause.claim(B, req, 'pretooluse');
+    // the model writes these with its own tool, under its umask
+    fs.mkdirSync(path.dirname(pause.checkpointPath(A)), {recursive: true});
+    fs.writeFileSync(pause.checkpointPath(A), '# checkpoint\n', {mode: 0o664});
+    fs.chmodSync(pause.checkpointPath(A), 0o664);
+    const outside = path.join(pauseDir(io), '..', 'outside.txt');
+    fs.writeFileSync(outside, 'x', {mode: 0o644});
+    fs.chmodSync(outside, 0o644);
+    fs.symlinkSync(outside, path.join(pauseDir(io), `${A}.reason.txt`));
     pause.report({sessionId: A, requestId: req.id, verdict: 'SAFE', checkpoint: pause.checkpointPath(A)});
+    assert.equal(mode(pause.checkpointPath(A)), 0o600);
+    assert.equal(mode(outside), 0o644, 'a symlinked reason file is never followed');
     pause.report({sessionId: B, requestId: req.id, verdict: 'NOT_SAFE', reason: 'deploy 7'});
     assert.equal(mode(path.join(pauseDir(io), `${A}.verdict.json`)), 0o600);
     st = pause.status();
