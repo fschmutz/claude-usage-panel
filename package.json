@@ -1,6 +1,6 @@
 {
   "name": "claude-usage-panel",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "GNOME + macOS panel for Claude Code plan usage",
   "private": true,
   "type": "module",

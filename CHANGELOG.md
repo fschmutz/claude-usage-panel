@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-09
+
 ### Added
 
 - **Pause and resume every session.** `claudectl session pause [NAME...|--all]`
