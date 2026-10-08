@@ -51,6 +51,7 @@ node scripts/check-deps.mjs audit      # OSV for direct pins + npm audit of ever
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
 ./install.sh cost            # pinned ccusage (.github/ccusage, Dependabot) + cost line on (opt-in)
+./install.sh waiting         # Claude Code hooks for "Waiting on you" + the panel section on (opt-in: node per tool call)
 ./install.sh update [target...]        # reinstall installed targets (upgrade); --pull to git pull first
 ./install.sh --uninstall [target...]   # reverse it (default: all installed)   |   --list (detected + installed)   |   -h
 ./install.sh --dry-run [target...]     # print actions without touching anything
@@ -293,7 +294,9 @@ Swift twin together, and keep the fixture matching.
   `login-usage.js` (which login's usage and its auth-failure label: a live
   token keeps the refresh hint, a stored one names the profile),
   `statusline.js` (renders from Claude Code's stdin, nothing else; optional `waiting` segment),
-  `waiting.js` / `waiting-hook.js` / `waiting-cli.js` (live sessions waiting on you:
+  `waiting.js` / `waiting-hook.js` / `waiting-cli.js` (live sessions waiting on you;
+  the hooks are installed ONLY by the opt-in `./install.sh waiting`, and the panels
+  gate the section behind `waiting-enabled` / `waitingEnabled`, off by default:
   Notification marks, Stop marks idle, UserPromptSubmit / PreToolUse / PostToolUse /
   SessionEnd clear; a marker counts only for the same pid AND session id),
   `transcript-tokens.js` (a transcript's token totals and their incremental

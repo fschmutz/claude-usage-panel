@@ -127,6 +127,14 @@ final class UsageModel: ObservableObject {
     /// The index is still catching up, so the token numbers are a floor.
     @Published var sessionsPending = false
     @Published var sessionError: String?
+    /// Waiting on you: off by default, like the GNOME `waiting-enabled`; with
+    /// it off the registry is not read. `./install.sh waiting` turns it on.
+    @Published var waitingEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(waitingEnabled, forKey: "waitingEnabled")
+            Task { await refreshWaiting() }
+        }
+    }
     /// Live sessions blocked on a permission prompt, a question, or idle after Stop.
     @Published var waiting: [WaitingSession] = []
 
@@ -183,6 +191,7 @@ final class UsageModel: ObservableObject {
         eventCommand = UserDefaults.standard.string(forKey: "eventCommand") ?? ""
         cursorEnabled = UserDefaults.standard.bool(forKey: "cursorEnabled")
         codexEnabled = UserDefaults.standard.bool(forKey: "codexEnabled")
+        waitingEnabled = UserDefaults.standard.bool(forKey: "waitingEnabled")
         accountsEnabled = UserDefaults.standard.bool(forKey: "accountsEnabled")
         accountsAutoSwitch = UserDefaults.standard.bool(forKey: "accountsAutoSwitch")
         accountsSwitchThreshold =
@@ -396,6 +405,10 @@ final class UsageModel: ObservableObject {
     /// Off the main actor, like the session index: the scan spawns `ps` per
     /// registry entry and must never stall the menu bar.
     func refreshWaiting() async {
+        guard waitingEnabled else {
+            waiting = []
+            return
+        }
         waiting = await Task.detached(priority: .utility) {
             WaitingStore.refresh()
         }.value

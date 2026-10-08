@@ -58,11 +58,6 @@ install_gnome() {
         ok "dry-run: no changes written"
         return 0
     fi
-    if command -v node >/dev/null; then
-        _install_node_tree
-    else
-        skip "waiting hooks: Node.js not found on PATH - sessions waiting on you stay unmarked"
-    fi
     ok "installed to $dest"
     echo "  Log out and back in (Wayland loads new extensions only at login)."
 }
@@ -74,7 +69,6 @@ uninstall_gnome() {
     fi
     _gnome_enabled_key remove 2>/dev/null || true
     act rm -rf "$HOME/.local/share/gnome-shell/extensions/$UUID"
-    _prune_node_tree
     ok "removed"
 }
 

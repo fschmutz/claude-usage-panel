@@ -42,17 +42,16 @@ _install_node_tree() {
     # Pre-1.11 installs were loose .mjs copies next to settings.json.
     act rm -f "$HOME/.claude/claude-usage-statusline.mjs" "$HOME/.claude/claude-usage-mcp.mjs" \
         "$HOME/.claude/claude-usage-accounts.mjs"
-    _install_waiting_hooks
 }
 
-# Claude Code hooks that mark a live session as waiting on you. Same
-# settings.json merge as the status line: other hooks stay, re-run is safe.
+# Claude Code hooks that mark a live session as waiting on you (the opt-in
+# waiting target, scripts/install/waiting.sh). Same settings.json merge as the
+# status line: other hooks stay, re-run is safe.
 _waiting_hook_command() {
     printf 'node "%s"' "$HOOK_DEST"
 }
 
 _install_waiting_hooks() {
-    command -v node >/dev/null || return 0
     local command
     command="$(_waiting_hook_command)"
     if $DRY; then
@@ -64,8 +63,11 @@ _install_waiting_hooks() {
 }
 
 _remove_waiting_hooks() {
-    command -v node >/dev/null || return 0
-    [ -f "$CLAUDE_SETTINGS" ] || return 0
+    _waiting_installed || return 0
+    if ! command -v node >/dev/null; then
+        skip_fatal "waiting: Node.js not found on PATH - the hooks stay in $CLAUDE_SETTINGS"
+        return 0
+    fi
     if $DRY; then
         echo "  would: drop waiting hooks from $CLAUDE_SETTINGS"
         return 0
@@ -75,17 +77,11 @@ _remove_waiting_hooks() {
 
 # Drop the tree once nothing installed uses it any more.
 _prune_node_tree() {
-    [ -d "$NODE_TREE" ] || {
-        _remove_waiting_hooks
-        return 0
-    }
+    [ -d "$NODE_TREE" ] || return 0
     _cli_installed && return 0 # scripts/install/cli.sh
     _statusline_installed && return 0
     _mcp_installed && return 0
-    # gnome / macos may have installed the tree just so the waiting hooks run
-    [ -d "$HOME/.local/share/gnome-shell/extensions/$UUID" ] && return 0
-    [ -d "/Applications/ClaudeUsagePanel.app" ] && return 0
-    _remove_waiting_hooks
+    _waiting_installed && return 0 # scripts/install/waiting.sh: the hook runs from it
     act rm -rf "$NODE_TREE"
 }
 

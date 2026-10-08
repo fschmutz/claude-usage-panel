@@ -49,6 +49,17 @@
         last returned them, labelled est. and stamped with when.
       </description>
     </key>
+    <key name="waiting-enabled" type="b">
+      <default>false</default>
+      <summary>Show the sessions waiting on you</summary>
+      <description>
+        Add a "Waiting on you" section and a top-bar count for the live Claude
+        Code sessions blocked on a permission prompt, a question, or idle after
+        their turn. Off by default; with it off, the session registry is not
+        read. It needs the Claude Code hooks that `./install.sh waiting`
+        installs (and that turns this on).
+      </description>
+    </key>
     <key name="cursor-enabled" type="b">
       <default>false</default>
       <summary>Show Cursor usage</summary>

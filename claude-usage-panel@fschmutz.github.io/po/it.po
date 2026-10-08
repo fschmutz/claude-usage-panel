@@ -16,75 +16,75 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:193
+#: extension.js:194
 msgid "Extra usage"
 msgstr "Utilizzo extra"
 
-#: extension.js:339
+#: extension.js:340
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - nuovo tentativo, ultima lettura mostrata"
 
-#: extension.js:376
+#: extension.js:377
 #, javascript-format
 msgid "Updated %s"
 msgstr "Aggiornato %s"
 
-#: extension.js:410
+#: extension.js:411
 msgid "Session cost: computing…"
 msgstr "Costo sessione: calcolo…"
 
-#: extension.js:415
+#: extension.js:416
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "Costo sessione: $%s · %s token (stima)"
 
-#: extension.js:417
+#: extension.js:418
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "Costo sessione: non disponibile (installa ccusage)"
 
-#: extension.js:447
+#: extension.js:448
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (%d%% del limite)"
 
-#: extension.js:464
+#: extension.js:465
 #, javascript-format
 msgid "last %s"
 msgstr "ultimo %s"
 
-#: extension.js:464 prefs/pings.js:96
+#: extension.js:465 prefs/pings.js:96
 msgid "never"
 msgstr "mai"
 
-#: extension.js:468
+#: extension.js:469
 #, javascript-format
 msgid "next %s"
 msgstr "prossimo %s"
 
-#: extension.js:470
+#: extension.js:471
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "Ping di sessione: %s"
 
-#: extension.js:482 extension.js:486 lib/accountsSection.js:535
+#: extension.js:483 extension.js:487 lib/accountsSection.js:535
 #: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
-#: lib/waitingSection.js:104 lib/waitingSection.js:111
-#: lib/waitingSection.js:119
+#: lib/waitingSection.js:117 lib/waitingSection.js:124
+#: lib/waitingSection.js:132
 msgid "Claude usage"
 msgstr "Utilizzo di Claude"
 
-#: extension.js:483
+#: extension.js:484
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s ha raggiunto il %d%%"
 
-#: extension.js:487
+#: extension.js:488
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s si esaurirà prima del reset al ritmo attuale"
 
-#: extension.js:611
+#: extension.js:612
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -419,30 +419,31 @@ msgstr "finestra azzerata: in attesa della prima lettura della nuova"
 msgid "the endpoint reported no figure for this limit"
 msgstr "l'endpoint non ha comunicato alcun valore per questo limite"
 
-#: lib/waitingSection.js:37 lib/waitingSection.js:64
+#: lib/waitingSection.js:39 lib/waitingSection.js:77
 msgid "Waiting on you"
 msgstr "In attesa di te"
 
-#: lib/waitingSection.js:91
+#: lib/waitingSection.js:104
 msgid "permission"
 msgstr "permesso"
 
-#: lib/waitingSection.js:93
+#: lib/waitingSection.js:106
 msgid "idle"
 msgstr "inattivo"
 
-#: lib/waitingSection.js:94
+#: lib/waitingSection.js:107
 msgid "question"
 msgstr "domanda"
 
-#: lib/waitingSection.js:105 lib/waitingSection.js:119
+#: lib/waitingSection.js:118 lib/waitingSection.js:132
 #, javascript-format
 msgid "Could not focus %s"
 msgstr "Impossibile portare in primo piano %s"
 
-#: lib/waitingSection.js:112
+#: lib/waitingSection.js:125
 msgid "Install claudectl (./install.sh cli) to jump to a waiting session."
-msgstr "Installa claudectl (./install.sh cli) per passare a una sessione in attesa."
+msgstr ""
+"Installa claudectl (./install.sh cli) per passare a una sessione in attesa."
 
 #: prefs/accounts.js:23
 msgid ""
@@ -619,8 +620,8 @@ msgstr "Costo"
 #: prefs/integrations.js:13
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires ccusage installed: npm i -"
-"g ccusage)."
+"this to compute it locally with ccusage (requires ccusage installed: npm i "
+"-g ccusage)."
 msgstr ""
 "L'API ufficiale non espone il costo in dollari sui piani in abbonamento. "
 "Attivalo per calcolarlo in locale con ccusage (richiede ccusage installato: "
@@ -640,8 +641,8 @@ msgstr "Cursor (opzionale)"
 
 #: prefs/integrations.js:27
 msgid ""
-"Show Cursor team spend using the Cursor Admin API. Create a key at cursor."
-"com → team → Settings → Admin API. Stored in the system keyring."
+"Show Cursor team spend using the Cursor Admin API. Create a key at "
+"cursor.com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
 "Mostra la spesa del team Cursor tramite l'API Admin di Cursor. Crea una "
 "chiave su cursor.com → team → Settings → Admin API. Salvata nel portachiavi "
@@ -659,12 +660,40 @@ msgstr "Aggiunge al menu una sezione di spesa Cursor"
 msgid "Cursor Admin API key"
 msgstr "Chiave API Admin di Cursor"
 
-#
 #: prefs/integrations.js:68
+msgid "Waiting on you (optional)"
+msgstr "In attesa di te (facoltativo)"
+
+#: prefs/integrations.js:69
+msgid ""
+"The live Claude Code sessions blocked on a permission prompt, a question, or "
+"idle after their turn, as a section and a count on the top bar. Off by "
+"default - with it off, the session registry is not read. It needs the Claude "
+"Code hooks `./install.sh waiting` installs; they run node on every tool call "
+"of every session."
+msgstr ""
+"Le sessioni attive di Claude Code bloccate su una richiesta di permesso, una "
+"domanda, o inattive dopo il loro turno, come sezione e contatore nella barra "
+"superiore. Disattivato per impostazione predefinita - se disattivato, il "
+"registro delle sessioni non viene letto. Richiede gli hook di Claude Code "
+"installati da `./install.sh waiting`; eseguono node a ogni chiamata di "
+"strumento di ogni sessione."
+
+#: prefs/integrations.js:72
+msgid "Show sessions waiting on you"
+msgstr "Mostra le sessioni in attesa di te"
+
+#: prefs/integrations.js:73
+msgid "Adds a Waiting on you section and a top-bar count"
+msgstr ""
+"Aggiunge una sezione «In attesa di te» e un contatore nella barra superiore"
+
+#
+#: prefs/integrations.js:82
 msgid "OpenAI Codex (optional)"
 msgstr "OpenAI Codex (facoltativo)"
 
-#: prefs/integrations.js:69
+#: prefs/integrations.js:83
 msgid ""
 "A sibling section for the ChatGPT logins the codex CLI holds: save them "
 "under a name and switch without a browser. Off by default - with it off, "
@@ -682,20 +711,20 @@ msgstr ""
 "viene mai emesso un token."
 
 #
-#: prefs/integrations.js:72
+#: prefs/integrations.js:86
 msgid "Show saved Codex logins"
 msgstr "Mostra gli accessi Codex salvati"
 
 #
-#: prefs/integrations.js:73
+#: prefs/integrations.js:87
 msgid "Adds an OpenAI Codex section below the Claude ones"
 msgstr "Aggiunge una sezione OpenAI Codex sotto quelle di Claude"
 
-#: prefs/integrations.js:80
+#: prefs/integrations.js:94
 msgid "Usage figures are est."
 msgstr "Le cifre sono stime"
 
-#: prefs/integrations.js:81
+#: prefs/integrations.js:95
 msgid ""
 "OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
 "ones the codex CLI recorded when the API last returned them, stamped with "

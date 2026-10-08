@@ -138,6 +138,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'changed::cursor-key-stamp', () => this.refresh(),
             'changed::show-sessions', () => this.refresh(),
             'changed::accounts-enabled', () => this.refresh(),
+            'changed::waiting-enabled', () => this.refresh(),
             'changed::accounts-auto-switch', () => this._accounts.syncToggle(),
             'changed::accounts-switch-threshold', () => this._accounts.syncToggle(),
             'changed::accounts-menu-toggle', () => this._accounts.syncToggle(),

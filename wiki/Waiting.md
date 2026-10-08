@@ -26,10 +26,13 @@ session, cannot leave a ghost row. A re-mark for the same session and reason
 keeps the original time, so the age does not jump back to 0s when Claude
 Code's idle reminder fires a minute after Stop.
 
-The hooks are merged into `~/.claude/settings.json` whenever the Node tree is
-installed (`./install.sh statusline`, `mcp`, `cli`, and `gnome` / `macos` when
-Node is on PATH). Other hooks you already have are left alone. Uninstalling
-the last Node consumer removes ours.
+**Opt-in.** The `PreToolUse` / `PostToolUse` hooks start `node` on every tool
+call of every session, so only `./install.sh waiting` merges them into
+`~/.claude/settings.json` - no other target does. It also turns the section on
+in the installed panel(s): GNOME `waiting-enabled`, macOS `waitingEnabled`,
+both off by default (with it off, the session registry is not read). Other
+hooks you already have are left alone; `./install.sh --uninstall waiting`
+removes ours and turns the section off.
 
 ## Surfaces
 
@@ -44,7 +47,8 @@ the last Node consumer removes ours.
 ## Install
 
 ```bash
-./install.sh cli          # hooks + claudectl waiting
+./install.sh waiting      # the hooks, and the panel section on
+./install.sh cli          # claudectl waiting (list / focus)
 ./install.sh statusline --segments=context,limits,tokens,ping,waiting
 ```
 
