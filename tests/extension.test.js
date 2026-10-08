@@ -161,7 +161,7 @@ test('a section that hangs does not stop the next poll being armed', async t => 
     for (let i = 0; i < 20; i++)
         await new Promise(r => setImmediate(r));
     assert.equal(done, false, 'still waiting on the hung section');
-    assert.equal(calls.length, 5, 'every section was started');
+    assert.equal(calls.length, 6, 'every section was started');
     assert.equal(deadlines.size, 1, 'only the hung section is still under its deadline');
     for (const fire of deadlines.values())
         fire();
