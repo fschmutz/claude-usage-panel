@@ -201,7 +201,8 @@ test('a switch whose credentials write fails leaves a pending mark; a rotation c
     assert.deepEqual(sec.argvs.filter((a) => /at-|rt-/.test(a)), [], 'no token ever sits in an argv');
 });
 
-test('a Keychain write security -i cannot take is refused before the live login is touched', async () => {
+test('a Keychain write the stdin line cannot carry goes in argv, as Claude Code does', async () => {
+    // A real blob carries every MCP server's OAuth tokens: tens of KB.
     const big = {...creds('perso'), mcpOAuth: {server: {accessToken: 'x'.repeat(2100)}}};
     for (const [what, acct, credentials] of [
         ['an unquotable account name', 'me\\x', creds('perso')],
@@ -216,13 +217,30 @@ test('a Keychain write security -i cannot take is refused before the live login 
         const store = openStore(io);
         store.saveCurrent('PRO');
         store.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials});
-        const config = fs.readFileSync(path.join(home, '.claude.json'), 'utf8');
-        await assert.rejects(store.switchTo('PERSO'), /cannot write the Keychain item Claude Code-credentials/, what);
-        assert.equal(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'), config, `${what}: account block untouched`);
-        assert.equal(store.liveAccessToken(), 'at-pro', `${what}: credentials untouched`);
-        assert.equal(store.readPendingSwitch(), null, `${what}: no pending mark`);
+        const r = await store.switchTo('PERSO');
+        assert.deepEqual([r.from, r.to, r.changed], ['PRO', 'PERSO', true], what);
+        assert.deepEqual(JSON.parse(keychain.get('Claude Code-credentials')), credentials, `${what}: the item holds it`);
+        assert.equal(store.readPendingSwitch(), null, `${what}: switch finished`);
         assert.deepEqual(sec.argvs.filter((a) => a.startsWith('-i')), [], `${what}: security -i never ran`);
     }
+});
+
+test('a Keychain item with no account name is refused before the live login is touched', async () => {
+    const {home, io} = world();
+    fs.rmSync(path.join(home, '.claude', '.credentials.json'));
+    const keychain = new Map([['Claude Code-credentials', JSON.stringify(creds('pro'))]]);
+    io.platform = 'darwin';
+    const sec = fakeSecurity(keychain, {acct: ''});
+    io.exec = sec.exec;
+    const store = openStore(io);
+    store.saveCurrent('PRO');
+    store.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    const config = fs.readFileSync(path.join(home, '.claude.json'), 'utf8');
+    await assert.rejects(store.switchTo('PERSO'), /cannot write the Keychain item Claude Code-credentials/);
+    assert.equal(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'), config, 'account block untouched');
+    assert.equal(store.liveAccessToken(), 'at-pro', 'credentials untouched');
+    assert.equal(store.readPendingSwitch(), null, 'no pending mark');
+    assert.deepEqual(sec.argvs.filter((a) => a.startsWith('-i') || a.startsWith('add-')), [], 'nothing written');
 });
 
 test('switchTo parks an unsaved login whose email starts with an underscore', async () => {

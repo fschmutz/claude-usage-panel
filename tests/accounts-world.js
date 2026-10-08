@@ -47,8 +47,9 @@ export function world({live = 'pro', extraConfig = {}} = {}) {
 
 /**
  * /usr/bin/security as the store drives it: reads on argv, the write as a
- * `security -i` stdin line. Like the real tool, -i exits 0 even when its
- * command fails. Every argv is recorded, to prove no token ever sits in one.
+ * `security -i` stdin line, or in argv when the line cannot carry it. Like the
+ * real tool, -i exits 0 even when its command fails. Every argv is recorded,
+ * to prove which tokens sit in one.
  */
 export function fakeSecurity(keychain, {denied = () => false, acct = 'me'} = {}) {
     const argvs = [];
@@ -58,6 +59,11 @@ export function fakeSecurity(keychain, {denied = () => false, acct = 'me'} = {})
         if (args[0] === '-i') {
             const m = /^add-generic-password -U -a "([^"]*)" -s "([^"]*)" -X ([0-9a-f]+)\n$/.exec(opts.input ?? '');
             if (m && !denied()) keychain.set(m[2], Buffer.from(m[3], 'hex').toString('utf8'));
+            return '';
+        }
+        if (args[0] === 'add-generic-password') {
+            if (denied()) throw new Error('write denied');
+            keychain.set(args[args.indexOf('-s') + 1], Buffer.from(args[args.indexOf('-X') + 1], 'hex').toString('utf8'));
             return '';
         }
         const service = args[args.indexOf('-s') + 1];

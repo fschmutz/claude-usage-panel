@@ -320,17 +320,20 @@ function utf8Hex(text) {
 }
 
 /**
- * The line fed to `security -i` on stdin that stores `secret` in the Keychain
- * item (account, service). The secret never goes on the command line, where
- * `ps` shows it: it travels hex-encoded (-X) on stdin. Account and service are
- * double-quoted; one that cannot be quoted plainly (a quote, a backslash, a
- * control character, or empty) gives null, and the caller refuses the write.
- * So does a line of KEYCHAIN_LINE_MAX bytes or more: `security -i` reads each
- * command into a buffer of that size and would run a truncated one.
+ * How /usr/bin/security stores `secret` in the Keychain item (account,
+ * service): `{args, stdin}`, or null when the write must be refused (an empty
+ * account or service, or a secret that is not text). The secret travels
+ * hex-encoded (-X). It goes on stdin to `security -i` whenever that can
+ * carry it, so `ps` never shows it: account and service double-quoted, which
+ * needs names without a quote, a backslash or a control character, and a line
+ * under KEYCHAIN_LINE_MAX bytes, since `security -i` reads each command into a
+ * buffer of that size and would run a truncated one. Otherwise it goes in
+ * argv, as Claude Code itself does: its blob carries the MCP servers' OAuth
+ * tokens (`mcpOAuth`) and routinely outgrows the stdin line.
  */
-export function keychainWriteLine(account, service, secret) {
-    const plain = s => typeof s === 'string' && s !== '' && !/["\\\p{Cc}]/u.test(s);
-    if (!plain(account) || !plain(service) || typeof secret !== 'string')
+export function keychainWrite(account, service, secret) {
+    const given = s => typeof s === 'string' && s !== '';
+    if (!given(account) || !given(service) || typeof secret !== 'string')
         return null;
     let hex;
     try {
@@ -338,8 +341,11 @@ export function keychainWriteLine(account, service, secret) {
     } catch {
         return null; // a lone surrogate: not text a Keychain item can hold
     }
+    const plain = s => !/["\\\p{Cc}]/u.test(s);
     const line = `add-generic-password -U -a "${account}" -s "${service}" -X ${hex}\n`;
-    return utf8Hex(line).length / 2 < KEYCHAIN_LINE_MAX ? line : null; // bytes, not code units
+    if (plain(account) && plain(service) && utf8Hex(line).length / 2 < KEYCHAIN_LINE_MAX) // bytes, not code units
+        return {args: ['-i'], stdin: line};
+    return {args: ['add-generic-password', '-U', '-a', account, '-s', service, '-X', hex], stdin: null};
 }
 
 /** The fullest limit of a set of normalized cards at `nowMs`; null without

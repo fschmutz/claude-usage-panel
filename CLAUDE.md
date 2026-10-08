@@ -168,8 +168,8 @@ must agree on: profile validity + names, which saved profile the live login is
 expired once the refresh token is gone), and `autoSwitchTarget` (threshold 90,
 margin 15, cooldown 5 min, most headroom wins, ties by code-point name order),
 `liveLogin`, `syncBack` (torn / pending / no account block), `sameName`,
-`parkName`, `formatUsage`, the Keychain services and the `keychainWrite` stdin
-line (with its 4096-byte limit).
+`parkName`, `formatUsage`, the Keychain services and the `keychainWrite` run
+(stdin line under 4096 bytes, argv beyond).
 
 A profile is `{version, name, savedAt, account: <oauthAccount block of
 ~/.claude.json>, credentials: <the .credentials.json blob>}`, one `0600` file
@@ -195,10 +195,11 @@ it. Everything the credentials write needs is resolved before the mark, so a
 write that cannot happen leaves the login untouched. Profile names collide
 ignoring case (APFS). On macOS the Keychain item follows Claude Code:
 `Claude Code-credentials-<sha256(NFC CLAUDE_CONFIG_DIR)[0:8]>` when
-`CLAUDE_CONFIG_DIR` is set (`CLAUDE_SECURESTORAGE_CONFIG_DIR` wins). The
-credentials never go in argv: the app writes through `SecItemUpdate` /
-`SecItemAdd`, the Node CLI/MCP through `security -i` on stdin, which refuses a
-command line of 4096 bytes or more. Both read the item back. The panels gate all of it behind
+`CLAUDE_CONFIG_DIR` is set (`CLAUDE_SECURESTORAGE_CONFIG_DIR` wins). Every
+port writes it with `/usr/bin/security` (its ACL trusts that tool): on stdin
+to `security -i` when the line fits under 4096 bytes, else in argv like Claude
+Code does - the blob carries `mcpOAuth` and is often tens of KB. All read the
+item back. The panels gate all of it behind
 `accounts-enabled` (GSettings) / `accountsEnabled` (UserDefaults), **off by
 default**; the status line segment is opt-in. The CLI + MCP tools are always on.
 

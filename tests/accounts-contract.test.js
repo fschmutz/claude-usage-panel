@@ -64,11 +64,13 @@ test('worstPercent reads by JSON type: a percent that is not a number is no read
     assert.equal(accounts.worstPercent([{percent: '96'}, {percent: null}, {percent: true}], NOW), null);
 });
 
-test('keychainWriteLine: the tokens go hex-encoded on stdin, quoted names only', () => {
+test('keychainWrite: stdin when the line carries the tokens, argv otherwise', () => {
     for (const c of FIX.keychainWrite) {
-        const got = accounts.keychainWriteLine(c.account, c.service, c.secret.repeat(c.repeat ?? 1));
-        if ('expectedBytes' in c) assert.equal(Buffer.byteLength(got ?? ''), c.expectedBytes, c.name);
-        else assert.equal(got, c.expected, c.name);
+        const got = accounts.keychainWrite(c.account, c.service, c.secret.repeat(c.repeat ?? 1));
+        if ('expectedStdinBytes' in c) {
+            assert.deepEqual(got?.args, ['-i'], c.name);
+            assert.equal(Buffer.byteLength(got.stdin), c.expectedStdinBytes, c.name);
+        } else assert.deepEqual(got, c.expected, c.name);
     }
 });
 

@@ -19,6 +19,16 @@ semantic versioning.
   `UserPromptSubmit` / `PreToolUse` / `SessionEnd` clear. Dead pids are
   ignored. Shared contract: `tests/fixtures/waiting.json`.
 
+### Fixed
+
+- **Switching accounts on macOS works with MCP servers logged in.** Claude
+  Code's Keychain item also holds every MCP server's OAuth tokens
+  (`mcpOAuth`), often tens of KB, and `security -i` reads one command of under
+  4096 bytes, so every client refused the switch ("the credentials are too
+  large for `security -i`"). The write now goes in argv when the stdin line
+  cannot carry it, as Claude Code itself does (`keychainWrite`, pinned by
+  `tests/fixtures/accounts.json`).
+
 ### Changed
 
 - **The Homebrew tap is written with a GitHub App, not a personal token.**

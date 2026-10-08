@@ -219,10 +219,10 @@ enum AccountStore {
 
     /// Where the live credentials go: the credentials file when it exists,
     /// else Claude Code's Keychain item (or a new one under the first name),
-    /// with the `security -i` line that writes it already built.
+    /// with the security(1) run that writes it already built.
     private enum CredentialsTarget {
         case file
-        case keychain(service: String, line: String)
+        case keychain(service: String, write: Accounts.KeychainWrite)
     }
 
     /// Resolved BEFORE the first live write, so everything the credentials
@@ -231,27 +231,27 @@ enum AccountStore {
         if FileManager.default.fileExists(atPath: credentialsURL.path) { return .file }
         let item = keychainItem() ?? (keychainServices[0], NSUserName())
         guard
-            let line = Accounts.keychainWriteLine(
+            let write = Accounts.keychainWrite(
                 account: item.account, service: item.service,
                 secret: String(decoding: secret, as: UTF8.self))
         else {
             throw AccountError.message(
-                "cannot write the Keychain item \(item.service): its account name cannot be quoted, "
-                    + "or the credentials are too large for `security -i`")
+                "cannot write the Keychain item \(item.service): it has no account name")
         }
-        return .keychain(service: item.service, line: line)
+        return .keychain(service: item.service, write: write)
     }
 
     /// The Keychain write goes through /usr/bin/security, like every other
     /// access to this item: Claude Code created it with security(1), so the
     /// item's ACL trusts that tool, and an in-process SecItemUpdate from this
     /// (ad-hoc signed, rebuilt on every install) app would prompt on each
-    /// switch. The tokens travel hex-encoded on stdin, never in argv.
+    /// switch. The tokens travel hex-encoded, on stdin whenever they fit
+    /// (Accounts.keychainWrite).
     private static func writeLiveCredentials(_ data: Data, to target: CredentialsTarget) throws {
         switch target {
         case .file: try writePrivate(data, to: credentialsURL)
-        case .keychain(let service, let line):
-            _ = Shell.run("/usr/bin/security", ["-i"], stdin: Data(line.utf8))
+        case .keychain(let service, let write):
+            _ = Shell.run("/usr/bin/security", write.args, stdin: write.stdin.map { Data($0.utf8) })
             // `security -i` exits 0 even when its command fails: read back.
             let back = security(["find-generic-password", "-s", service, "-w"])
             let text = String(decoding: data, as: UTF8.self)
