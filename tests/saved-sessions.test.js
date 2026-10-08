@@ -3,10 +3,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {load} from './gjs-stub.js';
+import './gjs-stub.js';
 
 async function controller({newest = null, cli = '/bin/claudectl', result = {ok: true, stdout: '', stderr: ''}} = {}) {
-    const {SavedSessionsController} = await load('lib/savedSessions.js');
+    const {SavedSessionsController} = await import('../claude-usage-panel@fschmutz.github.io/lib/savedSessions.js');
     const seen = {states: [], runs: [], notes: [], closed: 0};
     const ctl = new SavedSessionsController({
         header: {syncReopen: s => seen.states.push(s)},

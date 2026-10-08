@@ -10,7 +10,7 @@ import {setImmediate} from 'node:timers';
 import {URL} from 'node:url';
 import {TextDecoder, TextEncoder} from 'node:util';
 
-import {load, stub} from './gjs-stub.js';
+import {stub} from './gjs-stub.js';
 
 const HOME = '/home/tester';
 const SESSIONS = `${HOME}/.codex/sessions`;
@@ -130,7 +130,7 @@ test('the Codex transcript scan is async, newest day first, and reads 4 levels d
         [`${SESSIONS}/x/y/z/w/deep4.jsonl`]: 1,
     };
     const listed = install({files, mtimes});
-    const {recordedCodexUsage} = await load('lib/codex.js');
+    const {recordedCodexUsage} = await import('../claude-usage-panel@fschmutz.github.io/lib/codex.js');
     const pending = recordedCodexUsage(now);
     assert.ok(pending instanceof Promise, 'the scan hands back a promise, the shell never waits on it');
     const got = await pending;
@@ -157,7 +157,7 @@ test('a GNOME switch keeps a token the codex CLI rotated between the sync-back a
         if (path === AUTH && ++authReads === 2)
             files[AUTH] = JSON.stringify(rotated);
     }});
-    const {switchCodexTo} = await load('lib/codex.js');
+    const {switchCodexTo} = await import('../claude-usage-panel@fschmutz.github.io/lib/codex.js');
     const r = switchCodexTo(ben.name);
     assert.deepEqual({from: r.from, changed: r.changed}, {from: ana.name, changed: true});
     const saved = JSON.parse(files[`${PROFILES}/${ana.name}.json`]);
@@ -170,7 +170,7 @@ test('the Codex section draws its accounts at once and the usage when the scan l
     const now = Date.now();
     const files = {[`${SESSIONS}/2026/09/13/rollout.jsonl`]: line(now - 60_000, 40)};
     install({files, mtimes: {[`${SESSIONS}/2026/09/13/rollout.jsonl`]: now / 1000}});
-    const {CodexController} = await load('lib/codexSection.js');
+    const {CodexController} = await import('../claude-usage-panel@fschmutz.github.io/lib/codexSection.js');
     const section = new CodexController({
         settings: {get_boolean: () => true},
         menu: {addMenuItem() {}},

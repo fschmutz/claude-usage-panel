@@ -3,7 +3,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {load, stub} from './gjs-stub.js';
+import {stub} from './gjs-stub.js';
 
 globalThis.global ??= {stage: {}};
 
@@ -18,7 +18,7 @@ function sized(widget, {allocated, preferred}) {
 async function bars(t) {
     stub.overrides['gi://St'] = {ThemeContext: {get_for_stage: () => ({scale_factor: 1})}};
     t.after(() => { stub.overrides = {}; });
-    return load('lib/bar.js');
+    return import('../claude-usage-panel@fschmutz.github.io/lib/bar.js');
 }
 
 test('a poll with the menu closed fills the bar against its allocation, not its preferred width', async t => {

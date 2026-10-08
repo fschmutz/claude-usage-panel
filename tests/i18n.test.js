@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {URL} from 'node:url';
 
-import {EXT, load, stub} from './gjs-stub.js';
+import {EXT, stub} from './gjs-stub.js';
 
 const read = rel => fs.readFileSync(new URL(rel, EXT), 'utf8');
 
@@ -26,7 +26,7 @@ test('the usage errors a user reads go through the extension catalog', async t =
         stub.gettext = s => s;
         stub.overrides = {};
     });
-    const {fetchUsage} = await load('lib/claudeUsage.js');
+    const {fetchUsage} = await import('../claude-usage-panel@fschmutz.github.io/lib/claudeUsage.js');
     const r = await fetchUsage({}, null);
     assert.equal(r.code, 'no_token');
     assert.equal(r.message, '«No Claude credentials found. Sign in with Claude Code.»');
@@ -55,7 +55,7 @@ test('the Cursor API errors go through the catalog too', async t => {
         send_and_read_async: (_m, _p, _c, cb) => cb(session, null),
         send_and_read_finish: () => ({get_data: () => new Uint8Array(0)}),
     };
-    const {fetchCursor} = await load('lib/cursorUsage.js');
+    const {fetchCursor} = await import('../claude-usage-panel@fschmutz.github.io/lib/cursorUsage.js');
     await assert.rejects(fetchCursor(session, 'k'), {message: '«Cursor API key rejected»'});
     status.code = 500;
     await assert.rejects(fetchCursor(session, 'k'), {message: '«Cursor HTTP 500»'});

@@ -3,7 +3,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {load, stub} from './gjs-stub.js';
+import {stub} from './gjs-stub.js';
 
 // ── The Cursor section stays off the keyring while it is off ────────────────
 
@@ -15,7 +15,7 @@ async function cursorController({enabled, secret = null}) {
         password_store: (_s, _a, _c, _l, _v, _cn, cb) => cb(null, null),
         password_store_finish: () => true,
     };
-    const {CursorController} = await load('lib/cursorSection.js');
+    const {CursorController} = await import('../claude-usage-panel@fschmutz.github.io/lib/cursorSection.js');
     const settings = {
         get_boolean: k => (k === 'cursor-enabled' ? enabled : false),
         get_string: () => '',

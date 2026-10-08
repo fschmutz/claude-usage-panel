@@ -4,7 +4,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {setImmediate} from 'node:timers';
 
-import {load, stub} from './gjs-stub.js';
+import {stub} from './gjs-stub.js';
 
 // ── run(): a child process never holds the poll hostage ─────────────────────
 
@@ -62,7 +62,7 @@ function fakeGio({hang}) {
 test('run() kills a child that overruns its time and resolves ok:false', async t => {
     t.after(() => { stub.overrides = {}; });
     const {log} = fakeGio({hang: true});
-    const {run, RUN_TIMEOUT_SECONDS} = await load('lib/proc.js');
+    const {run, RUN_TIMEOUT_SECONDS} = await import('../claude-usage-panel@fschmutz.github.io/lib/proc.js');
     const r = await run(['ccusage', 'blocks'], {timeoutSeconds: 30});
     assert.equal(r.ok, false);
     assert.match(r.stderr, /ccusage: timed out after 30 s/);
@@ -75,7 +75,7 @@ test('run() kills a child that overruns its time and resolves ok:false', async t
 test('run() is bounded by default: a caller that passes nothing still gets the timeout', async t => {
     t.after(() => { stub.overrides = {}; });
     const {log} = fakeGio({hang: true});
-    const {run, RUN_TIMEOUT_SECONDS} = await load('lib/proc.js');
+    const {run, RUN_TIMEOUT_SECONDS} = await import('../claude-usage-panel@fschmutz.github.io/lib/proc.js');
     const r = await run(['ccusage', 'blocks', '--active', '--json']);
     assert.equal(r.ok, false);
     assert.equal(log.timers[0].seconds, RUN_TIMEOUT_SECONDS);
@@ -84,7 +84,7 @@ test('run() is bounded by default: a caller that passes nothing still gets the t
 test('run() with timeoutSeconds 0 arms no timer, and a finished child clears its timer', async t => {
     t.after(() => { stub.overrides = {}; });
     const {log} = fakeGio({hang: false});
-    const {run} = await load('lib/proc.js');
+    const {run} = await import('../claude-usage-panel@fschmutz.github.io/lib/proc.js');
     assert.deepEqual(await run(['true'], {timeoutSeconds: 0}), {ok: true, stdout: 'out', stderr: ''});
     assert.equal(log.timers.length, 0);
     assert.deepEqual(await run(['true']), {ok: true, stdout: 'out', stderr: ''});
@@ -94,7 +94,7 @@ test('run() with timeoutSeconds 0 arms no timer, and a finished child clears its
 test('run() forwards the caller cancellable, and lets go of it afterwards', async t => {
     t.after(() => { stub.overrides = {}; });
     const {log, Cancellable} = fakeGio({hang: false});
-    const {run} = await load('lib/proc.js');
+    const {run} = await import('../claude-usage-panel@fschmutz.github.io/lib/proc.js');
     const caller = new Cancellable();
     await run(['true'], {cancellable: caller});
     assert.notEqual(log.ownCancellable, caller);

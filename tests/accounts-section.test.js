@@ -8,7 +8,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {TextDecoder, TextEncoder} from 'node:util';
 
-import {load, stub} from './gjs-stub.js';
+import {stub} from './gjs-stub.js';
 
 const HOME = '/home/tester';
 const ACCOUNTS = `${HOME}/.local/state/claude-usage-panel/accounts`;
@@ -213,7 +213,7 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
         },
     };
 
-    const {AccountsController} = await load('lib/accountsSection.js');
+    const {AccountsController} = await import('../claude-usage-panel@fschmutz.github.io/lib/accountsSection.js');
     const settings = {
         get_boolean: k => (k === 'accounts-enabled' ? enabled : false),
         get_int: () => 90,
@@ -394,7 +394,7 @@ test('the store never refreshes the live login, even when its credentials cannot
         },
         token: () => ({status: 200, body: {access_token: 'x', refresh_token: 'y', expires_in: 60}}),
     });
-    const store = await load('lib/accounts.js');
+    const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
     assert.equal(store.liveAccountName(), 'PRO');
     await assert.rejects(store.accessTokenFor(session, 'PRO'), {code: 'no_token'});
     await assert.rejects(store.switchTo(session, 'PRO'), {code: 'no_token'});
@@ -419,7 +419,7 @@ test('concurrent refreshes of one profile spend its refresh token once', async t
             return {status: 200, body: {access_token: 'at-new', refresh_token: 'rt-new', expires_in: 3600}};
         },
     });
-    const store = await load('lib/accounts.js');
+    const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
     const got = await Promise.all([1, 2, 3].map(() => store.accessTokenFor(session, 'PERSO')));
     assert.deepEqual(got.map(g => g.token), ['at-new', 'at-new', 'at-new']);
     assert.deepEqual(exchanges, ['rt-PERSO']);
@@ -462,7 +462,7 @@ test('two waiters that judged one lock stale: only one takes it over, the token 
             return {status: 200, body: {access_token: 'at-new', refresh_token: 'rt-new', expires_in: 3600}};
         },
     });
-    const store = await load('lib/accounts.js');
+    const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
     // A takes the stale lock over and holds it through its exchange.
     const first = store.accessTokenFor(session, 'PERSO');
     while (exchanges.length === 0)
