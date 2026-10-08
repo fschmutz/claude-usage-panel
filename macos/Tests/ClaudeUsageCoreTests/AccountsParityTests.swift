@@ -222,18 +222,25 @@ final class AccountsParityTests: XCTestCase {
         }
     }
 
-    func testKeychainWriteLine() throws {
+    func testKeychainWrite() throws {
         let fix = try fixture()
         for c in fix["keychainWrite"] as! [[String: Any]] {
+            let name = c["name"] as! String
             let secret = String(
                 repeating: c["secret"] as! String, count: c["repeat"] as? Int ?? 1)
-            let got = Accounts.keychainWriteLine(
+            let got = Accounts.keychainWrite(
                 account: c["account"] as! String, service: c["service"] as! String,
                 secret: secret)
-            if let bytes = c["expectedBytes"] as? Int {
-                XCTAssertEqual(got?.utf8.count, bytes, c["name"] as! String)
+            if let bytes = c["expectedStdinBytes"] as? Int {
+                XCTAssertEqual(got?.args, ["-i"], name)
+                XCTAssertEqual(got?.stdin?.utf8.count, bytes, name)
+            } else if let want = c["expected"] as? [String: Any] {
+                XCTAssertEqual(
+                    got,
+                    Accounts.KeychainWrite(
+                        args: want["args"] as! [String], stdin: want["stdin"] as? String), name)
             } else {
-                XCTAssertEqual(got, c["expected"] as? String, c["name"] as! String)
+                XCTAssertNil(got, name)
             }
         }
     }

@@ -57,12 +57,13 @@ in the store, so no client takes the half-installed login for either account.
 `claudectl account list` shows it (`the switch to NAME did not finish`), and
 re-running `claudectl account use NAME` finishes it.
 
-On macOS the tokens never go on a command line. The menu-bar app writes the
-Keychain item through the Security framework; the CLI and the MCP server send
-it on stdin to `security -i`, which reads one command of under 4096 bytes. A
-login whose credentials blob is too large for that (about 2 KB of JSON, which
-MCP OAuth entries can reach) is refused before anything is touched; switch to
-it from the menu-bar app, which has no such limit.
+On macOS every client writes the Keychain item with `/usr/bin/security`, the
+tool Claude Code created it with, so the item's access list keeps trusting it.
+The tokens go on stdin to `security -i` whenever they fit: it reads one command
+of under 4096 bytes, about 2 KB of JSON. A larger blob (the item also holds
+every MCP server's OAuth tokens, `mcpOAuth`, often tens of KB) goes on the
+command line instead, as Claude Code itself does, where `ps` can see it for
+the instant the write lasts.
 
 **Claude Code sessions already running keep the old login** until they restart;
 `use` tells you how many there are. New sessions, the panels and the MCP tool
