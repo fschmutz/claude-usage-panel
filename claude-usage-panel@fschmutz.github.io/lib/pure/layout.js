@@ -11,7 +11,7 @@ export const MIN_POPUP_WIDTH = 300;
 /** Widest it may get: past this, reset lines read as one long unbroken run. */
 export const MAX_POPUP_WIDTH = 420;
 /** Share of the screen the dropdown may take before it stops growing. */
-export const POPUP_WIDTH_SHARE = 0.22;
+const POPUP_WIDTH_SHARE = 0.22;
 
 /**
  * Dropdown width in CSS pixels for a monitor of `monitorWidth` device pixels.

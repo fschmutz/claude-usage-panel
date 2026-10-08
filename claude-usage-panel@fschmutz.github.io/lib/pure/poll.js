@@ -16,9 +16,9 @@
 //      rate-limited endpoint must not be asked again every minute forever.
 
 export const POLL_IDLE_AFTER = 3;              // unchanged polls before backing off
-export const POLL_IDLE_FACTOR = 4;
-export const POLL_IDLE_MAX_SECONDS = 15 * 60;
-export const POLL_RESET_LAG_SECONDS = 5;       // land just PAST the reset, never on it
+const POLL_IDLE_FACTOR = 4;
+const POLL_IDLE_MAX_SECONDS = 15 * 60;
+const POLL_RESET_LAG_SECONDS = 5;       // land just PAST the reset, never on it
 export const POLL_RETRY_SECONDS = 60;          // after a retryable failure
 export const POLL_RETRY_FACTOR = 2;            // per consecutive retryable failure
 

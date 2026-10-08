@@ -101,9 +101,9 @@ export function latchCrossings(fired, cards) {
 }
 
 /** The pace alert fires once the forecast runs dry this many hours (or more) before the reset. */
-export const PACE_ALERT_MARGIN_HOURS = -1;
+const PACE_ALERT_MARGIN_HOURS = -1;
 /** ...and re-arms only once the projection clears the reset by this margin. */
-export const PACE_REARM_MARGIN_HOURS = 2;
+const PACE_REARM_MARGIN_HOURS = 2;
 
 /**
  * The limits whose burn rate now projects them running dry at least an hour

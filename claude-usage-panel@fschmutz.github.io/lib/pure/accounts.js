@@ -22,7 +22,7 @@ export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/;
 export const PROFILE_VERSION = 1;
 /** Colour thresholds for usage figures that carry no API severity (an account
  *  row's "S 42% · W 12%"): yellow from `warning`, red from `critical`. */
-export const USAGE_SEVERITY_THRESHOLDS = {warning: 70, critical: 90};
+const USAGE_SEVERITY_THRESHOLDS = {warning: 70, critical: 90};
 
 export function usageSeverity(percent) {
     if (percent === null || percent === undefined)
@@ -289,9 +289,9 @@ export function parkName(email, taken = []) {
 // ── macOS Keychain (the Node CLI / MCP; Swift Accounts.keychainServices) ──────
 
 /** Claude Code's macOS Keychain item for its credentials, by default. */
-export const KEYCHAIN_SERVICE = 'Claude Code-credentials';
+const KEYCHAIN_SERVICE = 'Claude Code-credentials';
 /** Names older Claude Code releases used for the default item. */
-export const LEGACY_KEYCHAIN_SERVICES = ['Claude Code', 'claude'];
+const LEGACY_KEYCHAIN_SERVICES = ['Claude Code', 'claude'];
 
 /**
  * The Keychain items to read, current first; writes go to the first. Claude
@@ -310,7 +310,7 @@ export function keychainServices(env, sha256Hex) {
 }
 
 /** security(1)'s MAX_LINE_LEN: one `security -i` command, newline included, must be shorter. */
-export const KEYCHAIN_LINE_MAX = 4096;
+const KEYCHAIN_LINE_MAX = 4096;
 
 // UTF-8 bytes of `text` as lowercase hex, built-in free: encodeURIComponent
 // already spells every non-ASCII byte as %XX; the rest is one byte each.

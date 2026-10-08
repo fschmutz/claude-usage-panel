@@ -58,7 +58,7 @@ const CLI_JS_RE = /(^|\/)@anthropic-ai\/claude-code\/cli\.m?js$/;
 /** A /proc cmdline's arguments to claude, or null when it is not claude:
  *  the native binary (`claude ...`) or an npm install run by its interpreter
  *  (`node .../@anthropic-ai/claude-code/cli.js ...`). */
-export function claudeArgs(argv) {
+function claudeArgs(argv) {
   const bin = path.basename(argv[0] ?? '');
   if (bin === 'claude') return argv.slice(1);
   if (/^(node|nodejs|bun)$/.test(bin) && (path.basename(argv[1] ?? '') === 'claude' || CLI_JS_RE.test(argv[1] ?? ''))) {
@@ -84,7 +84,7 @@ export function flagValue(args, long, short) {
 
 /** The session id a claude process resumed, or null: `--resume` also takes
  *  a search term for the picker, which names no session. */
-export function resumeIdOf(args) {
+function resumeIdOf(args) {
   const v = flagValue(args, '--resume', '-r');
   return v && SESSION_ID_RE.test(v) ? v : null;
 }

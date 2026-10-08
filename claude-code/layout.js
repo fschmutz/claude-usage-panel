@@ -50,7 +50,7 @@ export const TERMINAL_LAYOUT_SCRIPT = tabbedScript('Terminal',
 
 // `:` separates: tmux prints a tab in -F output as `_` (3.6), and forbids
 // `:` in a session name; a tty path and a window index have none either.
-export const TMUX_LAYOUT_FORMAT = '#{pane_tty}:#{session_name}:#{window_index}';
+const TMUX_LAYOUT_FORMAT = '#{pane_tty}:#{session_name}:#{window_index}';
 
 /** Record key -> {window, tab, order} in `map` unless the key is known:
  *  the first listing of a tty or pid wins. */
@@ -127,7 +127,7 @@ export function ttyPath(value) {
 }
 
 /** One batched `ps -o pid=,<field>=` listing to Map(pid -> rest of line). */
-export function parsePsColumns(text) {
+function parsePsColumns(text) {
   const map = new Map();
   for (const line of String(text ?? '').split('\n')) {
     const m = /^\s*(\d+)\s+(.*)$/.exec(line);

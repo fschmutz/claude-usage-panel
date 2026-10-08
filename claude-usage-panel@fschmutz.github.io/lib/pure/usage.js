@@ -169,7 +169,7 @@ export const NO_READING = '–';
 /** The window this card measures has already rolled over. Whole seconds
  *  floored, exactly like resetParts, so a reset and its countdown never
  *  disagree by a rounding step. */
-export function windowRolledOver(resetsAt, nowMs = Date.now()) {
+function windowRolledOver(resetsAt, nowMs = Date.now()) {
     const target = Date.parse(resetsAt ?? '');
     return Number.isFinite(target) && Math.floor((target - nowMs) / 1000) <= 0;
 }
@@ -243,7 +243,7 @@ function money(obj) {
 }
 
 /** "$12.40", or "12.40 CHF" for anything but USD. */
-export function formatMoney(amount, currency = 'USD') {
+function formatMoney(amount, currency = 'USD') {
     if (!Number.isFinite(amount))
         return '';
     const n = amount.toFixed(2);
@@ -302,7 +302,7 @@ export function sparkline(history) {
 // once the reset is due. The status line / MCP render it compactly
 // (claude-code/stamps.js resetHint, built on this) and Swift (ResetCountdown)
 // splits it the same way; tests/fixtures/resets.json pins every label.
-export function resetParts(iso, nowMs = Date.now()) {
+function resetParts(iso, nowMs = Date.now()) {
     if (!iso)
         return null;
     const target = Date.parse(iso);
@@ -371,7 +371,7 @@ export function thresholdClass(percent) {
 export const PANEL_MAX_CHARS = 20;
 
 // "all mod…" - cut to `max` INCLUDING the ellipsis, '' when there is no room.
-export function ellipsize(text, max) {
+function ellipsize(text, max) {
     const s = String(text ?? '').trim();
     if (s.length <= max)
         return s;
@@ -441,7 +441,7 @@ export const AUTH_EXPIRED_MESSAGE =
  * @param {?string} value the raw header
  * @param {number} nowMs
  */
-export function parseRetryAfter(value, nowMs = Date.now()) {
+function parseRetryAfter(value, nowMs = Date.now()) {
     if (typeof value !== 'string')
         return null;
     const v = value.trim();

@@ -22,8 +22,8 @@ import {readJSON, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {
     CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexSwitch,
-    codexTokenState, isValidName, parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin,
-    sameJSON, sameName, scanCodexSessionsAsync,
+    codexTokenState, isValidName, parseCodexProfile, pickRecordedCodexUsage, sameJSON,
+    scanCodexSessionsAsync,
 } from './pure.js';
 
 // The transcript scan runs on the shell's main loop: every call on the way is
@@ -45,20 +45,20 @@ const ENUMERATE_BATCH = 64;
 const writePrivate = (path, text) => writeText(path, text, {mode: 0o600});
 
 /** The codex CLI's config dir - follows CODEX_HOME, as every port does. */
-export function codexHome() {
+function codexHome() {
     return GLib.getenv('CODEX_HOME') || GLib.build_filenamev([GLib.get_home_dir(), '.codex']);
 }
 
-export function codexAuthPath() {
+function codexAuthPath() {
     return GLib.build_filenamev([codexHome(), 'auth.json']);
 }
 
-export function codexSessionsDir() {
+function codexSessionsDir() {
     return GLib.build_filenamev([codexHome(), 'sessions']);
 }
 
 /** A directory of its own, next to (never inside) the Claude one. */
-export function codexAccountsDir() {
+function codexAccountsDir() {
     return GLib.build_filenamev([stateDir(), 'codex-accounts']);
 }
 
@@ -67,7 +67,7 @@ function profilePath(name) {
 }
 
 /** Every valid saved Codex login, by name in code-point order. */
-export function listCodexProfiles() {
+function listCodexProfiles() {
     const dir = Gio.File.new_for_path(codexAccountsDir());
     let children;
     try {
@@ -89,7 +89,7 @@ export function listCodexProfiles() {
     return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
-export function readCodexProfile(name) {
+function readCodexProfile(name) {
     if (!isValidName(name))
         return null;
     const profile = parseCodexProfile(readJSON(profilePath(name)), isValidName);
@@ -104,24 +104,14 @@ function writeCodexProfile(profile) {
     return clean;
 }
 
-export function removeCodexProfile(name) {
-    if (!readCodexProfile(name))
-        throw new Error(`no saved Codex account named ${name}`);
-    try {
-        Gio.File.new_for_path(profilePath(name)).delete(null);
-    } catch (e) {
-        throw new Error(`could not remove ${name}: ${e.message}`);
-    }
-}
-
 /** The auth.json the codex CLI holds right now, or null. */
-export function readLiveCodexAuth() {
+function readLiveCodexAuth() {
     const auth = readJSON(codexAuthPath());
     return auth && typeof auth === 'object' && !Array.isArray(auth) ? auth : null;
 }
 
 /** Which saved profile the live Codex login is, or null. */
-export function liveCodexName() {
+function liveCodexName() {
     return activeCodexName(listCodexProfiles(), readLiveCodexAuth());
 }
 
@@ -154,36 +144,6 @@ function syncBackLiveCodex() {
  *  rotated since the last switch are the ones we keep. */
 export function syncBackCodex() {
     return syncBackLiveCodex().name;
-}
-
-/** Save the live Codex login as `name`. */
-export function saveCurrentCodex(name, {force = false} = {}) {
-    if (!isValidName(name)) {
-        throw new Error(
-            `invalid name "${name}": letters, digits, . _ - only, up to 32 characters`);
-    }
-    const auth = readLiveCodexAuth();
-    if (!auth)
-        throw new Error('no Codex login to save - run `codex login` first');
-    const profiles = listCodexProfiles();
-    const variant = profiles.find(p => p.name !== name && sameName(p.name, name));
-    if (variant)
-        throw new Error(`${variant.name} already exists - names ignore case, use ${variant.name}`);
-    const live = codexIdentity(auth);
-    const existing = profiles.find(p => p.name === name);
-    if (existing && !force) {
-        const held = codexIdentity(existing.auth);
-        if (!sameCodexLogin(held, live)) {
-            throw new Error(
-                `${name} is already ${held.email ?? 'another account'} - pick another name`);
-        }
-    }
-    const twin = activeCodexName(profiles.filter(p => p.name !== name), auth);
-    if (twin) {
-        throw new Error(`this login (${live.email ?? 'no email'}) is already saved as ${twin} - ` +
-            `remove ${twin} first if you meant to rename it`);
-    }
-    return snapshotLiveCodex(name);
 }
 
 /**

@@ -25,7 +25,7 @@ const CLOCK_MARK_HALF = 4;
  * unchanged on open, no notify::width ever repainted it: the percentage was
  * right and the bar stayed wrong until a refresh with the menu open.
  */
-export function cssWidth(actor) {
+function cssWidth(actor) {
     const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
     return actor.get_allocation_box().get_width() / scale;
 }

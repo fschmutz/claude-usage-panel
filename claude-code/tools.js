@@ -9,7 +9,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 /** Where the tools live when PATH does not list them: Homebrew first. */
-export const TOOL_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
+const TOOL_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
 
 /** PATH with every `dirs` entry it lacks appended, PATH order first. */
 export function toolPath(envPath = '', dirs = TOOL_DIRS) {

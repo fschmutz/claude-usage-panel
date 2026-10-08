@@ -106,7 +106,7 @@ export function pruneByDay(byDay, nowMs) {
 }
 
 /** Display name for a session: its custom title, else the project directory. */
-export function sessionTitle(entry) {
+function sessionTitle(entry) {
     if (entry.title)
         return entry.title;
     const cwd = entry.cwd ?? '';

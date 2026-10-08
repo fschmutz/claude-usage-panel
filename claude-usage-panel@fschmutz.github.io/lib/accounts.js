@@ -26,11 +26,11 @@ import {
     switchPlan, syncBackPlan, tokenState, usageCacheEntry, keepWeeklyResets,
 } from './pure.js';
 
-export {readLiveAccount, readLiveCredentials};
+export {readLiveAccount};
 
-export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
+const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
 // Claude Code's public OAuth client - the same id the CLI itself refreshes with.
-export const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 // The status line reads this snapshot of every account's worst limit; the
 // last-switch stamp is what every auto-switch caller - this panel, the macOS
 // app, the MCP tool - checks its cooldown against, so a switch made anywhere
@@ -46,7 +46,7 @@ const SWITCH_PENDING_FILE = '.switch-pending.json';
 // ── Paths ───────────────────────────────────────────────────────────────────────
 
 /** Same root as the usage warehouse, so every client reads one store. */
-export function accountsDir() {
+function accountsDir() {
     return GLib.build_filenamev([stateDir(), 'accounts']);
 }
 
@@ -54,11 +54,11 @@ function profilePath(name) {
     return GLib.build_filenamev([accountsDir(), `${name}.json`]);
 }
 
-export function usageCachePath() {
+function usageCachePath() {
     return GLib.build_filenamev([accountsDir(), USAGE_CACHE_FILE]);
 }
 
-export function lastSwitchPath() {
+function lastSwitchPath() {
     return GLib.build_filenamev([accountsDir(), LAST_SWITCH_FILE]);
 }
 
@@ -102,14 +102,14 @@ export function listProfiles() {
     return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
-export function readProfile(name) {
+function readProfile(name) {
     if (!isValidName(name))
         return null;
     const profile = parseProfile(readJSON(profilePath(name)));
     return profile?.name === name ? profile : null;
 }
 
-export function writeProfile(profile) {
+function writeProfile(profile) {
     const clean = parseProfile(profile);
     if (!clean)
         throw new Error('not a valid profile');
@@ -223,7 +223,7 @@ function parkUnsavedLogin() {
 }
 
 /** Claude Code processes alive right now - they keep the old token. */
-export async function runningClaudeCount() {
+async function runningClaudeCount() {
     const {ok, stdout} = await run(['ps', '-eo', 'args=']);
     if (!ok)
         return 0;
@@ -369,7 +369,7 @@ async function exchange(session, name, oauth) {
  * first, the stored result is returned and no token is spent. Throws a coded
  * error on failure. Never touches the live login.
  */
-export async function refreshProfile(session, profile) {
+async function refreshProfile(session, profile) {
     const sent = profile.credentials.claudeAiOauth;
     if (!sent.refreshToken) {
         throw coded('login_expired',
@@ -497,7 +497,7 @@ export async function switchTo(session, name) {
 
 // ── The last switch (auto-switch cooldown, shared by every client) ──────────────
 
-export function writeLastSwitch({from, to}, nowMs = Date.now()) {
+function writeLastSwitch({from, to}, nowMs = Date.now()) {
     try {
         writePrivate(lastSwitchPath(), JSON.stringify({at: nowMs, from: from ?? null, to}));
     } catch (e) {

@@ -34,10 +34,10 @@ import {readJSON, writePrivate} from './private-fs.js';
 /** Tail of a session transcript read when looking for the last rate-limit
  *  snapshot. A rollout file grows with the conversation; the newest events are
  *  at the end, and nothing older than the tail would be fresh enough to show. */
-export const SESSION_TAIL_BYTES = 256 * 1024;
+const SESSION_TAIL_BYTES = 256 * 1024;
 /** How many recent transcripts to look through before giving up (the
  *  contract's CODEX_SESSION_SCAN_LIMIT, one rule for every port). */
-export const SESSION_SCAN_LIMIT = CODEX_SESSION_SCAN_LIMIT;
+const SESSION_SCAN_LIMIT = CODEX_SESSION_SCAN_LIMIT;
 
 /** The last SESSION_TAIL_BYTES of a file, as text; '' when unreadable. */
 function readTail(file, bytes = SESSION_TAIL_BYTES) {
