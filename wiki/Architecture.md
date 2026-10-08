@@ -146,6 +146,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── WindowPlanner.swift       # session-window planner (twin of pure/pings.js)
     │   ├── Snapshots.swift           # the claudectl snapshot summary
     │   ├── Waiting.swift             # waiting-on-you list (twin of pure/waiting.js)
+    │   ├── Pause.swift               # pause / resume shapes, row state, summary (twin of pure/pause.js)
     │   ├── HttpFailure.swift         # usage-endpoint error bodies, transient statuses
     │   ├── ShellQuote.swift          # POSIX single-quoting
     │   ├── DataProvenance.swift      # official vs estimated figures
@@ -173,6 +174,8 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── CodexView.swift           # the optional Codex section in the popup and Settings
         ├── Sessions.swift            # the same index + the terminal launch (osascript)
         ├── Waiting.swift             # live-session registry + waiting markers + focus
+        ├── PauseState.swift          # pause / resume through claudectl, followed until terminal
+        ├── PauseView.swift           # the opt-in Pause section in the popup and Settings
         ├── SavedSessions.swift       # the claudectl snapshot store in Settings
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
         ├── SessionPingSettings.swift # session pings as the UI sees them

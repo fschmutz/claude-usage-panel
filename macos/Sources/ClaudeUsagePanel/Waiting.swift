@@ -40,6 +40,16 @@ enum WaitingStore {
     }
 
     static func refresh(now: Date = Date()) -> [WaitingSession] {
+        let (sessions, markers) = scan()
+        return Waiting.list(
+            sessions: sessions, markers: markers, nowMs: now.timeIntervalSince1970 * 1000)
+    }
+
+    /// The live interactive sessions alone (the pause section lists them).
+    static func liveSessions() -> [Waiting.LiveSession] { scan().sessions }
+
+    /// One pass over the registry: the live sessions and every marker.
+    private static func scan() -> (sessions: [Waiting.LiveSession], markers: [WaitingMarker]) {
         let fm = FileManager.default
         let names = (try? fm.contentsOfDirectory(atPath: registryDir)) ?? []
         var sessions: [Waiting.LiveSession] = []
@@ -69,9 +79,7 @@ enum WaitingStore {
                     pid: pid, sessionId: sessionId, name: obj["name"] as? String ?? "", cwd: cwd))
         }
         let live = livePids(sessions.map(\.pid))
-        return Waiting.list(
-            sessions: sessions.filter { live.contains($0.pid) }, markers: markers,
-            nowMs: now.timeIntervalSince1970 * 1000)
+        return (sessions.filter { live.contains($0.pid) }, markers)
     }
 
     /// Raise the session's terminal. Prefers claudectl so the placement is

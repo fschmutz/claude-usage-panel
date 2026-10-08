@@ -145,6 +145,8 @@ final class UsageModel: ObservableObject {
     /// The `claudectl session` snapshot store, for the header's Reopen button
     /// (the same store and the same button as Settings ▸ Saved sessions).
     let saved = SavedSessions()
+    /// Pause / resume every live session (opt-in, `pauseEnabled`).
+    let pause = PauseState()
     private var forwarders: [AnyCancellable] = []
 
     /// Per-limit [epochMs, percent] samples - sparkline + burn-rate forecast.
@@ -240,6 +242,7 @@ final class UsageModel: ObservableObject {
         // see; assumeIsolated says so, and traps if it ever were not.
         for child in [
             sessionPing.objectWillChange, updates.objectWillChange, saved.objectWillChange,
+            pause.objectWillChange,
         ] {
             forwarders.append(
                 child.sink { [weak self] _ in
@@ -361,6 +364,7 @@ final class UsageModel: ObservableObject {
         saved.reload()
         await refreshSessions()
         await refreshWaiting()
+        await pause.refresh()
         await refreshCursor()
         await refreshAccounts()
         refreshCodex()

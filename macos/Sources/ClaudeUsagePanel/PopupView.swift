@@ -216,6 +216,10 @@ struct PopupView: View {
                 WaitingSectionView(model: model)
             }
 
+            if model.pause.enabled {
+                PauseSectionView(pause: model.pause)
+            }
+
             if model.showSessions && !model.sessions.isEmpty {
                 SessionsSectionView(model: model)
             }
