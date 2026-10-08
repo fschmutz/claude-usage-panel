@@ -18,7 +18,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
-import {readJSON, writeText} from './fs.js';
+import {listChildrenAsync, readJSON, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {
     CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexSwitch,
@@ -27,20 +27,16 @@ import {
 } from './pure.js';
 
 // The transcript scan runs on the shell's main loop: every call on the way is
-// the async variant, so a tree of thousands of rollouts never stalls a frame.
-Gio._promisify(Gio.File.prototype, 'enumerate_children_async', 'enumerate_children_finish');
+// the async variant, so a tree of thousands of rollouts never stalls a frame
+// (the directory walk is fs.js listChildrenAsync).
 Gio._promisify(Gio.File.prototype, 'query_info_async', 'query_info_finish');
 Gio._promisify(Gio.File.prototype, 'read_async', 'read_finish');
-Gio._promisify(Gio.FileEnumerator.prototype, 'next_files_async', 'next_files_finish');
-Gio._promisify(Gio.FileEnumerator.prototype, 'close_async', 'close_finish');
 Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async', 'read_bytes_finish');
 Gio._promisify(Gio.InputStream.prototype, 'close_async', 'close_finish');
 
 /** Tail of a session transcript read when looking for the last rate-limit
  *  snapshot: the newest events are at the end of a rollout file. */
 const SESSION_TAIL_BYTES = 256 * 1024;
-/** Children fetched per next_files_async round trip. */
-const ENUMERATE_BATCH = 64;
 
 const writePrivate = (path, text) => writeText(path, text, {mode: 0o600});
 
@@ -201,37 +197,16 @@ async function readTail(path) {
 
 /** One directory under sessions/, as codexSessionScan asks for it; [] when
  *  unreadable. */
-async function listSessionDir(segments) {
-    const dir = Gio.File.new_for_path(GLib.build_filenamev([codexSessionsDir(), ...segments]));
-    const out = [];
-    let children;
-    try {
-        children = await dir.enumerate_children_async(
-            'standard::name,standard::type,time::modified', Gio.FileQueryInfoFlags.NONE,
-            GLib.PRIORITY_LOW, null);
-    } catch {
-        return out;
-    }
-    try {
-        for (;;) {
-            const batch = await children.next_files_async(ENUMERATE_BATCH, GLib.PRIORITY_LOW, null);
-            if (!batch.length)
-                break;
-            for (const info of batch) {
-                const dirType = info.get_file_type() === Gio.FileType.DIRECTORY;
-                out.push({
-                    name: info.get_name(),
-                    dir: dirType,
-                    mtimeMs: dirType ? null : info.get_attribute_uint64('time::modified') * 1000,
-                });
-            }
-        }
-    } catch {
-        // a directory that vanished mid-listing keeps what was read
-    } finally {
-        await children.close_async(GLib.PRIORITY_LOW, null).catch(() => {});
-    }
-    return out;
+function listSessionDir(segments) {
+    return listChildrenAsync(GLib.build_filenamev([codexSessionsDir(), ...segments]),
+        'standard::name,standard::type,time::modified', info => {
+            const dir = info.get_file_type() === Gio.FileType.DIRECTORY;
+            return {
+                name: info.get_name(),
+                dir,
+                mtimeMs: dir ? null : info.get_attribute_uint64('time::modified') * 1000,
+            };
+        });
 }
 
 /** The newest session transcripts, newest first, capped: the contract's

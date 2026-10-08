@@ -53,12 +53,10 @@ enum WaitingStore {
                 let cwd = obj["cwd"] as? String, !cwd.isEmpty,
                 isAlive(pid: pid)
             else { continue }
-            let fallback = (cwd as NSString).lastPathComponent
+            // The raw name: Waiting.list owns the cwd / session-id fallback.
             sessions.append(
                 Waiting.LiveSession(
-                    pid: pid, sessionId: sessionId,
-                    name: (obj["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? fallback,
-                    cwd: cwd))
+                    pid: pid, sessionId: sessionId, name: obj["name"] as? String ?? "", cwd: cwd))
         }
         return Waiting.list(
             sessions: sessions, markers: markers, nowMs: now.timeIntervalSince1970 * 1000)
@@ -66,9 +64,10 @@ enum WaitingStore {
 
     /// Raise the session's terminal. Prefers claudectl so the placement is
     /// the same as `claudectl session save`; without it, the kitty pid match.
+    /// By pid, never by name: two clones of one repo share a basename.
     static func focus(_ row: WaitingSession) {
         if let cli {
-            Shell.launch(cli, ["waiting", "focus", row.name])
+            Shell.launch(cli, ["waiting", "focus", String(row.pid)])
             return
         }
         if let argv = Waiting.focusArgv(Waiting.focusPlan(window: nil, tab: nil, pid: row.pid)),

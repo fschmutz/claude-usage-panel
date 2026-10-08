@@ -46,7 +46,7 @@ export class WaitingController {
     async refresh() {
         let rows = [];
         try {
-            rows = listWaiting();
+            rows = await listWaiting();
         } catch (e) {
             logError(e, 'claude-usage-panel: waiting scan failed');
         }
@@ -98,7 +98,7 @@ export class WaitingController {
         this._menu.close();
         const cli = claudectlPath();
         if (cli) {
-            run([cli, 'waiting', 'focus', row.name]).then(({ok, stdout, stderr}) => {
+            run(focusCommand(cli, row)).then(({ok, stdout, stderr}) => {
                 if (this._isDestroyed() || ok)
                     return;
                 this._notify(_('Claude usage'),
@@ -121,6 +121,12 @@ export class WaitingController {
     }
 
     destroy() {}
+}
+
+/** The claudectl argv that raises `row`: by pid, never by name - two clones
+ *  of one repo share a basename. */
+export function focusCommand(cli, row) {
+    return [cli, 'waiting', 'focus', String(row.pid)];
 }
 
 function lastLine(stdout, stderr) {

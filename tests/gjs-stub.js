@@ -14,6 +14,14 @@ export const EXT = new URL('../claude-usage-panel@fschmutz.github.io/', import.m
 // build. What a test cares about it sets in `stub.overrides`.
 // Never a thenable: `await widget` must not wait forever on a stub `then`.
 const opaque = prop => typeof prop !== 'string' || prop === 'then';
+// A directory enumerator is EMPTY unless a test overrides it, as a real one
+// is at its end: next_file() is null and a batch is []. Without this a stub
+// enumerator listed forever, and production code grew a guard against it.
+const ENUMERATOR_END = {
+    next_file: () => null,
+    next_files: () => [],
+    next_files_async: async () => [],
+};
 
 function anything(name) {
     const cache = new Map();
@@ -21,6 +29,8 @@ function anything(name) {
         constructor(...args) {
             const self = new Proxy(this, {
                 get: (target, prop, receiver) => {
+                    if (!(prop in target) && Object.hasOwn(ENUMERATOR_END, prop))
+                        target[prop] = ENUMERATOR_END[prop];
                     if (!(prop in target) && !opaque(prop))
                         target[prop] = anything(`${name}().${prop}`);
                     return Reflect.get(target, prop, receiver);
