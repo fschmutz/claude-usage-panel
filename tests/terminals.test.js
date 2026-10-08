@@ -311,7 +311,7 @@ test('the resume prompt says when it was saved and what died with the process', 
     const p = resumePrompt({label: 'auto-2026-09-23_192140', savedAt: saved, nowMs: saved + (3 * 60 + 44) * 60_000});
     assert.match(p, /snapshot auto-2026-09-23_192140 at 19:21 \(3h44m ago\) and reopened at 23:05/);
     assert.match(p, /background shells, Monitors, \/loop and scheduled wakeups/);
-    assert.match(p, /nothing destructive, outward-facing or still waiting on my answer without asking me first/);
+    assert.match(p, /nothing destructive, outward-facing or still waiting on the user's answer without asking the user first/);
     assert.equal(sessionCommand({name: 'A', session_id: 'i'}), `claude --name 'A' --resume 'i'; exec "$SHELL" -i`);
 });
 

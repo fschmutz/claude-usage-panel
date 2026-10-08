@@ -38,6 +38,7 @@ import {onPath, query, toolEnv} from './tools.js';
 import {captureLayout} from './layout.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
+import {PAUSE_RESUME_GUARD, resumeProtocolText} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
 import {resetHint} from './stamps.js';
 
 /** Autosaves kept by default: 48 half-hourly runs = one day of history. */
@@ -117,24 +118,28 @@ export function sameSessions(a, b) {
  * re-read where it stopped and re-check what moved meanwhile before it
  * carries on, and restates that approvals do not carry over a restart.
  */
-export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = ''}) {
+export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = '', checkpoint = null}) {
   // Under a minute the countdown floors to "0m" (or '' when not past):
   // "(moments ago)" reads right, "(0m ago)" does not.
   const hint = resetHint(new Date(nowMs).toISOString(), savedAt);
   const ago = hint && hint !== '0m' ? hint : 'moments';
-  return `Resumed by claudectl after a restart: this session was saved in snapshot ${label} ` +
+  // A session paused with `claudectl session pause` wrote a checkpoint: the
+  // RESUME PROTOCOL (lib/pure/pause.js) replaces the generic three steps.
+  const steps = checkpoint ? `${resumeProtocolText(checkpoint)}\n\n`
+    : '1. Re-read the end of this conversation: my last request, what you finished, what was ' +
+      'still running or waiting.\n' +
+      '2. Check what moved while you were down: git status and recent commits here, and the ' +
+      'push, CI run, build or job you were waiting on, if any.\n' +
+      '3. Reply with a short status (done / interrupted / next), re-arm what you still need to ' +
+      'watch, then carry on with the interrupted work.\n\n';
+  const saved = label ? `saved in snapshot ${label}` : 'paused';
+  return `Resumed by claudectl after a restart: this session was ${saved} ` +
     `at ${formatClock(savedAt)} (${ago} ago) and reopened at ${formatClock(nowMs)}. ` +
     'Everything that lived only in the old process is gone: background shells, Monitors, ' +
     '/loop and scheduled wakeups, watchers on a push or a CI run.\n\n' +
-    '1. Re-read the end of this conversation: my last request, what you finished, what was ' +
-    'still running or waiting.\n' +
-    '2. Check what moved while you were down: git status and recent commits here, and the ' +
-    'push, CI run, build or job you were waiting on, if any.\n' +
-    '3. Reply with a short status (done / interrupted / next), re-arm what you still need to ' +
-    'watch, then carry on with the interrupted work.\n\n' +
+    steps +
     peersNote(peers, homedir) +
-    'Same rules as before: nothing destructive, outward-facing or still waiting on my answer ' +
-    'without asking me first.';
+    PAUSE_RESUME_GUARD;
 }
 
 /**

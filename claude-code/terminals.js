@@ -42,9 +42,12 @@ export const GNOME_TERMINAL_KEY = '/org/gnome/shell/extensions/claude-usage-pane
 
 /** What one tab runs: resume the session under its name - with `prompt` as
  *  its first message when given - then stay on an interactive shell in its
- *  directory (the panels' interactiveResume form). */
+ *  directory (the panels' interactiveResume form). `prompt` may be a
+ *  function of the row: each session its own first message (a paused one
+ *  carries its checkpoint). */
 export function sessionCommand(row, prompt = '') {
-  const first = prompt ? ` ${shellQuote(prompt)}` : '';
+  const text = typeof prompt === 'function' ? prompt(row) : prompt;
+  const first = text ? ` ${shellQuote(text)}` : '';
   return `claude --name ${shellQuote(row.name)} --resume ${shellQuote(row.session_id)}${first}; exec "$SHELL" -i`;
 }
 

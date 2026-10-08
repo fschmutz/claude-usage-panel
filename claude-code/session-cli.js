@@ -8,6 +8,8 @@ import os from 'node:os';
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
 import {AUTO_KEEP, describeLaunch, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {tabsDir} from './paths.js';
+import {openPause} from './pause.js';
+import {PAUSE_COMMANDS, PAUSE_HELP, runPause} from './pause-cli.js';
 
 export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as laid out
 
@@ -26,6 +28,7 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
                                              what the schedule runs: save only when
                                              the set changed, keep the newest N autos;
                                              --force saves now, even an empty set
+${PAUSE_HELP}
 
 SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
 skips a session that is still running (--force to try anyway) and one whose
@@ -39,8 +42,10 @@ native tabs; any other terminal gets one tmux session per saved window
 one window per session (--windows forces that). Each resumed session
 gets a first message telling it it was restarted: re-read where it stopped,
 re-check git / CI / jobs, re-arm its watchers, report, then carry on
-(--prompt=TEXT replaces it, --no-prompt sends none). \`./install.sh cli\` also schedules
-\`autosave\` every 30 minutes (keeps ${AUTO_KEEP}, one day).
+(--prompt=TEXT replaces it, --no-prompt sends none); a session paused
+with a checkpoint gets the resume protocol and its checkpoint path
+instead. \`./install.sh cli\` also schedules \`autosave\` every 30 minutes
+(keeps ${AUTO_KEEP}, one day).
 Snapshots: ${tabsDir()}`;
 
 // Local time, like the labels: 2026-09-23 19:21.
@@ -79,6 +84,8 @@ export async function main(argv, io = {}) {
     }));
   const list = (v) => (typeof v === 'string' ? v.split(',').filter(Boolean) : []);
   const [cmd, ...rest] = args;
+  // pause & co. parse their own flags (`--reason TEXT` takes a value)
+  if (PAUSE_COMMANDS.has(argv[0])) return runPause(argv[0], argv.slice(1), io);
   switch (cmd) {
     case undefined:
     case 'help':
@@ -143,18 +150,26 @@ export async function main(argv, io = {}) {
         return 1;
       }
       const terminal = typeof opts.terminal === 'string' ? opts.terminal : undefined;
+      // A session paused with a checkpoint (claudectl session pause) gets
+      // the resume protocol and its path in its own prompt.
+      const pause = openPause(io);
+      const generated = !opts['no-prompt'] && typeof opts.prompt !== 'string';
+      const checkpoints = new Map(generated
+        ? open.map((row) => [row.session_id, pause.pendingCheckpoint(row.session_id)]) : []);
+      const nowMs = io.nowMs ? io.nowMs() : Date.now();
+      // everyone up after this: the reopened ones and those still running
+      const peers = [...open, ...tabs.liveSessions().filter((l) => !open.some((o) => o.session_id === l.session_id))];
       const prompt = opts['no-prompt'] ? ''
         : (typeof opts.prompt === 'string' ? opts.prompt
-          : resumePrompt({
-            label: snap.label, savedAt: snap.savedAt, nowMs: io.nowMs ? io.nowMs() : Date.now(),
-            // everyone up after this: the reopened ones and those still running
-            peers: [...open, ...tabs.liveSessions().filter((l) => !open.some((o) => o.session_id === l.session_id))],
-            homedir: io.homedir ?? os.homedir(),
+          : (row) => resumePrompt({
+            label: snap.label, savedAt: snap.savedAt, nowMs, peers, homedir: io.homedir ?? os.homedir(),
+            checkpoint: checkpoints.get(row.session_id) ?? null,
           }));
       const r = tabs.launch(open, {
         terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), prompt,
         dryRun: Boolean(opts['dry-run']),
       });
+      if (!opts['dry-run']) for (const [id, cp] of checkpoints) if (cp) pause.markResumed(id);
       for (const row of open) out(`open ${row.name.padEnd(20)} ${row.session_id.slice(0, 8)}  ${row.cwd}\n`);
       if (opts['dry-run']) {
         for (const st of r.steps) out(`${st.cmd} ${st.args.map((x) => JSON.stringify(x)).join(' ')}\n`);
