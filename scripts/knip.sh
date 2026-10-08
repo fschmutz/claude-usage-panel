@@ -16,7 +16,12 @@ want="$(sed -n 's/^ *"knip": *"\([0-9][0-9.]*\)".*/\1/p' "$dir/package.json")"
     echo "knip.sh: no knip version pinned in $dir/package.json" >&2
     exit 1
 }
-have="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$dir/node_modules/knip/package.json" 2>/dev/null | head -1)"
+# Not installed yet is the first run, not an error: a sed on the missing
+# file exits 2, and under pipefail that killed the hook with no message.
+have=""
+if [ -f "$dir/node_modules/knip/package.json" ]; then
+    have="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$dir/node_modules/knip/package.json" | head -1)"
+fi
 if [ "$have" != "$want" ]; then
     echo "knip.sh: installing knip $want into $dir/node_modules" >&2
     # --ignore-scripts: a transitive install script from a later bump must not
