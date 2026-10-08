@@ -11,7 +11,7 @@ import St from 'gi://St';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {run} from './proc.js';
+import {lastOutputLine, run} from './proc.js';
 import {claudectlPath} from './snapshots.js';
 import {focusArgv, focusPlan} from './pure.js';
 import {listWaiting} from './waiting.js';
@@ -115,7 +115,7 @@ export class WaitingController {
                 if (this._isDestroyed() || ok)
                     return;
                 this._notify(_('Claude usage'),
-                    lastLine(stdout, stderr) || _('Could not focus %s').format(row.name));
+                    lastOutputLine(stdout, stderr) || _('Could not focus %s').format(row.name));
             });
             return;
         }
@@ -140,9 +140,4 @@ export class WaitingController {
  *  of one repo share a basename. */
 export function focusCommand(cli, row) {
     return [cli, 'waiting', 'focus', String(row.pid)];
-}
-
-function lastLine(stdout, stderr) {
-    const text = `${stdout}\n${stderr}`.trim();
-    return text.split('\n').filter(Boolean).at(-1) ?? '';
 }

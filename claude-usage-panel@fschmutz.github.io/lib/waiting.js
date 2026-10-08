@@ -10,8 +10,9 @@ import {listChildrenAsync, readJSONAsync, readTextAsync} from './fs.js';
 import {configDir} from './paths.js';
 import {pidFromWaitingMarkerName, waitingList} from './pure.js';
 
-/** Kernel start time (field 22) of a pid; comm may hold spaces and parens. */
-async function procStart(pid) {
+/** Kernel start time (field 22) of a pid; comm may hold spaces and parens.
+ *  null when the pid is gone. */
+export async function procStart(pid) {
     const text = await readTextAsync(`/proc/${pid}/stat`);
     if (!text)
         return null;
@@ -29,8 +30,8 @@ async function liveSession(file) {
     return {pid: d.pid, sessionId: d.sessionId, name: d.name ?? '', cwd: d.cwd};
 }
 
-/** Live sessions that are waiting, oldest wait first. */
-export async function listWaiting({nowMs = Date.now()} = {}) {
+/** The registry dir split into marker files and registry rows. */
+async function scanRegistry() {
     const dir = GLib.build_filenamev([configDir(), 'sessions']);
     const names = await listChildrenAsync(dir, 'standard::name', info => info.get_name());
     const markerFiles = [];
@@ -42,9 +43,22 @@ export async function listWaiting({nowMs = Date.now()} = {}) {
         else if (name.endsWith('.json'))
             registry.push(file);
     }
+    return {markerFiles, registry};
+}
+
+const liveOf = async registry => (await Promise.all(registry.map(liveSession))).filter(Boolean);
+
+/** Every live interactive session in the registry: {pid, sessionId, name, cwd}. */
+export async function listLiveSessions() {
+    return liveOf((await scanRegistry()).registry);
+}
+
+/** Live sessions that are waiting, oldest wait first. */
+export async function listWaiting({nowMs = Date.now()} = {}) {
+    const {markerFiles, registry} = await scanRegistry();
     const [markers, sessions] = await Promise.all([
         Promise.all(markerFiles.map(readJSONAsync)),
-        Promise.all(registry.map(liveSession)),
+        liveOf(registry),
     ]);
-    return waitingList(sessions.filter(Boolean), markers.filter(Boolean), nowMs);
+    return waitingList(sessions, markers.filter(Boolean), nowMs);
 }

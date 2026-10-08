@@ -16,75 +16,76 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:194
+#: extension.js:196
 msgid "Extra usage"
 msgstr "追加利用"
 
-#: extension.js:340
+#: extension.js:344
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - 再試行中、前回の値を表示しています"
 
-#: extension.js:377
+#: extension.js:381
 #, javascript-format
 msgid "Updated %s"
 msgstr "更新 %s"
 
-#: extension.js:411
+#: extension.js:416
 msgid "Session cost: computing…"
 msgstr "セッション費用: 計算中…"
 
-#: extension.js:416
+#: extension.js:421
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "セッション費用: $%s · %s トークン (推定)"
 
-#: extension.js:418
+#: extension.js:423
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "セッション費用: 利用不可 (ccusage をインストール)"
 
-#: extension.js:448
+#: extension.js:453
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (上限の %d%%)"
 
-#: extension.js:465
+#: extension.js:470
 #, javascript-format
 msgid "last %s"
 msgstr "前回 %s"
 
-#: extension.js:465 prefs/pings.js:96
+#: extension.js:470 prefs/pings.js:96
 msgid "never"
 msgstr "なし"
 
-#: extension.js:469
+#: extension.js:474
 #, javascript-format
 msgid "next %s"
 msgstr "次回 %s"
 
-#: extension.js:471
+#: extension.js:476
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
-#: extension.js:483 extension.js:487 lib/accountsSection.js:535
-#: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
+#: extension.js:488 extension.js:492 lib/accountsSection.js:535
+#: lib/headerBar.js:42 lib/pauseSection.js:188 lib/pauseSection.js:198
+#: lib/sessionsSection.js:159 lib/sessionsSection.js:169
 #: lib/waitingSection.js:117 lib/waitingSection.js:124
 #: lib/waitingSection.js:132
 msgid "Claude usage"
 msgstr "Claude の使用状況"
 
-#: extension.js:484
+#: extension.js:489
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s が %d%% に達しました"
 
-#: extension.js:488
+#: extension.js:493
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s は現在のペースだとリセット前に上限に達します"
 
-#: extension.js:612
+#: extension.js:617
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -338,6 +339,129 @@ msgstr "設定"
 #: lib/headerBar.js:83
 msgid "Quit"
 msgstr "終了"
+
+#: lib/pauseSection.js:45
+msgid "woken"
+msgstr "起動済み"
+
+#: lib/pauseSection.js:45
+msgid "next tool call"
+msgstr "次のツール呼び出し"
+
+#: lib/pauseSection.js:47
+msgid "SAFE"
+msgstr "安全"
+
+#: lib/pauseSection.js:48
+#, javascript-format
+msgid "NOT SAFE: %s"
+msgstr "安全ではない: %s"
+
+#: lib/pauseSection.js:48
+msgid "NOT SAFE"
+msgstr "安全ではない"
+
+#: lib/pauseSection.js:49
+msgid "resumed"
+msgstr "再開済み"
+
+#: lib/pauseSection.js:50
+#, javascript-format
+msgid "delivered (%s), pausing"
+msgstr "配信済み (%s)、一時停止中"
+
+#: lib/pauseSection.js:50
+msgid "delivered, pausing"
+msgstr "配信済み、一時停止中"
+
+#: lib/pauseSection.js:51
+msgid "delivering"
+msgstr "配信中"
+
+#: lib/pauseSection.js:52
+msgid "no waiter yet: gets it on its next turn"
+msgstr "waiter 未起動: 次のターンで受け取ります"
+
+#: lib/pauseSection.js:53
+msgid "ended without a verdict"
+msgstr "判定なしで終了"
+
+#: lib/pauseSection.js:54
+msgid "superseded by a newer request"
+msgstr "新しいリクエストに置き換えられました"
+
+#: lib/pauseSection.js:55
+msgid "no verdict within the hour"
+msgstr "1時間以内に判定なし"
+
+#: lib/pauseSection.js:55
+msgid "expired before delivery"
+msgstr "配信前に期限切れ"
+
+#: lib/pauseSection.js:56
+msgid "not running"
+msgstr "実行されていません"
+
+#: lib/pauseSection.js:66
+#, javascript-format
+msgid "Resume %s"
+msgstr "再開 %s"
+
+#: lib/pauseSection.js:67
+#, javascript-format
+msgid "%d/%d resumed"
+msgstr "%d/%d 再開済み"
+
+#: lib/pauseSection.js:68
+#, javascript-format
+msgid "Pause %s"
+msgstr "一時停止 %s"
+
+#: lib/pauseSection.js:69
+#, javascript-format
+msgid "%d/%d safe"
+msgstr "%d/%d 安全"
+
+#: lib/pauseSection.js:71
+#, javascript-format
+msgid "%d not safe"
+msgstr "%d 件が安全ではない"
+
+#: lib/pauseSection.js:73
+#, javascript-format
+msgid "%d in progress"
+msgstr "%d 件処理中"
+
+#: lib/pauseSection.js:97
+msgid "Pause / resume"
+msgstr "一時停止 / 再開"
+
+#: lib/pauseSection.js:102
+msgid "Pause all"
+msgstr "すべて一時停止"
+
+#: lib/pauseSection.js:103
+msgid "Resume all"
+msgstr "すべて再開"
+
+#: lib/pauseSection.js:169
+msgid "Pause"
+msgstr "一時停止"
+
+#: lib/pauseSection.js:189
+msgid ""
+"Install claudectl and the pause hooks (./install.sh pause) to pause sessions."
+msgstr ""
+"セッションを一時停止するには claudectl と一時停止フック (./install.sh pause) "
+"をインストールしてください。"
+
+#: lib/pauseSection.js:199
+msgid "Could not resume the sessions"
+msgstr "セッションを再開できませんでした"
+
+#: lib/pauseSection.js:199
+msgid "Could not pause the sessions"
+msgstr "セッションを一時停止できませんでした"
 
 #: lib/savedSessions.js:45
 #, javascript-format
@@ -679,12 +803,45 @@ msgstr "入力待ちのセッションを表示"
 msgid "Adds a Waiting on you section and a top-bar count"
 msgstr "「入力待ち」セクションとトップバーの件数を追加します"
 
-#
 #: prefs/integrations.js:82
+msgid "Pause and resume (optional)"
+msgstr "一時停止と再開（任意）"
+
+#: prefs/integrations.js:83
+msgid ""
+"Send the pause protocol to every live Claude Code session in one click: each "
+"one stops its jobs, writes a checkpoint and answers SAFE or NOT SAFE, shown "
+"per session in the dropdown. Resume all sends the resume protocol, or "
+"reopens a closed session with its checkpoint. Off by default - with it off, "
+"neither the session registry nor the pause store is read. It needs the "
+"Claude Code hooks `./install.sh pause` installs; they keep one idle node "
+"waiter per session and run node on every tool call."
+msgstr ""
+"ワンクリックで実行中のすべての Claude Code セッションに一時停止プロトコルを送"
+"ります。各セッションはジョブを停止し、チェックポイントを書き、SAFE または "
+"NOT SAFE と答え、ドロップダウンにセッションごとに表示されます。「すべて再開」"
+"は再開プロトコルを送るか、閉じたセッションをチェックポイント付きで開き直しま"
+"す。既定ではオフ - オフの間はセッションレジストリも一時停止ストアも読みませ"
+"ん。`./install.sh pause` がインストールする Claude Code フックが必要です。"
+"セッションごとに待機中の node waiter を 1 つ保持し、ツール呼び出しごとに "
+"node を実行します。"
+
+#: prefs/integrations.js:86
+msgid "Show pause and resume"
+msgstr "一時停止と再開を表示"
+
+#: prefs/integrations.js:87
+msgid "Adds Pause all, Resume all and a per-session state to the dropdown"
+msgstr ""
+"ドロップダウンに「すべて一時停止」「すべて再開」とセッションごとの状態を追加"
+"します"
+
+#
+#: prefs/integrations.js:96
 msgid "OpenAI Codex (optional)"
 msgstr "OpenAI Codex（任意）"
 
-#: prefs/integrations.js:83
+#: prefs/integrations.js:97
 msgid ""
 "A sibling section for the ChatGPT logins the codex CLI holds: save them "
 "under a name and switch without a browser. Off by default - with it off, "
@@ -701,20 +858,20 @@ msgstr ""
 "ンを発行することもありません。"
 
 #
-#: prefs/integrations.js:86
+#: prefs/integrations.js:100
 msgid "Show saved Codex logins"
 msgstr "保存した Codex ログインを表示"
 
 #
-#: prefs/integrations.js:87
+#: prefs/integrations.js:101
 msgid "Adds an OpenAI Codex section below the Claude ones"
 msgstr "Claude のセクションの下に OpenAI Codex セクションを追加します"
 
-#: prefs/integrations.js:94
+#: prefs/integrations.js:108
 msgid "Usage figures are est."
 msgstr "数値は推定値です"
 
-#: prefs/integrations.js:95
+#: prefs/integrations.js:109
 msgid ""
 "OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
 "ones the codex CLI recorded when the API last returned them, stamped with "

@@ -77,6 +77,20 @@ export function buildWaiting(prefs, settings) {
     return waiting;
 }
 
+export function buildPause(prefs, settings) {
+    const pause = new Adw.PreferencesGroup({
+        title: _('Pause and resume (optional)'),
+        description: _('Send the pause protocol to every live Claude Code session in one click: each one stops its jobs, writes a checkpoint and answers SAFE or NOT SAFE, shown per session in the dropdown. Resume all sends the resume protocol, or reopens a closed session with its checkpoint. Off by default - with it off, neither the session registry nor the pause store is read. It needs the Claude Code hooks `./install.sh pause` installs; they keep one idle node waiter per session and run node on every tool call.'),
+    });
+    const row = new Adw.SwitchRow({
+        title: _('Show pause and resume'),
+        subtitle: _('Adds Pause all, Resume all and a per-session state to the dropdown'),
+    });
+    settings.bind('pause-enabled', row, 'active', 0);
+    pause.add(row);
+    return pause;
+}
+
 export function buildCodex(prefs, settings) {
     const codex = new Adw.PreferencesGroup({
         title: _('OpenAI Codex (optional)'),

@@ -70,3 +70,10 @@ export function run(argv, {cancellable = null, timeoutSeconds = RUN_TIMEOUT_SECO
         });
     });
 }
+
+/** The last non-empty line of a child's output: what a CLI says it did or
+ *  why it refused, for a notification. */
+export function lastOutputLine(stdout, stderr) {
+    const text = `${stdout}\n${stderr}`.trim();
+    return text.split('\n').filter(Boolean).at(-1) ?? '';
+}

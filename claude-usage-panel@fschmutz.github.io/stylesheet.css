@@ -153,6 +153,30 @@
     spacing: 3px;
     padding: 8px 8px 4px 8px;
 }
+.cu-pause {
+    spacing: 3px;
+    padding: 8px 8px 4px 8px;
+}
+.cu-pause-head {
+    spacing: 6px;
+}
+.cu-pause-btn {
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: #d1cbbf;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+.cu-pause-btn:hover,
+.cu-pause-btn:focus {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+.cu-pause-btn:insensitive {
+    color: #6b665e;
+}
+.cu-pause-safe { color: #8fbf7f; }
+.cu-pause-not-safe,
+.cu-pause-lost { color: #e0a458; }
 .cu-sessions {
     spacing: 3px;
     padding: 8px 8px 4px 8px;
@@ -309,6 +333,12 @@
 .cu-light .cu-session-label { color: #333; }
 .cu-light .cu-session-meta { color: #6b6b60; }
 .cu-light .cu-session-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
+.cu-light .cu-pause-btn { color: #333; background-color: rgba(0, 0, 0, 0.05); }
+.cu-light .cu-pause-btn:hover,
+.cu-light .cu-pause-btn:focus { background-color: rgba(0, 0, 0, 0.1); }
+.cu-light .cu-pause-safe { color: #3f7a32; }
+.cu-light .cu-pause-not-safe,
+.cu-light .cu-pause-lost { color: #a3561a; }
 .cu-light .cu-icon-btn { color: #6b6b60; }
 .cu-light .cu-icon-btn:hover,
 .cu-light .cu-icon-btn:focus {

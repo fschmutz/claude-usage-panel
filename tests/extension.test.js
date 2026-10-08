@@ -110,6 +110,7 @@ function spyOn(button, hang = []) {
     };
     button._refreshCost = make('cost');
     button._waiting = {refresh: make('waiting'), destroy: () => {}};
+    button._pause = {refresh: make('pause'), destroy: () => {}};
     button._sessions = {refresh: make('sessions'), destroy: () => {}};
     button._cursor = {refresh: make('cursor')};
     button._accounts = {refresh: make('accounts'), activeName: null, destroy: () => {}};
@@ -123,7 +124,7 @@ test('a poll with no login still refreshes every section', async t => {
     const armed = rec.timers.length;
     await button.refresh();
     assert.deepEqual(calls.map(([n]) => n).sort(),
-        ['accounts', 'codex', 'cost', 'cursor', 'sessions', 'waiting']);
+        ['accounts', 'codex', 'cost', 'cursor', 'pause', 'sessions', 'waiting']);
     assert.deepEqual(calls.find(([n]) => n === 'accounts')[1], [], 'no live cards to report');
     assert.equal(button._updatedLabel.text, 'No Claude credentials found. Sign in with Claude Code.');
     assert.equal(rec.timers.length, armed + 1, 'the next poll is armed');
@@ -161,7 +162,7 @@ test('a section that hangs does not stop the next poll being armed', async t => 
     for (let i = 0; i < 20; i++)
         await new Promise(r => setImmediate(r));
     assert.equal(done, false, 'still waiting on the hung section');
-    assert.equal(calls.length, 6, 'every section was started');
+    assert.equal(calls.length, 7, 'every section was started');
     assert.equal(deadlines.size, 1, 'only the hung section is still under its deadline');
     for (const fire of deadlines.values())
         fire();

@@ -60,6 +60,18 @@
         installs (and that turns this on).
       </description>
     </key>
+    <key name="pause-enabled" type="b">
+      <default>false</default>
+      <summary>Show pause and resume for the live sessions</summary>
+      <description>
+        Add a "Pause / resume" section: Pause all, Pause per session and Resume
+        all run the installed claudectl, and each session's row shows whether
+        the pause protocol reached it and whether it answered SAFE or NOT SAFE.
+        Off by default; with it off, neither the session registry nor the pause
+        store is read. It needs the Claude Code hooks that `./install.sh pause`
+        installs (and that turns this on).
+      </description>
+    </key>
     <key name="cursor-enabled" type="b">
       <default>false</default>
       <summary>Show Cursor usage</summary>

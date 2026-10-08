@@ -16,75 +16,76 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:194
+#: extension.js:196
 msgid "Extra usage"
 msgstr "额外用量"
 
-#: extension.js:340
+#: extension.js:344
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - 正在重试，显示上次读数"
 
-#: extension.js:377
+#: extension.js:381
 #, javascript-format
 msgid "Updated %s"
 msgstr "已更新 %s"
 
-#: extension.js:411
+#: extension.js:416
 msgid "Session cost: computing…"
 msgstr "会话费用：计算中…"
 
-#: extension.js:416
+#: extension.js:421
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "会话费用：$%s · %s 个 token（估算）"
 
-#: extension.js:418
+#: extension.js:423
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "会话费用：不可用（请安装 ccusage）"
 
-#: extension.js:448
+#: extension.js:453
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s（上限的 %d%%）"
 
-#: extension.js:465
+#: extension.js:470
 #, javascript-format
 msgid "last %s"
 msgstr "上次 %s"
 
-#: extension.js:465 prefs/pings.js:96
+#: extension.js:470 prefs/pings.js:96
 msgid "never"
 msgstr "从未"
 
-#: extension.js:469
+#: extension.js:474
 #, javascript-format
 msgid "next %s"
 msgstr "下次 %s"
 
-#: extension.js:471
+#: extension.js:476
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "会话 ping：%s"
 
-#: extension.js:483 extension.js:487 lib/accountsSection.js:535
-#: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
+#: extension.js:488 extension.js:492 lib/accountsSection.js:535
+#: lib/headerBar.js:42 lib/pauseSection.js:188 lib/pauseSection.js:198
+#: lib/sessionsSection.js:159 lib/sessionsSection.js:169
 #: lib/waitingSection.js:117 lib/waitingSection.js:124
 #: lib/waitingSection.js:132
 msgid "Claude usage"
 msgstr "Claude 用量"
 
-#: extension.js:484
+#: extension.js:489
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s 已达到 %d%%"
 
-#: extension.js:488
+#: extension.js:493
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "按当前速度，%s 将在重置前用尽"
 
-#: extension.js:612
+#: extension.js:617
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -330,6 +331,127 @@ msgstr "设置"
 #: lib/headerBar.js:83
 msgid "Quit"
 msgstr "退出"
+
+#: lib/pauseSection.js:45
+msgid "woken"
+msgstr "已唤醒"
+
+#: lib/pauseSection.js:45
+msgid "next tool call"
+msgstr "下一次工具调用"
+
+#: lib/pauseSection.js:47
+msgid "SAFE"
+msgstr "安全"
+
+#: lib/pauseSection.js:48
+#, javascript-format
+msgid "NOT SAFE: %s"
+msgstr "不安全：%s"
+
+#: lib/pauseSection.js:48
+msgid "NOT SAFE"
+msgstr "不安全"
+
+#: lib/pauseSection.js:49
+msgid "resumed"
+msgstr "已恢复"
+
+#: lib/pauseSection.js:50
+#, javascript-format
+msgid "delivered (%s), pausing"
+msgstr "已送达（%s），正在暂停"
+
+#: lib/pauseSection.js:50
+msgid "delivered, pausing"
+msgstr "已送达，正在暂停"
+
+#: lib/pauseSection.js:51
+msgid "delivering"
+msgstr "正在送达"
+
+#: lib/pauseSection.js:52
+msgid "no waiter yet: gets it on its next turn"
+msgstr "尚无 waiter：将在下一轮收到"
+
+#: lib/pauseSection.js:53
+msgid "ended without a verdict"
+msgstr "未给出结论即结束"
+
+#: lib/pauseSection.js:54
+msgid "superseded by a newer request"
+msgstr "已被更新的请求取代"
+
+#: lib/pauseSection.js:55
+msgid "no verdict within the hour"
+msgstr "一小时内无结论"
+
+#: lib/pauseSection.js:55
+msgid "expired before delivery"
+msgstr "送达前已过期"
+
+#: lib/pauseSection.js:56
+msgid "not running"
+msgstr "未运行"
+
+#: lib/pauseSection.js:66
+#, javascript-format
+msgid "Resume %s"
+msgstr "恢复 %s"
+
+#: lib/pauseSection.js:67
+#, javascript-format
+msgid "%d/%d resumed"
+msgstr "%d/%d 已恢复"
+
+#: lib/pauseSection.js:68
+#, javascript-format
+msgid "Pause %s"
+msgstr "暂停 %s"
+
+#: lib/pauseSection.js:69
+#, javascript-format
+msgid "%d/%d safe"
+msgstr "%d/%d 安全"
+
+#: lib/pauseSection.js:71
+#, javascript-format
+msgid "%d not safe"
+msgstr "%d 个不安全"
+
+#: lib/pauseSection.js:73
+#, javascript-format
+msgid "%d in progress"
+msgstr "%d 个进行中"
+
+#: lib/pauseSection.js:97
+msgid "Pause / resume"
+msgstr "暂停 / 恢复"
+
+#: lib/pauseSection.js:102
+msgid "Pause all"
+msgstr "全部暂停"
+
+#: lib/pauseSection.js:103
+msgid "Resume all"
+msgstr "全部恢复"
+
+#: lib/pauseSection.js:169
+msgid "Pause"
+msgstr "暂停"
+
+#: lib/pauseSection.js:189
+msgid ""
+"Install claudectl and the pause hooks (./install.sh pause) to pause sessions."
+msgstr "安装 claudectl 和暂停钩子（./install.sh pause）后即可暂停会话。"
+
+#: lib/pauseSection.js:199
+msgid "Could not resume the sessions"
+msgstr "无法恢复会话"
+
+#: lib/pauseSection.js:199
+msgid "Could not pause the sessions"
+msgstr "无法暂停会话"
 
 #: lib/savedSessions.js:45
 #, javascript-format
@@ -656,12 +778,40 @@ msgstr "显示正在等你的会话"
 msgid "Adds a Waiting on you section and a top-bar count"
 msgstr "添加“正在等你”分区和顶栏计数"
 
-#
 #: prefs/integrations.js:82
+msgid "Pause and resume (optional)"
+msgstr "暂停与恢复（可选）"
+
+#: prefs/integrations.js:83
+msgid ""
+"Send the pause protocol to every live Claude Code session in one click: each "
+"one stops its jobs, writes a checkpoint and answers SAFE or NOT SAFE, shown "
+"per session in the dropdown. Resume all sends the resume protocol, or "
+"reopens a closed session with its checkpoint. Off by default - with it off, "
+"neither the session registry nor the pause store is read. It needs the "
+"Claude Code hooks `./install.sh pause` installs; they keep one idle node "
+"waiter per session and run node on every tool call."
+msgstr ""
+"一键向每个正在运行的 Claude Code 会话发送暂停协议：每个会话停止其任务、写入检"
+"查点并回答 SAFE 或 NOT SAFE，按会话显示在下拉菜单中。“全部恢复”发送恢复协议，"
+"或带检查点重新打开已关闭的会话。默认关闭 - 关闭时既不读取会话注册表也不读取暂"
+"停存储。需要 `./install.sh pause` 安装的 Claude Code 钩子；它们为每个会话保留"
+"一个空闲的 node waiter，并在每次工具调用时运行 node。"
+
+#: prefs/integrations.js:86
+msgid "Show pause and resume"
+msgstr "显示暂停与恢复"
+
+#: prefs/integrations.js:87
+msgid "Adds Pause all, Resume all and a per-session state to the dropdown"
+msgstr "在下拉菜单中添加“全部暂停”“全部恢复”和每个会话的状态"
+
+#
+#: prefs/integrations.js:96
 msgid "OpenAI Codex (optional)"
 msgstr "OpenAI Codex（可选）"
 
-#: prefs/integrations.js:83
+#: prefs/integrations.js:97
 msgid ""
 "A sibling section for the ChatGPT logins the codex CLI holds: save them "
 "under a name and switch without a browser. Off by default - with it off, "
@@ -676,20 +826,20 @@ msgstr ""
 "Claude 存储的旁边，而不是其中。不会上传任何内容，也永远不会在此签发令牌。"
 
 #
-#: prefs/integrations.js:86
+#: prefs/integrations.js:100
 msgid "Show saved Codex logins"
 msgstr "显示已保存的 Codex 登录"
 
 #
-#: prefs/integrations.js:87
+#: prefs/integrations.js:101
 msgid "Adds an OpenAI Codex section below the Claude ones"
 msgstr "在 Claude 各节下方添加一个 OpenAI Codex 节"
 
-#: prefs/integrations.js:94
+#: prefs/integrations.js:108
 msgid "Usage figures are est."
 msgstr "数值为估算值"
 
-#: prefs/integrations.js:95
+#: prefs/integrations.js:109
 msgid ""
 "OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
 "ones the codex CLI recorded when the API last returned them, stamped with "

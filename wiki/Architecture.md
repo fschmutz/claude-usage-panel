@@ -114,6 +114,8 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── sessionsSection.js # the dropdown's today's-sessions rows + terminal launch
     ├── waiting.js      # live-session registry + waiting markers (GJS I/O)
     ├── waitingSection.js # the dropdown's waiting-on-you rows + focus
+    ├── pause.js        # pause / resume rows from the claudectl store (async reads; the panel never writes)
+    ├── pauseSection.js # the dropdown's Pause all / Resume all, per-session Pause + state, via claudectl
     ├── sessionPing.js  # reads/writes the systemd units + the last-ping stamp
     ├── sessionPingUnit.js # the unit text itself (pure, shared with install.sh)
     ├── snapshots.js    # reads the claudectl snapshot store for the preferences

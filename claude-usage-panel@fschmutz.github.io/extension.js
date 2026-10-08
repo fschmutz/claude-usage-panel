@@ -28,6 +28,7 @@ import {CodexController} from './lib/codexSection.js';
 import {CursorController} from './lib/cursorSection.js';
 import {SessionsController} from './lib/sessionsSection.js';
 import {WaitingController} from './lib/waitingSection.js';
+import {PauseController} from './lib/pauseSection.js';
 import {UsageCard} from './lib/usageCard.js';
 import {HeaderBar} from './lib/headerBar.js';
 import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
@@ -139,6 +140,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'changed::show-sessions', () => this.refresh(),
             'changed::accounts-enabled', () => this.refresh(),
             'changed::waiting-enabled', () => this.refresh(),
+            'changed::pause-enabled', () => this.refresh(),
             'changed::accounts-auto-switch', () => this._accounts.syncToggle(),
             'changed::accounts-switch-threshold', () => this._accounts.syncToggle(),
             'changed::accounts-menu-toggle', () => this._accounts.syncToggle(),
@@ -220,6 +222,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._panelWait.visible = n > 0;
             },
         });
+        // Pause / resume sits with the live sessions, above today's ranking.
+        this._pause = new PauseController(deps);
         // The optional sections, each owning its menu item, in menu order.
         this._sessions = new SessionsController(deps);
         this._cursor = new CursorController(deps);
@@ -387,6 +391,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         const outcomes = await refreshSections({
             cost: () => this._refreshCost(),
             waiting: () => this._waiting.refresh(),
+            pause: () => this._pause.refresh(),
             sessions: () => this._sessions.refresh(),
             cursor: () => this._cursor.refresh(),
             accounts: cards => this._accounts.refresh(cards),
@@ -635,6 +640,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._networkMonitor = null;
         this._sessions.destroy();
         this._waiting.destroy();
+        this._pause.destroy();
         this._accounts.destroy();
         this._settings?.disconnectObject(this);
         this._ifaceSettings?.disconnectObject(this);

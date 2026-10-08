@@ -16,75 +16,76 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:194
+#: extension.js:196
 msgid "Extra usage"
 msgstr "Utilizzo extra"
 
-#: extension.js:340
+#: extension.js:344
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - nuovo tentativo, ultima lettura mostrata"
 
-#: extension.js:377
+#: extension.js:381
 #, javascript-format
 msgid "Updated %s"
 msgstr "Aggiornato %s"
 
-#: extension.js:411
+#: extension.js:416
 msgid "Session cost: computing…"
 msgstr "Costo sessione: calcolo…"
 
-#: extension.js:416
+#: extension.js:421
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "Costo sessione: $%s · %s token (stima)"
 
-#: extension.js:418
+#: extension.js:423
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "Costo sessione: non disponibile (installa ccusage)"
 
-#: extension.js:448
+#: extension.js:453
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (%d%% del limite)"
 
-#: extension.js:465
+#: extension.js:470
 #, javascript-format
 msgid "last %s"
 msgstr "ultimo %s"
 
-#: extension.js:465 prefs/pings.js:96
+#: extension.js:470 prefs/pings.js:96
 msgid "never"
 msgstr "mai"
 
-#: extension.js:469
+#: extension.js:474
 #, javascript-format
 msgid "next %s"
 msgstr "prossimo %s"
 
-#: extension.js:471
+#: extension.js:476
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "Ping di sessione: %s"
 
-#: extension.js:483 extension.js:487 lib/accountsSection.js:535
-#: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
+#: extension.js:488 extension.js:492 lib/accountsSection.js:535
+#: lib/headerBar.js:42 lib/pauseSection.js:188 lib/pauseSection.js:198
+#: lib/sessionsSection.js:159 lib/sessionsSection.js:169
 #: lib/waitingSection.js:117 lib/waitingSection.js:124
 #: lib/waitingSection.js:132
 msgid "Claude usage"
 msgstr "Utilizzo di Claude"
 
-#: extension.js:484
+#: extension.js:489
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s ha raggiunto il %d%%"
 
-#: extension.js:488
+#: extension.js:493
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s si esaurirà prima del reset al ritmo attuale"
 
-#: extension.js:612
+#: extension.js:617
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -340,6 +341,129 @@ msgstr "Impostazioni"
 #: lib/headerBar.js:83
 msgid "Quit"
 msgstr "Esci"
+
+#: lib/pauseSection.js:45
+msgid "woken"
+msgstr "risvegliata"
+
+#: lib/pauseSection.js:45
+msgid "next tool call"
+msgstr "prossima chiamata a strumento"
+
+#: lib/pauseSection.js:47
+msgid "SAFE"
+msgstr "SICURO"
+
+#: lib/pauseSection.js:48
+#, javascript-format
+msgid "NOT SAFE: %s"
+msgstr "NON SICURO: %s"
+
+#: lib/pauseSection.js:48
+msgid "NOT SAFE"
+msgstr "NON SICURO"
+
+#: lib/pauseSection.js:49
+msgid "resumed"
+msgstr "ripresa"
+
+#: lib/pauseSection.js:50
+#, javascript-format
+msgid "delivered (%s), pausing"
+msgstr "consegnato (%s), in pausa"
+
+#: lib/pauseSection.js:50
+msgid "delivered, pausing"
+msgstr "consegnato, in pausa"
+
+#: lib/pauseSection.js:51
+msgid "delivering"
+msgstr "in consegna"
+
+#: lib/pauseSection.js:52
+msgid "no waiter yet: gets it on its next turn"
+msgstr "nessun waiter ancora: lo riceve al prossimo turno"
+
+#: lib/pauseSection.js:53
+msgid "ended without a verdict"
+msgstr "terminata senza verdetto"
+
+#: lib/pauseSection.js:54
+msgid "superseded by a newer request"
+msgstr "sostituita da una richiesta più recente"
+
+#: lib/pauseSection.js:55
+msgid "no verdict within the hour"
+msgstr "nessun verdetto entro l'ora"
+
+#: lib/pauseSection.js:55
+msgid "expired before delivery"
+msgstr "scaduta prima della consegna"
+
+#: lib/pauseSection.js:56
+msgid "not running"
+msgstr "non in esecuzione"
+
+#: lib/pauseSection.js:66
+#, javascript-format
+msgid "Resume %s"
+msgstr "Ripresa %s"
+
+#: lib/pauseSection.js:67
+#, javascript-format
+msgid "%d/%d resumed"
+msgstr "%d/%d riprese"
+
+#: lib/pauseSection.js:68
+#, javascript-format
+msgid "Pause %s"
+msgstr "Pausa %s"
+
+#: lib/pauseSection.js:69
+#, javascript-format
+msgid "%d/%d safe"
+msgstr "%d/%d sicure"
+
+#: lib/pauseSection.js:71
+#, javascript-format
+msgid "%d not safe"
+msgstr "%d non sicure"
+
+#: lib/pauseSection.js:73
+#, javascript-format
+msgid "%d in progress"
+msgstr "%d in corso"
+
+#: lib/pauseSection.js:97
+msgid "Pause / resume"
+msgstr "Pausa / ripresa"
+
+#: lib/pauseSection.js:102
+msgid "Pause all"
+msgstr "Metti tutte in pausa"
+
+#: lib/pauseSection.js:103
+msgid "Resume all"
+msgstr "Riprendi tutte"
+
+#: lib/pauseSection.js:169
+msgid "Pause"
+msgstr "Pausa"
+
+#: lib/pauseSection.js:189
+msgid ""
+"Install claudectl and the pause hooks (./install.sh pause) to pause sessions."
+msgstr ""
+"Installa claudectl e gli hook di pausa (./install.sh pause) per mettere in "
+"pausa le sessioni."
+
+#: lib/pauseSection.js:199
+msgid "Could not resume the sessions"
+msgstr "Impossibile riprendere le sessioni"
+
+#: lib/pauseSection.js:199
+msgid "Could not pause the sessions"
+msgstr "Impossibile mettere in pausa le sessioni"
 
 #: lib/savedSessions.js:45
 #, javascript-format
@@ -688,12 +812,45 @@ msgid "Adds a Waiting on you section and a top-bar count"
 msgstr ""
 "Aggiunge una sezione «In attesa di te» e un contatore nella barra superiore"
 
-#
 #: prefs/integrations.js:82
+msgid "Pause and resume (optional)"
+msgstr "Pausa e ripresa (facoltativo)"
+
+#: prefs/integrations.js:83
+msgid ""
+"Send the pause protocol to every live Claude Code session in one click: each "
+"one stops its jobs, writes a checkpoint and answers SAFE or NOT SAFE, shown "
+"per session in the dropdown. Resume all sends the resume protocol, or "
+"reopens a closed session with its checkpoint. Off by default - with it off, "
+"neither the session registry nor the pause store is read. It needs the "
+"Claude Code hooks `./install.sh pause` installs; they keep one idle node "
+"waiter per session and run node on every tool call."
+msgstr ""
+"Invia con un clic il protocollo di pausa a ogni sessione Claude Code attiva: "
+"ciascuna ferma i suoi job, scrive un checkpoint e risponde SAFE o NOT SAFE, "
+"mostrato per sessione nel menu. Riprendi tutte invia il protocollo di "
+"ripresa, oppure riapre una sessione chiusa con il suo checkpoint. "
+"Disattivato per impostazione predefinita - finché è spento, non vengono "
+"letti né il registro delle sessioni né l'archivio delle pause. Richiede gli "
+"hook di Claude Code installati da `./install.sh pause`; mantengono un waiter "
+"node inattivo per sessione ed eseguono node a ogni chiamata a strumento."
+
+#: prefs/integrations.js:86
+msgid "Show pause and resume"
+msgstr "Mostra pausa e ripresa"
+
+#: prefs/integrations.js:87
+msgid "Adds Pause all, Resume all and a per-session state to the dropdown"
+msgstr ""
+"Aggiunge Metti tutte in pausa, Riprendi tutte e uno stato per sessione al "
+"menu"
+
+#
+#: prefs/integrations.js:96
 msgid "OpenAI Codex (optional)"
 msgstr "OpenAI Codex (facoltativo)"
 
-#: prefs/integrations.js:83
+#: prefs/integrations.js:97
 msgid ""
 "A sibling section for the ChatGPT logins the codex CLI holds: save them "
 "under a name and switch without a browser. Off by default - with it off, "
@@ -711,20 +868,20 @@ msgstr ""
 "viene mai emesso un token."
 
 #
-#: prefs/integrations.js:86
+#: prefs/integrations.js:100
 msgid "Show saved Codex logins"
 msgstr "Mostra gli accessi Codex salvati"
 
 #
-#: prefs/integrations.js:87
+#: prefs/integrations.js:101
 msgid "Adds an OpenAI Codex section below the Claude ones"
 msgstr "Aggiunge una sezione OpenAI Codex sotto quelle di Claude"
 
-#: prefs/integrations.js:94
+#: prefs/integrations.js:108
 msgid "Usage figures are est."
 msgstr "Le cifre sono stime"
 
-#: prefs/integrations.js:95
+#: prefs/integrations.js:109
 msgid ""
 "OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
 "ones the codex CLI recorded when the API last returned them, stamped with "
