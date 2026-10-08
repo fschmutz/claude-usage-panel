@@ -225,6 +225,21 @@ test('a Keychain write the stdin line cannot carry goes in argv, as Claude Code 
     }
 });
 
+test('an argv Keychain write security refuses fails the switch with its reason', async () => {
+    const {home, io} = world();
+    fs.rmSync(path.join(home, '.claude', '.credentials.json'));
+    const keychain = new Map([['Claude Code-credentials', JSON.stringify(creds('pro'))]]);
+    io.platform = 'darwin';
+    const sec = fakeSecurity(keychain, {denied: () => true});
+    io.exec = sec.exec;
+    const store = openStore(io);
+    store.saveCurrent('PRO');
+    const big = {...creds('perso'), mcpOAuth: {server: {accessToken: 'x'.repeat(2100)}}};
+    store.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: big});
+    await assert.rejects(store.switchTo('PERSO'), /could not write the Keychain item Claude Code-credentials: write denied/);
+    assert.deepEqual(JSON.parse(keychain.get('Claude Code-credentials')), creds('pro'), 'the item is unchanged');
+});
+
 test('a Keychain item with no account name is refused before the live login is touched', async () => {
     const {home, io} = world();
     fs.rmSync(path.join(home, '.claude', '.credentials.json'));
