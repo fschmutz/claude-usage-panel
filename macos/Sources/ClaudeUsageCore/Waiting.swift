@@ -124,7 +124,8 @@ public enum Waiting {
 
     /// What a Claude Code hook event does to the waiting marker.
     /// Stop marks idle; UserPromptSubmit / PreToolUse / PostToolUse /
-    /// SessionEnd clear. A mark for the same session and reason as `previous`
+    /// SessionEnd clear; a mark with no session id is ignored. A mark for the
+    /// same session and reason as `previous`
     /// keeps its `at`, so idle_prompt after Stop does not restart the wait.
     public static func applyHookEvent(
         _ name: String, payload: [String: Any] = [:], nowMs: Double = 0,
@@ -141,11 +142,13 @@ public enum Waiting {
         default:
             return .ignore
         }
-        let sessionId =
-            (payload["session_id"] as? String) ?? (payload["sessionId"] as? String)
-        if let previous, previous.reason == reason, let sessionId,
-            previous.sessionId == sessionId
-        {
+        // A marker counts only for the session that wrote it: without an id
+        // it could never be read, so it is not written.
+        guard
+            let sessionId = (payload["session_id"] as? String)
+                ?? (payload["sessionId"] as? String), !sessionId.isEmpty
+        else { return .ignore }
+        if let previous, previous.reason == reason, previous.sessionId == sessionId {
             return .mark(reason: reason, at: previous.at)
         }
         return .mark(reason: reason, at: nowMs)
