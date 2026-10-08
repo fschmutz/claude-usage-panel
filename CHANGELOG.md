@@ -32,6 +32,19 @@ semantic versioning.
   `saveCurrentCodex` / `removeCodexProfile`; the GNOME tests now import the
   extension files by literal path so knip sees what they use.
 
+### Fixed
+
+- **Waiting on you, hardened.** The GNOME scan is async end to end (it ran
+  sync Gio reads on the Shell's main loop every poll) and the macOS one runs
+  off the main actor. A marker counts only for the same pid and session id,
+  so a pid reused after a crash no longer shows "idle 3d". `PostToolUse`
+  clears an approved permission prompt while the tool runs; a re-mark for
+  the same session and reason keeps its start, so the age no longer jumps
+  back to 0s a minute into an idle wait. Focus goes by pid (two clones of
+  one repo share a name; `claudectl waiting focus NAME` refuses an
+  ambiguous one), WezTerm focuses the pane (`activate-pane --pane-id`; it
+  was given a window id), `claudectl waiting --help` prints the help.
+
 ### Changed
 
 - **The Homebrew tap is written with a GitHub App, not a personal token.**

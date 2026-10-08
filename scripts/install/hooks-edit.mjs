@@ -12,7 +12,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const EVENTS = ['Notification', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SessionEnd'];
+// The one list of events the hook handles (lib/pure/waiting.js, pinned by
+// tests/fixtures/waiting.json): a second copy here drifted the day it grew.
+import {WAITING_HOOK_EVENTS as EVENTS} from '../../claude-usage-panel@fschmutz.github.io/lib/pure/waiting.js';
 
 const [op, file, command] = process.argv.slice(2);
 

@@ -10,7 +10,9 @@ export const HELP = `claudectl waiting - live Claude Code sessions waiting on yo
 
 Stop marks a session idle (the turn ended; the prompt is waiting). A
 Notification hook marks permission or a question. UserPromptSubmit,
-PreToolUse and SessionEnd clear the mark. Dead pids are ignored.`;
+PreToolUse, PostToolUse and SessionEnd clear the mark. Dead pids, and a
+pid reused by a later session, are ignored. Focus by pid when two sessions
+share a name.`;
 
 function table(out, rows) {
   const w = Math.max(4, ...rows.map((r) => r.name.length));
@@ -24,7 +26,8 @@ export async function main(argv, io = {}) {
   const args = argv.filter((a) => !a.startsWith('--'));
   const json = argv.includes('--json');
   const cmd = args[0] === undefined || args[0] === 'list' ? 'list' : args[0];
-  if (cmd === 'help' || cmd === '-h' || cmd === '--help') {
+  // before the flag filter dropped it: `waiting --help` is help, not a list
+  if (argv.includes('--help') || cmd === 'help' || cmd === '-h') {
     out(`${HELP}\n`);
     return 0;
   }
@@ -34,10 +37,16 @@ export async function main(argv, io = {}) {
       throw new Error('waiting focus needs a name or pid');
     const rows = listWaiting(io);
     const pid = /^\d+$/.test(key) ? Number(key) : null;
-    const row = rows.find((r) => r.name === key || r.pid === pid
-      || r.sessionId === key || r.sessionId.startsWith(key));
-    if (!row)
+    // A pid or a session id names one session; a name may not (two clones
+    // of one repo share a basename), so an ambiguous name is refused.
+    const exact = rows.filter((r) => r.pid === pid || r.sessionId === key);
+    const loose = exact.length ? exact
+      : rows.filter((r) => r.name === key || r.sessionId.startsWith(key));
+    if (!loose.length)
       throw new Error(`nothing waiting named ${key}`);
+    if (loose.length > 1)
+      throw new Error(`${key} is ambiguous (${loose.map((r) => r.pid).join(', ')}) - pass the pid`);
+    const [row] = loose;
     if (!focusWaiting(row, io))
       throw new Error(`could not focus ${row.name}`);
     out(`focused ${row.name}\n`);

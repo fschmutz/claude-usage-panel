@@ -46,11 +46,12 @@ final class WaitingParityTests: XCTestCase {
             let expected = c["expected"] as! [String: Any]
             let got = Waiting.applyHookEvent(
                 c["name"] as! String, payload: c["payload"] as? [String: Any] ?? [:],
-                nowMs: now)
+                nowMs: now, previous: Waiting.parseMarker(c["previous"]))
             switch expected["action"] as! String {
             case "mark":
                 let reason = WaitingReason(rawValue: expected["reason"] as! String)!
-                XCTAssertEqual(got, .mark(reason: reason, at: now))
+                let at = (expected["at"] as? NSNumber)?.doubleValue ?? now
+                XCTAssertEqual(got, .mark(reason: reason, at: at))
             case "clear":
                 XCTAssertEqual(got, .clear)
             default:
@@ -118,7 +119,8 @@ final class WaitingParityTests: XCTestCase {
             let got = Waiting.focusPlan(
                 window: row["window"] as? String,
                 tab: (row["tab"] as? NSNumber)?.intValue,
-                pid: (row["pid"] as? NSNumber)?.intValue)
+                pid: (row["pid"] as? NSNumber)?.intValue,
+                pane: (row["pane"] as? NSNumber)?.intValue)
             XCTAssertEqual(got.how.rawValue, expected["how"] as? String)
             if let id = expected["id"] as? String { XCTAssertEqual(got.id, id) }
             if let session = expected["session"] as? String {
@@ -132,31 +134,12 @@ final class WaitingParityTests: XCTestCase {
     func testFocusArgv() throws {
         let fix = try fixture()
         for c in fix["focusArgv"] as! [[String: Any]] {
-            let raw = c["plan"] as! [String: Any]
-            let plan = Waiting.focusPlan(
-                window: windowOf(raw),
-                tab: (raw["tab"] as? NSNumber)?.intValue,
-                pid: (raw["pid"] as? NSNumber)?.intValue)
-            // Rebuild from the fixture's how so we do not depend on window:
-            let rebuilt = planFromFixture(raw)
-            let got = Waiting.focusArgv(rebuilt)
+            let got = Waiting.focusArgv(planFromFixture(c["plan"] as! [String: Any]))
             if c["expected"] is NSNull {
                 XCTAssertNil(got)
             } else {
                 XCTAssertEqual(got, c["expected"] as? [String])
             }
-            _ = plan
-        }
-    }
-
-    private func windowOf(_ raw: [String: Any]) -> String? {
-        switch raw["how"] as? String {
-        case "kitty": return "kitty:\(raw["id"] as? String ?? "")"
-        case "wezterm": return "wezterm:\(raw["id"] as? String ?? "")"
-        case "tmux": return "tmux:\(raw["session"] as? String ?? "")"
-        case "iterm": return "iterm:\(raw["id"] as? String ?? "")"
-        case "terminal": return "terminal:\(raw["id"] as? String ?? "")"
-        default: return nil
         }
     }
 

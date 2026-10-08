@@ -48,9 +48,9 @@ for (const c of fix.reasonFromNotification) {
 
 for (const c of fix.applyHookEvent) {
     test(`applyHookEvent - ${c.name}`, () => {
-        const got = pure.applyHookEvent(c.name, c.payload, NOW);
+        const got = pure.applyHookEvent(c.name, c.payload, NOW, c.previous ?? null);
         if (c.expected.action === 'mark') {
-            assert.deepEqual(got, {action: 'mark', reason: c.expected.reason, at: NOW});
+            assert.deepEqual(got, {action: 'mark', reason: c.expected.reason, at: c.expected.at ?? NOW});
         } else {
             assert.deepEqual(got, {action: c.expected.action});
         }
@@ -69,7 +69,7 @@ for (const c of fix.age) {
     });
 }
 
-test('waitingList joins live sessions, drops dead pids, oldest first', () => {
+test('waitingList joins live sessions, drops dead and reused pids, oldest first', () => {
     assert.deepEqual(pure.waitingList(fix.list.sessions, fix.list.markers, NOW), fix.list.expected);
 });
 
@@ -179,6 +179,30 @@ test('handleHook SessionEnd and PreToolUse clear; unknown events leave the marke
     assert.equal(listWaiting(io).length, 0);
 });
 
+test('handleHook: a re-mark keeps the wait start; PostToolUse clears an approved prompt', (t) => {
+    let now = NOW;
+    const io = {...world(t, {live: [{pid: 11, sessionId: 's1', name: 'API', cwd: '/a'}]}), nowMs: () => now};
+    const env = {...io.env, CLAUDE_PID: '11'};
+    handleHook({hook_event_name: 'Stop', session_id: 's1'}, {...io, env});
+    now = NOW + 60_000; // Claude Code's idle_prompt Notification a minute later
+    handleHook({hook_event_name: 'Notification', notification_type: 'idle_prompt', session_id: 's1'},
+        {...io, env});
+    assert.equal(listWaiting(io)[0].at, NOW, 'the wait did not restart');
+    handleHook({hook_event_name: 'Notification', notification_type: 'permission_prompt', session_id: 's1'},
+        {...io, env});
+    assert.equal(listWaiting(io)[0].at, now, 'a new reason is a new wait');
+    handleHook({hook_event_name: 'PostToolUse', session_id: 's1'}, {...io, env});
+    assert.equal(listWaiting(io).length, 0);
+});
+
+test('listWaiting: a pid reused by a later session does not inherit the old marker', (t) => {
+    const io = world(t, {
+        live: [{pid: 11, sessionId: 'new', name: 'API', cwd: '/a'}],
+        markers: [{sessionId: 'crashed', pid: 11, reason: 'idle', at: NOW - 86_400_000 * 3}],
+    });
+    assert.deepEqual(listWaiting(io), []);
+});
+
 test('writeWaitingMarker is atomic and 0600', (t) => {
     const io = world(t);
     const file = path.join(sessionRegistryDir(io), '11.waiting.json');
@@ -225,6 +249,28 @@ test('claudectl waiting lists oldest first and --json is the structured rows', a
     const json = await cli(io, '--json');
     const rows = JSON.parse(json.text);
     assert.deepEqual(rows.map((r) => r.name), ['API', 'WEB']);
+});
+
+test('claudectl waiting --help is the help; focus refuses an ambiguous name', async (t) => {
+    const io = world(t, {
+        live: [
+            {pid: 11, sessionId: 's1', name: 'repo', cwd: '/a/repo'},
+            {pid: 22, sessionId: 's2', name: 'repo', cwd: '/b/repo'},
+        ],
+        markers: [
+            {sessionId: 's1', pid: 11, reason: 'idle', at: NOW - 1000},
+            {sessionId: 's2', pid: 22, reason: 'idle', at: NOW - 2000},
+        ],
+    });
+    assert.match((await cli(io, '--help')).text, /claudectl waiting - live Claude Code sessions/);
+    await assert.rejects(cli(io, 'focus', 'repo'), /repo is ambiguous \(22, 11\) - pass the pid/);
+    const ran = [];
+    io.exec = (cmd, args) => {
+        ran.push([cmd, ...args].join(' '));
+        return '';
+    };
+    assert.equal((await cli(io, 'focus', '11')).text, 'focused repo\n');
+    assert.ok(ran.includes('kitty @ focus-window --match pid:11'));
 });
 
 test('claudectl waiting with nothing waiting says so', async (t) => {

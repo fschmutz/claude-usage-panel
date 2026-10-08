@@ -39,6 +39,14 @@ function markerPath(io, pid) {
   return path.join(sessionRegistryDir(io), waitingMarkerName(pid));
 }
 
+function readMarker(file) {
+  try {
+    return parseWaitingMarker(JSON.parse(fs.readFileSync(file, 'utf8')));
+  } catch {
+    return null;
+  }
+}
+
 function readMarkers(io) {
   const dir = sessionRegistryDir(io);
   let names;
@@ -51,14 +59,11 @@ function readMarkers(io) {
   for (const name of names) {
     if (pidFromWaitingMarkerName(name) === null)
       continue;
-    try {
-      const marker = parseWaitingMarker(JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
-      if (marker)
-        out.push(marker);
-    } catch {
-      // unreadable or not JSON: skip, never throw - a status line / hook
-      // must not die on a half-written marker
-    }
+    // unreadable or not JSON: skipped, never thrown - a status line / hook
+    // must not die on a half-written marker
+    const marker = readMarker(path.join(dir, name));
+    if (marker)
+      out.push(marker);
   }
   return out;
 }
@@ -97,13 +102,15 @@ function pidForSession(io, sessionId) {
 export function handleHook(payload, io = {}) {
   try {
     const event = payload?.hook_event_name ?? payload?.hookEventName ?? '';
-    const decision = applyHookEvent(event, payload ?? {}, nowMs(io));
-    if (decision.action === 'ignore')
-      return decision;
+    if (applyHookEvent(event, payload ?? {}).action === 'ignore')
+      return {action: 'ignore'};
     const pid = pidFromEnv(io) ?? pidForSession(io, payload?.session_id ?? payload?.sessionId);
     if (!pid)
-      return decision;
+      return applyHookEvent(event, payload ?? {}, nowMs(io));
     const file = markerPath(io, pid);
+    // The marker on disk: a re-mark for the same session and reason keeps
+    // its `at` (applyHookEvent), so the wait does not restart at 0s.
+    const decision = applyHookEvent(event, payload ?? {}, nowMs(io), readMarker(file));
     if (decision.action === 'clear') {
       try {
         fs.unlinkSync(file);

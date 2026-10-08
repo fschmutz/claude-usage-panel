@@ -17,10 +17,14 @@ Claude Code hooks write a small marker next to the live-session registry
 | `Stop` | mark **idle** - the turn ended and the prompt is waiting on you. Stop does **not** clear the marker. |
 | `UserPromptSubmit` | clear - you just sent work |
 | `PreToolUse` | clear - the agent is working |
+| `PostToolUse` | clear - a tool you approved is done; the permission prompt is no longer waiting |
 | `SessionEnd` | clear - the session is gone |
 
-A marker whose pid is no longer a live Claude Code process is ignored, so a
-crash or a reused pid cannot leave a ghost row.
+A marker counts only for the live session that wrote it - same pid **and**
+same session id - so a crash, or a pid the kernel later reuses for another
+session, cannot leave a ghost row. A re-mark for the same session and reason
+keeps the original time, so the age does not jump back to 0s when Claude
+Code's idle reminder fires a minute after Stop.
 
 The hooks are merged into `~/.claude/settings.json` whenever the Node tree is
 installed (`./install.sh statusline`, `mcp`, `cli`, and `gnome` / `macos` when
@@ -50,5 +54,5 @@ Manual hook command, if you wire `~/.claude/settings.json` yourself:
 node "/home/you/.claude/claude-usage-panel/claude-code/waiting-hook.js"
 ```
 
-on `Notification`, `UserPromptSubmit`, `PreToolUse`, `Stop` and `SessionEnd`.
+on `Notification`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop` and `SessionEnd`.
 The hook reads the payload on stdin and never fails the session.
