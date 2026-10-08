@@ -52,6 +52,7 @@ node scripts/check-deps.mjs audit      # OSV for direct pins + npm audit of ever
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
 ./install.sh cost            # pinned ccusage (.github/ccusage, Dependabot) + cost line on (opt-in)
 ./install.sh waiting         # Claude Code hooks for "Waiting on you" + the panel section on (opt-in: node per tool call)
+./install.sh pause           # Claude Code hooks for `claudectl session pause|resume` (opt-in: asyncRewake waiter + node per tool call)
 ./install.sh update [target...]        # reinstall installed targets (upgrade); --pull to git pull first
 ./install.sh --uninstall [target...]   # reverse it (default: all installed)   |   --list (detected + installed)   |   -h
 ./install.sh --dry-run [target...]     # print actions without touching anything
@@ -267,7 +268,7 @@ Swift twin together, and keep the fixture matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
- sessions,accounts,notices,codex,snapshots,layout,waiting}.js` (`layout.js`, the dropdown
+ sessions,accounts,notices,codex,snapshots,layout,waiting,pause}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
   imports anywhere under `pure/`, so it all runs under plain `node` for tests
   and in the Node clients. This is the reference implementation: the GNOME
@@ -277,7 +278,7 @@ Swift twin together, and keep the fixture matching.
  (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Notices.swift`,
  `Codex.swift`, `Warehouse.swift`,
  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
- `Snapshots.swift`, `Waiting.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
+ `Snapshots.swift`, `Waiting.swift`, `Pause.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
  `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
  `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
  `PlanLabel.swift`).
@@ -300,6 +301,13 @@ Swift twin together, and keep the fixture matching.
   gate the section behind `waiting-enabled` / `waitingEnabled`, off by default:
   Notification marks, Stop marks idle, UserPromptSubmit / PreToolUse / PostToolUse /
   SessionEnd clear; a marker counts only for the same pid AND session id),
+  `pause.js` / `pause-hook.js` / `pause-cli.js` (`claudectl session pause |
+  resume | report | pause-status`; the hooks are installed ONLY by the opt-in
+  `./install.sh pause`: an asyncRewake `wait` on SessionStart + Stop, one live
+  waiter per session by lock, exactly-once delivery by claim, a PreToolUse
+  `pretool` backstop that skips subagents; shapes, row states and the protocol
+  texts are `lib/pure/pause.js`, pinned by `tests/fixtures/pause.json`; a
+  reopen of a session with a pending checkpoint gets the resume protocol),
   `transcript-tokens.js` (a transcript's token totals and their incremental
   on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`

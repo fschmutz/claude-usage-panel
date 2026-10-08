@@ -94,6 +94,12 @@ export function tabsDir(io) {
   return path.join(stateDir(io), 'tabs');
 }
 
+/** `claudectl session pause`: the current request, each session's delivery
+ *  record, verdict, waiter lock and checkpoint (lib/pure/pause.js names). */
+export function pauseDir(io) {
+  return path.join(stateDir(io), 'pause');
+}
+
 /** 90 days of poll samples, one JSONL line per poll that moved. */
 export function warehousePath(io) {
   return path.join(stateDir(io), 'history.jsonl');

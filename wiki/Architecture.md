@@ -42,6 +42,19 @@ half of that: Claude Code hooks write `<pid>.waiting.json` next to the
 registry, `Stop` marks idle (the prompt is waiting; it does not clear), and
 the list joins markers to live pids only, oldest wait first.
 
+**Pause and resume** (`tests/fixtures/pause.json`, asserted by
+`tests/pause.test.js` and the Swift `Pause.swift` twin) is its write half: `lib/pure/pause.js` holds the
+request, delivery and verdict shapes, `shouldDeliver` (TTL, targets, once per
+request) and `pauseBindingOk` (the process it was sent to), the row state
+machine, `pauseRows` (the one row join the CLI and GNOME run, and the macOS
+app reads through `pause-status --json`), the summary, and the protocol texts.
+The Swift twin covers only what the app reads (request, row states, summary,
+row names, text cleaning, the status JSON); the delivery side is Node-only;
+`claude-code/pause.js` does the 0600 file I/O under
+`<state dir>/claude-usage-panel/pause/`, `pause-hook.js` delivers it (an
+asyncRewake waiter + a PreToolUse backstop, claimed exactly once). See
+[[Pause]].
+
 **Session pings and today's sessions** are the third piece of the contract
 (`tests/fixtures/sessions.json`, asserted by `tests/sessions.test.js` and the
 Swift `SessionsParityTests`): the ping-stamp parser and its "last 05:30 /
@@ -84,7 +97,8 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── codex.js    # named OpenAI Codex logins
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   ├── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
-    │   └── waiting.js  # waiting-on-you list: hook events, markers, age, focus plan
+    │   ├── waiting.js  # waiting-on-you list: hook events, markers, age, focus plan
+    │   └── pause.js    # pause / resume: request, delivery and verdict shapes, row state, the protocol texts
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
     ├── claudeUsage.js  # /oauth/usage fetch (live or saved token)
     ├── accounts.js     # the account store's GJS I/O
@@ -187,6 +201,7 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── waiting.js          # live registry + waiting markers; focus via layout.js
 ├── waiting-hook.js     # Claude Code hook: mark / clear `<pid>.waiting.json`
 ├── waiting-cli.js      # `claudectl waiting`: list and focus
+├── pause.js            # openPause(io): the pause request, deliveries, verdicts, waiter locks, checkpoints
 └── claudectl.js        # the claudectl entry point: dispatches to the groups
 
 mcp/                    # MCP server (Claude Code, Cursor…)

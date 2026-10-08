@@ -208,6 +208,19 @@ export function openTabs(io = {}) {
     }
   }
 
+  /** The live registry row of one claude pid ({session_id, cwd, name,
+   *  status, pid}), or null when the pid has no registry file or is dead:
+   *  one file and one liveness check, cheap enough for a poll. */
+  function sessionOfPid(pid) {
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+    const d = readJSON(path.join(sessionRegistryDir(io), `${pid}.json`));
+    if (!d || d.pid !== pid || !d.sessionId || !isAlive(d)) return null;
+    return {
+      name: d.name || path.basename(d.cwd ?? ''), cwd: d.cwd ?? '', session_id: d.sessionId, pid,
+      status: d.status ?? '', startedAt: d.startedAt ?? null,
+    };
+  }
+
   /** Running interactive sessions, oldest first: the registry, plus the
    *  terminal-attached `claude --resume <id>` processes it does not know
    *  (status "unregistered", after the registered ones). */
@@ -482,5 +495,8 @@ export function openTabs(io = {}) {
     return result;
   }
 
-  return {liveSessions, unaccounted, selfPid, blocker, snapshots, resolve, save, autosave, purge, plan, launch};
+  return {
+    liveSessions, sessionOfPid, procStart, unaccounted, selfPid, blocker, snapshots, resolve, save, autosave, purge,
+    plan, launch,
+  };
 }

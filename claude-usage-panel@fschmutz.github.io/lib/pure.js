@@ -16,3 +16,4 @@ export * from './pure/codex.js';
 export * from './pure/layout.js';
 export * from './pure/snapshots.js';
 export * from './pure/waiting.js';
+export * from './pure/pause.js';
