@@ -294,7 +294,8 @@ Swift twin together, and keep the fixture matching.
   token keeps the refresh hint, a stored one names the profile),
   `statusline.js` (renders from Claude Code's stdin, nothing else; optional `waiting` segment),
   `waiting.js` / `waiting-hook.js` / `waiting-cli.js` (live sessions waiting on you:
-  Notification marks, Stop marks idle, UserPromptSubmit / PreToolUse / SessionEnd clear),
+  Notification marks, Stop marks idle, UserPromptSubmit / PreToolUse / PostToolUse /
+  SessionEnd clear; a marker counts only for the same pid AND session id),
   `transcript-tokens.js` (a transcript's token totals and their incremental
   on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`

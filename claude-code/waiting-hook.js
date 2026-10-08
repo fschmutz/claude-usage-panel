@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Claude Code hook: mark or clear the waiting marker for THIS session.
 // Wired by install.sh into ~/.claude/settings.json for Notification,
-// UserPromptSubmit, PreToolUse, Stop and SessionEnd. Reads the hook
+// UserPromptSubmit, PreToolUse, PostToolUse, Stop and SessionEnd. Reads the hook
 // payload on stdin, writes `<pid>.waiting.json` next to the live-session
 // registry, never throws (a crashing hook is worse than a missed mark).
 //
 // Stop marks idle - the turn ended and the prompt is waiting on you.
-// UserPromptSubmit / PreToolUse / SessionEnd clear. Notification marks
+// UserPromptSubmit / PreToolUse / PostToolUse / SessionEnd clear. Notification marks
 // with a more specific reason (permission / question / idle).
 
 import fs from 'node:fs';

@@ -49,6 +49,13 @@ test('placeRows: tmux beats iTerm, AppleScript beats the env, windows never inte
     ]);
 });
 
+test('placeRows: a WezTerm pane id rides along to the placed row, others get none', () => {
+    const wez = parseWeztermList(JSON.stringify([{window_id: 3, tab_id: 10, pane_id: 7, tty_name: '/dev/t1'}]));
+    const tmux = parseTtyTable('/dev/t2\twork\t1\n', 'tmux:');
+    const out = placeRows([{pid: 1}, {pid: 2}], {ttyOf: (pid) => `/dev/t${pid}`, tables: [tmux, wez], envOf: () => null});
+    assert.deepEqual(out, [{pid: 2, window: 'tmux:work', tab: 1}, {pid: 1, window: 'wezterm:3', tab: 1, pane: 7}]);
+});
+
 test('placeRows: nothing known leaves rows as they were', () => {
     const rows = [{pid: 1, name: 'a'}, {pid: 2, name: 'b'}];
     assert.deepEqual(placeRows(rows, {ttyOf: () => null, tables: [], envOf: () => null}), rows);
@@ -152,6 +159,8 @@ test('parseWeztermList: windows > tabs by listing order, keyed by tty', () => {
         ['/dev/pts/1', 'wezterm:3', 1], ['/dev/pts/2', 'wezterm:3', 1],
         ['/dev/pts/3', 'wezterm:3', 2], ['/dev/pts/4', 'wezterm:5', 1],
     ]);
+    // the pane id is what `wezterm cli activate-pane --pane-id` focuses
+    assert.deepEqual([...m.values()].map((v) => v.pane), [1, 2, 3, 4]);
     assert.equal(parseWeztermList('not json').size, 0);
 });
 

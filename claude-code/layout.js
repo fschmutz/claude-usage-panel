@@ -52,10 +52,11 @@ export const TERMINAL_LAYOUT_SCRIPT = tabbedScript('Terminal',
 // `:` in a session name; a tty path and a window index have none either.
 const TMUX_LAYOUT_FORMAT = '#{pane_tty}:#{session_name}:#{window_index}';
 
-/** Record key -> {window, tab, order} in `map` unless the key is known:
- *  the first listing of a tty or pid wins. */
-function addLoc(map, key, window, tab) {
-  if (!map.has(key)) map.set(key, {window, tab, order: map.size});
+/** Record key -> {window, tab, order[, pane]} in `map` unless the key is
+ *  known: the first listing of a tty or pid wins. `pane` is the terminal's
+ *  own pane id where focusing needs it (WezTerm's activate-pane). */
+function addLoc(map, key, window, tab, pane) {
+  if (!map.has(key)) map.set(key, {window, tab, order: map.size, ...(Number.isInteger(pane) && {pane})});
 }
 
 /** `key<sep>window<sep>tab` lines to Map(key -> {window: prefix+window, tab,
@@ -91,7 +92,7 @@ export function parseWeztermList(text) {
     const tabs = tabsOf.get(p.window_id) ?? [];
     if (!tabs.includes(p.tab_id)) tabs.push(p.tab_id);
     tabsOf.set(p.window_id, tabs);
-    addLoc(map, p.tty_name, `wezterm:${p.window_id}`, tabs.indexOf(p.tab_id) + 1);
+    addLoc(map, p.tty_name, `wezterm:${p.window_id}`, tabs.indexOf(p.tab_id) + 1, p.pane_id);
   }
   return map;
 }
@@ -199,7 +200,9 @@ export function placeRows(rows, {ttyOf, tables, envOf}) {
     if (!a.loc || !b.loc) return (a.loc ? -1 : 0) + (b.loc ? 1 : 0) || a.i - b.i;
     return before(first.get(a.loc.window), first.get(b.loc.window)) || a.loc.tab - b.loc.tab || a.i - b.i;
   };
-  return placed.sort(cmp).map(({r, loc}) => (loc ? {...r, window: loc.window, tab: loc.tab} : r));
+  return placed.sort(cmp).map(({r, loc}) => (loc
+    ? {...r, window: loc.window, tab: loc.tab, ...(loc.pane !== undefined && {pane: loc.pane})}
+    : r));
 }
 
 /**

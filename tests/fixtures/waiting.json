@@ -4,11 +4,16 @@
     "shape, age labels, joining live registry rows to markers (dead pids dropped),",
     "and the focus plan layout.js already knows. Asserted by tests/waiting.test.js",
     "(lib/pure/waiting.js) and macos WaitingParityTests. Stop marks idle - the",
-    "turn ended and the prompt is waiting - it does not clear."
+    "turn ended and the prompt is waiting - it does not clear. A marker counts",
+    "only for the same pid AND session id (a reused pid never inherits one). A",
+    "re-mark for the same session and reason keeps the previous at; expected.at",
+    "absent means nowMs. WezTerm focuses a pane: without one it is the pid plan."
   ],
   "nowMs": 1788264000000,
   "reasons": ["permission", "question", "idle"],
-  "hookEvents": ["Notification", "UserPromptSubmit", "PreToolUse", "Stop", "SessionEnd"],
+  "hookEvents": [
+    "Notification", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"
+  ],
   "markerName": [
     {"pid": 11, "name": "11.waiting.json"},
     {"pid": 4221, "name": "4221.waiting.json"}
@@ -45,7 +50,26 @@
     },
     {"name": "UserPromptSubmit", "payload": {}, "expected": {"action": "clear"}},
     {"name": "PreToolUse", "payload": {}, "expected": {"action": "clear"}},
+    {"name": "PostToolUse", "payload": {}, "expected": {"action": "clear"}},
     {"name": "SessionEnd", "payload": {}, "expected": {"action": "clear"}},
+    {
+      "name": "Notification",
+      "payload": {"notification_type": "idle_prompt", "session_id": "s1"},
+      "previous": {"sessionId": "s1", "pid": 11, "reason": "idle", "at": 1788263000000},
+      "expected": {"action": "mark", "reason": "idle", "at": 1788263000000}
+    },
+    {
+      "name": "Notification",
+      "payload": {"notification_type": "permission_prompt", "session_id": "s1"},
+      "previous": {"sessionId": "s1", "pid": 11, "reason": "idle", "at": 1788263000000},
+      "expected": {"action": "mark", "reason": "permission"}
+    },
+    {
+      "name": "Stop",
+      "payload": {"session_id": "s2"},
+      "previous": {"sessionId": "s1", "pid": 11, "reason": "idle", "at": 1788263000000},
+      "expected": {"action": "mark", "reason": "idle"}
+    },
     {"name": "SessionStart", "payload": {}, "expected": {"action": "ignore"}}
   ],
   "parse": [
@@ -88,6 +112,7 @@
     "markers": [
       {"sessionId": "s2", "pid": 22, "reason": "question", "at": 1788263900000},
       {"sessionId": "s1", "pid": 11, "reason": "permission", "at": 1788263700000},
+      {"sessionId": "old-session", "pid": 22, "reason": "permission", "at": 1788200000000},
       {"sessionId": "gone", "pid": 99, "reason": "idle", "at": 1788260000000},
       {"sessionId": "s3", "pid": 33, "reason": "idle", "at": 1788263990000}
     ],
@@ -127,9 +152,10 @@
   "focusPlan": [
     {"row": {"window": "kitty:7", "pid": 11}, "expected": {"how": "kitty", "id": "7"}},
     {
-      "row": {"window": "wezterm:3", "pid": 11},
-      "expected": {"how": "wezterm", "id": "3"}
+      "row": {"window": "wezterm:3", "pane": 14, "pid": 11},
+      "expected": {"how": "wezterm", "id": "14"}
     },
+    {"row": {"window": "wezterm:3", "pid": 11}, "expected": {"how": "pid", "pid": 11}},
     {
       "row": {"window": "tmux:work", "tab": 2, "pid": 11},
       "expected": {"how": "tmux", "session": "work", "tab": 2}
@@ -151,8 +177,8 @@
       "expected": ["kitty", "@", "focus-window", "--match", "id:7"]
     },
     {
-      "plan": {"how": "wezterm", "id": "3"},
-      "expected": ["wezterm", "cli", "activate-pane", "--window-id", "3"]
+      "plan": {"how": "wezterm", "id": "14"},
+      "expected": ["wezterm", "cli", "activate-pane", "--pane-id", "14"]
     },
     {
       "plan": {"how": "tmux", "session": "work", "tab": 2},

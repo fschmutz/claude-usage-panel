@@ -6,13 +6,16 @@
 // ClaudeUsageCore/Waiting.swift; pinned by tests/fixtures/waiting.json.
 //
 // Stop marks idle (the turn ended and the prompt is waiting), it does not
-// clear. UserPromptSubmit / PreToolUse / SessionEnd clear. Notification
-// marks with a more specific reason. Markers for a pid that is not live
-// are ignored - the I/O layer hands only live registry rows in.
+// clear. UserPromptSubmit / PreToolUse / PostToolUse / SessionEnd clear
+// (PostToolUse: an approved permission prompt is no longer waiting while the
+// tool runs). Notification marks with a more specific reason. A marker
+// counts only for the live session it was written by: same pid AND same
+// session id, so a pid the kernel reused for a later session never inherits
+// a stale marker. The I/O layer hands only live registry rows in.
 
 export const WAITING_REASONS = Object.freeze(['permission', 'question', 'idle']);
 export const WAITING_HOOK_EVENTS = Object.freeze([
-    'Notification', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SessionEnd',
+    'Notification', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'SessionEnd',
 ]);
 const WAITING_MARKER_SUFFIX = '.waiting.json';
 export const WAITING_MARKER_VERSION = 1;
@@ -47,22 +50,33 @@ export function reasonFromNotification(payload) {
     return 'question';
 }
 
+const CLEARS = new Set(['SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse']);
+
 /**
  * What a Claude Code hook event does to the waiting marker.
  *   Notification -> mark (permission / question / idle)
  *   Stop         -> mark idle  (the turn ended; the prompt is waiting)
- *   UserPromptSubmit / PreToolUse / SessionEnd -> clear
+ *   UserPromptSubmit / PreToolUse / PostToolUse / SessionEnd -> clear
  * Anything else is ignore, so an unknown event cannot wipe a marker.
+ * `previous` is the marker already on disk (parsed) or null: a mark for the
+ * same session and reason keeps its `at`, so Claude Code's idle_prompt
+ * Notification a minute after Stop does not restart the wait at 0s.
  */
-export function applyHookEvent(name, payload = {}, nowMs = 0) {
+export function applyHookEvent(name, payload = {}, nowMs = 0, previous = null) {
     const event = String(name ?? '');
-    if (event === 'SessionEnd' || event === 'UserPromptSubmit' || event === 'PreToolUse')
+    if (CLEARS.has(event))
         return {action: 'clear'};
+    let reason;
     if (event === 'Stop')
-        return {action: 'mark', reason: 'idle', at: nowMs};
-    if (event === 'Notification')
-        return {action: 'mark', reason: reasonFromNotification(payload), at: nowMs};
-    return {action: 'ignore'};
+        reason = 'idle';
+    else if (event === 'Notification')
+        reason = reasonFromNotification(payload);
+    else
+        return {action: 'ignore'};
+    const sessionId = payload?.session_id ?? payload?.sessionId;
+    const same = previous && previous.reason === reason && typeof sessionId === 'string'
+        && previous.sessionId === sessionId;
+    return {action: 'mark', reason, at: same ? previous.at : nowMs};
 }
 
 /** A marker object, or null when a field is the wrong JSON type. */
@@ -113,10 +127,11 @@ function waitingReasonLabel(reason) {
 /**
  * Live sessions that have a waiting marker, oldest wait first.
  * `sessions` is already the live registry (dead pids dropped by I/O).
- * A marker whose pid is not in that list is ignored.
+ * A marker counts only when its pid AND session id match a live row: a
+ * dead pid, or a pid reused by a later session, is ignored.
  *
  * @param {object[]} sessions {pid, sessionId, name, cwd}
- * @param {object[]} markers  parseWaitingMarker results (nulls skipped)
+ * @param {object[]} markers  marker JSON as read (invalid ones skipped)
  * @param {number} nowMs
  * @returns {Array<{pid, sessionId, name, cwd, reason, at, age, reasonLabel}>}
  */
@@ -129,17 +144,18 @@ export function waitingList(sessions, markers, nowMs) {
     }
     const out = [];
     for (const raw of markers ?? []) {
-        const marker = raw && raw.reason ? raw : parseWaitingMarker(raw);
+        // always parsed: a raw object with a `reason` is not yet a marker
+        const marker = parseWaitingMarker(raw);
         if (!marker)
             continue;
         const session = live.get(marker.pid);
-        if (!session)
+        if (!session || session.sessionId !== marker.sessionId)
             continue;
         const name = session.name || session.cwd?.replace(/\/+$/, '').split('/').pop()
             || (session.sessionId ?? '').slice(0, 8) || 'session';
         out.push({
             pid: marker.pid,
-            sessionId: session.sessionId ?? marker.sessionId,
+            sessionId: session.sessionId,
             name,
             cwd: session.cwd ?? '',
             reason: marker.reason,
@@ -162,8 +178,10 @@ export function focusPlan(row) {
     const w = String(row?.window ?? '');
     if (w.startsWith('kitty:'))
         return {how: 'kitty', id: w.slice(6)};
-    if (w.startsWith('wezterm:'))
-        return {how: 'wezterm', id: w.slice(8)};
+    // WezTerm raises a PANE (`activate-pane --pane-id`); a window id alone
+    // cannot be focused, so without the pane it falls through to the pid.
+    if (w.startsWith('wezterm:') && Number.isInteger(row.pane))
+        return {how: 'wezterm', id: String(row.pane)};
     if (w.startsWith('tmux:'))
         return {how: 'tmux', session: w.slice(5), tab: Number.isInteger(row.tab) ? row.tab : null};
     if (w.startsWith('iterm:'))
@@ -185,7 +203,7 @@ export function focusArgv(plan) {
         case 'kitty':
             return ['kitty', '@', 'focus-window', '--match', `id:${plan.id}`];
         case 'wezterm':
-            return ['wezterm', 'cli', 'activate-pane', '--window-id', String(plan.id)];
+            return ['wezterm', 'cli', 'activate-pane', '--pane-id', String(plan.id)];
         case 'tmux': {
             const target = plan.tab != null ? `${plan.session}:${plan.tab}` : plan.session;
             return ['tmux', 'select-window', '-t', target];

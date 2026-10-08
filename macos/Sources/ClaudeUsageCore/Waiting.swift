@@ -81,7 +81,7 @@ public struct WaitingFocusPlan: Equatable, Sendable {
 public enum Waiting {
     public static let reasons = ["permission", "question", "idle"]
     public static let hookEvents = [
-        "Notification", "UserPromptSubmit", "PreToolUse", "Stop", "SessionEnd",
+        "Notification", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd",
     ]
     public static let markerSuffix = ".waiting.json"
     public static let markerVersion = 1
@@ -123,20 +123,32 @@ public enum Waiting {
     }
 
     /// What a Claude Code hook event does to the waiting marker.
-    /// Stop marks idle; UserPromptSubmit / PreToolUse / SessionEnd clear.
+    /// Stop marks idle; UserPromptSubmit / PreToolUse / PostToolUse /
+    /// SessionEnd clear. A mark for the same session and reason as `previous`
+    /// keeps its `at`, so idle_prompt after Stop does not restart the wait.
     public static func applyHookEvent(
-        _ name: String, payload: [String: Any] = [:], nowMs: Double = 0
+        _ name: String, payload: [String: Any] = [:], nowMs: Double = 0,
+        previous: WaitingMarker? = nil
     ) -> HookAction {
+        let reason: WaitingReason
         switch name {
-        case "SessionEnd", "UserPromptSubmit", "PreToolUse":
+        case "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse":
             return .clear
         case "Stop":
-            return .mark(reason: .idle, at: nowMs)
+            reason = .idle
         case "Notification":
-            return .mark(reason: reasonFromNotification(payload), at: nowMs)
+            reason = reasonFromNotification(payload)
         default:
             return .ignore
         }
+        let sessionId =
+            (payload["session_id"] as? String) ?? (payload["sessionId"] as? String)
+        if let previous, previous.reason == reason, let sessionId,
+            previous.sessionId == sessionId
+        {
+            return .mark(reason: reason, at: previous.at)
+        }
+        return .mark(reason: reason, at: nowMs)
     }
 
     /// A marker object, or nil when a field is the wrong JSON type.
@@ -191,7 +203,8 @@ public enum Waiting {
     }
 
     /// Live sessions that have a waiting marker, oldest wait first. A marker
-    /// whose pid is not in `sessions` is ignored (dead process).
+    /// counts only when its pid AND session id match a live row: a dead pid,
+    /// or a pid reused by a later session, is ignored.
     public static func list(
         sessions: [LiveSession], markers: [WaitingMarker], nowMs: Double
     ) -> [WaitingSession] {
@@ -199,7 +212,8 @@ public enum Waiting {
         let live = Dictionary(uniqueKeysWithValues: pairs)
         var out: [WaitingSession] = []
         for marker in markers {
-            guard let session = live[marker.pid] else { continue }
+            guard let session = live[marker.pid], session.sessionId == marker.sessionId
+            else { continue }
             let trimmed = session.cwd.replacingOccurrences(
                 of: "/+$", with: "", options: .regularExpression)
             let fallback = trimmed.split(separator: "/").last.map(String.init) ?? ""
@@ -213,7 +227,7 @@ public enum Waiting {
             out.append(
                 WaitingSession(
                     pid: marker.pid,
-                    sessionId: session.sessionId.isEmpty ? marker.sessionId : session.sessionId,
+                    sessionId: session.sessionId,
                     name: name,
                     cwd: session.cwd,
                     reason: marker.reason,
@@ -224,14 +238,17 @@ public enum Waiting {
         return out.sorted { a, b in a.at != b.at ? a.at < b.at : a.pid < b.pid }
     }
 
-    /// How to raise the terminal that holds a live session.
-    public static func focusPlan(window: String?, tab: Int?, pid: Int?) -> WaitingFocusPlan {
+    /// How to raise the terminal that holds a live session. WezTerm raises a
+    /// pane, so without `pane` a wezterm window falls through to the pid.
+    public static func focusPlan(
+        window: String?, tab: Int?, pid: Int?, pane: Int? = nil
+    ) -> WaitingFocusPlan {
         let w = window ?? ""
         if w.hasPrefix("kitty:") {
             return WaitingFocusPlan(how: .kitty, id: String(w.dropFirst(6)))
         }
-        if w.hasPrefix("wezterm:") {
-            return WaitingFocusPlan(how: .wezterm, id: String(w.dropFirst(8)))
+        if w.hasPrefix("wezterm:"), let pane {
+            return WaitingFocusPlan(how: .wezterm, id: String(pane))
         }
         if w.hasPrefix("tmux:") {
             return WaitingFocusPlan(how: .tmux, session: String(w.dropFirst(5)), tab: tab)
@@ -252,7 +269,7 @@ public enum Waiting {
         case .kitty:
             return ["kitty", "@", "focus-window", "--match", "id:\(plan.id ?? "")"]
         case .wezterm:
-            return ["wezterm", "cli", "activate-pane", "--window-id", plan.id ?? ""]
+            return ["wezterm", "cli", "activate-pane", "--pane-id", plan.id ?? ""]
         case .tmux:
             let target =
                 plan.tab.map { "\(plan.session ?? ""):\($0)" } ?? (plan.session ?? "")
