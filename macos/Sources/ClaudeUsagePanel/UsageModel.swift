@@ -351,7 +351,7 @@ final class UsageModel: ObservableObject {
         sessionPing.refreshLastPing()
         saved.reload()
         await refreshSessions()
-        refreshWaiting()
+        await refreshWaiting()
         await refreshCursor()
         await refreshAccounts()
         refreshCodex()
@@ -393,8 +393,12 @@ final class UsageModel: ObservableObject {
         sessionError = TerminalLauncher.open(session: session, choice: terminalChoice)
     }
 
-    func refreshWaiting() {
-        waiting = WaitingStore.refresh()
+    /// Off the main actor, like the session index: the scan spawns `ps` per
+    /// registry entry and must never stall the menu bar.
+    func refreshWaiting() async {
+        waiting = await Task.detached(priority: .utility) {
+            WaitingStore.refresh()
+        }.value
     }
 
     func focusWaiting(_ row: WaitingSession) {

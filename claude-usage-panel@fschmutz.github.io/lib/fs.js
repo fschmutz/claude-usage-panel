@@ -8,6 +8,16 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+// The async half runs on the Shell's main loop without ever stalling a frame:
+// a directory walk or a read that polls (sessions, transcripts) uses these.
+Gio._promisify(Gio.File.prototype, 'enumerate_children_async', 'enumerate_children_finish');
+Gio._promisify(Gio.File.prototype, 'load_contents_async', 'load_contents_finish');
+Gio._promisify(Gio.FileEnumerator.prototype, 'next_files_async', 'next_files_finish');
+Gio._promisify(Gio.FileEnumerator.prototype, 'close_async', 'close_finish');
+
+/** Children fetched per next_files_async round trip. */
+const ENUMERATE_BATCH = 64;
+
 /** The file's text, or null when it is missing or unreadable. */
 export function readText(path) {
     try {
@@ -28,6 +38,58 @@ export function readJSON(path) {
     } catch {
         return null;
     }
+}
+
+/** The file's text, read without blocking; null when missing or unreadable. */
+export async function readTextAsync(path) {
+    try {
+        const [bytes] = await Gio.File.new_for_path(path).load_contents_async(null);
+        return new TextDecoder().decode(bytes);
+    } catch {
+        return null;
+    }
+}
+
+/** readTextAsync parsed as JSON; null when missing, unreadable or not JSON. */
+export async function readJSONAsync(path) {
+    const text = await readTextAsync(path);
+    if (text === null)
+        return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * A directory's children as `map(Gio.FileInfo)` results, listed without
+ * blocking; [] when it cannot be opened, and what was read when it vanishes
+ * mid-listing. `attributes` is the Gio query string the map reads.
+ */
+export async function listChildrenAsync(path, attributes, map) {
+    const out = [];
+    let children;
+    try {
+        children = await Gio.File.new_for_path(path).enumerate_children_async(
+            attributes, Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_LOW, null);
+    } catch {
+        return out;
+    }
+    try {
+        for (;;) {
+            const batch = await children.next_files_async(ENUMERATE_BATCH, GLib.PRIORITY_LOW, null);
+            if (!batch.length)
+                break;
+            for (const info of batch)
+                out.push(map(info));
+        }
+    } catch {
+        // a directory that vanished mid-listing keeps what was read
+    } finally {
+        await children.close_async(GLib.PRIORITY_LOW, null).catch(() => {});
+    }
+    return out;
 }
 
 /**

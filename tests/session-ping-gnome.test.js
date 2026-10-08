@@ -44,6 +44,8 @@ globalThis.sessionPingStub = {
         unlink: () => 0,
     },
     Gio: {
+        _promisify: () => {}, // lib/fs.js promisifies at import; unused here
+        FileEnumerator: {},
         FileQueryInfoFlags: {NONE: 0},
         FileCopyFlags: {OVERWRITE: 1},
         File: {new_for_path: () => ({set_attribute_uint32: () => true, move: () => true})},

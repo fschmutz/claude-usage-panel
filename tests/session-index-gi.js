@@ -83,6 +83,10 @@ function fileFor(p) {
 }
 
 export const Gio = {
+    // lib/fs.js promisifies its async calls at import; this stand-in serves
+    // only the sync ones session-index uses
+    _promisify: () => {},
+    FileEnumerator: {},
     FileQueryInfoFlags: {NONE: 0},
     FileType: {REGULAR: 1, DIRECTORY: 2},
     FileCopyFlags: {OVERWRITE: 1},
