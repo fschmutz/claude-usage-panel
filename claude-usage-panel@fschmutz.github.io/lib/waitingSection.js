@@ -20,12 +20,14 @@ import {vbox, clipLabel} from './widgets.js';
 export class WaitingController {
     /**
      * @param {object} deps
+     * @param {Gio.Settings} deps.settings  waiting-enabled gates the scan
      * @param {PopupMenu.PopupMenu} deps.menu
      * @param {(title: string, body: string) => void} deps.notify
      * @param {() => boolean} deps.isDestroyed
      * @param {(n: number) => void} [deps.setBadge]
      */
-    constructor({menu, notify, isDestroyed, setBadge}) {
+    constructor({settings, menu, notify, isDestroyed, setBadge}) {
+        this._settings = settings;
         this._menu = menu;
         this._notify = notify;
         this._isDestroyed = isDestroyed;
@@ -48,6 +50,13 @@ export class WaitingController {
         // A poll can start while the last scan is still reading (the poll
         // times sections out): only the newest scan may paint.
         const scan = ++this._scan;
+        // Off (the default): nothing is read, no badge. A scan still in
+        // flight is dropped by the generation check below.
+        if (!this._settings.get_boolean('waiting-enabled')) {
+            this._setBadge(0);
+            this._render([]);
+            return;
+        }
         let rows = [];
         try {
             rows = await listWaiting();

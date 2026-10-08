@@ -13,6 +13,8 @@ const HOME = '/home/tester';
 const SESSIONS = `${HOME}/.claude/sessions`;
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 const encode = new TextEncoder();
+const ON = {get_boolean: key => key === 'waiting-enabled'};
+const OFF = {get_boolean: () => false};
 
 const stat = start => `4242 (claude (dev)) S 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ${start} 0\n`;
 const registry = (pid, sessionId, start, extra = {}) => JSON.stringify({
@@ -107,6 +109,7 @@ test('the section shows the badge count and focuses by pid, never by a shared na
         await import('../claude-usage-panel@fschmutz.github.io/lib/waitingSection.js');
     const badges = [];
     const section = new WaitingController({
+        settings: ON,
         menu: {addMenuItem: () => {}, close: () => {}},
         notify: () => {},
         isDestroyed: () => false,
@@ -147,6 +150,7 @@ test('an older scan that finishes after a newer one never paints over it', async
     const {WaitingController} = await import('../claude-usage-panel@fschmutz.github.io/lib/waitingSection.js');
     const badges = [];
     const section = new WaitingController({
+        settings: ON,
         menu: {addMenuItem: () => {}, close: () => {}},
         notify: () => {},
         isDestroyed: () => false,
@@ -158,4 +162,25 @@ test('an older scan that finishes after a newer one never paints over it', async
     release();
     await older;
     assert.deepEqual(badges, [0], 'the stale scan (1 waiting) was dropped');
+});
+
+test('off (the default): no registry read, no badge, no section', async t => {
+    t.after(() => { stub.overrides = {}; });
+    install({});
+    // any read at all fails this test
+    stub.overrides['gi://Gio'].File.new_for_path = path => {
+        throw new Error(`read ${path} with the section off`);
+    };
+    const {WaitingController} = await import('../claude-usage-panel@fschmutz.github.io/lib/waitingSection.js');
+    const badges = [];
+    const section = new WaitingController({
+        settings: OFF,
+        menu: {addMenuItem: () => {}, close: () => {}},
+        notify: () => {},
+        isDestroyed: () => false,
+        setBadge: n => badges.push(n),
+    });
+    await section.refresh();
+    assert.deepEqual(badges, [0]);
+    assert.equal(section._item.visible, false);
 });

@@ -19,6 +19,7 @@ struct SettingsView: View {
                 .tabItem { Label("Accounts", systemImage: "person.2") }
             SettingsTab {
                 todaysSessions
+                waitingOnYou
                 SavedSessionsSection()
                 SessionPingSection(pings: model.sessionPing)
             }
@@ -48,6 +49,19 @@ struct SettingsView: View {
                 "%e event (threshold or reset) · %l label · %p percent · %t threshold · "
                     + "%k key · %% a literal %. Empty disables it. Values are shell-quoted "
                     + "when substituted."
+            )
+            .font(.footnote).foregroundColor(.secondary)
+        }
+    }
+
+    private var waitingOnYou: some View {
+        Section("Waiting on you") {
+            Toggle("Show sessions waiting on you", isOn: $model.waitingEnabled)
+            Text(
+                "The live Claude Code sessions blocked on a permission prompt, a question, "
+                    + "or idle after their turn, with a count in the menu bar. It needs the "
+                    + "Claude Code hooks ./install.sh waiting installs; they run node on every "
+                    + "tool call of every session."
             )
             .font(.footnote).foregroundColor(.secondary)
         }

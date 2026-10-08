@@ -63,6 +63,20 @@ export function buildCursor(prefs, settings) {
     return cursor;
 }
 
+export function buildWaiting(prefs, settings) {
+    const waiting = new Adw.PreferencesGroup({
+        title: _('Waiting on you (optional)'),
+        description: _('The live Claude Code sessions blocked on a permission prompt, a question, or idle after their turn, as a section and a count on the top bar. Off by default - with it off, the session registry is not read. It needs the Claude Code hooks `./install.sh waiting` installs; they run node on every tool call of every session.'),
+    });
+    const row = new Adw.SwitchRow({
+        title: _('Show sessions waiting on you'),
+        subtitle: _('Adds a Waiting on you section and a top-bar count'),
+    });
+    settings.bind('waiting-enabled', row, 'active', 0);
+    waiting.add(row);
+    return waiting;
+}
+
 export function buildCodex(prefs, settings) {
     const codex = new Adw.PreferencesGroup({
         title: _('OpenAI Codex (optional)'),

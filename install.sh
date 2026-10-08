@@ -19,6 +19,9 @@
 #                                   window opens on schedule (default 05:30, Mon-Fri)
 #   ./install.sh cost               install the pinned ccusage and turn the session
 #                                   cost line on in the installed panel(s) (opt-in)
+#   ./install.sh waiting            Claude Code hooks that mark a session waiting on
+#                                   you, and the panels' "Waiting on you" section on
+#                                   (opt-in: PreToolUse/PostToolUse run node per tool call)
 #   ./install.sh plan [--day HH:MM-HH:MM] [--pings N] [--compare a,b]
 #                                   recommend sessionping times for your working
 #                                   day, and score the schedule you already have
@@ -63,6 +66,8 @@ UUID="claude-usage-panel@fschmutz.github.io"
 . "$ROOT/scripts/install/sessionping.sh"
 # shellcheck source=scripts/install/cost.sh
 . "$ROOT/scripts/install/cost.sh"
+# shellcheck source=scripts/install/waiting.sh
+. "$ROOT/scripts/install/waiting.sh"
 # shellcheck source=scripts/install/targets.sh
 . "$ROOT/scripts/install/targets.sh"
 

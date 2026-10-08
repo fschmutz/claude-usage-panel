@@ -68,7 +68,8 @@ bar show a count, the dropdown lists them oldest-first, and a click focuses
 that session's terminal. `claudectl waiting` and the MCP `waiting` tool return
 the same list; the status line can show `wait N` with `--segments=…,waiting`.
 `Stop` marks the session idle (the prompt is waiting); the next prompt or tool
-use clears it. Details: [wiki/Waiting](https://github.com/fschmutz/claude-usage-panel/wiki/Waiting).
+use clears it. Opt-in: `./install.sh waiting` installs the hooks (they run
+node on every tool call) and turns the section on. Details: [wiki/Waiting](https://github.com/fschmutz/claude-usage-panel/wiki/Waiting).
 
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list
 today's sessions ranked by the tokens each one spent; clicking one opens your

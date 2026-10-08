@@ -84,9 +84,6 @@ PLIST
         open "$installed" 2>/dev/null || true
         ok "installed to $installed and launched"
         echo "  Starts at login by default - toggle it in Settings ▸ Start at login."
-        if command -v node >/dev/null; then
-            _install_node_tree
-        fi
     else
         # Not a skip and not an "ok": the old binary is still what runs. Saying
         # so with a zero exit is what let an update stamp itself as installed
@@ -101,7 +98,6 @@ uninstall_macos() {
     info "macOS app"
     act rm -rf "$ROOT/macos/ClaudeUsagePanel.app"
     act rm -rf "/Applications/ClaudeUsagePanel.app"
-    _prune_node_tree
     ok "removed built + installed bundles (source untouched)"
     echo "  If it was set to start at login, remove it in System Settings ▸ General ▸ Login Items."
 }

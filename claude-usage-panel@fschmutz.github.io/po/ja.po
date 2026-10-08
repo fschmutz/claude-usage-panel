@@ -16,75 +16,75 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: extension.js:193
+#: extension.js:194
 msgid "Extra usage"
 msgstr "追加利用"
 
-#: extension.js:339
+#: extension.js:340
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - 再試行中、前回の値を表示しています"
 
-#: extension.js:376
+#: extension.js:377
 #, javascript-format
 msgid "Updated %s"
 msgstr "更新 %s"
 
-#: extension.js:410
+#: extension.js:411
 msgid "Session cost: computing…"
 msgstr "セッション費用: 計算中…"
 
-#: extension.js:415
+#: extension.js:416
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "セッション費用: $%s · %s トークン (推定)"
 
-#: extension.js:417
+#: extension.js:418
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "セッション費用: 利用不可 (ccusage をインストール)"
 
-#: extension.js:447
+#: extension.js:448
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (上限の %d%%)"
 
-#: extension.js:464
+#: extension.js:465
 #, javascript-format
 msgid "last %s"
 msgstr "前回 %s"
 
-#: extension.js:464 prefs/pings.js:96
+#: extension.js:465 prefs/pings.js:96
 msgid "never"
 msgstr "なし"
 
-#: extension.js:468
+#: extension.js:469
 #, javascript-format
 msgid "next %s"
 msgstr "次回 %s"
 
-#: extension.js:470
+#: extension.js:471
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "セッション ping: %s"
 
-#: extension.js:482 extension.js:486 lib/accountsSection.js:535
+#: extension.js:483 extension.js:487 lib/accountsSection.js:535
 #: lib/headerBar.js:42 lib/sessionsSection.js:159 lib/sessionsSection.js:169
-#: lib/waitingSection.js:104 lib/waitingSection.js:111
-#: lib/waitingSection.js:119
+#: lib/waitingSection.js:117 lib/waitingSection.js:124
+#: lib/waitingSection.js:132
 msgid "Claude usage"
 msgstr "Claude の使用状況"
 
-#: extension.js:483
+#: extension.js:484
 #, javascript-format
 msgid "%s reached %d%%"
 msgstr "%s が %d%% に達しました"
 
-#: extension.js:487
+#: extension.js:488
 #, javascript-format
 msgid "%s is on pace to run out before it resets"
 msgstr "%s は現在のペースだとリセット前に上限に達します"
 
-#: extension.js:611
+#: extension.js:612
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -418,30 +418,32 @@ msgstr ""
 msgid "the endpoint reported no figure for this limit"
 msgstr "このリミットについてエンドポイントは値を返しませんでした"
 
-#: lib/waitingSection.js:37 lib/waitingSection.js:64
+#: lib/waitingSection.js:39 lib/waitingSection.js:77
 msgid "Waiting on you"
 msgstr "入力待ち"
 
-#: lib/waitingSection.js:91
+#: lib/waitingSection.js:104
 msgid "permission"
 msgstr "許可"
 
-#: lib/waitingSection.js:93
+#: lib/waitingSection.js:106
 msgid "idle"
 msgstr "待機"
 
-#: lib/waitingSection.js:94
+#: lib/waitingSection.js:107
 msgid "question"
 msgstr "質問"
 
-#: lib/waitingSection.js:105 lib/waitingSection.js:119
+#: lib/waitingSection.js:118 lib/waitingSection.js:132
 #, javascript-format
 msgid "Could not focus %s"
 msgstr "%s にフォーカスできませんでした"
 
-#: lib/waitingSection.js:112
+#: lib/waitingSection.js:125
 msgid "Install claudectl (./install.sh cli) to jump to a waiting session."
-msgstr "待機中のセッションに移動するには claudectl をインストールしてください (./install.sh cli)。"
+msgstr ""
+"待機中のセッションに移動するには claudectl をインストールしてください (./"
+"install.sh cli)。"
 
 #: prefs/accounts.js:23
 msgid ""
@@ -452,9 +454,9 @@ msgid ""
 "login until they restart."
 msgstr ""
 "現在の Claude Code のログインを名前(PRO、PERSO)を付けて保存し、ブラウザなしで"
-"ドロップダウンから保存済みログインを切り替えます。変わるのは認証情報と ~/."
-"claude.json のアカウント欄だけで、設定・フック・プラグイン・履歴はそのままで"
-"す。実行中の Claude Code セッションは再起動まで以前のログインのままです。"
+"ドロップダウンから保存済みログインを切り替えます。変わるのは認証情報と "
+"~/.claude.json のアカウント欄だけで、設定・フック・プラグイン・履歴はそのまま"
+"です。実行中の Claude Code セッションは再起動まで以前のログインのままです。"
 
 #: prefs/accounts.js:30
 msgid "Enable named accounts"
@@ -611,8 +613,8 @@ msgstr "費用"
 #: prefs/integrations.js:13
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires ccusage installed: npm i -"
-"g ccusage)."
+"this to compute it locally with ccusage (requires ccusage installed: npm i "
+"-g ccusage)."
 msgstr ""
 "公式 API はサブスクリプションプランのドル費用を返しません。有効にすると "
 "ccusage でローカルに計算します (ccusage のインストールが必要: npm i -g "
@@ -632,8 +634,8 @@ msgstr "Cursor (任意)"
 
 #: prefs/integrations.js:27
 msgid ""
-"Show Cursor team spend using the Cursor Admin API. Create a key at cursor."
-"com → team → Settings → Admin API. Stored in the system keyring."
+"Show Cursor team spend using the Cursor Admin API. Create a key at "
+"cursor.com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
 "Cursor Admin API でチームの利用額を表示します。cursor.com → チーム → "
 "Settings → Admin API でキーを作成してください。システムキーリングに保存されま"
@@ -651,12 +653,38 @@ msgstr "ドロップダウンに Cursor の支出セクションを追加しま�
 msgid "Cursor Admin API key"
 msgstr "Cursor Admin API キー"
 
-#
 #: prefs/integrations.js:68
+msgid "Waiting on you (optional)"
+msgstr "入力待ち（任意）"
+
+#: prefs/integrations.js:69
+msgid ""
+"The live Claude Code sessions blocked on a permission prompt, a question, or "
+"idle after their turn, as a section and a count on the top bar. Off by "
+"default - with it off, the session registry is not read. It needs the Claude "
+"Code hooks `./install.sh waiting` installs; they run node on every tool call "
+"of every session."
+msgstr ""
+"許可の確認や質問で止まっている、またはターン終了後にアイドルになっている実行"
+"中の Claude Code セッションを、セクションとトップバーの件数で表示します。既定"
+"ではオフで、オフのときはセッション登録を読みません。`./install.sh waiting` が"
+"インストールする Claude Code フックが必要です。フックはすべてのセッションの"
+"ツール呼び出しごとに node を起動します。"
+
+#: prefs/integrations.js:72
+msgid "Show sessions waiting on you"
+msgstr "入力待ちのセッションを表示"
+
+#: prefs/integrations.js:73
+msgid "Adds a Waiting on you section and a top-bar count"
+msgstr "「入力待ち」セクションとトップバーの件数を追加します"
+
+#
+#: prefs/integrations.js:82
 msgid "OpenAI Codex (optional)"
 msgstr "OpenAI Codex（任意）"
 
-#: prefs/integrations.js:69
+#: prefs/integrations.js:83
 msgid ""
 "A sibling section for the ChatGPT logins the codex CLI holds: save them "
 "under a name and switch without a browser. Off by default - with it off, "
@@ -673,20 +701,20 @@ msgstr ""
 "ンを発行することもありません。"
 
 #
-#: prefs/integrations.js:72
+#: prefs/integrations.js:86
 msgid "Show saved Codex logins"
 msgstr "保存した Codex ログインを表示"
 
 #
-#: prefs/integrations.js:73
+#: prefs/integrations.js:87
 msgid "Adds an OpenAI Codex section below the Claude ones"
 msgstr "Claude のセクションの下に OpenAI Codex セクションを追加します"
 
-#: prefs/integrations.js:80
+#: prefs/integrations.js:94
 msgid "Usage figures are est."
 msgstr "数値は推定値です"
 
-#: prefs/integrations.js:81
+#: prefs/integrations.js:95
 msgid ""
 "OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
 "ones the codex CLI recorded when the API last returned them, stamped with "

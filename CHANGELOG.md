@@ -12,12 +12,14 @@ semantic versioning.
   permission prompt, a question, or idle after Stop show up as a badge on the
   GNOME top bar and the macOS menu bar, a list in both dropdowns (oldest wait
   first, click to focus the terminal), an optional status-line `waiting`
-  segment, a `waiting` MCP tool, and `claudectl waiting`. Claude Code hooks
-  (installed with the Node clients) write `<pid>.waiting.json` next to the
+  segment, a `waiting` MCP tool, and `claudectl waiting`. **Opt-in:**
+  `./install.sh waiting` installs the Claude Code hooks (they run node on
+  every tool call) and turns the section on; the panels keep it off by
+  default (`waiting-enabled` / `waitingEnabled`). The hooks write `<pid>.waiting.json` next to the
   live-session registry: `Notification` marks the reason, `Stop` marks idle
   (the turn ended; the prompt is waiting - it does not clear), and
-  `UserPromptSubmit` / `PreToolUse` / `SessionEnd` clear. Dead pids are
-  ignored. Shared contract: `tests/fixtures/waiting.json`.
+  `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `SessionEnd` clear.
+  Dead and reused pids are ignored. Shared contract: `tests/fixtures/waiting.json`.
 - **Dependency freshness and advisory gate** (`node scripts/check-deps.mjs`,
   the CI `deps` job, also weekly on a schedule). Every pinned version
   (actions, pre-commit hook revs, the npm/pip tool pins under `.github/`, the
