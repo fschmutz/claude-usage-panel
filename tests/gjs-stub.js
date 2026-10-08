@@ -130,6 +130,3 @@ registerHooks({
         return nextLoad(url, context);
     },
 });
-
-/** Import an extension file (path relative to the extension dir) through the stubs. */
-export const load = rel => import(new URL(rel, EXT).href);

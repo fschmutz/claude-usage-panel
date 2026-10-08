@@ -6,12 +6,8 @@
 // as the preferences window would receive them.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'node:path';
 import {registerHooks} from 'node:module';
-import {fileURLToPath} from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const EXT = path.join(ROOT, 'claude-usage-panel@fschmutz.github.io');
 
 // ── Stand-ins for the GJS modules lib/sessionPing.js imports ─────────────────
 // Every gettext lookup comes back wrapped in «», so a string that skipped
@@ -78,7 +74,7 @@ registerHooks({
     },
 });
 
-const {applySchedule} = await import(path.join(EXT, 'lib', 'sessionPing.js'));
+const {applySchedule} = await import('../claude-usage-panel@fschmutz.github.io/lib/sessionPing.js');
 
 function reset() {
     Object.assign(world, {

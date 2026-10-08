@@ -7,7 +7,7 @@ import {setImmediate} from 'node:timers';
 import {TextEncoder} from 'node:util';
 
 import {SECTION_DEADLINE_MS} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
-import {load, stub} from './gjs-stub.js';
+import {stub} from './gjs-stub.js';
 
 // ── The poll loop itself (extension.js) ─────────────────────────────────────
 
@@ -91,7 +91,7 @@ async function panel(t, {token = false, flags = {}, answers = null} = {}) {
         connectObject: () => {},
         disconnectObject: () => {},
     };
-    const {default: Extension} = await load('extension.js');
+    const {default: Extension} = await import('../claude-usage-panel@fschmutz.github.io/extension.js');
     const ext = new Extension();
     Object.assign(ext, {uuid: 'test@x', metadata: {}, getSettings: () => settings});
     ext.enable();
