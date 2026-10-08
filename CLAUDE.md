@@ -33,6 +33,12 @@ cd macos && swift test
 pre-commit run --all-files
 pre-commit run eslint --all-files   # single hook
 pre-commit run zizmor --all-files   # workflow security audit (actionlint = validity)
+scripts/knip.sh                     # unused files/exports/deps (pinned knip, knip.jsonc); also a pre-commit hook
+
+# Dependency freshness + advisories (network; the CI `deps` job, weekly too)
+node scripts/check-deps.mjs            # both
+node scripts/check-deps.mjs freshness  # every pin vs upstream; exceptions in .github/dependency-holds
+node scripts/check-deps.mjs audit      # OSV for direct pins + npm audit of every .github/<tool> tree
 
 # Install - one unified entrypoint for all clients (also reachable with
 # curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash [-s -- target…])
@@ -121,6 +127,16 @@ hides real traps, notably `"${arr[@]}"` on an empty array under `set -u`.
 The `plugin-validate` job runs `claude plugin validate` on the marketplace
 and on `plugin/` with the CLI pinned in `.github/claude-cli` (Dependabot's npm
 ecosystem), and fails on any warning.
+
+The `deps` job (`scripts/check-deps.mjs`) also runs weekly on a schedule: a
+pin is current or a NAMED hold in `.github/dependency-holds` (version-pinned,
+so it expires when upstream moves; a hold that matches nothing fails), and
+the same for advisories. The grace window is Dependabot's own (weekly + 7-day
+cooldown = 14 days, pinned by `tests/deps.test.js`). A new pin kind or a
+pin-shaped line the inventory cannot parse fails the gate. knip runs in
+pre-commit; a GNOME test imports extension files by literal
+`import('../claude-usage-panel@fschmutz.github.io/...')`, never a computed
+path, or knip cannot see which exports it uses.
 
 The `js` job runs a Node matrix of the `package.json` engines floor (22) and
 the active LTS (24); `tests/ci-release.test.js` fails if the floor is not in

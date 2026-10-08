@@ -1,0 +1,16 @@
+# Deliberate dependency holds - the ONLY exceptions scripts/check-deps.mjs (the
+# CI `deps` job) tolerates. Anything stale or carrying a known advisory and not
+# declared here FAILS.
+#
+# Format, one per line, the reason is mandatory:
+#   <kind> <name> <version> <reason>        held at <version>, the upstream release
+#                                           the hold was taken against: when upstream
+#                                           moves past it the gate fails again
+#   <kind> <name> track:<prefix> <reason>   compare only against releases <prefix>.x
+#   audit <package> <advisory-id> <reason>  a known advisory, accepted
+# kinds: action hook npm pip docker node audit
+#
+# A hold is a decision with a reason, not a parking space. Delete it the moment
+# the blocker clears: an entry that matches nothing fails the gate.
+
+docker bash track:3.2 The bash32 job exists to run the bash macOS ships as /bin/bash (3.2), never a newer one. Same decision as the bash >= 3.3 ignore in .github/dependabot.yml; tests/deps.test.js keeps the two in step.

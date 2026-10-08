@@ -18,7 +18,8 @@ i18n ──────────────┤
 swift-core ────────┼──▶ ci-gate ──▶ the only context the ruleset requires
 macos-app ─────────┤
 bash32 ────────────┤
-plugin-validate ───┘
+plugin-validate ───┤
+deps ──────────────┘
 ```
 
 `i18n` runs `scripts/update-po.sh --check` (every `_()` string of the GNOME
@@ -26,6 +27,16 @@ extension reached the template and every catalog) and compiles each catalog
 with `msgfmt --check`; pre-commit's `i18n-catalogs` hook runs the same check
 locally but skips it when gettext is missing, so this job is the one that
 cannot be skipped.
+
+`deps` runs `node scripts/check-deps.mjs`, on every push and weekly on a
+schedule: every pinned version (actions, hook revs, the npm/pip tool pins under
+`.github/`, the Docker images and their digests, the Node lines) against its
+upstream, and every pin and tool tree against OSV / `npm audit`. A pin is
+current, or declared in `.github/dependency-holds` with its reason (version-
+pinned, so a hold expires when upstream moves on; a hold that matches nothing
+fails). A release still inside Dependabot's window (weekly + 7-day cooldown,
+14 days) or with its Dependabot PR open is in flight, not stale. An upstream
+that does not answer is UNKNOWN and fails.
 
 `bash32` runs `scripts/bash32-smoke.sh` inside a `bash:3.2` container - the
 version macOS still ships as `/bin/bash`, and the one the launchd agents
@@ -72,7 +83,8 @@ ever find yourself editing the ruleset's required checks, something is wrong.
   the `bash32` job is pinned by digest in `.github/bash32/Dockerfile` (docker
   ecosystem, held to 3.2).
   The Claude Code CLI the `plugin-validate` job runs is pinned in
-  `.github/claude-cli/package-lock.json` (npm ecosystem).
+  `.github/claude-cli/package-lock.json`, and the knip of the `knip` hook in
+  `.github/knip/package-lock.json` (npm ecosystem).
 - **Dependabot waits 7 days** (`cooldown`) before proposing a new release. A
   compromised upstream is normally caught and yanked inside that window.
 - **`permissions:` is least-privilege.** The workflow level grants no write
