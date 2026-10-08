@@ -468,27 +468,45 @@ public enum Accounts {
         return ["\(keychainService)-\(hash.prefix(8))"]
     }
 
-    /// The line fed to `security -i` on stdin that stores `secret` in the
-    /// Keychain item (account, service). The secret never goes on the command
-    /// line, where `ps` shows it: it travels hex-encoded (-X) on stdin. Account
-    /// and service are double-quoted; one that cannot be quoted plainly (a
-    /// quote, a backslash, a control character, or empty) gives nil, and the
-    /// caller refuses the write. So does a line of `keychainLineMax` bytes or
-    /// more: `security -i` reads each command into a buffer of that size and
-    /// would run a truncated one.
-    public static func keychainWriteLine(account: String, service: String, secret: String)
-        -> String?
+    /// How /usr/bin/security stores `secret` in the Keychain item (account,
+    /// service), or nil when the write must be refused (an empty account or
+    /// service). The secret travels hex-encoded (-X). It goes on stdin to
+    /// `security -i` whenever that can carry it, so `ps` never shows it:
+    /// account and service double-quoted, which needs names without a quote,
+    /// a backslash or a control character, and a line under `keychainLineMax`
+    /// bytes, since `security -i` reads each command into a buffer of that
+    /// size and would run a truncated one. Otherwise it goes in argv, as
+    /// Claude Code itself does: its blob carries the MCP servers' OAuth tokens
+    /// (`mcpOAuth`) and routinely outgrows the stdin line.
+    public static func keychainWrite(account: String, service: String, secret: String)
+        -> KeychainWrite?
     {
+        guard !account.isEmpty, !service.isEmpty else { return nil }
         let plain = { (s: String) in
-            !s.isEmpty
-                && !s.unicodeScalars.contains {
-                    $0 == "\"" || $0 == "\\" || $0.properties.generalCategory == .control
-                }
+            !s.unicodeScalars.contains {
+                $0 == "\"" || $0 == "\\" || $0.properties.generalCategory == .control
+            }
         }
-        guard plain(account), plain(service) else { return nil }
         let hex = secret.utf8.map { String(format: "%02x", $0) }.joined()
         let line = "add-generic-password -U -a \"\(account)\" -s \"\(service)\" -X \(hex)\n"
-        return line.utf8.count < keychainLineMax ? line : nil
+        if plain(account), plain(service), line.utf8.count < keychainLineMax {
+            return KeychainWrite(args: ["-i"], stdin: line)
+        }
+        return KeychainWrite(
+            args: ["add-generic-password", "-U", "-a", account, "-s", service, "-X", hex],
+            stdin: nil)
+    }
+
+    /// One /usr/bin/security run: its arguments, and the line for its stdin
+    /// (nil: the secret is in `args`).
+    public struct KeychainWrite: Equatable {
+        public let args: [String]
+        public let stdin: String?
+
+        public init(args: [String], stdin: String?) {
+            self.args = args
+            self.stdin = stdin
+        }
     }
 
     /// security(1)'s MAX_LINE_LEN: one `security -i` command, newline

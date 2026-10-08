@@ -47,6 +47,16 @@ semantic versioning.
   ambiguous one), WezTerm focuses the pane (`activate-pane --pane-id`; it
   was given a window id), `claudectl waiting --help` prints the help.
 
+### Fixed
+
+- **Switching accounts on macOS works with MCP servers logged in.** Claude
+  Code's Keychain item also holds every MCP server's OAuth tokens
+  (`mcpOAuth`), often tens of KB, and `security -i` reads one command of under
+  4096 bytes, so every client refused the switch ("the credentials are too
+  large for `security -i`"). The write now goes in argv when the stdin line
+  cannot carry it, as Claude Code itself does (`keychainWrite`, pinned by
+  `tests/fixtures/accounts.json`).
+
 ### Changed
 
 - **The Homebrew tap is written with a GitHub App, not a personal token.**

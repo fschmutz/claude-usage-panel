@@ -35,7 +35,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 import {
-  PROFILE_VERSION, accountSummary, isTorn, isValidName, keychainServices, keychainWriteLine,
+  PROFILE_VERSION, accountSummary, isTorn, isValidName, keychainServices, keychainWrite,
   liveProfileName, parkName, parseProfile, saveRefusal, sameJSON, switchPlan, syncBackPlan, tokenState,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {accountHealth, accountNotices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/notices.js';
@@ -182,14 +182,15 @@ export function openStore(io = {}) {
     const text = JSON.stringify(credentials);
     if (platform !== 'darwin' || fs.existsSync(credsPath)) return () => writePrivate(credsPath, text);
     // -U updates the existing item in place, so Claude Code's ACL on it
-    // stays. The tokens go on stdin, never in argv (keychainWriteLine).
-    const line = keychainWriteLine(keychainAccount(), services[0], text);
-    if (!line) {
-      throw new Error(`cannot write the Keychain item ${services[0]} through \`security -i\`: `
-        + 'its account name cannot be quoted, or the credentials are too large for one command line');
-    }
+    // stays. The tokens go on stdin whenever they fit (keychainWrite).
+    const write = keychainWrite(keychainAccount(), services[0], text);
+    if (!write) throw new Error(`cannot write the Keychain item ${services[0]}: no account name, or credentials that are not valid text`);
     return () => {
-      security(['-i'], {input: line, stdio: ['pipe', 'ignore', 'ignore']});
+      try {
+        security(write.args, {input: write.stdin ?? undefined, stdio: ['pipe', 'ignore', 'ignore']});
+      } catch {
+        // a refused argv write exits non-zero: the read-back reports it
+      }
       // `security -i` exits 0 whatever its command did: read the item back.
       let back = null;
       try {
