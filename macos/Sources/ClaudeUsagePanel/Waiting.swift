@@ -19,13 +19,24 @@ enum WaitingStore {
         return FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }
 
-    /// A registry pid is live when `ps` still shows a claude command line.
-    static func isAlive(pid: Int) -> Bool {
-        let r = Shell.run("/bin/ps", ["-o", "command=", "-p", String(pid)])
-        guard r.ok else { return false }
-        let cmd = r.out.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// The registry pids `ps` still shows with a claude command line: ONE
+    /// `ps` for the whole registry, not one per entry.
+    static func livePids(_ pids: [Int]) -> Set<Int> {
+        guard !pids.isEmpty else { return [] }
+        let r = Shell.run(
+            "/bin/ps", ["-o", "pid=,command=", "-p", pids.map(String.init).joined(separator: ",")])
+        // ps exits 1 when one of the pids is gone: the listing still holds the rest
         let pattern = #"(^|/)claude(\s|$)|(^|/)@anthropic-ai/claude-code/cli\.m?js(\s|$)"#
-        return cmd.range(of: pattern, options: .regularExpression) != nil
+        var live = Set<Int>()
+        for line in r.out.split(separator: "\n") {
+            let parts = line.trimmingCharacters(in: .whitespaces)
+                .split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard parts.count == 2, let pid = Int(parts[0]),
+                parts[1].range(of: pattern, options: .regularExpression) != nil
+            else { continue }
+            live.insert(pid)
+        }
+        return live
     }
 
     static func refresh(now: Date = Date()) -> [WaitingSession] {
@@ -50,16 +61,17 @@ enum WaitingStore {
                 obj["kind"] as? String == "interactive",
                 let pid = (obj["pid"] as? NSNumber)?.intValue, pid > 0,
                 let sessionId = obj["sessionId"] as? String, !sessionId.isEmpty,
-                let cwd = obj["cwd"] as? String, !cwd.isEmpty,
-                isAlive(pid: pid)
+                let cwd = obj["cwd"] as? String, !cwd.isEmpty
             else { continue }
             // The raw name: Waiting.list owns the cwd / session-id fallback.
             sessions.append(
                 Waiting.LiveSession(
                     pid: pid, sessionId: sessionId, name: obj["name"] as? String ?? "", cwd: cwd))
         }
+        let live = livePids(sessions.map(\.pid))
         return Waiting.list(
-            sessions: sessions, markers: markers, nowMs: now.timeIntervalSince1970 * 1000)
+            sessions: sessions.filter { live.contains($0.pid) }, markers: markers,
+            nowMs: now.timeIntervalSince1970 * 1000)
     }
 
     /// Raise the session's terminal. Prefers claudectl so the placement is

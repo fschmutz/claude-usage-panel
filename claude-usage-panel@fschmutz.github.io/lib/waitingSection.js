@@ -41,16 +41,20 @@ export class WaitingController {
         this._item.add_child(box);
         menu.addMenuItem(this._item);
         this._item.visible = false;
+        this._scan = 0;
     }
 
     async refresh() {
+        // A poll can start while the last scan is still reading (the poll
+        // times sections out): only the newest scan may paint.
+        const scan = ++this._scan;
         let rows = [];
         try {
             rows = await listWaiting();
         } catch (e) {
             logError(e, 'claude-usage-panel: waiting scan failed');
         }
-        if (this._isDestroyed())
+        if (scan !== this._scan || this._isDestroyed())
             return;
         this._setBadge(rows.length);
         this._render(rows);

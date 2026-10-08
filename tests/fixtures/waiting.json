@@ -7,7 +7,7 @@
     "turn ended and the prompt is waiting - it does not clear. A marker counts",
     "only for the same pid AND session id (a reused pid never inherits one). A",
     "re-mark for the same session and reason keeps the previous at; expected.at",
-    "absent means nowMs. WezTerm focuses a pane: without one it is the pid plan."
+    "absent means nowMs; a mark with no session id is ignored. WezTerm focuses a pane: without one it is the pid plan."
   ],
   "nowMs": 1788264000000,
   "reasons": ["permission", "question", "idle"],
@@ -35,17 +35,24 @@
   "applyHookEvent": [
     {
       "name": "Notification",
-      "payload": {"notification_type": "permission_prompt"},
+      "payload": {"notification_type": "permission_prompt", "session_id": "s1"},
       "expected": {"action": "mark", "reason": "permission"}
     },
     {
       "name": "Notification",
-      "payload": {"message": "Do you want to continue?"},
+      "payload": {"message": "Do you want to continue?", "session_id": "s1"},
       "expected": {"action": "mark", "reason": "question"}
     },
     {
       "name": "Stop",
-      "payload": {},
+      "payload": {"session_id": "s1"},
+      "expected": {"action": "mark", "reason": "idle"}
+    },
+    {"name": "Stop", "payload": {}, "expected": {"action": "ignore"}},
+    {
+      "name": "Notification",
+      "payload": {"notification_type": "idle_prompt", "session_id": "s1"},
+      "previous": {"sessionId": "s1", "pid": 11, "reason": "idle", "at": "junk"},
       "expected": {"action": "mark", "reason": "idle"}
     },
     {"name": "UserPromptSubmit", "payload": {}, "expected": {"action": "clear"}},

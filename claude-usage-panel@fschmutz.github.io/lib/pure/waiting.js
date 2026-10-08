@@ -52,31 +52,43 @@ export function reasonFromNotification(payload) {
 
 const CLEARS = new Set(['SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse']);
 
+/** What `event` does at all: 'mark', 'clear' or 'ignore'. */
+export function hookEffect(event) {
+    if (CLEARS.has(event))
+        return 'clear';
+    return event === 'Stop' || event === 'Notification' ? 'mark' : 'ignore';
+}
+
+/** The session id a hook payload names, or null. */
+export function hookSessionId(payload) {
+    const id = payload?.session_id ?? payload?.sessionId;
+    return typeof id === 'string' && id ? id : null;
+}
+
 /**
  * What a Claude Code hook event does to the waiting marker.
  *   Notification -> mark (permission / question / idle)
  *   Stop         -> mark idle  (the turn ended; the prompt is waiting)
  *   UserPromptSubmit / PreToolUse / PostToolUse / SessionEnd -> clear
- * Anything else is ignore, so an unknown event cannot wipe a marker.
- * `previous` is the marker already on disk (parsed) or null: a mark for the
+ * Anything else is ignore, so an unknown event cannot wipe a marker. A mark
+ * with no session id is ignore too: a marker counts only for the session
+ * that wrote it, so one without an id could never be read.
+ * `previous` is the marker JSON already on disk, or null: a mark for the
  * same session and reason keeps its `at`, so Claude Code's idle_prompt
  * Notification a minute after Stop does not restart the wait at 0s.
  */
 export function applyHookEvent(name, payload = {}, nowMs = 0, previous = null) {
     const event = String(name ?? '');
-    if (CLEARS.has(event))
-        return {action: 'clear'};
-    let reason;
-    if (event === 'Stop')
-        reason = 'idle';
-    else if (event === 'Notification')
-        reason = reasonFromNotification(payload);
-    else
+    const effect = hookEffect(event);
+    if (effect !== 'mark')
+        return {action: effect};
+    const sessionId = hookSessionId(payload);
+    if (!sessionId)
         return {action: 'ignore'};
-    const sessionId = payload?.session_id ?? payload?.sessionId;
-    const same = previous && previous.reason === reason && typeof sessionId === 'string'
-        && previous.sessionId === sessionId;
-    return {action: 'mark', reason, at: same ? previous.at : nowMs};
+    const reason = event === 'Stop' ? 'idle' : reasonFromNotification(payload);
+    const prior = parseWaitingMarker(previous);
+    const same = prior && prior.reason === reason && prior.sessionId === sessionId;
+    return {action: 'mark', reason, at: same ? prior.at : nowMs};
 }
 
 /** A marker object, or null when a field is the wrong JSON type. */

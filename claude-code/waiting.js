@@ -10,7 +10,8 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 import {
-  applyHookEvent, focusArgv, focusPlan, parseWaitingMarker, pidFromWaitingMarkerName,
+  applyHookEvent, focusArgv, focusPlan, hookEffect, hookSessionId, parseWaitingMarker,
+  pidFromWaitingMarkerName,
   waitingList, waitingMarkerName, WAITING_MARKER_VERSION,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/waiting.js';
 import {captureLayout} from './layout.js';
@@ -102,15 +103,18 @@ function pidForSession(io, sessionId) {
 export function handleHook(payload, io = {}) {
   try {
     const event = payload?.hook_event_name ?? payload?.hookEventName ?? '';
-    if (applyHookEvent(event, payload ?? {}).action === 'ignore')
+    if (hookEffect(event) === 'ignore')
       return {action: 'ignore'};
-    const pid = pidFromEnv(io) ?? pidForSession(io, payload?.session_id ?? payload?.sessionId);
+    const sessionId = hookSessionId(payload);
+    const pid = pidFromEnv(io) ?? pidForSession(io, sessionId);
     if (!pid)
-      return applyHookEvent(event, payload ?? {}, nowMs(io));
+      return {action: 'ignore'};
     const file = markerPath(io, pid);
     // The marker on disk: a re-mark for the same session and reason keeps
-    // its `at` (applyHookEvent), so the wait does not restart at 0s.
+    // its `at`, so the wait does not restart at 0s.
     const decision = applyHookEvent(event, payload ?? {}, nowMs(io), readMarker(file));
+    if (decision.action === 'ignore')
+      return decision;
     if (decision.action === 'clear') {
       try {
         fs.unlinkSync(file);
@@ -121,7 +125,7 @@ export function handleHook(payload, io = {}) {
     }
     writeWaitingMarker(file, {
       version: WAITING_MARKER_VERSION,
-      sessionId: payload?.session_id ?? payload?.sessionId ?? '',
+      sessionId,
       pid,
       reason: decision.reason,
       at: decision.at,

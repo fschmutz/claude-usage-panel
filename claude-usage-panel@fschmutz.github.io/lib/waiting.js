@@ -33,12 +33,18 @@ async function liveSession(file) {
 export async function listWaiting({nowMs = Date.now()} = {}) {
     const dir = GLib.build_filenamev([configDir(), 'sessions']);
     const names = await listChildrenAsync(dir, 'standard::name', info => info.get_name());
-    const files = names.map(name => ({name, file: GLib.build_filenamev([dir, name])}));
-    const markerFiles = files.filter(f => pidFromWaitingMarkerName(f.name) !== null);
-    const registry = files.filter(f => f.name.endsWith('.json') && !markerFiles.includes(f));
+    const markerFiles = [];
+    const registry = [];
+    for (const name of names) {
+        const file = GLib.build_filenamev([dir, name]);
+        if (pidFromWaitingMarkerName(name) !== null)
+            markerFiles.push(file);
+        else if (name.endsWith('.json'))
+            registry.push(file);
+    }
     const [markers, sessions] = await Promise.all([
-        Promise.all(markerFiles.map(f => readJSONAsync(f.file))),
-        Promise.all(registry.map(f => liveSession(f.file))),
+        Promise.all(markerFiles.map(readJSONAsync)),
+        Promise.all(registry.map(liveSession)),
     ]);
     return waitingList(sessions.filter(Boolean), markers.filter(Boolean), nowMs);
 }
