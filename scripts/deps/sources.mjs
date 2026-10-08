@@ -2,6 +2,10 @@
 // token}) so tests replay recorded answers offline. A lookup that cannot
 // answer returns {error}: UNKNOWN, which the verdict turns into a failure.
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import {newest} from './verdict.mjs';
 
 // Three tries for a dropped connection, a 429 or a 5xx: ~25 lookups run at
@@ -134,10 +138,28 @@ export async function dependabotPrs(io, repo) {
     }
 }
 
-/** The open PR that bumps `name` to `version`, from Dependabot's titles. */
+/**
+ * The open PR that bumps `name` to `version`, read from Dependabot's title
+ * ("bump <name> from <a> to <b>"): exact name and version, so knip never
+ * matches eslint-plugin-knip and 3.2.5 never matches 3.2.57. A grouped PR
+ * ("bump the actions-minor group ... with 3 updates") names no single pin
+ * and counts for none. The pre-commit ecosystem names a hook by its repo URL;
+ * a digest bump names short digests in backticks (`version` is then the
+ * full sha256:...).
+ */
 export function prFor(prs, name, version) {
-    const bare = String(version).replace(/^v/, '');
-    return (prs ?? []).find(p => p.title.includes(name) && p.title.includes(bare))?.number ?? null;
+    const want = String(version).replace(/^v/, '');
+    for (const p of prs ?? []) {
+        const m = /\bbump (\S+) from \S+ to (\S+?)(?:\s|$)/i.exec(p.title);
+        if (!m)
+            continue;
+        const who = m[1].replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
+        const to = m[2].replace(/^`|`$/g, '').replace(/^v/, '');
+        const digest = want.startsWith('sha256:') && to.length >= 7 && want.slice(7).startsWith(to);
+        if (who === name && (to === want || digest))
+            return p.number;
+    }
+    return null;
 }
 
 /**
@@ -163,4 +185,41 @@ export function osvAdvisories(io, pins) {
         return {found: asked.map((pin, i) => ({pin, ids: (results[i]?.vulns ?? []).map(v => v.id)}))
             .filter(r => r.ids.length)};
     });
+}
+
+/**
+ * `npm audit` of the tool tree in `dir` (its package.json, and its lockfile
+ * when one is committed), run in a scratch copy, never in place, with
+ * install scripts off: [{name, id, severity, title}].
+ */
+export async function npmAudit(io, dir) {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-audit-'));
+    try {
+        for (const f of ['package.json', 'package-lock.json']) {
+            if (fs.existsSync(path.join(dir, f)))
+                fs.copyFileSync(path.join(dir, f), path.join(tmp, f));
+        }
+        if (!fs.existsSync(path.join(tmp, 'package-lock.json')))
+            await io.exec('npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'], {cwd: tmp});
+        let out;
+        try {
+            out = await io.exec('npm', ['audit', '--json'], {cwd: tmp});
+        } catch (e) {
+            out = e.stdout; // npm audit exits 1 when it finds something
+            if (!out)
+                throw e;
+        }
+        const found = [];
+        for (const v of Object.values(JSON.parse(out).vulnerabilities ?? {})) {
+            for (const via of v.via) {
+                if (typeof via === 'object')
+                    found.push({name: via.name, id: via.url?.split('/').pop() ?? String(via.source), severity: via.severity, title: via.title});
+            }
+        }
+        return {found};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        fs.rmSync(tmp, {recursive: true, force: true});
+    }
 }

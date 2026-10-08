@@ -8,7 +8,8 @@
 #                                           moves past it the gate fails again
 #   <kind> <name> track:<prefix> <reason>   compare only against releases <prefix>.x
 #   audit <package> <advisory-id> <reason>  a known advisory, accepted
-# kinds: action hook npm pip docker node audit
+# kinds: action hook npm pip docker audit (a Node line is judged by its
+# release schedule, never held)
 #
 # A hold is a decision with a reason, not a parking space. Delete it the moment
 # the blocker clears: an entry that matches nothing fails the gate.

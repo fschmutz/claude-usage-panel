@@ -15,7 +15,6 @@
 
 import {execFile} from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
@@ -25,8 +24,8 @@ import {
     parseRequirements, parseWorkflow,
 } from './deps/inventory.mjs';
 import {
-    dependabotPrs, dockerLatest, githubLatest, nodeLines, npmLatest, osvAdvisories, prFor,
-    pypiLatest,
+    dependabotPrs, dockerLatest, githubLatest, nodeLines, npmAudit, npmLatest, osvAdvisories,
+    prFor, pypiLatest,
 } from './deps/sources.mjs';
 import {nodeVerdict, verdict} from './deps/verdict.mjs';
 
@@ -36,8 +35,8 @@ const HOLDS = '.github/dependency-holds';
 const run = promisify(execFile);
 
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const ls = (dir, re) => fs.readdirSync(path.join(ROOT, dir), {withFileTypes: true})
-    .filter(d => re.test(d.name)).map(d => path.posix.join(dir, d.name));
+const ls = (dir, re, {dirs = false} = {}) => fs.readdirSync(path.join(ROOT, dir), {withFileTypes: true})
+    .filter(d => re.test(d.name) && (!dirs || d.isDirectory())).map(d => path.posix.join(dir, d.name));
 
 /** Every pin, plus every pin-shaped line that did not parse. */
 export function inventory() {
@@ -45,7 +44,7 @@ export function inventory() {
         ...ls('.github/workflows', /\.ya?ml$/).map(f => parseWorkflow(f, read(f))),
         parsePreCommit('.pre-commit-config.yaml', read('.pre-commit-config.yaml')),
         parseEngines('package.json', read('package.json')),
-        ...ls('.github', /^[^.]/).flatMap(dir => {
+        ...ls('.github', /^[^.]/, {dirs: true}).flatMap(dir => {
             const out = [];
             if (fs.existsSync(path.join(ROOT, dir, 'package.json')))
                 out.push(parsePackageJson(`${dir}/package.json`, read(`${dir}/package.json`)));
@@ -131,7 +130,9 @@ export async function freshness(io, {pins, holds, now = Date.now()}) {
             return node.error ? {level: 'fail', msg: `node: ${node.error} - UNKNOWN, not clean`} : nodeVerdict(pin, node.lines, now);
         const hold = holds.find(h => h.kind === pin.kind && h.name === pin.name) ?? null;
         const up = await upstreamFor(io, pin, hold);
-        const openPr = up.latest ? prFor(prs, pin.name, up.latest) : null;
+        const digestMoved = up.digest && pin.digest && up.digest !== pin.digest;
+        const openPr = (up.latest ? prFor(prs, pin.name, up.latest) : null)
+            ?? (digestMoved ? prFor(prs, pin.name, up.digest) : null);
         return verdict(pin, up, {hold, openPr, now});
     });
     for (const r of await Promise.all(checks)) {
@@ -142,39 +143,6 @@ export async function freshness(io, {pins, holds, now = Date.now()}) {
     for (const h of holds.filter(x => x.kind !== 'audit' && !used.has(x)))
         results.push({level: 'fail', msg: `dependency-holds:${h.line}: ${h.kind} ${h.name} matches no pin - delete it`});
     return results;
-}
-
-/** `npm audit` of one .github/<tool> tree, in a scratch copy (never in place). */
-async function npmAudit(io, dir) {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-audit-'));
-    try {
-        for (const f of ['package.json', 'package-lock.json']) {
-            if (fs.existsSync(path.join(ROOT, dir, f)))
-                fs.copyFileSync(path.join(ROOT, dir, f), path.join(tmp, f));
-        }
-        if (!fs.existsSync(path.join(tmp, 'package-lock.json')))
-            await io.exec('npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'], {cwd: tmp});
-        let out;
-        try {
-            out = await io.exec('npm', ['audit', '--json'], {cwd: tmp});
-        } catch (e) {
-            out = e.stdout; // npm audit exits 1 when it finds something
-            if (!out)
-                throw e;
-        }
-        const found = [];
-        for (const v of Object.values(JSON.parse(out).vulnerabilities ?? {})) {
-            for (const via of v.via) {
-                if (typeof via === 'object')
-                    found.push({name: via.name, id: via.url?.split('/').pop() ?? String(via.source), severity: via.severity, title: via.title});
-            }
-        }
-        return {found};
-    } catch (e) {
-        return {error: e.message};
-    } finally {
-        fs.rmSync(tmp, {recursive: true, force: true});
-    }
 }
 
 export async function audit(io, {pins, holds}) {
@@ -199,7 +167,7 @@ export async function audit(io, {pins, holds}) {
             results.push({level: 'pass', msg: `OSV: no advisory for the ${pins.filter(p => ['npm', 'pip', 'action'].includes(p.kind)).length} direct npm/PyPI/Actions pins`});
     }
     for (const dir of [...new Set(pins.filter(p => p.kind === 'npm').map(p => path.posix.dirname(p.file)))]) {
-        const r = await npmAudit(io, dir);
+        const r = await npmAudit(io, path.join(ROOT, dir));
         if (r.error)
             results.push({level: 'fail', msg: `npm audit ${dir}: ${r.error} - UNKNOWN, not clean`});
         else if (!r.found.length)
