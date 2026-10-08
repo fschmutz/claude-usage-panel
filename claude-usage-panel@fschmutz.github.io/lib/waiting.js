@@ -30,8 +30,15 @@ function listDir(dir) {
         const en = Gio.File.new_for_path(dir)
             .enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
         let info;
-        while ((info = en.next_file(null)) !== null)
-            names.push(info.get_name());
+        // A name that is not a string means the enumerator is not a real
+        // directory listing (the GJS test stub's next_file never returns
+        // null). Stop rather than grow `names` without bound.
+        while ((info = en.next_file(null)) !== null) {
+            const name = info.get_name();
+            if (typeof name !== 'string')
+                break;
+            names.push(name);
+        }
         en.close(null);
     } catch {
         // no registry yet

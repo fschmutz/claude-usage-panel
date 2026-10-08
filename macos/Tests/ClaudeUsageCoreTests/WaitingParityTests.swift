@@ -20,7 +20,8 @@ final class WaitingParityTests: XCTestCase {
     func testMarkerName() throws {
         let fix = try fixture()
         for c in fix["markerName"] as! [[String: Any]] {
-            XCTAssertEqual(Waiting.markerName((c["pid"] as! NSNumber).intValue), c["name"] as? String)
+            let pid = (c["pid"] as! NSNumber).intValue
+            XCTAssertEqual(Waiting.markerName(pid), c["name"] as? String)
         }
         for c in fix["pidFromName"] as! [[String: Any]] {
             XCTAssertEqual(
@@ -48,7 +49,8 @@ final class WaitingParityTests: XCTestCase {
                 nowMs: now)
             switch expected["action"] as! String {
             case "mark":
-                XCTAssertEqual(got, .mark(reason: WaitingReason(rawValue: expected["reason"] as! String)!, at: now))
+                let reason = WaitingReason(rawValue: expected["reason"] as! String)!
+                XCTAssertEqual(got, .mark(reason: reason, at: now))
             case "clear":
                 XCTAssertEqual(got, .clear)
             default:
@@ -119,7 +121,9 @@ final class WaitingParityTests: XCTestCase {
                 pid: (row["pid"] as? NSNumber)?.intValue)
             XCTAssertEqual(got.how.rawValue, expected["how"] as? String)
             if let id = expected["id"] as? String { XCTAssertEqual(got.id, id) }
-            if let session = expected["session"] as? String { XCTAssertEqual(got.session, session) }
+            if let session = expected["session"] as? String {
+                XCTAssertEqual(got.session, session)
+            }
             if let tab = expected["tab"] as? NSNumber { XCTAssertEqual(got.tab, tab.intValue) }
             if let pid = expected["pid"] as? NSNumber { XCTAssertEqual(got.pid, pid.intValue) }
         }

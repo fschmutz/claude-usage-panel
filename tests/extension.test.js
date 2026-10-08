@@ -109,6 +109,7 @@ function spyOn(button, hang = []) {
         return hang.includes(name) ? new Promise(() => {}) : Promise.resolve();
     };
     button._refreshCost = make('cost');
+    button._waiting = {refresh: make('waiting'), destroy: () => {}};
     button._sessions = {refresh: make('sessions'), destroy: () => {}};
     button._cursor = {refresh: make('cursor')};
     button._accounts = {refresh: make('accounts'), activeName: null, destroy: () => {}};
@@ -122,7 +123,7 @@ test('a poll with no login still refreshes every section', async t => {
     const armed = rec.timers.length;
     await button.refresh();
     assert.deepEqual(calls.map(([n]) => n).sort(),
-        ['accounts', 'codex', 'cost', 'cursor', 'sessions']);
+        ['accounts', 'codex', 'cost', 'cursor', 'sessions', 'waiting']);
     assert.deepEqual(calls.find(([n]) => n === 'accounts')[1], [], 'no live cards to report');
     assert.equal(button._updatedLabel.text, 'No Claude credentials found. Sign in with Claude Code.');
     assert.equal(rec.timers.length, armed + 1, 'the next poll is armed');
