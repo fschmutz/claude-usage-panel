@@ -1,0 +1,8 @@
+{
+  "name": "claude-usage-panel-ci-knip",
+  "private": true,
+  "description": "The knip the knip CI job and the knip pre-commit hook run, pinned to one exact version. Dependabot's npm ecosystem bumps it, so a knip release that reports something new arrives as a reviewed PR, never as an unrelated PR turning red.",
+  "dependencies": {
+    "knip": "6.39.0"
+  }
+}
