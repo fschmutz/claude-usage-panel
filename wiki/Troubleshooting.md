@@ -61,6 +61,28 @@ Shell is still running the code it loaded at login: log out and back in. If it
 says **"Installed X, checkout Y"**, the code is there but the clients are not -
 press Update now, or run `./install.sh update`.
 
+## A pause row never reaches SAFE
+
+`claudectl session pause-status` names where each session stands (see the
+state table in [[Pause]]):
+
+- **no waiter yet**: the session started before `./install.sh pause`, or is
+  mid-turn. It gets the request on its next tool call or turn; an idle one
+  cannot be woken until then. Send it any message, or restart it.
+- **delivered, working through the protocol** for a long time: the session has
+  the text but has not run `report`. Look at that session; a model may treat
+  hook text as untrusted and ask you first.
+- **request expired before delivery** / **no verdict within the hour**: the
+  request is more than an hour old. Send a new one.
+- **superseded**: a newer request (a per-session Pause, a panel click) replaced
+  it before that session answered. `pause-status` shows the newer one.
+- **sent from inside a Claude Code session**: the request was typed in a
+  Claude session's Bash, so each session asks you before pausing. Send it from
+  a terminal or a panel instead.
+- Nothing at all after the install: check that `~/.claude/settings.json` has
+  the `pause-hook.js` entries under SessionStart, Stop and PreToolUse
+  (`./install.sh --list` shows the target), then open a new session.
+
 ## Logs (GNOME)
 
 ```bash

@@ -71,6 +71,13 @@ the same list; the status line can show `wait N` with `--segments=…,waiting`.
 use clears it. Opt-in: `./install.sh waiting` installs the hooks (they run
 node on every tool call) and turns the section on. Details: [wiki/Waiting](https://github.com/fschmutz/claude-usage-panel/wiki/Waiting).
 
+**Pause everything, safely.** `claudectl session pause --all` sends every live
+session, idle ones included, a pause protocol: stop what it launched, write a
+checkpoint, verify, then answer `SAFE TO CLOSE` or `NOT SAFE: <why>`. You get
+one row per session (delivered? safe?), and `claudectl session resume` (or a
+later reopen) hands each one its checkpoint back. Opt-in:
+`./install.sh pause`. Details: [wiki/Pause](https://github.com/fschmutz/claude-usage-panel/wiki/Pause).
+
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list
 today's sessions ranked by the tokens each one spent; clicking one opens your
 terminal on that project with `claude --resume <that session>`. The MCP tool

@@ -29,6 +29,7 @@ uninstalls every client.
 | `./install.sh sessionping [HH:MM …] [--days=…]` | scheduled `claude` pings that open the 5h session window (opt-in) |
 | `./install.sh cost` | pinned `ccusage` + the session-cost line on (opt-in) |
 | `./install.sh waiting` | Claude Code hooks for **Waiting on you** + the panel section on (opt-in: they run node per tool call) |
+| `./install.sh pause` | Claude Code hooks so `claudectl session pause` / `resume` reach every live session, idle ones included (opt-in; installs `cli` when missing) |
 | `./install.sh update [target…]` | reinstall what's already installed (upgrade) |
 | `./install.sh update --pull` | `git pull` first, then upgrade |
 | `./install.sh --uninstall [target…]` | reverse an install (default: everything installed, sessionping included) |

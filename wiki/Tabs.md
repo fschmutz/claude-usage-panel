@@ -50,6 +50,10 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux] [--prompt=TEXT\|--no-prompt]` | Reopen a snapshot in your terminal |
 | `purge SNAP... \| --keep=N \| --auto \| --all [--yes]` | Delete snapshots (asks first) |
 | `autosave [--keep=N] [--force]` | What the schedule runs; `--force` (the panels' **Save**) saves now, even unchanged or empty |
+| `pause [NAME...\|--all] [--include-self] [--wait[=S]\|--no-wait] [--json]` | Send the pause protocol, follow each verdict; see [[Pause]] |
+| `resume [NAME...\|--all] [--wait[=S]\|--no-wait] [--terminal=BIN] [--dry-run]` | Resume protocol to running sessions; reopen closed ones with their checkpoint |
+| `pause-status [--json]` | The last pause / resume request, one row per session |
+| `report --request ID --verdict SAFE\|NOT_SAFE [--checkpoint P] [--reason TEXT] [--session ID]` | What a paused session runs to answer |
 
 `SNAP` is a label, a unique prefix of one, or its number in `store`; without
 one, the newest snapshot is used.
@@ -90,6 +94,9 @@ and otherwise walks the parent process chain - the same on every platform.
   stopped, re-check git / CI / the job it was waiting on, reply with a short
   done / interrupted / next status, re-arm its watchers and carry on -
   asking first for anything destructive or outward-facing, as before.
+  A session paused with `claudectl session pause` whose checkpoint is newer
+  than its last resume gets the resume protocol and that checkpoint path
+  instead (see [[Pause]]).
   `--prompt=TEXT` sends your own message instead, `--no-prompt` none.
 - **No double resume.** A session still running is skipped (Claude Code
   refuses to resume a live session twice); `--force` tries anyway. A session

@@ -6,6 +6,37 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Pause and resume every session.** `claudectl session pause [NAME...|--all]`
+  sends the pause protocol to every live Claude Code session, idle ones
+  included, and follows each one: delivered (woken or on its next tool call),
+  then `SAFE` or `NOT SAFE: <why>`; exit 0 only when all are safe.
+  `claudectl session resume` hands running sessions the resume protocol and
+  reopens closed ones with their checkpoint; `pause-status` shows the last
+  request; `report` is what a session runs to answer. A reopen through
+  `claudectl session open` of a session with a pending checkpoint carries the
+  resume protocol and its path. **Opt-in:** `./install.sh pause` installs the
+  hooks: an asyncRewake waiter on SessionStart and Stop (one per session, by
+  lock) and a PreToolUse backstop that skips subagents; each (session,
+  request) is delivered exactly once. State is 0600 files under
+  `<state dir>/claude-usage-panel/pause/`. Shared contract:
+  `tests/fixtures/pause.json`. `--all` is frozen to the sessions live when the
+  request is sent and skips the calling one (`--include-self` keeps it); a
+  request is never delivered after one hour. Both panels get the section,
+  off by default (GSettings `pause-enabled`, UserDefaults `pauseEnabled`;
+  `./install.sh pause` turns it on): Pause all, per-session Pause, Resume
+  all, the summary and one row per session, the same `pauseRows` join the CLI
+  prints. `resume --all` resumes every session still paused, whichever
+  request paused it; a request is bound to each target's pid and start time,
+  so a session reopened later never pauses itself on it; a checkpoint the
+  session worked past (or older than 14 days) is never replayed; `pause
+  --wait` stops with exit 4 when a newer request replaces it. A request sent
+  from inside a Claude Code session is marked so and each session asks the
+  user first; reasons go through `--reason-file`, and names and reasons have
+  control characters blanked. Docs: wiki Pause (commands, panels, delivery
+  diagram, row states, limits) and a Troubleshooting entry.
+
 ## [3.1.0] - 2026-10-08
 
 ### Added
