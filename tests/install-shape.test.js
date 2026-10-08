@@ -398,4 +398,7 @@ test('the installed status line, MCP server and claudectl start from the tree, l
     assert.ok(tools.result.tools.some((tool) => tool.name === 'get_usage'));
 
     assert.match(start('claude-code/claudectl.js', ['--help'], ''), /claudectl session/);
+    assert.match(start('claude-code/claudectl.js', ['--help'], ''), /claudectl waiting/);
+    const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
+    assert.match(JSON.stringify(settings.hooks), /waiting-hook\.js/);
 });

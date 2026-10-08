@@ -28,6 +28,7 @@ import {
   ACCOUNT_TOOL_NAMES, ACCOUNT_TOOLS, GET_USAGE_TOOL, callAccountTool, currentAccount,
   renderAccount, renderCards, renderExtraUsage,
 } from './tools.js';
+import {WAITING_TOOL, getWaiting} from './waiting.js';
 import {withTrend} from './warehouse.js';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
@@ -99,9 +100,16 @@ export async function handleRequest(msg, io = {}) {
     case 'ping':
       return {};
     case 'tools/list':
-      return {tools: [GET_USAGE_TOOL, ...ACCOUNT_TOOLS, ...CODEX_TOOLS]};
+      return {tools: [GET_USAGE_TOOL, WAITING_TOOL, ...ACCOUNT_TOOLS, ...CODEX_TOOLS]};
     case 'tools/call': {
       const name = msg.params?.name;
+      if (name === 'waiting') {
+        try {
+          return getWaiting(io);
+        } catch (e) {
+          return {content: [{type: 'text', text: e.message}], isError: true};
+        }
+      }
       if (ACCOUNT_TOOL_NAMES.has(name)) {
         try {
           return await callAccountTool(name, msg.params?.arguments, openStore(io));

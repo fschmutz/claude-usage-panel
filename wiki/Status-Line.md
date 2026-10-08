@@ -50,7 +50,10 @@ command; re-run to change):
 ```
 
 - `--segments` - any order of `context`, `limits`, `tokens`, `ping`, `account`,
-  `sessions`. Default: `context,limits,tokens,ping`.
+  `sessions`, `waiting`. Default: `context,limits,tokens,ping`.
+- `waiting` (opt-in) renders `wait N` when a live session is blocked on a
+  permission prompt, a question, or idle after Stop. Silent at zero. See
+  [[Waiting]].
 - `account` (opt-in) renders `[PRO]`: the saved account this session runs on
   (nothing until a login is saved, see [[Accounts]]). When this session is at the
   auto-switch threshold and the panels' last snapshot says another saved

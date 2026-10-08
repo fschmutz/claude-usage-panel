@@ -150,6 +150,14 @@ text(PAD, y, `Updated ${DATA.updated}`, 11, C.dim);
 y += 17;
 text(PAD, y, `Session pings: last ${DATA.ping.last} · next ${DATA.ping.next}`, 11, C.dim);
 y += 26;
+// Waiting on you: live sessions blocked on a permission prompt or a question.
+text(PAD, y, 'Waiting on you', 13, C.warning, 'font-weight="700"');
+for (const w of DATA.waiting) {
+  y += 19;
+  text(PAD, y, `\u25b8 ${w.label}`, 12, C.text, 'font-weight="600"');
+  parts.push(`<text x="${W - PAD}" y="${y}" font-size="11" fill="${C.dim}" ${FONT} text-anchor="end">${esc(`${w.reason}  ${w.age}`)}</text>`);
+}
+y += 26;
 // Today's sessions: ranked by the tokens they spent, each row a resume click.
 text(PAD, y, "Today's sessions (est.)", 13, C.text, 'font-weight="700"');
 for (const s of DATA.sessions) {

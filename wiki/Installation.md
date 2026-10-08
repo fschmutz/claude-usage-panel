@@ -23,7 +23,7 @@ uninstalls every client.
 | `./install.sh` | auto-detect OS → the sensible set |
 | `./install.sh gnome` | GNOME Shell extension |
 | `./install.sh statusline` | Claude Code status line |
-| `./install.sh mcp` | `get_usage` MCP tool → Claude Code + Cursor |
+| `./install.sh mcp` | `get_usage` + `waiting` MCP tools → Claude Code + Cursor |
 | `./install.sh macos` | build + install the macOS `.app` |
 | `./install.sh autoupdate` | daily check for a new release + auto-install |
 | `./install.sh sessionping [HH:MM …] [--days=…]` | scheduled `claude` pings that open the 5h session window (opt-in) |
@@ -82,7 +82,7 @@ brew upgrade --cask claude-usage-panel
 
 ## MCP tool - no clone needed
 
-The `get_usage` tool also installs without touching the repo:
+The `get_usage` and `waiting` tools also install without touching the repo:
 
 ```bash
 # Claude Code plugin (inside a session)

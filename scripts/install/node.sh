@@ -15,6 +15,7 @@ NODE_TREE="$HOME/.claude/claude-usage-panel"
 NODE_TREE_DIRS="mcp claude-code claude-usage-panel@fschmutz.github.io/lib/pure"
 SL_DEST="$NODE_TREE/claude-code/statusline.js"
 MCP_DEST="$NODE_TREE/mcp/server.js"
+HOOK_DEST="$NODE_TREE/claude-code/waiting-hook.js"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 CURSOR_MCP="$HOME/.cursor/mcp.json"
 
@@ -41,14 +42,50 @@ _install_node_tree() {
     # Pre-1.11 installs were loose .mjs copies next to settings.json.
     act rm -f "$HOME/.claude/claude-usage-statusline.mjs" "$HOME/.claude/claude-usage-mcp.mjs" \
         "$HOME/.claude/claude-usage-accounts.mjs"
+    _install_waiting_hooks
+}
+
+# Claude Code hooks that mark a live session as waiting on you. Same
+# settings.json merge as the status line: other hooks stay, re-run is safe.
+_waiting_hook_command() {
+    printf 'node "%s"' "$HOOK_DEST"
+}
+
+_install_waiting_hooks() {
+    command -v node >/dev/null || return 0
+    local command
+    command="$(_waiting_hook_command)"
+    if $DRY; then
+        echo "  would: merge waiting hooks → $command into $CLAUDE_SETTINGS"
+        return 0
+    fi
+    node "$ROOT/scripts/install/hooks-edit.mjs" add "$CLAUDE_SETTINGS" "$command"
+    echo "  waiting hooks (Notification / Stop / …) → $CLAUDE_SETTINGS"
+}
+
+_remove_waiting_hooks() {
+    command -v node >/dev/null || return 0
+    [ -f "$CLAUDE_SETTINGS" ] || return 0
+    if $DRY; then
+        echo "  would: drop waiting hooks from $CLAUDE_SETTINGS"
+        return 0
+    fi
+    node "$ROOT/scripts/install/hooks-edit.mjs" remove "$CLAUDE_SETTINGS" "$(_waiting_hook_command)"
 }
 
 # Drop the tree once nothing installed uses it any more.
 _prune_node_tree() {
-    [ -d "$NODE_TREE" ] || return 0
+    [ -d "$NODE_TREE" ] || {
+        _remove_waiting_hooks
+        return 0
+    }
     _cli_installed && return 0 # scripts/install/cli.sh
     _statusline_installed && return 0
     _mcp_installed && return 0
+    # gnome / macos may have installed the tree just so the waiting hooks run
+    [ -d "$HOME/.local/share/gnome-shell/extensions/$UUID" ] && return 0
+    [ -d "/Applications/ClaudeUsagePanel.app" ] && return 0
+    _remove_waiting_hooks
     act rm -rf "$NODE_TREE"
 }
 
@@ -123,7 +160,7 @@ install_statusline() {
     _json set "$CLAUDE_SETTINGS" statusLine \
         "{\"type\": \"command\", \"command\": $(_json encode "$command")}"
     ok "installed to $dest (segments: $SL_SEGMENTS, tokens: $SL_TOKENS)"
-    echo "  Customize: re-run with --segments=context,limits,tokens,ping,account,sessions and --tokens=all|fresh."
+    echo "  Customize: re-run with --segments=context,limits,tokens,ping,account,sessions,waiting and --tokens=all|fresh."
     echo "  Open a Claude Code session or run /statusline to see it."
 }
 
@@ -158,7 +195,7 @@ uninstall_statusline() {
 
 # ── MCP server (Claude Code + Cursor) ──────────────────────────────────────────
 install_mcp() {
-    info "MCP server (get_usage tool for Claude Code + Cursor)"
+    info "MCP server (get_usage + waiting tools for Claude Code + Cursor)"
     if ! command -v node >/dev/null; then
         skip_fatal "mcp: Node.js not found on PATH"
         return 0

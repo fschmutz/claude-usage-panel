@@ -2,8 +2,9 @@
 
 A native SwiftUI menu-bar app (`MenuBarExtra`) that mirrors the GNOME extension:
 Claude Code plan limits (session / weekly / per-model like **Fable**) in the
-macOS menu bar, with a designed dropdown, severity colors, reset timers, and
-optional session cost via `ccusage`.
+macOS menu bar, with a designed dropdown, severity colors, reset timers,
+optional session cost via `ccusage`, and a **Waiting on you** list of live
+sessions blocked on a permission prompt, a question, or idle after Stop.
 
 Same data source as the GNOME version - reads the local Claude Code OAuth token
 (read-only) and calls `https://api.anthropic.com/api/oauth/usage`. On macOS the

@@ -1,6 +1,6 @@
 # MCP Tool - ask Claude or Cursor for your usage
 
-Four MCP tools. The main one, **`get_usage`**, lets any MCP client answer *"how much of my plan
+Nine MCP tools. The main one, **`get_usage`**, lets any MCP client answer *"how much of my plan
 have I used?"* in-conversation with live numbers: session, weekly, and
 per-model limits (Fable, Opus…) with percent, severity, and reset countdown -
 the same data as the desktop panels, from the official Anthropic usage
@@ -85,6 +85,12 @@ saved - see [[Accounts]].
 Errors (no token, expired session, network) come back as tool errors with a
 one-line fix hint - e.g. *"Claude session expired. Run any Claude Code command
 to refresh it."*
+
+## Waiting on you
+
+**`waiting`** lists live Claude Code sessions blocked on a permission prompt,
+a question, or idle after Stop - the same rows the desktop panels show.
+Oldest wait first. Dead pids are ignored. See [[Waiting]].
 
 ## Account tools
 

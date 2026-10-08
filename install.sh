@@ -28,7 +28,7 @@
 #   ./install.sh --uninstall [target...]   reverse an install (default: all installed)
 #   ./install.sh --dry-run [target...]     print the actions without doing them (alias -n)
 #   ./install.sh macos --build-only        build the .app but don't install it (used by CI)
-#   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions] \
+#   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions,waiting] \
 #                           --tokens=all|fresh
 #                                          choose status-line segments + token mode
 #   ./install.sh --list             show detected + installed targets

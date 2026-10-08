@@ -51,8 +51,8 @@ wiki page.
 ├── claude-code/             # the Node clients: I/O + terminal labels over lib/pure/
 │   ├── accounts.js · pace.js · paths.js · tabs.js   # stores, history, paths, sessions
 │   ├── statusline.js        # render one condensed line from stdin
-│   └── claudectl.js         # the claudectl CLI (account-cli.js · session-cli.js)
-├── mcp/                     # MCP server: usage, accounts, sessions (Claude Code, Cursor…)
+│   └── claudectl.js         # the claudectl CLI (account-cli.js · session-cli.js · waiting-cli.js)
+├── mcp/                     # MCP server: usage, waiting, accounts, sessions (Claude Code, Cursor…)
 │   └── server.js            # zero-dep stdio JSON-RPC, also the npx bin
 ├── linux/                   # usage-bar.mjs: one-line usage for waybar, polybar, tmux…
 ├── Casks/                   # the Homebrew cask, pinned to each release

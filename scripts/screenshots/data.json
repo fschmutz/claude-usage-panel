@@ -31,6 +31,10 @@
   ],
   "cost": "Session cost: $2.14 · 340k tokens",
   "ping": {"last": "05:30", "next": "10:35"},
+  "waiting": [
+    {"label": "my-app", "reason": "permission", "age": "3m"},
+    {"label": "docs", "reason": "question", "age": "12m"}
+  ],
   "sessions": [
     {"label": "my-app", "tokens": 412000, "when": "16:02"},
     {"label": "CONSOLE-DEV", "tokens": 180400, "when": "15:41"},

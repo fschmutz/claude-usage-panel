@@ -14,14 +14,16 @@ import {pathToFileURL} from 'node:url';
 import * as account from './account-cli.js';
 import * as codex from './codex-cli.js';
 import * as session from './session-cli.js';
+import * as waiting from './waiting-cli.js';
 
-const GROUPS = {account, codex, session};
+const GROUPS = {account, codex, session, waiting};
 
 const HELP = `claudectl - Claude Code from the command line
 
   claudectl account ...   named logins: list, current, save, use, remove, refresh
   claudectl session ...   running sessions: list, save, store, show, open, purge, autosave
   claudectl codex ...     named OpenAI Codex logins: list, current, save, use, remove, usage
+  claudectl waiting ...   live sessions waiting on you: list, focus
 
   claudectl <group> help  the commands of one group`;
 

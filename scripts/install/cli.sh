@@ -32,7 +32,7 @@ _cli_drop_legacy() {
 }
 
 install_cli() {
-    info "claudectl CLI (account + session, autosave every 30 min)"
+    info "claudectl CLI (account + session + waiting, autosave every 30 min)"
     if ! command -v node >/dev/null; then
         skip_fatal "cli: Node.js not found on PATH"
         return 0

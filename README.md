@@ -62,6 +62,14 @@ Note the middle frame. Between the switch and the first reading of the new
 window there is no honest percentage to show, so none is shown - a bar here is
 never the last number it happened to have.
 
+**Waiting on you.** When a live Claude Code session is blocked - a permission
+prompt, a question, or idle after Stop - the GNOME top bar and the macOS menu
+bar show a count, the dropdown lists them oldest-first, and a click focuses
+that session's terminal. `claudectl waiting` and the MCP `waiting` tool return
+the same list; the status line can show `wait N` with `--segments=…,waiting`.
+`Stop` marks the session idle (the prompt is waiting); the next prompt or tool
+use clears it. Details: [wiki/Waiting](https://github.com/fschmutz/claude-usage-panel/wiki/Waiting).
+
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list
 today's sessions ranked by the tokens each one spent; clicking one opens your
 terminal on that project with `claude --resume <that session>`. The MCP tool
