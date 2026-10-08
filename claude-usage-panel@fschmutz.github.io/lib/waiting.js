@@ -9,7 +9,7 @@ import {readJSON, readText} from './fs.js';
 import {configDir} from './paths.js';
 import {pidFromWaitingMarkerName, waitingList} from './pure.js';
 
-export function sessionRegistryDir() {
+function sessionRegistryDir() {
     return GLib.build_filenamev([configDir(), 'sessions']);
 }
 

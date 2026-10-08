@@ -39,7 +39,7 @@ export const WAITING_TOOL = {
   annotations: {readOnlyHint: true, openWorldHint: false},
 };
 
-export function renderWaiting(rows) {
+function renderWaiting(rows) {
   if (!rows.length)
     return 'Nothing waiting on you.';
   const lines = [`**Waiting on you** (${rows.length})`, ''];
