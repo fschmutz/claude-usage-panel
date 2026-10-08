@@ -19,6 +19,10 @@ on:
     branches: [main]
   pull_request:
   merge_group: # so the same gate guards a merge queue if one is ever enabled
+  # Weekly with no push at all: upstream moves while the repo sits still, and
+  # the `deps` job is what notices (a stale pin, a new advisory).
+  schedule:
+    - cron: "17 6 * * 1"
 
 # Least privilege: nothing at the workflow level, and every job asks for
 # exactly what it uses - here, reading the checkout (zizmor
@@ -232,6 +236,30 @@ jobs:
             fi
           done
 
+  # Every pinned version (actions, hook revs, npm/pip tool pins, Docker
+  # images, the Node lines) against its upstream, and every pin and tool tree
+  # against OSV / npm audit: scripts/check-deps.mjs. Current, or DECLARED in
+  # .github/dependency-holds with a reason; nothing else passes. A release
+  # still inside Dependabot's window (weekly + 7-day cooldown), or with its
+  # Dependabot PR open, is in flight, not stale. Upstream not answering is
+  # UNKNOWN and fails.
+  deps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # the open Dependabot PRs: a bump in flight is not stale
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - run: node scripts/check-deps.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
   # ── The one required check ──────────────────────────────────────────────────
   # Requires every job above to have actually SUCCEEDED. `if: always()` is what
   # makes that true: without it this job would be skipped when a dependency
@@ -241,7 +269,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [lint, js, screenshots, i18n, swift-core, macos-app, bash32, plugin-validate]
+    needs: [lint, js, screenshots, i18n, swift-core, macos-app, bash32, plugin-validate, deps]
     runs-on: ubuntu-latest
     permissions: {} # reads only the needs context, never the repo
     timeout-minutes: 5

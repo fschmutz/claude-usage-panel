@@ -18,6 +18,19 @@ semantic versioning.
   (the turn ended; the prompt is waiting - it does not clear), and
   `UserPromptSubmit` / `PreToolUse` / `SessionEnd` clear. Dead pids are
   ignored. Shared contract: `tests/fixtures/waiting.json`.
+- **Dependency freshness and advisory gate** (`node scripts/check-deps.mjs`,
+  the CI `deps` job, also weekly on a schedule). Every pinned version
+  (actions, pre-commit hook revs, the npm/pip tool pins under `.github/`, the
+  Docker images and their digests, the Node lines) is checked against its
+  upstream, and every pin and tool tree against OSV / `npm audit`. A pin is
+  current or declared in `.github/dependency-holds` with a reason; a release
+  inside Dependabot's window (weekly + 7-day cooldown) or with its Dependabot
+  PR open is in flight. An upstream that does not answer fails.
+- **knip** in pre-commit (`scripts/knip.sh`, pinned in `.github/knip`,
+  config `knip.jsonc`): unused files, exports and dependencies fail the
+  commit. The first run removed 80 dead exports and the never-wired GNOME
+  `saveCurrentCodex` / `removeCodexProfile`; the GNOME tests now import the
+  extension files by literal path so knip sees what they use.
 
 ### Changed
 
