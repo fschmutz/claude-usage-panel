@@ -186,10 +186,13 @@ export function openStore(io = {}) {
     const write = keychainWrite(keychainAccount(), services[0], text);
     if (!write) throw new Error(`cannot write the Keychain item ${services[0]}: no account name, or credentials that are not valid text`);
     return () => {
+      let refused = '';
       try {
-        security(write.args, {input: write.stdin ?? undefined, stdio: ['pipe', 'ignore', 'ignore']});
-      } catch {
-        // a refused argv write exits non-zero: the read-back reports it
+        security(write.args, {input: write.stdin ?? undefined, stdio: ['pipe', 'ignore', 'pipe']});
+      } catch (e) {
+        // a refused argv write exits non-zero: the read-back decides, and
+        // the error it raises keeps security's own reason
+        refused = String(e.stderr ?? e.message ?? '').trim().split('\n').at(-1) ?? '';
       }
       // `security -i` exits 0 whatever its command did: read the item back.
       let back = null;
@@ -198,7 +201,9 @@ export function openStore(io = {}) {
       } catch {
         // no item: the write failed
       }
-      if (back !== text) throw new Error(`could not write the Keychain item ${services[0]}`);
+      if (back !== text) {
+        throw new Error(`could not write the Keychain item ${services[0]}${refused ? `: ${refused}` : ''}`);
+      }
     };
   }
 
