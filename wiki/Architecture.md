@@ -202,6 +202,7 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── waiting-hook.js     # Claude Code hook: mark / clear `<pid>.waiting.json`
 ├── waiting-cli.js      # `claudectl waiting`: list and focus
 ├── pause.js            # openPause(io): the pause request, deliveries, verdicts, waiter locks, checkpoints
+├── pause-hook.js       # Claude Code hook: asyncRewake waiter (SessionStart / Stop) + PreToolUse backstop
 └── claudectl.js        # the claudectl entry point: dispatches to the groups
 
 mcp/                    # MCP server (Claude Code, Cursor…)

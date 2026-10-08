@@ -8,10 +8,12 @@
         // GNOME Shell loads these two by file name.
         "claude-usage-panel@fschmutz.github.io/extension.js",
         "claude-usage-panel@fschmutz.github.io/prefs.js",
-        // Claude Code runs these: the statusLine command, and the waiting
-        // hook command (scripts/install/node.sh writes both into settings.json).
+        // Claude Code runs these: the statusLine command, and the waiting and
+        // pause hook commands (scripts/install/node.sh and pause.sh write them
+        // into settings.json).
         "claude-code/statusline.js",
         "claude-code/waiting-hook.js",
+        "claude-code/pause-hook.js",
         // Run by scripts/install/node.sh to merge the hooks into settings.json.
         "scripts/install/hooks-edit.mjs",
         // Run by hand or by waybar/tmux/polybar; no install target.
