@@ -145,6 +145,7 @@ test('parseConfig picks segments/order and token mode, dropping unknowns', () =>
     assert.deepEqual(
         parseConfig(['--segments=nope,']).segments, ['context', 'limits', 'tokens', 'ping']);
     assert.deepEqual(parseConfig(['--segments=sessions']).segments, ['sessions']);
+    assert.deepEqual(parseConfig(['--segments=waiting,limits']).segments, ['waiting', 'limits']);
     assert.equal(parseConfig(['--tokens=fresh']).includeCacheRead, false);
     assert.equal(parseConfig(['--tokens=all']).includeCacheRead, true);
 });

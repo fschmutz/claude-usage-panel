@@ -27,6 +27,12 @@
     font-weight: 600;
     font-feature-settings: "tnum";
 }
+.cu-panel-wait {
+    color: #e0a458;
+    font-weight: 700;
+    font-feature-settings: "tnum";
+    padding: 0 2px;
+}
 
 /* severity colors, shared by panel + cards */
 .cu-normal   { color: #e6e1d7; }
@@ -142,7 +148,11 @@
     padding-bottom: 2px;
 }
 
-/* ---- today's sessions (resume links) ---- */
+/* ---- waiting on you + today's sessions (resume / focus links) ---- */
+.cu-waiting {
+    spacing: 3px;
+    padding: 8px 8px 4px 8px;
+}
 .cu-sessions {
     spacing: 3px;
     padding: 8px 8px 4px 8px;

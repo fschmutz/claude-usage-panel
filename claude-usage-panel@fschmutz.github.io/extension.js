@@ -27,6 +27,7 @@ import {AccountsController} from './lib/accountsSection.js';
 import {CodexController} from './lib/codexSection.js';
 import {CursorController} from './lib/cursorSection.js';
 import {SessionsController} from './lib/sessionsSection.js';
+import {WaitingController} from './lib/waitingSection.js';
 import {UsageCard} from './lib/usageCard.js';
 import {HeaderBar} from './lib/headerBar.js';
 import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
@@ -91,6 +92,13 @@ class ClaudeUsageButton extends PanelMenu.Button {
             y_align: Clutter.ActorAlign.CENTER,
         });
         box.add_child(this._panelIcon);
+        this._panelWait = new St.Label({
+            text: '',
+            style_class: 'cu-panel-wait',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
+        box.add_child(this._panelWait);
         box.add_child(this._panelLabel);
         this.add_child(box);
 
@@ -203,6 +211,14 @@ class ClaudeUsageButton extends PanelMenu.Button {
         statusItem.add_child(statusBox);
         this.menu.addMenuItem(statusItem);
 
+        // Waiting first: a permission prompt outranks today's spend ranking.
+        this._waiting = new WaitingController({
+            ...deps,
+            setBadge: n => {
+                this._panelWait.text = n ? String(n) : '';
+                this._panelWait.visible = n > 0;
+            },
+        });
         // The optional sections, each owning its menu item, in menu order.
         this._sessions = new SessionsController(deps);
         this._cursor = new CursorController(deps);
@@ -369,6 +385,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
     async _refreshSections(result) {
         const outcomes = await refreshSections({
             cost: () => this._refreshCost(),
+            waiting: () => this._waiting.refresh(),
             sessions: () => this._sessions.refresh(),
             cursor: () => this._cursor.refresh(),
             accounts: cards => this._accounts.refresh(cards),
@@ -616,6 +633,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._networkMonitor?.disconnectObject(this);
         this._networkMonitor = null;
         this._sessions.destroy();
+        this._waiting.destroy();
         this._accounts.destroy();
         this._settings?.disconnectObject(this);
         this._ifaceSettings?.disconnectObject(this);

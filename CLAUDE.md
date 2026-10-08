@@ -249,7 +249,7 @@ Swift twin together, and keep the fixture matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
- sessions,accounts,notices,codex,snapshots,layout}.js` (`layout.js`, the dropdown
+ sessions,accounts,notices,codex,snapshots,layout,waiting}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
   imports anywhere under `pure/`, so it all runs under plain `node` for tests
   and in the Node clients. This is the reference implementation: the GNOME
@@ -259,7 +259,7 @@ Swift twin together, and keep the fixture matching.
  (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Notices.swift`,
  `Codex.swift`, `Warehouse.swift`,
  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
- `Snapshots.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
+ `Snapshots.swift`, `Waiting.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
  `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
  `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
  `PlanLabel.swift`).
@@ -276,7 +276,9 @@ Swift twin together, and keep the fixture matching.
   vault),
   `login-usage.js` (which login's usage and its auth-failure label: a live
   token keeps the refresh hint, a stored one names the profile),
-  `statusline.js` (renders from Claude Code's stdin, nothing else),
+  `statusline.js` (renders from Claude Code's stdin, nothing else; optional `waiting` segment),
+  `waiting.js` / `waiting-hook.js` / `waiting-cli.js` (live sessions waiting on you:
+  Notification marks, Stop marks idle, UserPromptSubmit / PreToolUse / SessionEnd clear),
   `transcript-tokens.js` (a transcript's token totals and their incremental
   on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
@@ -289,12 +291,13 @@ Swift twin together, and keep the fixture matching.
   `SOURCES` table; AppleScript only on an interactive `save`, never the
   autosave; Node-only), `tools.js` (tool lookup on PATH plus Homebrew/system
   dirs, for a scheduler's minimal PATH). **One CLI, `claudectl`**:
-  `claudectl.js` only dispatches `account …`, `session …` and `codex …` to
-  their `<group>-cli.js`; a new command group is a new
+  `claudectl.js` only dispatches `account …`, `session …`, `codex …` and
+  `waiting …` to their `<group>-cli.js`; a new command group is a new
   `<group>-cli.js` exporting `main(argv, io)` + `HELP`, never a new binary.
 - **`mcp/`** - the MCP server: `server.js` is transport + `get_usage` only,
   `tools.js` the tool schemas / renderers / account tool calls, `codex.js`
-  the Codex tools,
+  the Codex tools, `waiting.js` the `waiting` tool (live sessions blocked on
+  the user; the join is `lib/pure/waiting.js`),
   `sessions.js` the session index I/O (folding and ranking are
   `lib/pure/sessions.js`) + the ping, `warehouse.js` the 90-day history file
   read (parsing and the peak are `lib/pure/warehouse.js`). `server.js` carries the exported `VERSION` const, bumped by

@@ -29,6 +29,7 @@ test('no group, help or -h prints both groups', async (t) => {
         assert.equal(r.code, 0);
         assert.match(r.text, /claudectl account \.\.\./);
         assert.match(r.text, /claudectl session \.\.\./);
+        assert.match(r.text, /claudectl waiting \.\.\./);
     }
 });
 
@@ -36,6 +37,7 @@ test('each group gets the rest of the argv', async (t) => {
     const io = sandboxHome(t);
     assert.match((await cli(io, 'account', 'help')).text, /^claudectl account - named/);
     assert.match((await cli(io, 'session', 'help')).text, /^claudectl session - save/);
+    assert.match((await cli(io, 'waiting', 'help')).text, /^claudectl waiting - live/);
     assert.match((await cli(io, 'account', 'list')).text, /no saved accounts/);
     assert.match((await cli(io, 'session', 'list')).text, /no running Claude Code session/);
 });

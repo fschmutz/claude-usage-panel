@@ -36,6 +36,12 @@ to 90 days, written by the two panels and read by everything -
 detect the crossings and resets between two polls and expand the user's command
 template with shell-quoted values.
 
+**Waiting on you** (`tests/fixtures/waiting.json`, asserted by
+`tests/waiting.test.js` and the Swift `WaitingParityTests`) is the live-session
+half of that: Claude Code hooks write `<pid>.waiting.json` next to the
+registry, `Stop` marks idle (the prompt is waiting; it does not clear), and
+the list joins markers to live pids only, oldest wait first.
+
 **Session pings and today's sessions** are the third piece of the contract
 (`tests/fixtures/sessions.json`, asserted by `tests/sessions.test.js` and the
 Swift `SessionsParityTests`): the ping-stamp parser and its "last 05:30 /
@@ -77,7 +83,8 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── notices.js  # account health, inline notices, button outcomes, switch rotation
     │   ├── codex.js    # named OpenAI Codex logins
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
-    │   └── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
+    │   ├── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
+    │   └── waiting.js  # waiting-on-you list: hook events, markers, age, focus plan
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
     ├── claudeUsage.js  # /oauth/usage fetch (live or saved token)
     ├── accounts.js     # the account store's GJS I/O
@@ -91,6 +98,8 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── secretStore.js  # the Cursor key in the system keyring
     ├── sessionIndex.js # incremental fold of ~/.claude/projects → today's sessions
     ├── sessionsSection.js # the dropdown's today's-sessions rows + terminal launch
+    ├── waiting.js      # live-session registry + waiting markers (GJS I/O)
+    ├── waitingSection.js # the dropdown's waiting-on-you rows + focus
     ├── sessionPing.js  # reads/writes the systemd units + the last-ping stamp
     ├── sessionPingUnit.js # the unit text itself (pure, shared with install.sh)
     ├── snapshots.js    # reads the claudectl snapshot store for the preferences
@@ -120,6 +129,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── SessionPing.swift         # the launchd plist text (twin of sessionPingUnit.js)
     │   ├── WindowPlanner.swift       # session-window planner (twin of pure/pings.js)
     │   ├── Snapshots.swift           # the claudectl snapshot summary
+    │   ├── Waiting.swift             # waiting-on-you list (twin of pure/waiting.js)
     │   ├── HttpFailure.swift         # usage-endpoint error bodies, transient statuses
     │   ├── ShellQuote.swift          # POSIX single-quoting
     │   ├── DataProvenance.swift      # official vs estimated figures
@@ -146,6 +156,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── CodexStore.swift          # the Codex store's I/O (auth.json, recorded limits)
         ├── CodexView.swift           # the optional Codex section in the popup and Settings
         ├── Sessions.swift            # the same index + the terminal launch (osascript)
+        ├── Waiting.swift             # live-session registry + waiting markers + focus
         ├── SavedSessions.swift       # the claudectl snapshot store in Settings
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
         ├── SessionPingSettings.swift # session pings as the UI sees them
@@ -173,12 +184,16 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── codex-cli.js        # `claudectl codex`: the CLI over the Codex store
 ├── session-cli.js      # `claudectl session`: the CLI over tabs.js
-└── claudectl.js        # the claudectl entry point: dispatches to the two groups
+├── waiting.js          # live registry + waiting markers; focus via layout.js
+├── waiting-hook.js     # Claude Code hook: mark / clear `<pid>.waiting.json`
+├── waiting-cli.js      # `claudectl waiting`: list and focus
+└── claudectl.js        # the claudectl entry point: dispatches to the groups
 
 mcp/                    # MCP server (Claude Code, Cursor…)
 ├── server.js           # stdio JSON-RPC transport + get_usage; also the npx bin
 ├── tools.js            # tool schemas, renderers, the account tool calls
 ├── sessions.js         # today's sessions + session-ping index
+├── waiting.js          # the `waiting` tool (sessions blocked on the user)
 ├── codex.js            # the OpenAI Codex tools (vault + the recorded rate limits)
 └── warehouse.js        # the 90-day usage history reader
 
@@ -196,6 +211,7 @@ scripts/session-ping.sh # scheduled: 1-turn haiku ping so the 5h window opens on
 scripts/lib.sh          # log/say/die/lock, shared by the two standalone workers
 scripts/pack-gnome.sh   # assemble the extension dir (install.sh gnome + the release zip)
 scripts/json-edit.mjs   # the one JSON reader/writer install.sh drives
+scripts/install/hooks-edit.mjs # merge/drop the waiting hooks in settings.json
 scripts/version-sites.sh# every place the version is written, read by bump + check
 ```
 

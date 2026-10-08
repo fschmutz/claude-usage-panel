@@ -212,6 +212,10 @@ struct PopupView: View {
                 Text(u.summary).font(.system(size: 11)).foregroundColor(.cuCritical)
             }
 
+            if !model.waiting.isEmpty {
+                WaitingSectionView(model: model)
+            }
+
             if model.showSessions && !model.sessions.isEmpty {
                 SessionsSectionView(model: model)
             }
@@ -304,6 +308,36 @@ private struct SettingsIcon14: View {
         HeaderIcon(systemImage: "gearshape", title: "Settings") {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
+        }
+    }
+}
+
+// Live sessions blocked on the user: permission, a question, or idle after
+// Stop. Oldest wait first; a click raises that session's terminal.
+private struct WaitingSectionView: View {
+    @ObservedObject var model: UsageModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Waiting on you")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.cuWarning)
+            ForEach(model.waiting) { row in
+                Button {
+                    model.focusWaiting(row)
+                } label: {
+                    HStack {
+                        Text("\u{25b8} \(row.name)")
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Text("\(row.reasonLabel)  \(row.age)")
+                            .font(.system(size: 11)).foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("Focus \(row.name) · \(row.cwd)")
+            }
         }
     }
 }

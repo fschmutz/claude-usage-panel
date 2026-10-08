@@ -209,6 +209,13 @@ public enum SessionPaths {
         let base = config ?? (home as NSString).appendingPathComponent(".claude")
         return (base as NSString).appendingPathComponent("projects")
     }
+
+    /// Claude Code's live-session registry: one <pid>.json per running session.
+    public static func sessionRegistryDir(environment: [String: String], home: String) -> String {
+        let config = environment["CLAUDE_CONFIG_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+        let base = config ?? (home as NSString).appendingPathComponent(".claude")
+        return (base as NSString).appendingPathComponent("sessions")
+    }
 }
 
 public struct RankedSession: Identifiable, Equatable, Sendable {

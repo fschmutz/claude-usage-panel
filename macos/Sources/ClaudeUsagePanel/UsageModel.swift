@@ -127,6 +127,8 @@ final class UsageModel: ObservableObject {
     /// The index is still catching up, so the token numbers are a floor.
     @Published var sessionsPending = false
     @Published var sessionError: String?
+    /// Live sessions blocked on a permission prompt, a question, or idle after Stop.
+    @Published var waiting: [WaitingSession] = []
 
     /// Session pings and update status: their own observables, owned here and
     /// re-published so a view holding only the model still re-renders.
@@ -349,6 +351,7 @@ final class UsageModel: ObservableObject {
         sessionPing.refreshLastPing()
         saved.reload()
         await refreshSessions()
+        refreshWaiting()
         await refreshCursor()
         await refreshAccounts()
         refreshCodex()
@@ -388,6 +391,14 @@ final class UsageModel: ObservableObject {
     /// Open one session's project in a terminal, resuming that exact session.
     func resume(_ session: RankedSession) {
         sessionError = TerminalLauncher.open(session: session, choice: terminalChoice)
+    }
+
+    func refreshWaiting() {
+        waiting = WaitingStore.refresh()
+    }
+
+    func focusWaiting(_ row: WaitingSession) {
+        WaitingStore.focus(row)
     }
 
     private func refreshCursor() async {
@@ -484,7 +495,8 @@ final class UsageModel: ObservableObject {
         let name = showAccount ? activeAccount ?? "" : ""
         let text = PanelReadout.text(
             account: name, label: worst.label, percent: worst.percent, known: reading.known)
-        return "\(dot(sev)) \(text)"
+        let wait = waiting.isEmpty ? "" : "\(waiting.count) · "
+        return "\(wait)\(dot(sev)) \(text)"
     }
 
     static let timeFormatter: DateFormatter = {

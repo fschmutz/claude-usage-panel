@@ -169,19 +169,20 @@ test('ping - empty result', async () => {
     assert.deepEqual(await handleRequest({method: 'ping'}), {});
 });
 
-test('tools/list - exposes get_usage (with schemas), the account tools and the Codex ones', async () => {
+test('tools/list - exposes get_usage, waiting, the account tools and the Codex ones', async () => {
     const r = await handleRequest({method: 'tools/list'});
     assert.deepEqual(r.tools.map(t => t.name), [
-        'get_usage', 'list_accounts', 'save_account', 'switch_account',
+        'get_usage', 'waiting', 'list_accounts', 'save_account', 'switch_account',
         'list_codex_accounts', 'save_codex_account', 'switch_codex_account', 'get_codex_usage',
     ]);
     const tool = r.tools[0];
     assert.equal(tool.inputSchema.type, 'object');
     assert.deepEqual(tool.outputSchema.required, ['limits']);
     assert.equal(tool.annotations.readOnlyHint, true);
-    assert.equal(r.tools[1].annotations.readOnlyHint, true);
-    assert.equal(r.tools[3].annotations.readOnlyHint, false);
-    assert.equal(r.tools[3].annotations.destructiveHint, false);
+    assert.equal(r.tools.find(t => t.name === 'waiting').annotations.readOnlyHint, true);
+    const switched = r.tools.find(t => t.name === 'switch_account');
+    assert.equal(switched.annotations.readOnlyHint, false);
+    assert.equal(switched.annotations.destructiveHint, false);
     // save with `force` can overwrite another account's saved login.
     for (const name of ['save_account', 'save_codex_account'])
         assert.equal(r.tools.find(t => t.name === name).annotations.destructiveHint, true, name);

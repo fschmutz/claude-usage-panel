@@ -31,6 +31,7 @@ import {forecastMap} from './pace.js';
 import {lastPingPath, sessionIndexPath} from './paths.js';
 import {resetHint} from './stamps.js';
 import {transcriptTotals} from './transcript-tokens.js';
+import {listWaiting} from './waiting.js';
 
 // Short labels for the two rate-limit windows stdin exposes. Terse because the
 // status line has little horizontal room.
@@ -261,6 +262,13 @@ export function sessionsSegment({
 // can only lag during a switch torn between its two writes, which the next
 // switch or sync repairs. Never throws: a status line must render whatever the
 // store looks like.
+// "wait 2": live sessions blocked on the user. Silent at zero - the line
+// stays short - and opt-in (--segments=…,waiting) like sessions / account.
+export function waitingSegment({io = {}} = {}) {
+  const n = listWaiting(io).length;
+  return n ? `${SEV_COLOR.warning}wait ${n}${RESET}` : '';
+}
+
 export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
   try {
     const store = openStore({...io, nowMs});
@@ -312,10 +320,11 @@ const SEGMENTS = {
   tokens: (stdin, cfg) => tokensSegment(stdin, {includeCacheRead: cfg.includeCacheRead}),
   ping: () => pingSegment(),
   sessions: () => sessionsSegment(),
+  waiting: () => waitingSegment(),
 };
 // `ping` is in the default list but renders nothing until session pings are
-// scheduled, so it costs an unconfigured user no width. `account` and
-// `sessions` are opt-in (--segments=account,…).
+// scheduled, so it costs an unconfigured user no width. `account`,
+// `sessions` and `waiting` are opt-in (--segments=account,…).
 const DEFAULT_SEGMENTS = ['context', 'limits', 'tokens', 'ping'];
 
 // Configure the line from the command's argv (install.sh bakes these into the

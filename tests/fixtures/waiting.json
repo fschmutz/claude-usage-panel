@@ -1,0 +1,168 @@
+{
+  "_comment": [
+    "Shared contract for the waiting-on-you list: hook event semantics, marker",
+    "shape, age labels, joining live registry rows to markers (dead pids dropped),",
+    "and the focus plan layout.js already knows. Asserted by tests/waiting.test.js",
+    "(lib/pure/waiting.js) and macos WaitingParityTests. Stop marks idle - the",
+    "turn ended and the prompt is waiting - it does not clear."
+  ],
+  "nowMs": 1788264000000,
+  "reasons": ["permission", "question", "idle"],
+  "hookEvents": ["Notification", "UserPromptSubmit", "PreToolUse", "Stop", "SessionEnd"],
+  "markerName": [
+    {"pid": 11, "name": "11.waiting.json"},
+    {"pid": 4221, "name": "4221.waiting.json"}
+  ],
+  "pidFromName": [
+    {"name": "11.waiting.json", "pid": 11},
+    {"name": "11.json", "pid": null},
+    {"name": "waiting.json", "pid": null},
+    {"name": "11.waiting.json.bak", "pid": null}
+  ],
+  "reasonFromNotification": [
+    {"payload": {"notification_type": "permission_prompt"}, "reason": "permission"},
+    {"payload": {"notificationType": "PermissionRequired"}, "reason": "permission"},
+    {"payload": {"message": "Claude needs your permission to use Bash"}, "reason": "permission"},
+    {"payload": {"notification_type": "idle_prompt"}, "reason": "idle"},
+    {"payload": {"notification_type": "elicitation_dialog"}, "reason": "question"},
+    {"payload": {}, "reason": "question"}
+  ],
+  "applyHookEvent": [
+    {
+      "name": "Notification",
+      "payload": {"notification_type": "permission_prompt"},
+      "expected": {"action": "mark", "reason": "permission"}
+    },
+    {
+      "name": "Notification",
+      "payload": {"message": "Do you want to continue?"},
+      "expected": {"action": "mark", "reason": "question"}
+    },
+    {
+      "name": "Stop",
+      "payload": {},
+      "expected": {"action": "mark", "reason": "idle"}
+    },
+    {"name": "UserPromptSubmit", "payload": {}, "expected": {"action": "clear"}},
+    {"name": "PreToolUse", "payload": {}, "expected": {"action": "clear"}},
+    {"name": "SessionEnd", "payload": {}, "expected": {"action": "clear"}},
+    {"name": "SessionStart", "payload": {}, "expected": {"action": "ignore"}}
+  ],
+  "parse": [
+    {
+      "raw": {"version": 1, "sessionId": "s1", "pid": 11, "reason": "permission", "at": 1},
+      "expected": {"sessionId": "s1", "pid": 11, "reason": "permission", "at": 1}
+    },
+    {
+      "raw": {"sessionId": "s1", "pid": "11", "reason": "permission", "at": 1},
+      "expected": null
+    },
+    {
+      "raw": {"sessionId": "s1", "pid": 11, "reason": "blocked", "at": 1},
+      "expected": null
+    },
+    {
+      "raw": {"sessionId": "s1", "pid": 11, "reason": "idle", "at": "now"},
+      "expected": null
+    },
+    {
+      "raw": {"sessionId": "", "pid": 11, "reason": "idle", "at": 1},
+      "expected": null
+    }
+  ],
+  "age": [
+    {"atMs": 1788264000000, "expected": "0s"},
+    {"atMs": 1788263997000, "expected": "3s"},
+    {"atMs": 1788263900000, "expected": "1m 40s"},
+    {"atMs": 1788263820000, "expected": "3m"},
+    {"atMs": 1788256800000, "expected": "2h"},
+    {"atMs": 1788253200000, "expected": "3h"},
+    {"atMs": 1788168000000, "expected": "1d 2h"}
+  ],
+  "list": {
+    "sessions": [
+      {"pid": 11, "sessionId": "s1", "name": "API", "cwd": "/a"},
+      {"pid": 22, "sessionId": "s2", "name": "WEB", "cwd": "/b"},
+      {"pid": 33, "sessionId": "s3", "name": "OPS", "cwd": "/c"}
+    ],
+    "markers": [
+      {"sessionId": "s2", "pid": 22, "reason": "question", "at": 1788263900000},
+      {"sessionId": "s1", "pid": 11, "reason": "permission", "at": 1788263700000},
+      {"sessionId": "gone", "pid": 99, "reason": "idle", "at": 1788260000000},
+      {"sessionId": "s3", "pid": 33, "reason": "idle", "at": 1788263990000}
+    ],
+    "expected": [
+      {
+        "pid": 11,
+        "sessionId": "s1",
+        "name": "API",
+        "cwd": "/a",
+        "reason": "permission",
+        "at": 1788263700000,
+        "age": "5m",
+        "reasonLabel": "permission"
+      },
+      {
+        "pid": 22,
+        "sessionId": "s2",
+        "name": "WEB",
+        "cwd": "/b",
+        "reason": "question",
+        "at": 1788263900000,
+        "age": "1m 40s",
+        "reasonLabel": "question"
+      },
+      {
+        "pid": 33,
+        "sessionId": "s3",
+        "name": "OPS",
+        "cwd": "/c",
+        "reason": "idle",
+        "at": 1788263990000,
+        "age": "10s",
+        "reasonLabel": "idle"
+      }
+    ]
+  },
+  "focusPlan": [
+    {"row": {"window": "kitty:7", "pid": 11}, "expected": {"how": "kitty", "id": "7"}},
+    {
+      "row": {"window": "wezterm:3", "pid": 11},
+      "expected": {"how": "wezterm", "id": "3"}
+    },
+    {
+      "row": {"window": "tmux:work", "tab": 2, "pid": 11},
+      "expected": {"how": "tmux", "session": "work", "tab": 2}
+    },
+    {
+      "row": {"window": "iterm:42", "tab": 1, "pid": 11},
+      "expected": {"how": "iterm", "id": "42", "tab": 1}
+    },
+    {
+      "row": {"window": "terminal:9", "tab": 3, "pid": 11},
+      "expected": {"how": "terminal", "id": "9", "tab": 3}
+    },
+    {"row": {"pid": 11}, "expected": {"how": "pid", "pid": 11}},
+    {"row": {}, "expected": {"how": "none"}}
+  ],
+  "focusArgv": [
+    {
+      "plan": {"how": "kitty", "id": "7"},
+      "expected": ["kitty", "@", "focus-window", "--match", "id:7"]
+    },
+    {
+      "plan": {"how": "wezterm", "id": "3"},
+      "expected": ["wezterm", "cli", "activate-pane", "--window-id", "3"]
+    },
+    {
+      "plan": {"how": "tmux", "session": "work", "tab": 2},
+      "expected": ["tmux", "select-window", "-t", "work:2"]
+    },
+    {
+      "plan": {"how": "pid", "pid": 11},
+      "expected": ["kitty", "@", "focus-window", "--match", "pid:11"]
+    },
+    {"plan": {"how": "iterm", "id": "42"}, "expected": null},
+    {"plan": {"how": "none"}, "expected": null}
+  ]
+}
