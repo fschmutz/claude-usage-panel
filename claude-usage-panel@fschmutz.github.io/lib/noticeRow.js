@@ -38,7 +38,7 @@ class OutcomeLabel extends St.BoxLayout {
 });
 
 /** A severity dot, a sentence, one button, and room for the answer under it. */
-export const NoticeRow = GObject.registerClass(
+const NoticeRow = GObject.registerClass(
 class NoticeRow extends St.BoxLayout {
     /**
      * @param {{severity: string, text: string, actionLabel: ?string}} notice

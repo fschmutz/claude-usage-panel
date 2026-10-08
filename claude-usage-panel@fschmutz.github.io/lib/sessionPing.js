@@ -31,7 +31,7 @@ function unitPath(ext) {
 }
 
 /** Where scripts/session-ping.sh records its last successful ping. */
-export function lastPingPath() {
+function lastPingPath() {
     return GLib.build_filenamev([stateDir(), 'last-ping']);
 }
 
@@ -64,7 +64,7 @@ export function readSchedule() {
  * git-checkout install), else the copy `install.sh gnome` drops beside the
  * extension. Same resolution order as the macOS app's bundled Resources copy.
  */
-export function resolveRunner(existing, extensionPath) {
+function resolveRunner(existing, extensionPath) {
     if (existing && GLib.file_test(existing, GLib.FileTest.IS_EXECUTABLE))
         return existing;
     const bundled = GLib.build_filenamev([extensionPath, 'scripts', 'session-ping.sh']);

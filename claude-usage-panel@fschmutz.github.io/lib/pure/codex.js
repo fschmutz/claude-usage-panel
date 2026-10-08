@@ -451,7 +451,7 @@ const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
  * @param {number} maxDepth
  * @returns {Generator<string[], Array<{path: string, mtimeMs: number}>, ?Array>}
  */
-export function* codexSessionScan(limit = CODEX_SESSION_SCAN_LIMIT,
+function* codexSessionScan(limit = CODEX_SESSION_SCAN_LIMIT,
     maxDepth = CODEX_SESSIONS_MAX_DEPTH) {
     const found = [];
     function* visit(segments) {

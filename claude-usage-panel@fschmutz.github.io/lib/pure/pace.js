@@ -13,7 +13,7 @@ import {clampPercent} from './usage.js';
 // cross-port contract (the status line and the MCP server import this file;
 // Model.swift is the Swift twin; tests/fixtures/pace.json pins the numbers).
 
-export const WINDOW_MS = {session: 5 * 3600_000, weekly: 7 * 86400_000};
+const WINDOW_MS = {session: 5 * 3600_000, weekly: 7 * 86400_000};
 
 // Points of divergence below which used ≈ elapsed. Under it every card would
 // flicker between ahead and behind on rounding alone.
@@ -23,7 +23,7 @@ export const PACE_TOLERANCE = 5;
  * How much of a limit's window has already gone, 0..100, or null when it can't
  * be known (no reset, or a group with no defined window length).
  */
-export function elapsedPercent(card, nowMs = Date.now()) {
+function elapsedPercent(card, nowMs = Date.now()) {
     const span = WINDOW_MS[card?.group];
     if (!span || !card?.resetsAt)
         return null;
@@ -75,7 +75,7 @@ const FORECAST_MIN_PACE = 0.2;           // %/h below this is idle → no foreca
 // thing: Swift's default `.rounded()` sends -0.5 away from zero, and a margin
 // of whole minutes lands on an exact negative half-tenth one gap in six (3
 // min early is -0.05 h). floor(x + 0.5) also never yields -0.
-export function roundHalfUp(x, decimals = 0) {
+function roundHalfUp(x, decimals = 0) {
     const k = 10 ** decimals;
     return Math.floor(x * k + 0.5) / k;
 }

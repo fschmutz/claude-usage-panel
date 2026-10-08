@@ -8,7 +8,7 @@ import {readJSON} from './fs.js';
 import {stateDir} from './paths.js';
 import {summarizeSnapshots} from './pure.js';
 
-export function snapshotsDir() {
+function snapshotsDir() {
     return GLib.build_filenamev([stateDir(), 'tabs']);
 }
 

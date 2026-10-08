@@ -11,7 +11,7 @@ import {stateDir} from './paths.js';
 import {parseWarehouse, pruneWarehouse} from './pure.js';
 
 /** Same path the MCP server and the macOS app use, so all three write one file. */
-export function warehousePath() {
+function warehousePath() {
     return GLib.build_filenamev([stateDir(), 'history.jsonl']);
 }
 

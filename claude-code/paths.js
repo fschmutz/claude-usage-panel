@@ -21,7 +21,7 @@ function platform(io) {
 }
 
 /** Durable per-user state: the usage warehouse, saved accounts, tab snapshots. */
-export function stateDir(io) {
+function stateDir(io) {
   if (platform(io) === 'darwin') {
     return path.join(homedir(io), 'Library', 'Application Support', APP);
   }
@@ -29,13 +29,13 @@ export function stateDir(io) {
 }
 
 /** Rebuildable caches: the session index. */
-export function cacheDir(io) {
+function cacheDir(io) {
   if (platform(io) === 'darwin') return path.join(homedir(io), 'Library', 'Caches', APP);
   return path.join(env(io).XDG_CACHE_HOME || path.join(homedir(io), '.cache'), APP);
 }
 
 /** Claude Code's own config dir - follows CLAUDE_CONFIG_DIR when set. */
-export function claudeDir(io) {
+function claudeDir(io) {
   return env(io).CLAUDE_CONFIG_DIR || path.join(homedir(io), '.claude');
 }
 
@@ -63,7 +63,7 @@ export function accountsDir(io) {
 
 /** The Codex CLI's own config dir - follows CODEX_HOME when set, like
  *  CLAUDE_CONFIG_DIR does for Claude Code. */
-export function codexHome(io) {
+function codexHome(io) {
   return env(io).CODEX_HOME || path.join(homedir(io), '.codex');
 }
 

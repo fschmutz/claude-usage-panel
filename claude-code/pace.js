@@ -45,7 +45,7 @@ export function sanitizeHistory(parsed) {
 }
 
 /** The history key of one card for one login. */
-export function historyKey(cardKey, account) {
+function historyKey(cardKey, account) {
   return account ? `${account}|${cardKey}` : cardKey;
 }
 

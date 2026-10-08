@@ -25,9 +25,9 @@ const DEFAULT_BUDGET = 64 << 20; // …and at most this much parsing per refresh
 // wall time, so this caps one refresh at roughly a third of that, and the
 // extension re-runs sooner while `pending` is set.
 const CARRY_MAX = 1 << 20; // a "line" longer than this is not a line
-export const INDEX_VERSION = 1;
+const INDEX_VERSION = 1;
 
-export function indexPath() {
+function indexPath() {
     return GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-usage-panel', 'sessions.json']);
 }
 
@@ -39,7 +39,7 @@ export function projectsDir() {
     return GLib.build_filenamev([configDir(), 'projects']);
 }
 
-export function loadIndex() {
+function loadIndex() {
     const parsed = readJSON(indexPath());
     if (parsed?.version !== INDEX_VERSION || typeof parsed.files !== 'object')
         return {version: INDEX_VERSION, files: {}};
@@ -48,7 +48,7 @@ export function loadIndex() {
 
 // Atomic: a crash mid-write must not leave a truncated index that every
 // client on this machine would then re-fold from scratch.
-export function saveIndex(index) {
+function saveIndex(index) {
     try {
         writeText(indexPath(), JSON.stringify(index));
     } catch {

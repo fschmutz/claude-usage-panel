@@ -11,10 +11,10 @@
 // decides WHEN, instead of making the user guess. It does not raise quota - it
 // lines the windows up with the hours actually worked.
 
-export const WINDOW_MINUTES = 5 * 60;
+const WINDOW_MINUTES = 5 * 60;
 
 /** 09:00-18:00, what every port plans against when the given day is unusable. */
-export const DEFAULT_WORK_DAY = Object.freeze({startMinute: 9 * 60, endMinute: 18 * 60});
+const DEFAULT_WORK_DAY = Object.freeze({startMinute: 9 * 60, endMinute: 18 * 60});
 
 /**
  * The day the planner actually works on: `day` when it is a real range inside
@@ -23,7 +23,7 @@ export const DEFAULT_WORK_DAY = Object.freeze({startMinute: 9 * 60, endMinute: 1
  * a negative coverage; macOS already fell back to 09:00-18:00, so both ports
  * now do it here, where every caller goes through.
  */
-export function effectiveWorkDay(day) {
+function effectiveWorkDay(day) {
     const s = day?.startMinute;
     const e = day?.endMinute;
     const ok = Number.isInteger(s) && Number.isInteger(e) && s >= 0 && e <= 1440 && e > s;

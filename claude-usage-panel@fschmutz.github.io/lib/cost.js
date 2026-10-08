@@ -8,7 +8,7 @@
 
 import {run} from './proc.js';
 
-export const CCUSAGE_ARGV = ['ccusage', 'blocks', '--active', '--json'];
+const CCUSAGE_ARGV = ['ccusage', 'blocks', '--active', '--json'];
 
 /**
  * Run `ccusage blocks --active --json` and resolve the active block cost.

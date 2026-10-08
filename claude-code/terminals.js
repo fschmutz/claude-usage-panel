@@ -66,7 +66,7 @@ export function windowGroups(rows) {
 }
 
 /** The i-th fallback tmux session name: claudectl, claudectl-2, … */
-export const tmuxSessionName = (i) => (i ? `${TMUX_SESSION}-${i + 1}` : TMUX_SESSION);
+const tmuxSessionName = (i) => (i ? `${TMUX_SESSION}-${i + 1}` : TMUX_SESSION);
 
 // What a saved tmux name must look like to be reused: it reaches a shell
 // line (`tmux attach -t NAME`), and a snapshot is a file anyone can edit.
@@ -120,7 +120,7 @@ export function tabsArgv(terminal, rows, prompt = '') {
  *  window name or start directory would otherwise run through /bin/sh, and a
  *  snapshot's cwd is whatever directory the session ran in. `##` is tmux's
  *  literal `#`. */
-export const tmuxLiteral = (s) => String(s ?? '').replace(/#/g, '##');
+const tmuxLiteral = (s) => String(s ?? '').replace(/#/g, '##');
 
 /** tmux calls building one detached session, one window per row. */
 export function tmuxCalls(rows, session = TMUX_SESSION, prompt = '') {

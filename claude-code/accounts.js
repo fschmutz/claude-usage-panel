@@ -43,10 +43,6 @@ import {bindUsage, coded} from './accounts-usage.js';
 import {accountsDir, claudeConfigPath, credentialsPath} from './paths.js';
 import {readJSON, writePrivate} from './private-fs.js';
 
-export {
-  OAUTH_BETA_HEADER, OAUTH_CLIENT_ID, OAUTH_TOKEN_ENDPOINT, USAGE_CACHE_MAX_AGE_MS, USAGE_ENDPOINT,
-} from './accounts-usage.js';
-
 const LAST_SWITCH_FILE = '.last-switch.json';
 // A switch in progress: {at, from, to}, written before the live login is
 // touched and removed once both halves are installed. While it is there no

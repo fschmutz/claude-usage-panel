@@ -159,7 +159,7 @@ export const CODEX_TOOLS = [
 
 export const CODEX_TOOL_NAMES = new Set(CODEX_TOOLS.map((t) => t.name));
 
-export function renderCodexAccounts({active, accounts}) {
+function renderCodexAccounts({active, accounts}) {
   if (!accounts.length) {
     return 'No saved Codex logins yet - save_codex_account names the current one.';
   }
@@ -181,7 +181,7 @@ const WHY = {
   stale: 'the newest recorded reading is old enough that its window has rolled over',
 };
 
-export function renderCodexUsage({cards, capturedAt, reason}, now = Date.now()) {
+function renderCodexUsage({cards, capturedAt, reason}, now = Date.now()) {
   if (reason) return `Codex usage unavailable: ${WHY[reason] ?? reason}.`;
   const lines = cards.map((c) => {
     const reset = resetHint(c.resetsAt, now);

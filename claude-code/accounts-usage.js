@@ -28,13 +28,13 @@ import {normalizeExtraUsage, normalizeUsage, usageFailure} from '../claude-usage
 import {usageForLogin} from './login-usage.js';
 import {readJSON, writePrivate} from './private-fs.js';
 
-export const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
+const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
 // Claude Code's public OAuth client - the same id the CLI itself refreshes with.
-export const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-export const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
-export const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
+const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
+const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
 /** The status line trusts a cached usage snapshot this long. */
-export const USAGE_CACHE_MAX_AGE_MS = 30 * 60_000;
+const USAGE_CACHE_MAX_AGE_MS = 30 * 60_000;
 const FETCH_TIMEOUT_MS = 10_000;
 const USAGE_CACHE_FILE = '.usage-cache.json';
 
