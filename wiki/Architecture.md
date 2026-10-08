@@ -250,5 +250,6 @@ Code pipes on stdin - no credentials, no network.
 [`.pre-commit-config.yaml`](https://github.com/fschmutz/claude-usage-panel/blob/main/.pre-commit-config.yaml);
 beyond the file-hygiene set it runs `gitleaks`, `private-names` + `private-names-message`,
 `eslint`, `shellcheck`, `shfmt`, `markdownlint`, `actionlint`, `zizmor`, `no-em-dash`,
-`swift-format`, `check-versions`, `file-size` (the 700-line ceiling) and `i18n-catalogs`. `npm test` + `swift test` cover the
+`swift-format`, `check-versions`, `file-size` (the 700-line ceiling), `i18n-catalogs` and `knip`
+(unused files, exports and dependencies; `knip.jsonc`). `npm test` + `swift test` cover the
 pure logic and the cross-port parity contract; the rest of CI is on [[CI]].

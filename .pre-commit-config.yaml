@@ -132,3 +132,12 @@ repos:
         entry: bash -c 'command -v xgettext >/dev/null || { echo "xgettext not installed - catalogs unchecked (apt install gettext)"; exit 0; }; exec scripts/update-po.sh --check'
         files: ^claude-usage-panel@fschmutz\.github\.io/.*\.(js|po|pot)$
         pass_filenames: false
+      # knip: unused files and exports, unlisted dependencies and binaries,
+      # with the knip pinned in .github/knip (config: knip.jsonc). Any finding
+      # fails; an exception is a NAMED entry in knip.jsonc with its reason.
+      - id: knip
+        name: knip (unused files, exports, deps)
+        language: system
+        entry: scripts/knip.sh
+        files: \.(m?js|jsonc?)$
+        pass_filenames: false

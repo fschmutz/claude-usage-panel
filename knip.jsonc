@@ -1,0 +1,37 @@
+{
+    "$schema": "https://unpkg.com/knip@6/schema.json",
+
+    // Entry points knip cannot infer from package.json (`bin` and the
+    // `node --test` script it reads on its own). Each is started by something
+    // outside the module graph:
+    "entry": [
+        // GNOME Shell loads these two by file name.
+        "claude-usage-panel@fschmutz.github.io/extension.js",
+        "claude-usage-panel@fschmutz.github.io/prefs.js",
+        // Claude Code runs it as the statusLine command (scripts/install).
+        "claude-code/statusline.js",
+        // Run by hand or by waybar/tmux/polybar; no install target.
+        "linux/usage-bar.mjs",
+        // Run by the shell scripts, CI and by hand (`node scripts/<x>.mjs`).
+        // Top level only: scripts/deps/ and scripts/lib/ are modules the
+        // entries import, and their unused exports are findings.
+        "scripts/*.mjs",
+        // tests/session-index.test.js loads it by URL as the GLib/Gio stand-in.
+        "tests/session-index-gi.js"
+    ],
+
+    // GJS built-ins, resolved by GNOME Shell at runtime and never installable:
+    // `gi://Gio`, `resource:///org/gnome/shell/...`, `gettext`. knip reads the
+    // URL scheme as a package name. Exactly these three; any other unlisted
+    // import is a real finding.
+    "ignoreDependencies": ["gi", "resource", "gettext"],
+
+    // librsvg's CLI, called by scripts/screenshots/render.mjs to rasterize the
+    // generated SVGs. A system tool (apt librsvg2-bin), not an npm package.
+    "ignoreBinaries": ["rsvg-convert"],
+
+    // ESLint runs from pre-commit (mirrors-eslint), not from package.json, so
+    // knip's eslint plugin does not switch itself on; without this it reads
+    // eslint.config.js as a dead file.
+    "eslint": {"config": ["eslint.config.js"]}
+}
