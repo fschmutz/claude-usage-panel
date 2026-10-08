@@ -24,8 +24,8 @@ enum WaitingStore {
         let r = Shell.run("/bin/ps", ["-o", "command=", "-p", String(pid)])
         guard r.ok else { return false }
         let cmd = r.out.trimmingCharacters(in: .whitespacesAndNewlines)
-        return cmd.range(of: #"(^|/)claude(\s|$)|(^|/)@anthropic-ai/claude-code/cli\.m?js(\s|$)"#,
-            options: .regularExpression) != nil
+        let pattern = #"(^|/)claude(\s|$)|(^|/)@anthropic-ai/claude-code/cli\.m?js(\s|$)"#
+        return cmd.range(of: pattern, options: .regularExpression) != nil
     }
 
     static func refresh(now: Date = Date()) -> [WaitingSession] {

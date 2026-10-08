@@ -146,7 +146,8 @@ public enum Waiting {
         // Integer pid only (JS Number.isInteger). JSONSerialization on Linux
         // often boxes a JSON integer as a float NSNumber, so do not use
         // CFNumberIsFloatType; require a whole positive number and reject bools.
-        guard let pidNum = obj["pid"] as? NSNumber, !Accounts.isJSONBool(pidNum) else { return nil }
+        guard let pidNum = obj["pid"] as? NSNumber, !Accounts.isJSONBool(pidNum)
+        else { return nil }
         let pid = pidNum.intValue
         guard pid > 0, pidNum.doubleValue == Double(pid) else { return nil }
         guard let reasonRaw = obj["reason"] as? String,
@@ -194,7 +195,8 @@ public enum Waiting {
     public static func list(
         sessions: [LiveSession], markers: [WaitingMarker], nowMs: Double
     ) -> [WaitingSession] {
-        let live = Dictionary(uniqueKeysWithValues: sessions.filter { $0.pid > 0 }.map { ($0.pid, $0) })
+        let pairs = sessions.filter { $0.pid > 0 }.map { ($0.pid, $0) }
+        let live = Dictionary(uniqueKeysWithValues: pairs)
         var out: [WaitingSession] = []
         for marker in markers {
             guard let session = live[marker.pid] else { continue }
@@ -206,7 +208,8 @@ public enum Waiting {
                 ? session.name
                 : (!fallback.isEmpty
                     ? fallback
-                    : (session.sessionId.isEmpty ? "session" : String(session.sessionId.prefix(8))))
+                    : (session.sessionId.isEmpty
+                        ? "session" : String(session.sessionId.prefix(8))))
             out.append(
                 WaitingSession(
                     pid: marker.pid,
