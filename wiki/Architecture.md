@@ -129,6 +129,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── http.js         # one promise around Soup
     ├── proc.js         # one promise around Gio.Subprocess
     ├── wakeWatch.js    # resume-from-suspend + network-back signals that trigger a poll
+    ├── focusService.js # RaiseWindow on D-Bus: claudectl session focus raises a gnome-terminal window
     ├── fs.js           # read + atomic write
     └── paths.js        # every on-disk path the extension uses
 
@@ -200,6 +201,7 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
 ├── layout.js           # which window and tab each session sits in (tmux, kitty, WezTerm, iTerm, Terminal.app)
+├── gnome-terminal.js   # the windows and tab order `session open` created there; focus selects the tab
 ├── tools.js            # finding and querying tmux / ps / osascript from a scheduler's minimal PATH
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── codex-cli.js        # `claudectl codex`: the CLI over the Codex store

@@ -27,6 +27,19 @@ closing threads, before shutting the lid: the 30-minute autosave never sees a
 close that happens between its ticks, and Reopen would bring those threads
 back. A forced save of nothing open hides Reopen until the next session starts.
 
+## Focus in gnome-terminal
+
+gnome-terminal has no way to list its tabs or say which window holds a
+session, so `claudectl session open` records it: the D-Bus paths of the
+windows it created and the sessions of each in tab order, in
+`gnome-tabs.json` next to the snapshots' state. `focus` then selects the tab
+(the window's `active-tab` action) and asks the GNOME extension to raise the
+window (`RaiseWindow` on `org.gnome.Shell`, `/io/github/fschmutz/ClaudeUsagePanel`):
+on Wayland only the Shell may bring a window up. A closed tab to the left is
+accounted for. What it cannot find, it refuses instead of raising the wrong
+tab: a session not opened by claudectl, a tab dragged to another position,
+a window from before gnome-terminal restarted, or no extension running.
+
 ## Install
 
 `./install.sh cli` puts `claudectl` on your PATH (`~/.local/bin`) and
@@ -47,7 +60,7 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `claudectl session …` | What it does |
 | --- | --- |
 | `list [--json]` | Running sessions: name, session id, state, directory |
-| `focus [#\|NAME\|PID\|ID]` | Raise that session's tab (tmux, kitty, WezTerm, iTerm, Terminal.app; gnome-terminal cannot be asked for one tab). No argument at a terminal: the list, then asks which |
+| `focus [#\|NAME\|PID\|ID]` | Raise that session's tab: tmux, kitty, WezTerm, iTerm, Terminal.app, and a gnome-terminal tab that `open` opened (see below). No argument at a terminal: the list, then asks which |
 | `save [LABEL] [--exclude-self]` | Snapshot the running sessions |
 | `store [--json]` | Saved snapshots, newest first, numbered |
 | `show [SNAP] [--json]` | What a snapshot holds, and which of its sessions are running |

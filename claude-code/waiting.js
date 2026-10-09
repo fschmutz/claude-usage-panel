@@ -14,6 +14,7 @@ import {
   pidFromWaitingMarkerName,
   waitingList, waitingMarkerName, WAITING_MARKER_VERSION,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/waiting.js';
+import {focusTab, terminalEnvOf} from './gnome-terminal.js';
 import {captureLayout} from './layout.js';
 import {sessionRegistryDir} from './paths.js';
 import {writePrivate} from './private-fs.js';
@@ -176,14 +177,16 @@ end tell`;
  * Raise the terminal that holds `row` (pid / session id / name), waiting or
  * not. Uses the same placement sources as `claudectl session save` (tmux,
  * kitty, WezTerm, iTerm, Terminal.app), then the kitty pid match layout.js
- * already uses. false when none of them can: gnome-terminal has no way to
- * be asked for one tab.
+ * already uses. A gnome-terminal tab is found through what
+ * `claudectl session open` recorded (gnome-terminal.js). false when none of
+ * them can.
  */
 export function focusSession(row, io = {}) {
   const wantPid = Number.isInteger(row?.pid) ? row.pid : null;
   const wantId = row?.sessionId ?? row?.session_id ?? '';
   const wantName = row?.name ?? '';
-  const found = openTabs(io).liveSessions().find((s) =>
+  const live = openTabs(io).liveSessions();
+  const found = live.find((s) =>
     (wantPid && s.pid === wantPid) || (wantId && s.session_id === wantId)
     || (wantName && s.name === wantName));
   if (!found)
@@ -195,6 +198,9 @@ export function focusSession(row, io = {}) {
     placed = found;
   }
   const plan = focusPlan(placed);
+  // not placed by tmux & co, but in a gnome-terminal tab: the tab
+  // `claudectl session open` recorded for it
+  if (plan.how === 'pid' && terminalEnvOf(found.pid, io).screen) return focusTab(found, live, io);
   if (plan.how === 'iterm' || plan.how === 'terminal')
     return runArgv(['osascript', '-e', appleScript(plan)], io);
   const argv = focusArgv(plan);

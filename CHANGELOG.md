@@ -6,6 +6,16 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`claudectl session focus` works in gnome-terminal** for the tabs
+  `claudectl session open` opened: `open` records which new window holds
+  which sessions in tab order, `focus` selects the tab and the GNOME
+  extension raises the window (a new `RaiseWindow` D-Bus method on the
+  Shell's connection). The panel's waiting-focus button gets it too. Tabs
+  dragged elsewhere, sessions opened by hand and a restarted gnome-terminal
+  are refused rather than guessed.
+
 ## [3.3.0] - 2026-10-09
 
 ### Added

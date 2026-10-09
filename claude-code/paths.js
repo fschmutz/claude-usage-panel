@@ -94,6 +94,12 @@ export function tabsDir(io) {
   return path.join(stateDir(io), 'tabs');
 }
 
+/** Which gnome-terminal window `claudectl session open` created for which
+ *  sessions, in tab order (gnome-terminal.js): what focus needs to find one. */
+export function gnomeTabsPath(io) {
+  return path.join(stateDir(io), 'gnome-tabs.json');
+}
+
 /** `claudectl session pause`: the current request, each session's delivery
  *  record, verdict, waiter lock and checkpoint (lib/pure/pause.js names). */
 export function pauseDir(io) {

@@ -530,7 +530,7 @@ test('CLI: focus says which terminals can be raised when none answers', async (t
     io.exec = () => {
         throw new Error('kitty: not found');
     };
-    await assert.rejects(cli(io, 'focus', 'API'), /could not raise API: .*gnome-terminal .*cannot/);
+    await assert.rejects(cli(io, 'focus', 'API'), /could not raise API: .*a gnome-terminal tab only when `claudectl session open` opened it and the GNOME extension is on/);
     const none = await cli(world(t, []), 'focus', 'API');
     assert.equal(none.code, 1);
     assert.match(none.text, /^no running Claude Code session$/m);
@@ -559,6 +559,37 @@ test('CLI: open with no SNAP asks which at a terminal, Enter takes the newest', 
     assert.deepEqual(piped.asked, []);
     assert.doesNotMatch(piped.text, /open which/);
     assert.match(piped.text, /saved in snapshot newer/, 'no terminal: the newest, as before');
+});
+
+test('CLI: open in gnome-terminal records its window, and focus then selects the tab', async (t) => {
+    const io = world(t, [A, B]);
+    await cli(io, 'save', 's');
+    let spawned = 0;
+    const gdbus = [];
+    io.spawn = () => {
+        spawned++;
+        return {unref: () => {}};
+    };
+    io.sleep = async () => {};
+    io.exec = (cmd, args) => {
+        assert.equal(cmd, 'gdbus', 'nothing but gdbus runs');
+        gdbus.push(args.join(' '));
+        if (args[0] === 'introspect' && args.at(-1).includes('/screen/')) return 'interface org.freedesktop.DBus.Peer';
+        if (args[0] === 'introspect') return spawned ? '  node 1 {\n  };\n  node 2 {\n  };' : '  node 1 {\n  };';
+        if (args.includes('org.freedesktop.DBus.GetNameOwner')) return "(':1.204',)";
+        return args.includes('io.github.fschmutz.ClaudeUsagePanel.RaiseWindow') ? '(true,)' : '()';
+    };
+    const r = await cli(io, 'open', '--force', '--terminal=gnome-terminal');
+    assert.equal(r.code, 0, r.text);
+    assert.equal(spawned, 1);
+    for (const [s, n] of [[A, 'a'], [B, 'b']]) {
+        fs.writeFileSync(path.join(io.procDir, String(s.pid), 'environ'),
+            `GNOME_TERMINAL_SCREEN=/org/gnome/Terminal/screen/${n}\0GNOME_TERMINAL_SERVICE=:1.204\0`);
+    }
+    const f = await cli(io, 'focus', 'WEB');
+    assert.equal(f.code, 0, f.text);
+    assert.ok(gdbus.some((a) => a.endsWith('/org/gnome/Terminal/window/2 --method org.gtk.Actions.SetState active-tab <1> {}')),
+        gdbus.join('\n'));
 });
 
 test('CLI: purge asks first, --yes skips the question, --auto and --keep select', async (t) => {

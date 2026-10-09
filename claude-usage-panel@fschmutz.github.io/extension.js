@@ -33,6 +33,7 @@ import {UsageCard} from './lib/usageCard.js';
 import {HeaderBar} from './lib/headerBar.js';
 import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
 import {watchWakeAndNetwork} from './lib/wakeWatch.js';
+import {exportFocusService} from './lib/focusService.js';
 import {vbox} from './lib/widgets.js';
 import {writeText} from './lib/fs.js';
 import {stateDir} from './lib/paths.js';
@@ -616,6 +617,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
 
 export default class ClaudeUsagePanelExtension extends Extension {
     enable() {
+        // claudectl session focus raises a terminal window through this
+        this._unexportFocus = exportFocusService();
         if (this._quitThisLogin)
             return;
         this._button = new ClaudeUsageButton(this);
@@ -662,6 +665,8 @@ export default class ClaudeUsagePanelExtension extends Extension {
             GLib.Source.remove(this._quitId);
             this._quitId = 0;
         }
+        this._unexportFocus?.();
+        this._unexportFocus = null;
         this._destroyButton();
     }
 

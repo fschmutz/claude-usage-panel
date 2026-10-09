@@ -4,6 +4,7 @@
 // own session. claudectl.js dispatches here.
 
 import os from 'node:os';
+import path from 'node:path';
 
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
 import {AUTO_KEEP, describeLaunch, matchSession, openTabs, resumePrompt, stampLabel} from './tabs.js';
@@ -11,6 +12,8 @@ import {tabsDir} from './paths.js';
 import {openPause} from './pause.js';
 import {PAUSE_COMMANDS, PAUSE_HELP, runPause} from './pause-cli.js';
 import {focusSession} from './waiting.js';
+import {recordTabs, terminalWindows} from './gnome-terminal.js';
+import {windowGroups} from './terminals.js';
 
 export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as laid out
 
@@ -36,8 +39,9 @@ ${PAUSE_HELP}
 SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
 with no SNAP, typed at a terminal, lists the newest snapshots and asks which
 (Enter = the newest; without a terminal it takes the newest). \`focus\` raises
-tmux, kitty, WezTerm, iTerm and Terminal.app tabs; gnome-terminal has no way
-to be asked for one tab, so it fails there and says so. \`open\`
+tmux, kitty, WezTerm, iTerm and Terminal.app tabs, and a gnome-terminal tab
+that \`open\` opened (it records which window holds which sessions; the GNOME
+extension raises the window). A tab dragged elsewhere is not followed. \`open\`
 skips a session that is still running (--force to try anyway) and one whose
 directory or transcript is gone. It opens the terminal the panels use (GNOME
 preference \`terminal-command\`, then $TERMINAL, then the desktop's default
@@ -164,8 +168,8 @@ export async function main(argv, io = {}) {
       }
       const row = matchSession(live, key, {numbered: true});
       if (!focusSession(row, io)) {
-        throw new Error(`could not raise ${row.name}: only tmux, kitty, WezTerm, iTerm and Terminal.app ` +
-          'can be asked for one tab (gnome-terminal and the others cannot)');
+        throw new Error(`could not raise ${row.name}: tmux, kitty, WezTerm, iTerm and Terminal.app tabs can be ` +
+          'raised; a gnome-terminal tab only when `claudectl session open` opened it and the GNOME extension is on');
       }
       out(`focused ${row.name}\n`);
       return 0;
@@ -213,10 +217,15 @@ export async function main(argv, io = {}) {
             label: snap.label, savedAt: snap.savedAt, nowMs, peers, homedir: io.homedir ?? os.homedir(),
             checkpoint: checkpoints.get(row.session_id) ?? null,
           }));
-      const r = tabs.launch(open, {
-        terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), prompt,
-        dryRun: Boolean(opts['dry-run']),
-      });
+      const dryRun = Boolean(opts['dry-run']);
+      const how = {terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), prompt};
+      // gnome-terminal cannot list its tabs: note its windows before, to
+      // record which new one holds which sessions (what `focus` needs)
+      const plan = tabs.launch(open, {...how, dryRun: true});
+      const gnomeTabs = !dryRun && plan.how === 'tabs' && path.basename(plan.terminal) === 'gnome-terminal';
+      const before = gnomeTabs ? terminalWindows(io) : [];
+      const r = dryRun ? plan : tabs.launch(open, how);
+      if (gnomeTabs) await recordTabs({before, groups: windowGroups(open), io});
       if (!opts['dry-run']) for (const [id, cp] of checkpoints) if (cp) pause.markResumed(id);
       for (const row of open) out(`open ${row.name.padEnd(20)} ${row.session_id.slice(0, 8)}  ${row.cwd}\n`);
       if (opts['dry-run']) {
