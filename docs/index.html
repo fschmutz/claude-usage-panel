@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Usage Panel - see your Claude Code usage in the top bar</title>
 <meta name="description" content="A GNOME Shell + macOS menu-bar panel showing Claude Code plan limits (session, weekly, per-model like Fable) with a designed dropdown, alerts, sparklines, named accounts you can switch between without a browser, and optional Cursor spend.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%B3%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta property="og:title" content="Claude Usage Panel">
 <meta property="og:description" content="See your Claude Code plan usage at a glance - GNOME top bar or macOS menu bar.">
 <meta property="og:image" content="https://fschmutz.github.io/claude-usage-panel/og.png">
@@ -43,7 +45,7 @@
   header{position:sticky;top:0;z-index:10;backdrop-filter:blur(10px);background:#0e0e11cc;border-bottom:1px solid var(--line)}
   nav{display:flex;align-items:center;gap:18px;height:60px}
   nav .logo{font-weight:800;font-size:17px;margin-right:auto;display:flex;gap:8px;align-items:center}
-  nav .logo span{color:var(--accent)}
+  nav .logo img{width:22px;height:22px}
   nav a.navlink{color:var(--mut);font-size:14px;font-weight:500}
   nav a.navlink:hover{color:var(--fg);text-decoration:none}
   @media(max-width:640px){nav .navlink{display:none}}
@@ -99,7 +101,7 @@
 <body>
 
 <header><div class="wrap"><nav>
-  <div class="logo"><span>✳</span> Claude Usage Panel</div>
+  <div class="logo"><img src="logo.svg" alt="" width="22" height="22"> Claude Usage Panel</div>
   <a class="navlink" href="#features">Features</a>
   <a class="navlink" href="#install">Install</a>
   <a class="navlink" href="#how">How it works</a>

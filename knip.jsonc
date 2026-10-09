@@ -27,10 +27,11 @@
     ],
 
     // GJS built-ins, resolved by GNOME Shell at runtime and never installable:
-    // `gi://Gio`, `resource:///org/gnome/shell/...`, `gettext`. knip reads the
-    // URL scheme as a package name. Exactly these three; any other unlisted
-    // import is a real finding.
-    "ignoreDependencies": ["gi", "resource", "gettext"],
+    // `gi://Gio`, `resource:///org/gnome/shell/...`, `gettext`, and `cairo`
+    // (lib/panelGauge.js draws the top-bar gauge). knip reads the URL scheme
+    // as a package name. Exactly these four; any other unlisted import is a
+    // real finding.
+    "ignoreDependencies": ["gi", "resource", "gettext", "cairo"],
 
     // librsvg's CLI, called by scripts/screenshots/render.mjs to rasterize the
     // generated SVGs. A system tool (apt librsvg2-bin), not an npm package.

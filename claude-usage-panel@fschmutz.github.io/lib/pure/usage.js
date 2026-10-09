@@ -518,3 +518,24 @@ export function planLabel(oauth) {
         ? /_(\d+x)$/.exec(oauth.rateLimitTier)?.[1] : null;
     return tier ? `${plan} ${tier}` : plan;
 }
+
+// ── The top-bar gauge ───────────────────────────────────────────────────────────
+
+/** The gauge's fill color per tone (the track is the panel's own foreground). */
+export const GAUGE_COLORS = {normal: '#3fb950', warning: '#e0a458', critical: '#e5484d'};
+
+/**
+ * What the top-bar / menu-bar gauge draws for the panel card: the arc's fill
+ * (0..1, empty for no honest reading) and its tone. The tone is the card's
+ * severity, lifted to warning while the forecast says the limit runs out
+ * before its reset - trouble at 50%, not at 90%. The label shares the tone.
+ * Swift twin: PanelGauge. Pinned by tests/fixtures/gauge.json.
+ */
+export function panelGauge(reading, severity, exhaustsBeforeReset = false) {
+    if (reading?.known !== true)
+        return {fraction: 0, tone: 'normal'};
+    let tone = severity === 'critical' || severity === 'warning' ? severity : 'normal';
+    if (tone === 'normal' && exhaustsBeforeReset)
+        tone = 'warning';
+    return {fraction: clampPercent(reading.percent) / 100, tone};
+}

@@ -6,16 +6,8 @@
     spacing: 6px;
     padding: 0 4px;
 }
-.cu-panel-icon {
-    color: #d97757;
-    font-size: 13px;
-    font-weight: bold;
-    -st-icon-style: symbolic;
-}
-/* severity overrides win over the default accent */
-.cu-panel-icon.cu-normal   { color: #d97757; }
-.cu-panel-icon.cu-warning  { color: #e0a458; }
-.cu-panel-icon.cu-critical { color: #e5484d; }
+/* the gauge (lib/panelGauge.js) paints itself: fill per tone, track from the
+   panel foreground */
 
 .cu-spark {
     color: #8f897e;

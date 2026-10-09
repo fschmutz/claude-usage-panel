@@ -393,6 +393,12 @@ The normalization contract (must stay identical across ports):
   readings first, ties to the first in `KIND_ORDER`); `worstPercent`,
   `usageCacheEntry` and the auto-switch skip unknown readings.
   `tests/fixtures/reading.json`.
+- Both top bars draw the logo's arc live: `panelGauge(reading, severity,
+  exhaustsBeforeReset)` (Swift `PanelGauge`) gives the fill (the honest
+  reading over 100, empty for none) and the tone (the severity, lifted to
+  warning by a forecast that runs dry before the reset; the label shares
+  it), `GAUGE_COLORS` the fill per tone. `tests/fixtures/gauge.json`. The
+  drawing is `lib/panelGauge.js` (Cairo) / `MenuBarGauge.swift` (AppKit).
 - `usageFailure` (`tests/fixtures/usage-endpoint.json`): 401 `auth_expired`
   (refresh hint), 403 `forbidden` (server words, no refresh hint), 408/424/425/
   429/5xx `transient` with `Retry-After` parsed; `transient` and

@@ -484,32 +484,30 @@ final class UsageModel: ObservableObject {
         Shell.launch("/usr/bin/osascript", NotifyScript.arguments(title: title, body: body))
     }
 
-    /// Severity dot for the menu-bar title (renders in color as an emoji).
-    private func dot(_ s: Severity) -> String {
-        switch s {
-        case .critical: return "🔴"
-        case .warning: return "🟠"
-        case .normal: return "🟢"
+    /// The card the menu bar shows: the worst honest reading, ranked exactly
+    /// like the GNOME top bar (PanelCard), so a rolled-over window's stale
+    /// percentage never parks itself in the menu bar.
+    private var panelCard: LimitCard? { PanelCard.pick(cards, mode: .worst, now: Date()) }
+
+    /// The menu-bar gauge: filled to that card's reading, tinted by its
+    /// severity - lifted to warning while the forecast says the limit runs
+    /// out before its reset (trouble at 50%, not at 90%).
+    var menuBarGauge: PanelGauge {
+        guard let worst = panelCard else {
+            return PanelGauge.of(known: false, percent: nil, severity: .normal)
         }
+        return PanelGauge.of(
+            UsageReading.of(worst, now: Date()), severity: worst.severity,
+            exhaustsBeforeReset: forecasts[worst.id]?.exhaustsBeforeReset == true)
     }
 
-    /// Worst (highest %) limit, for the menu-bar title. A limit reading normal
-    /// but on pace to run out before its reset shows the warning dot -
-    /// trouble at 50%, not at 90%.
+    /// Worst (highest %) limit, for the menu-bar title; the gauge next to it
+    /// carries the color.
     var titleText: String {
-        // Rank on what the cards may honestly show (PanelCard): a window that
-        // has just reset still carries the old percentage, and picking by that
-        // would park a stale 96% in the menu bar. Ties break exactly like the
-        // GNOME top bar's.
-        let now = Date()
-        guard let worst = PanelCard.pick(cards, mode: .worst, now: now) else {
-            return errorText == nil ? "⚪️ …" : "⚪️ ?"
+        guard let worst = panelCard else {
+            return errorText == nil ? "…" : "?"
         }
-        let reading = UsageReading.of(worst, now: now)
-        var sev = reading.known ? worst.severity : .normal
-        if sev == .normal, reading.known, forecasts[worst.id]?.exhaustsBeforeReset == true {
-            sev = .warning
-        }
+        let reading = UsageReading.of(worst, now: Date())
         // "PRO · Session 42%" once there is more than one saved account to tell
         // apart - and only while the name fits the bar's character budget.
         let showAccount = showAccountInMenuBar && accounts.count > 1
@@ -517,7 +515,7 @@ final class UsageModel: ObservableObject {
         let text = PanelReadout.text(
             account: name, label: worst.label, percent: worst.percent, known: reading.known)
         let wait = waiting.isEmpty ? "" : "\(waiting.count) · "
-        return "\(wait)\(dot(sev)) \(text)"
+        return "\(wait)\(text)"
     }
 
     static let timeFormatter: DateFormatter = {

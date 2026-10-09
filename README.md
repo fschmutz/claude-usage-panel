@@ -1,5 +1,10 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="logo/svg/mark-on-dark.svg">
+  <img src="logo/svg/mark.svg" width="96" alt="Claude Usage Panel logo: a gauge arc">
+</picture>
+
 # Claude Usage Panel
 
 **See your Claude Code plan usage at a glance - in the GNOME top bar, the macOS

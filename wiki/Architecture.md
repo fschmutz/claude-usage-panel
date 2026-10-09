@@ -104,6 +104,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── accounts.js     # the account store's GJS I/O
     ├── accountsSection.js # the dropdown's Accounts rows
     ├── noticeRow.js    # one inline notice row: severity dot, sentence, one repair button
+    ├── panelGauge.js   # the top bar's live gauge (Cairo over pure panelGauge)
     ├── codex.js        # the Codex store's GJS I/O (auth.json + recorded rate limits)
     ├── codexSection.js # the dropdown's optional OpenAI Codex section
     ├── cost.js         # optional ccusage cost (subprocess)
@@ -160,6 +161,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     └── ClaudeUsagePanel/
         ├── ClaudeUsagePanelApp.swift # the App + MenuBarExtra scene, palette
         ├── UsageModel.swift          # the view model
+        ├── MenuBarGauge.swift        # the menu bar's live gauge (AppKit over PanelGauge)
         ├── PopupView.swift           # the popup's views
         ├── SettingsView.swift        # the Settings window
         ├── Usage.swift               # the UsageEndpoint protocol + the ephemeral-session fetch

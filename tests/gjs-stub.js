@@ -1,5 +1,5 @@
 // The GJS module stubs the GNOME tests load real extension files under:
-// a module hook that answers gi://, resource:/// and 'gettext' with
+// a module hook that answers gi://, resource:///, 'gettext' and 'cairo' with
 // scriptable stubs. Importing this file registers the hook for the whole
 // test process; each test installs the few GObject members it exercises in
 // `stub.overrides` and puts them back afterwards.
@@ -133,7 +133,8 @@ function stubSource(specifier) {
 
 registerHooks({
     resolve(specifier, context, nextResolve) {
-        if (specifier === 'gettext' || specifier.startsWith('gi://') || specifier.startsWith('resource:///'))
+        // 'cairo' is GJS's own module too (lib/panelGauge.js draws with it).
+        if (specifier === 'gettext' || specifier === 'cairo' || specifier.startsWith('gi://') || specifier.startsWith('resource:///'))
             return {url: `gjs-stub:${encodeURIComponent(specifier)}`, shortCircuit: true};
         return nextResolve(specifier, context);
     },
