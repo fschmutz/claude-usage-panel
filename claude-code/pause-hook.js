@@ -198,10 +198,16 @@ async function main(mode) {
     return 0;
   }
   if (mode !== 'wait') return 0;
-  const waiter = startWaiter(payload);
-  // Claude Code ends a session's hooks with SIGTERM: leave quietly, lock released.
-  process.once('SIGTERM', waiter.stop);
-  process.once('SIGHUP', waiter.stop);
+  // Claude Code ends a session's hooks with SIGTERM: leave quietly, lock
+  // released. Armed BEFORE startWaiter takes the lock: a signal landing
+  // between the two would otherwise kill us the default way, lock left behind.
+  // A signal is only delivered once this synchronous code has run, so
+  // `waiter` is always set by then.
+  let waiter = null;
+  const stop = () => waiter?.stop();
+  process.once('SIGTERM', stop);
+  process.once('SIGHUP', stop);
+  waiter = startWaiter(payload);
   const {code, text} = await waiter.done;
   if (code === 2) process.stderr.write(text);
   return code;

@@ -8,6 +8,7 @@ import {spawn, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {setImmediate} from 'node:timers';
 
 import {handlePretool, startWaiter} from '../claude-code/pause-hook.js';
 import {openPause} from '../claude-code/pause.js';
@@ -161,7 +162,10 @@ test('`pause-hook.js wait` leaves on SIGTERM with exit 0 and its lock removed', 
     t.after(() => child.exitCode === null && child.kill('SIGKILL'));
     child.stdin.end(JSON.stringify(payload(A)));
     const lock = path.join(pauseDir(io), `${A}.waiter`);
-    for (let i = 0; i < 100 && !fs.existsSync(lock); i++) await new Promise((r) => setTimeout(r, 50));
+    // SIGTERM the instant the lock appears: the handler must already be armed
+    // (a 50 ms poll hid a gap between taking the lock and arming it).
+    const until = Date.now() + 5000;
+    while (!fs.existsSync(lock) && Date.now() < until) await new Promise((r) => setImmediate(r));
     assert.ok(fs.existsSync(lock));
     child.kill('SIGTERM');
     assert.equal(await new Promise((r) => child.on('exit', r)), 0);
