@@ -128,6 +128,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── widgets.js      # small St helpers shared by the sections
     ├── http.js         # one promise around Soup
     ├── proc.js         # one promise around Gio.Subprocess
+    ├── wakeWatch.js    # resume-from-suspend + network-back signals that trigger a poll
     ├── fs.js           # read + atomic write
     └── paths.js        # every on-disk path the extension uses
 

@@ -32,6 +32,7 @@ import {PauseController} from './lib/pauseSection.js';
 import {UsageCard} from './lib/usageCard.js';
 import {HeaderBar} from './lib/headerBar.js';
 import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
+import {watchWakeAndNetwork} from './lib/wakeWatch.js';
 import {vbox} from './lib/widgets.js';
 import {writeText} from './lib/fs.js';
 import {stateDir} from './lib/paths.js';
@@ -63,7 +64,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._cards = new Map();
         this._timerId = 0;
         this._wakeId = 0;
-        this._logindId = 0;
         // Consecutive polls in which no limit moved - drives the backoff.
         this._idleStreak = 0;
         this._latest = [];
@@ -148,7 +148,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this
         );
 
-        this._watchWakeAndNetwork();
+        this._unwatchWake = watchWakeAndNetwork(() => this._refreshSoon());
         this.refresh();
         this._restartTimer();
     }
@@ -275,34 +275,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this.refresh();
             return GLib.SOURCE_REMOVE;
         });
-    }
-
-    // Two things that make a poll worth doing right now, whatever the timer
-    // says: the machine came back from suspend (every countdown on screen is
-    // stale by however long the lid was shut), and the network came back (the
-    // polls during the outage all failed).
-    _watchWakeAndNetwork() {
-        try {
-            this._logindId = Gio.DBus.system.signal_subscribe(
-                'org.freedesktop.login1',
-                'org.freedesktop.login1.Manager',
-                'PrepareForSleep',
-                '/org/freedesktop/login1',
-                null,
-                Gio.DBusSignalFlags.NONE,
-                (conn, sender, path, iface, signal, params) => {
-                    // true = about to suspend, false = just resumed.
-                    if (!params.deepUnpack()[0])
-                        this._refreshSoon();
-                });
-        } catch (e) {
-            logError(e, 'claude-usage-panel: no logind resume signal');
-        }
-        this._networkMonitor = Gio.NetworkMonitor.get_default();
-        this._networkMonitor?.connectObject('network-changed', (_m, available) => {
-            if (available)
-                this._refreshSoon();
-        }, this);
     }
 
     // Coalesce a burst of wake/network signals into one refresh a few seconds
@@ -632,12 +604,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
             GLib.Source.remove(this._wakeId);
             this._wakeId = 0;
         }
-        if (this._logindId) {
-            Gio.DBus.system.signal_unsubscribe(this._logindId);
-            this._logindId = 0;
-        }
-        this._networkMonitor?.disconnectObject(this);
-        this._networkMonitor = null;
+        this._unwatchWake?.();
+        this._unwatchWake = null;
         this._sessions.destroy();
         this._waiting.destroy();
         this._pause.destroy();
