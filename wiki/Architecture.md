@@ -160,6 +160,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     └── ClaudeUsagePanel/
         ├── ClaudeUsagePanelApp.swift # the App + MenuBarExtra scene, palette
         ├── UsageModel.swift          # the view model
+        ├── CollapsibleSection.swift  # a dropdown section folded to its header (the session lists)
         ├── PopupView.swift           # the popup's views
         ├── SettingsView.swift        # the Settings window
         ├── Usage.swift               # the UsageEndpoint protocol + the ephemeral-session fetch

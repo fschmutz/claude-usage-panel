@@ -8,10 +8,8 @@ struct PauseSectionView: View {
     @ObservedObject var pause: PauseState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        CollapsibleSection("pause", title: "Pause sessions", count: pause.rows.count) {
             HStack {
-                Text("Pause sessions").font(.system(size: 13, weight: .bold))
-                Spacer()
                 Button("Pause all") { pause.pauseAll() }
                     .disabled(!pause.canAct || !pause.rows.contains(where: \.live))
                     .help("Send the pause protocol to every running Claude Code session")
@@ -22,6 +20,7 @@ struct PauseSectionView: View {
                             + "checkpoint reopen in a terminal")
             }
             .font(.system(size: 11))
+        } content: {
             if let line = pause.summaryLine {
                 Text(line)
                     .font(.system(size: 12, weight: .semibold))

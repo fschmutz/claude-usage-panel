@@ -6,6 +6,14 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **macOS: the session lists fold.** "Waiting on you", "Pause sessions" and
+  "Today's sessions" grow one row per session, and the popup has no scroll
+  bar: with a dozen tabs open they pushed everything below them off the
+  screen. Each now folds to its header (title, row count, its own buttons),
+  folded by default; the choice is remembered per section.
+
 ## [3.6.0] - 2026-10-09
 
 ### Changed
