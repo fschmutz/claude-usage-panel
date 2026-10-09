@@ -37,7 +37,7 @@ installed_targets() {
     _statusline_installed && echo statusline
     _mcp_installed && echo mcp
     _cli_installed && echo cli
-    [ -d "/Applications/ClaudeUsagePanel.app" ] && echo macos
+    [ -n "$(mac_installed_app)" ] && echo macos
     _au_installed && echo autoupdate
     _sp_installed && echo sessionping
     _cost_installed && echo cost

@@ -63,7 +63,7 @@ gnome-extensions install --force claude-usage-panel@fschmutz.github.io.shell-ext
 
 ## macOS
 
-Requirements: macOS 13+, Xcode 15+ or the Swift toolchain.
+Requirements: macOS 13+; Xcode 15+ or the Swift toolchain to build (without one, the release zip is used).
 
 ```bash
 ./install.sh macos       # build, install to /Applications, and launch it
@@ -73,6 +73,17 @@ This builds `ClaudeUsagePanel.app`, ad-hoc signs it, copies it to `/Applications
 and opens it. On first run it **registers itself to start at login** (toggle in
 Settings ▸ Start at login). Just want to run it without installing?
 `cd macos && swift run`. See [[macOS]] for login-item and Keychain details.
+
+No admin rights? Nothing in it needs `sudo`. When `/Applications` is not
+writable (a standard account) the app goes to `~/Applications`
+(`--appdir=DIR` picks another), and without a Swift toolchain - the Command
+Line Tools need an admin to install - it takes the release's prebuilt zip
+instead of building, checked against the sha256 the release's cask pins
+(`--prebuilt` forces that; `update` keeps the choice):
+
+```bash
+./install.sh macos --prebuilt --appdir="$HOME/Applications"
+```
 
 No checkout? The release workflow publishes a Homebrew cask to
 `fschmutz/homebrew-tap`:
@@ -154,7 +165,7 @@ URL) is reported as that failure, not as "offline". It also reinstalls **only**
 the targets already installed, so it never adds a client you didn't want.
 
 If the reinstall itself fails - no `node` on the scheduler's `PATH`, or
-`/Applications` not writable on macOS - the run exits non-zero, records nothing
+the app's folder not writable on macOS - the run exits non-zero, records nothing
 as installed, and tries again next time. The rolling log is
 `~/.local/state/claude-usage-panel/auto-update.log`.
 
@@ -168,7 +179,7 @@ as installed, and tries again next time. The rolling log is
 so it won't add clients you never installed. `--pull` fast-forwards the checkout
 first. Per target: the **status line** and **MCP server** take effect next
 session; **GNOME** needs a log out / back in (Wayland); **macOS** quits the
-running app, replaces it in `/Applications`, and relaunches the new build.
+running app, replaces it where it is installed, and relaunches the new build.
 
 ## Session pings
 

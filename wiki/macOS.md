@@ -12,11 +12,22 @@ click **Always Allow**.
 ## Install
 
 ```bash
-./install.sh macos          # from a checkout: build, install to /Applications, launch
+./install.sh macos          # from a checkout: build, install to /Applications (or ~/Applications), launch
 ```
 
 Builds `ClaudeUsagePanel.app` (`LSUIElement`, no Dock icon), ad-hoc signs it, copies
 it to `/Applications`, and opens it. Version comes from `package.json`.
+
+No admin rights? Nothing in it needs `sudo`. When `/Applications` is not
+writable (a standard account) the app goes to `~/Applications`
+(`--appdir=DIR` picks another), and without a Swift toolchain - the Command
+Line Tools need an admin to install - it takes the release's prebuilt zip
+instead of building, checked against the sha256 the release's cask pins
+(`--prebuilt` forces that; `update` keeps the choice):
+
+```bash
+./install.sh macos --prebuilt --appdir="$HOME/Applications"
+```
 
 No checkout? Every release ships the built app, and the release workflow
 publishes a Homebrew cask pinned to it to `fschmutz/homebrew-tap`:
@@ -55,7 +66,7 @@ checks for a new release once a day and installs it for you - see
 ./install.sh update         # or: update --pull
 ```
 
-Quits the running app, replaces it in `/Applications`, and relaunches the new
+Quits the running app, replaces it where it is installed, and relaunches the new
 build - so the upgrade actually takes effect. `./install.sh --uninstall macos`
 removes it; `./install.sh --uninstall autoupdate` stops the daily check.
 

@@ -8,6 +8,12 @@ semantic versioning.
 
 ### Added
 
+- **The macOS app installs without admin rights.** When `/Applications`
+  is not writable it goes to `~/Applications` (`--appdir=DIR` picks
+  another), and `--prebuilt` - automatic without a Swift toolchain -
+  installs the release's zip, checked against the sha256 the release's cask
+  pins, so neither Xcode nor an admin is needed. `update`, `--list`,
+  `--uninstall` and the update check find the app in either place.
 - **`claudectl session close`** ends running sessions and closes their
   terminal tabs (the window too when it was the last tab), for any terminal:
   SIGTERM to claude, then SIGHUP to the shells that started it on its tty.

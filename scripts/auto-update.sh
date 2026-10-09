@@ -235,7 +235,10 @@ deployed_version() {
         sed -nE 's/.*"version-name": *"([^"]+)".*/\1/p' "$meta" | head -1
         return 0
     fi
-    local plist="/Applications/ClaudeUsagePanel.app/Contents/Info.plist"
+    # /Applications, or ~/Applications for an account without admin
+    # (scripts/install/macos.sh)
+    local plist="${CUP_TEST_SYSTEM_APPS:-/Applications}/ClaudeUsagePanel.app/Contents/Info.plist"
+    [ -f "$plist" ] || plist="$HOME/Applications/ClaudeUsagePanel.app/Contents/Info.plist"
     [ -f "$plist" ] || return 0
     # Both the XML and the binary form answer to PlistBuddy/defaults; the app is
     # written with the XML one, so a plain grep of the following <string> works

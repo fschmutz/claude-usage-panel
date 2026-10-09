@@ -34,6 +34,10 @@
 #   ./install.sh --uninstall [target...]   reverse an install (default: all installed)
 #   ./install.sh --dry-run [target...]     print the actions without doing them (alias -n)
 #   ./install.sh macos --build-only        build the .app but don't install it (used by CI)
+#   ./install.sh macos --prebuilt          the release's zip, sha256-checked, instead of
+#                                          swift build (automatic without a Swift toolchain)
+#   ./install.sh macos --appdir=DIR        install the app in DIR (default: /Applications
+#                                          when writable, else ~/Applications - no admin)
 #   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions,waiting] \
 #                           --tokens=all|fresh
 #                                          choose status-line segments + token mode
@@ -105,6 +109,8 @@ for arg in "$@"; do
         --uninstall) action=uninstall ;;
         --pull) PULL=true ;;
         --build-only) BUILD_ONLY=true ;;
+        --prebuilt) PREBUILT=true ;;
+        --appdir=*) APPDIR="${arg#*=}" ;;
         --segments=*)
             SL_SEGMENTS="${arg#*=}"
             SL_SEGMENTS_SET=true
