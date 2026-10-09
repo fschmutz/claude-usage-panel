@@ -6,7 +6,9 @@ semantic versioning.
 
 ## [Unreleased]
 
-### Changed
+## [3.2.1] - 2026-10-09
+
+### Fixed
 
 - **Quit lasts for this login only.** The cross in the dropdown's header used
   to run `gnome-extensions disable`, which persists across logins: a Quit

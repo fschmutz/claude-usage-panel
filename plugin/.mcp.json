@@ -2,7 +2,7 @@
   "mcpServers": {
     "claude-usage": {
       "command": "npx",
-      "args": ["-y", "github:fschmutz/claude-usage-panel#v3.2.0"]
+      "args": ["-y", "github:fschmutz/claude-usage-panel#v3.2.1"]
     }
   }
 }
