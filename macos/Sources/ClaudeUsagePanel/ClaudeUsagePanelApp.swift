@@ -36,7 +36,14 @@ struct ClaudeUsagePanelApp: App {
         MenuBarExtra {
             PopupView(model: model)
         } label: {
-            Text(model.titleText)
+            // The gauge is the color signal: the logo's arc, filled to the
+            // reading and tinted by its tone (MenuBarGauge).
+            Label {
+                Text(model.titleText)
+            } icon: {
+                Image(nsImage: MenuBarGauge.image(model.menuBarGauge))
+            }
+            .labelStyle(.titleAndIcon)
         }
         .menuBarExtraStyle(.window)
 

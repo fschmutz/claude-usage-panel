@@ -190,6 +190,19 @@ for (const c of readingFix.panelCard) {
     });
 }
 
+// ── The top-bar gauge ───────────────────────────────────────────────────────────
+// The logo's arc, drawn live in both top bars. The Swift twin is PanelGaugeTests.
+const gaugeFix = fixture('gauge.json');
+
+test('panelGauge - the fill colors are the fixture\'s', () => {
+    assert.deepEqual(pure.GAUGE_COLORS, gaugeFix.colors);
+});
+for (const c of gaugeFix.cases) {
+    test(`panelGauge - ${c.name}`, () => {
+        assert.deepEqual(pure.panelGauge(c.reading, c.severity, c.exhaustsBeforeReset), c.expected);
+    });
+}
+
 // ── Named accounts ──────────────────────────────────────────────────────────────
 // What a valid profile is, which saved login is the live one, whether a stored
 // token is still usable, and when to move to another account.

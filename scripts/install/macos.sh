@@ -17,7 +17,7 @@ install_macos() {
     local ver
     ver="$(version)"
     if $DRY; then
-        echo "  would: swift build -c release + assemble $bundle (v$ver)"
+        echo "  would: swift build -c release + assemble $bundle (v$ver) with AppIcon.icns"
         echo "  would: quit a running instance, ad-hoc codesign, cp -R to /Applications/$app.app, open it"
         ok "dry-run: no build performed"
         return 0
@@ -41,6 +41,10 @@ install_macos() {
         cp "$ROOT/scripts/session-ping.sh" "$ROOT/scripts/lib.sh" \
             "$bundle/Contents/Resources/" || exit 1
         chmod +x "$bundle/Contents/Resources/session-ping.sh" || exit 1
+        # The app icon (Finder, Login Items, the Settings window). The menu
+        # bar draws its own gauge (MenuBarGauge.swift), no image needed.
+        iconutil -c icns "$ROOT/macos/AppIcon.iconset" \
+            -o "$bundle/Contents/Resources/AppIcon.icns" || exit 1
         cat >"$bundle/Contents/Info.plist" <<PLIST || exit 1
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -53,6 +57,7 @@ install_macos() {
   <key>CFBundleShortVersionString</key><string>$ver</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>$app</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
 </dict>
@@ -78,7 +83,21 @@ PLIST
     # the app registers itself as a login item (toggle in Settings ▸ Start at login).
     # Quit any running instance first so we replace (not copy over) a busy bundle
     # and so `open` relaunches the NEW binary - this is what makes upgrades take.
-    osascript -e 'quit app "Claude Usage Panel"' >/dev/null 2>&1 || true
+    # By bundle id: the process is named ClaudeUsagePanel, and quitting the
+    # display name "Claude Usage Panel" matched nothing, so the old code kept
+    # running under a replaced file. pkill is the fallback for an app that
+    # ignores the Apple event. The daily auto-update (CUP_UPDATE_RUN) leaves the
+    # running app alone - it is not the moment to pull the panel from under
+    # the user; the new build is picked up at the next launch.
+    if [ "${CUP_UPDATE_RUN:-}" != 1 ]; then
+        osascript -e 'tell application id "io.github.fschmutz.claude-usage-panel" to quit' >/dev/null 2>&1 || true
+        local tries=0
+        while pgrep -f "/$app.app/Contents/MacOS/$app" >/dev/null && [ "$tries" -lt 10 ]; do
+            sleep 0.5
+            tries=$((tries + 1))
+        done
+        pkill -f "/$app.app/Contents/MacOS/$app" 2>/dev/null || true
+    fi
     local installed="/Applications/$app.app"
     if rm -rf "$installed" 2>/dev/null && cp -R "$bundle" "$installed" 2>/dev/null; then
         open "$installed" 2>/dev/null || true

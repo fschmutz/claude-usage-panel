@@ -19,6 +19,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {fetchUsage} from './lib/claudeUsage.js';
+import {PanelGauge} from './lib/panelGauge.js';
 import {readLiveAccount, readLiveCredentials} from './lib/claudeFiles.js';
 import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
@@ -39,7 +40,7 @@ import {writeText} from './lib/fs.js';
 import {stateDir} from './lib/paths.js';
 import {SavedSessionsController} from './lib/savedSessions.js';
 import {
-    severityClass, formatResets, latchCrossings, latchPaceAlerts, refreshSections, isRetryableFailure,
+    severityClass, panelGauge, formatResets, latchCrossings, latchPaceAlerts, refreshSections, isRetryableFailure,
     forecast, formatForecast, normalizeHistory,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
@@ -85,15 +86,15 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._paceAlerted = new Set();  // limit ids already warned about projected exhaustion
         this._forecasts = new Map();   // limit id -> latest forecast (or null)
 
-        // Panel button: brand glyph + compact worst-limit readout.
+        // Panel button: the live gauge + compact worst-limit readout.
         const box = new St.BoxLayout({style_class: 'cu-panel'});
-        this._panelIcon = new St.Label({text: '✳', style_class: 'cu-panel-icon'});
+        this._panelGauge = new PanelGauge();
         this._panelLabel = new St.Label({
             text: '…',
             style_class: 'cu-panel-label',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        box.add_child(this._panelIcon);
+        box.add_child(this._panelGauge);
         this._panelWait = new St.Label({
             text: '',
             style_class: 'cu-panel-wait',
@@ -568,19 +569,19 @@ class ClaudeUsageButton extends PanelMenu.Button {
             percent: card.percent,
             known: reading.known,
         });
-        // Predictive tint: a limit reading normal but on pace to run out before
-        // its reset shows amber in the top bar - trouble at 50%, not at 90%.
-        let sev = reading.known ? severityClass(card.severity) : 'cu-normal';
-        if (sev === 'cu-normal' && reading.known &&
-            this._forecasts.get(card.key)?.exhaustsBeforeReset)
-            sev = 'cu-warning';
-        this._panelLabel.style_class = `cu-panel-label ${sev}`;
-        this._panelIcon.style_class = `cu-panel-icon ${sev}`;
+        // The gauge fills to the reading; its tone (the severity, lifted to
+        // warning by a forecast that runs dry before the reset) also tints
+        // the label - trouble at 50%, not at 90%.
+        const gauge = panelGauge(reading, card.severity,
+            this._forecasts.get(card.key)?.exhaustsBeforeReset === true);
+        this._panelGauge.update(gauge);
+        this._panelLabel.style_class = `cu-panel-label cu-${gauge.tone}`;
     }
 
     _renderError(message) {
         this._panelLabel.text = _('Claude ?');
         this._panelLabel.style_class = 'cu-panel-label cu-warning';
+        this._panelGauge.update({fraction: 0, tone: 'warning'});
         for (const [, widget] of this._cards)
             widget.destroy();
         this._cards.clear();

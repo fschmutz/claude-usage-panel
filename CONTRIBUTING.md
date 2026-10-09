@@ -58,6 +58,7 @@ wiki page.
 ├── Casks/                   # the Homebrew cask, pinned to each release
 ├── plugin/                  # Claude Code plugin wrapping the MCP server
 ├── docs/                    # GitHub Pages site + the /install bootstrap
+├── logo/                    # the logo (svg + png); each client's icon derives from it
 ├── wiki/                    # source of the GitHub wiki (published by wiki.yml)
 ├── tests/                   # node --test suites + the shared cross-port fixtures
 ├── scripts/                 # install/ targets · pack-gnome · auto-update · session-ping · versions

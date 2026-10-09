@@ -1,0 +1,14 @@
+{
+  "_comment": "The top-bar gauge: the logo's 270-degree arc, drawn live on the GNOME top bar and the macOS menu bar. `fraction` is the arc's fill (the honest reading over 100, EMPTY for no reading - never a stale percent) and `tone` its color key: the card's severity, lifted from normal to warning while the forecast says the limit runs dry before its reset, and normal for no reading whatever the stale card says. The label next to the gauge shares the tone. Pinned for lib/pure/usage.js panelGauge + GAUGE_COLORS and Swift PanelGauge.",
+  "colors": {"normal": "#3fb950", "warning": "#e0a458", "critical": "#e5484d"},
+  "cases": [
+    {"name": "a normal reading fills the arc to its percent", "reading": {"known": true, "percent": 42}, "severity": "normal", "exhaustsBeforeReset": false, "expected": {"fraction": 0.42, "tone": "normal"}},
+    {"name": "warning comes from the API", "reading": {"known": true, "percent": 75}, "severity": "warning", "exhaustsBeforeReset": false, "expected": {"fraction": 0.75, "tone": "warning"}},
+    {"name": "critical fills the whole arc", "reading": {"known": true, "percent": 100}, "severity": "critical", "exhaustsBeforeReset": false, "expected": {"fraction": 1, "tone": "critical"}},
+    {"name": "a forecast that runs dry before the reset lifts normal to warning", "reading": {"known": true, "percent": 50}, "severity": "normal", "exhaustsBeforeReset": true, "expected": {"fraction": 0.5, "tone": "warning"}},
+    {"name": "the forecast never lowers critical", "reading": {"known": true, "percent": 100}, "severity": "critical", "exhaustsBeforeReset": true, "expected": {"fraction": 1, "tone": "critical"}},
+    {"name": "no honest reading is an empty arc in the normal tone, whatever the stale card says", "reading": {"known": false, "percent": null}, "severity": "critical", "exhaustsBeforeReset": true, "expected": {"fraction": 0, "tone": "normal"}},
+    {"name": "an unknown severity is normal", "reading": {"known": true, "percent": 10}, "severity": "bogus", "exhaustsBeforeReset": false, "expected": {"fraction": 0.1, "tone": "normal"}},
+    {"name": "0% is an empty arc with a reading", "reading": {"known": true, "percent": 0}, "severity": "normal", "exhaustsBeforeReset": false, "expected": {"fraction": 0, "tone": "normal"}}
+  ]
+}

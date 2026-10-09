@@ -542,3 +542,46 @@ public enum PanelReadout {
         return !name.isEmpty && name.count + 3 + tail.count <= max ? "\(name) · \(tail)" : tail
     }
 }
+
+// MARK: - The top-bar gauge
+
+/// What the top-bar / menu-bar gauge draws for the panel card: the arc's fill
+/// (0...1, empty for no honest reading) and its tone. The tone is the card's
+/// severity, lifted to warning while the forecast says the limit runs out
+/// before its reset - trouble at 50%, not at 90%. The label shares the tone.
+/// Mirrors lib/pure/usage.js `panelGauge`; pinned by tests/fixtures/gauge.json.
+public struct PanelGauge: Equatable, Sendable {
+    public enum Tone: String, Sendable {
+        case normal, warning, critical
+    }
+
+    public let fraction: Double
+    public let tone: Tone
+
+    public static let colors: [Tone: String] = [
+        .normal: "#3fb950", .warning: "#e0a458", .critical: "#e5484d",
+    ]
+
+    public static func of(
+        known: Bool, percent: Int?, severity: Severity, exhaustsBeforeReset: Bool = false
+    ) -> PanelGauge {
+        guard known else { return PanelGauge(fraction: 0, tone: .normal) }
+        var tone: Tone
+        switch severity {
+        case .critical: tone = .critical
+        case .warning: tone = .warning
+        case .normal: tone = .normal
+        }
+        if tone == .normal, exhaustsBeforeReset { tone = .warning }
+        let pct = max(0, min(100, percent ?? 0))
+        return PanelGauge(fraction: Double(pct) / 100, tone: tone)
+    }
+
+    public static func of(
+        _ reading: UsageReading, severity: Severity, exhaustsBeforeReset: Bool = false
+    ) -> PanelGauge {
+        of(
+            known: reading.known, percent: reading.percent, severity: severity,
+            exhaustsBeforeReset: exhaustsBeforeReset)
+    }
+}

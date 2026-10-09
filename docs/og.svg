@@ -5,7 +5,8 @@
   <stop offset="0" stop-color="#161513"/><stop offset="1" stop-color="#2b1c14"/>
 </linearGradient></defs>
 <rect width="1280" height="640" fill="url(#g)"/>
-<text x="72" y="140" font-size="30" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="700">✳ Claude Usage Panel</text>
+<g transform="translate(72 106) scale(0.4)"><g transform="translate(0 6)"><circle cx="50" cy="50" r="32" fill="none" stroke="#4a453f" stroke-width="12" stroke-linecap="round" stroke-dasharray="150.8 201.06" transform="rotate(135 50 50)"></circle><circle cx="50" cy="50" r="32" fill="none" stroke="#e07a4b" stroke-width="12" stroke-linecap="round" stroke-dasharray="90.5 201.06" transform="rotate(135 50 50)"></circle><polygon points="99,43 99,57 89,50" fill="#f6f4ef" transform="rotate(243 50 50)"></polygon></g></g>
+<text x="122" y="140" font-size="30" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="700">Claude Usage Panel</text>
 <text x="72" y="240" font-size="64" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800">Your Claude Code usage,</text>
 <text x="72" y="310" font-size="64" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800">everywhere you look.</text>
 <text x="72" y="375" font-size="28" fill="#c9c4bb" font-family="system-ui, -apple-system, sans-serif">GNOME top bar · macOS menu bar · status line · MCP tool -</text>

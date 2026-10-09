@@ -6,6 +6,28 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`install.sh macos` now replaces the running app.** It quit the app by its
+  display name, which matches no process, so the old code kept running under
+  the replaced bundle until the next logout. It quits by bundle id, with
+  `pkill` as the fallback; the daily auto-update leaves a running app alone.
+
+### Added
+
+- **A logo.** The gauge mark lives in `logo/` (SVG + PNG, light/dark and
+  mono variants, see `logo/README.md`) and reaches every surface: the GNOME
+  top bar and the macOS menu bar (see below), the macOS app icon
+  (`AppIcon.icns`, so Finder, Login Items and the Settings window stop
+  showing the generic one), the README, the site's favicon + touch icon,
+  and the OpenGraph card.
+- **A live gauge in both top bars.** The logo's arc is drawn with the real
+  percentage of the panel card and colored by its tone: green, orange from
+  the API's warning or a forecast that runs dry before the reset, red at
+  critical; an empty track when there is no honest reading. It replaces the
+  `✳` glyph on GNOME and the emoji dot in the macOS menu-bar title. Pinned
+  across both ports by `tests/fixtures/gauge.json`.
+
 ## [3.6.0] - 2026-10-09
 
 ### Changed
