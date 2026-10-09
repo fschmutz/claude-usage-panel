@@ -11,8 +11,10 @@ gnome-extensions prefs claude-usage-panel@fschmutz.github.io
 Four tabs: **General** (refresh, top bar, alerts, updates), **Accounts**,
 **Sessions** (today's sessions and the terminal, saved sessions, session
 pings) and **Integrations** (cost, Cursor). The cross at the right of the
-dropdown's header is **Quit**: it turns the extension off until you enable it
-again (`gnome-extensions enable claude-usage-panel@fschmutz.github.io`).
+dropdown's header is **Quit**: it hides the panel for the rest of this login,
+screen locks included, and it is back at the next login. To bring it back
+sooner, toggle it off and on in the Extensions app. To keep it off across
+logins, turn it off there (or `./install.sh --uninstall gnome`).
 
 The header's other icons, right to left: **Settings** (gear), **Refresh now**,
 **Reopen** - the newest `claudectl session` snapshot, one tab per session, the

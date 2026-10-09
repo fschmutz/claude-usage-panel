@@ -6,6 +6,15 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **Quit lasts for this login only.** The cross in the dropdown's header used
+  to run `gnome-extensions disable`, which persists across logins: a Quit
+  clicked to reload the panel after an update left it off for good, with
+  nothing on screen saying why. It now hides the panel until the next login
+  (a screen lock does not bring it back; toggling it in the Extensions app
+  does).
+
 ## [3.2.0] - 2026-10-09
 
 ### Added

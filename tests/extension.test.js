@@ -23,7 +23,7 @@ const CREDENTIALS = {claudeAiOauth: {
  * with every armed poll timer, notification and logged error recorded.
  */
 async function panel(t, {token = false, flags = {}, answers = null} = {}) {
-    const rec = {timers: [], notes: [], errors: []};
+    const rec = {timers: [], notes: [], errors: [], idles: []};
     const encode = o => new TextEncoder().encode(JSON.stringify(o));
     stub.overrides['gi://GLib'] = {
         PRIORITY_DEFAULT: 0,
@@ -37,6 +37,7 @@ async function panel(t, {token = false, flags = {}, answers = null} = {}) {
             throw new Error('no such file');
         },
         timeout_add_seconds: (_p, seconds, fn) => rec.timers.push({seconds, fn}),
+        idle_add: (_p, fn) => rec.idles.push(fn),
         Source: {remove: () => {}},
     };
     // `answers` scripts the endpoint, one entry per poll (the last repeats):
@@ -76,7 +77,11 @@ async function panel(t, {token = false, flags = {}, answers = null} = {}) {
             },
         },
     };
-    stub.overrides['resource:///org/gnome/shell/ui/main.js'] = {notify: (...a) => rec.notes.push(a)};
+    rec.sessionMode = {isLocked: false};
+    stub.overrides['resource:///org/gnome/shell/ui/main.js'] = {
+        notify: (...a) => rec.notes.push(a),
+        sessionMode: rec.sessionMode,
+    };
     globalThis.logError = (e, msg) => rec.errors.push(msg);
     t.after(() => {
         stub.overrides = {};
@@ -98,7 +103,7 @@ async function panel(t, {token = false, flags = {}, answers = null} = {}) {
     const button = ext._button;
     while (button._refreshing)
         await new Promise(r => setImmediate(r));
-    return {button, rec};
+    return {button, rec, ext};
 }
 
 /** Swap every section for a spy; a name in `hang` never settles. */
@@ -117,6 +122,30 @@ function spyOn(button, hang = []) {
     button._codex = {refresh: make('codex')};
     return calls;
 }
+
+test('Quit hides the panel for this login: a lock keeps it gone, a real disable clears it', async t => {
+    const {button, rec, ext} = await panel(t);
+    spyOn(button);
+    const spawned = [];
+    stub.overrides['gi://Gio'] = {Subprocess: {new: argv => spawned.push(argv)}};
+    button._quit();
+    assert.equal(ext._button, button, 'not torn down inside its own menu callback');
+    rec.idles.splice(0).forEach(fn => fn());
+    assert.equal(ext._button, null, 'gone once the callback returned');
+    assert.deepEqual(spawned, [], 'never gnome-extensions disable: that outlives the login');
+
+    rec.sessionMode.isLocked = true;
+    ext.disable();
+    ext.enable();
+    assert.equal(ext._button, null, 'a lock / unlock does not bring it back');
+
+    rec.sessionMode.isLocked = false;
+    ext.disable();
+    ext.enable();
+    assert.ok(ext._button, 'the Extensions app toggle shows it again');
+    spyOn(ext._button);
+    ext.disable();
+});
 
 test('a poll with no login still refreshes every section', async t => {
     const {button, rec} = await panel(t, {token: false});

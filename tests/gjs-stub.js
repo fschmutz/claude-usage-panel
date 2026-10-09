@@ -95,7 +95,7 @@ if (!String.prototype.format) {
 
 const NAMED = {
     'resource:///org/gnome/shell/ui/popupMenu.js': ['PopupBaseMenuItem', 'PopupMenu', 'PopupMenuItem'],
-    'resource:///org/gnome/shell/ui/main.js': ['notify', 'layoutManager', 'panel'],
+    'resource:///org/gnome/shell/ui/main.js': ['notify', 'layoutManager', 'panel', 'sessionMode'],
     'resource:///org/gnome/shell/ui/panelMenu.js': ['Button'],
 };
 
@@ -119,10 +119,14 @@ function stubSource(specifier) {
     let idx = SPECIFIERS.indexOf(specifier);
     if (idx < 0) idx = SPECIFIERS.push(specifier) - 1;
     const ns = `globalThis.gjsStub.namespace(globalThis.gjsStub.specifiers[${idx}])`;
-    // Functions forward at call time, so a test can swap Main.notify after load.
-    const named = (NAMED[specifier] ?? []).map(n => (n === 'notify'
-        ? `export const notify = (...a) => ${ns}.notify(...a);`
-        : `export const ${n} = ${ns}.${n};`)).join('\n');
+    // Main.notify and Main.sessionMode forward at call time, so a test can
+    // swap them after load.
+    const late = {
+        notify: `export const notify = (...a) => ${ns}.notify(...a);`,
+        sessionMode: `export const sessionMode = new Proxy({}, {get: (_t, p) => ${ns}.sessionMode[p]});`,
+    };
+    const named = (NAMED[specifier] ?? []).map(n => late[n]
+        ?? `export const ${n} = ${ns}.${n};`).join('\n');
     return `export default ${ns};\n${named}`;
 }
 

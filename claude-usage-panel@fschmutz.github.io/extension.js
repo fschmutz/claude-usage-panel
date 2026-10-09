@@ -238,18 +238,10 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._codex = new CodexController(deps);
     }
 
-    // Disable the extension: unloads it now and keeps it off across logins
-    // until re-enabled (gnome-extensions enable … or ./install.sh).
+    // Quit: the panel goes away for the rest of this login only.
     _quit() {
         this.menu.close();
-        try {
-            Gio.Subprocess.new(
-                ['gnome-extensions', 'disable', this._extension.uuid],
-                Gio.SubprocessFlags.NONE
-            );
-        } catch (e) {
-            logError(e, 'claude-usage-panel: failed to disable');
-        }
+        this._extension.quitUntilLogout();
     }
 
     // One-shot timer, re-armed after every poll: a fixed interval polls hardest
@@ -624,6 +616,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
 
 export default class ClaudeUsagePanelExtension extends Extension {
     enable() {
+        if (this._quitThisLogin)
+            return;
         this._button = new ClaudeUsageButton(this);
         Main.panel.addToStatusArea(this.uuid, this._button, 0, 'right');
         this._stampLoadedVersion();
@@ -644,7 +638,34 @@ export default class ClaudeUsagePanelExtension extends Extension {
         }
     }
 
+    // Quit from the dropdown. Never `gnome-extensions disable`: that persists
+    // across logins, so a Quit clicked to reload after an update left the
+    // panel off for good with nothing on screen saying why. The flag lives on
+    // this object, which the shell keeps until logout.
+    quitUntilLogout() {
+        this._quitThisLogin = true;
+        // Not from inside the button's own menu callback.
+        this._quitId ||= GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            this._quitId = 0;
+            this._destroyButton();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     disable() {
+        // The screen lock disables every extension and the unlock re-enables
+        // it: a Quit survives that. Any other disable (the Extensions app,
+        // gnome-extensions) clears it, so the next enable shows the panel.
+        if (!Main.sessionMode.isLocked)
+            this._quitThisLogin = false;
+        if (this._quitId) {
+            GLib.Source.remove(this._quitId);
+            this._quitId = 0;
+        }
+        this._destroyButton();
+    }
+
+    _destroyButton() {
         this._button?.destroy();
         this._button = null;
     }
