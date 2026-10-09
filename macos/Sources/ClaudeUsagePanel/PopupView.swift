@@ -322,10 +322,9 @@ private struct WaitingSectionView: View {
     @ObservedObject var model: UsageModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Waiting on you")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.cuWarning)
+        CollapsibleSection(
+            "waiting", title: "Waiting on you", count: model.waiting.count, titleColor: .cuWarning
+        ) {
             ForEach(model.waiting) { row in
                 Button {
                     model.focusWaiting(row)
@@ -353,12 +352,12 @@ private struct SessionsSectionView: View {
     @ObservedObject var model: UsageModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(
-                model.sessionsPending
-                    ? "Today's sessions (est., still indexing)" : "Today's sessions (est.)"
-            )
-            .font(.system(size: 13, weight: .bold))
+        CollapsibleSection(
+            "sessions",
+            title: model.sessionsPending
+                ? "Today's sessions (est., still indexing)" : "Today's sessions (est.)",
+            count: model.sessions.count
+        ) {
             ForEach(model.sessions) { session in
                 Button {
                     model.resume(session)
