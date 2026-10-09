@@ -1,6 +1,6 @@
 {
   "name": "usage-panel",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Ask Claude for your plan usage and switch accounts in-conversation: get_usage returns session, weekly, and per-model limits from the official Anthropic usage endpoint; waiting lists live sessions blocked on a permission prompt, a question, or idle after Stop; list_accounts / save_account / switch_account manage named Claude Code logins (PRO, PERSO) without a browser.",
   "author": {"name": "Falco Schmutz"},
   "homepage": "https://fschmutz.github.io/claude-usage-panel/",

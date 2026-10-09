@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-10-09
+
 ### Added
 
 - **`claudectl session focus` works in gnome-terminal** for the tabs
