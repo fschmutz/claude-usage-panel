@@ -433,8 +433,9 @@ export function openTabs(io = {}) {
     return {label, file, ...snap};
   }
 
-  function save(label, {excludeSelf = false} = {}) {
-    let live = liveSessions();
+  /** `sessions`: save only these live rows (what `close` ends). */
+  function save(label, {excludeSelf = false, sessions = null} = {}) {
+    let live = sessions ?? liveSessions();
     if (excludeSelf) {
       const me = selfPid(live);
       live = live.filter((r) => r.pid !== me);

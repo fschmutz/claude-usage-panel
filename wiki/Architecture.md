@@ -199,6 +199,7 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── codex.js            # openCodexStore(io): saved Codex logins + what the CLI recorded
 ├── login-usage.js      # which login's usage, and how its auth failure is labelled
 ├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
+├── close.js            # claudectl session close: SIGTERM claude, SIGHUP its tab's shells
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
 ├── layout.js           # which window and tab each session sits in (tmux, kitty, WezTerm, iTerm, Terminal.app)
 ├── gnome-terminal.js   # the windows and tab order `session open` created there; focus selects the tab

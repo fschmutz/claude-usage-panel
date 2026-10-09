@@ -6,6 +6,16 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`claudectl session close`** ends running sessions and closes their
+  terminal tabs (the window too when it was the last tab), for any terminal:
+  SIGTERM to claude, then SIGHUP to the shells that started it on its tty.
+  It saves an `auto-closed-<time>` snapshot first, so `session open` undoes
+  it, and refuses your own session, a busy one or a tab running other work
+  unless `--force` (which also SIGKILLs a claude that outlives the 10 s
+  grace).
+
 ## [3.6.0] - 2026-10-09
 
 ### Changed

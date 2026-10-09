@@ -14,6 +14,7 @@ import {PAUSE_COMMANDS, PAUSE_DETAILS, PAUSE_HELP, runPause} from './pause-cli.j
 import {focusSession} from './waiting.js';
 import {recordTabs, terminalWindows} from './gnome-terminal.js';
 import {windowGroups} from './terminals.js';
+import {closeBlocker, closePlan, openClose} from './close.js';
 
 export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as laid out
 
@@ -35,6 +36,8 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
                                              what the schedule runs: save only when
                                              the set changed, keep the newest N autos;
                                              --force saves now, even an empty set
+  claudectl session close #|NAME|PID|ID... | --all [--force] [--yes] [--dry-run]
+                                             end them and close their tabs
 ${PAUSE_HELP}
 
 SNAP is a label, a unique prefix of one, or its number in \`store\`.
@@ -90,6 +93,18 @@ everything.`,
 one, and keeps the newest ${AUTO_KEEP} autos: a count, not an age, so they cover a day
 or several. Labelled snapshots are never pruned. It exits 1 when a running
 claude cannot be identified, so the schedule goes red instead of skipping it.`,
+  close: `Saves the sessions it closes as a snapshot first (\`auto-closed-<time>\`),
+so \`claudectl session open\` with that label brings them back. Then, per
+session: SIGTERM to claude, up to 10 s to exit, then SIGHUP to the shells
+that started it on its tty, which closes the tab - and the window when that
+was its last tab (gnome-terminal, kitty, WezTerm, iTerm, Terminal.app, tmux
+alike). A session with no tty only has claude ended.
+
+Refused without --force: the session you type it in, a busy one, and one
+whose tab runs other processes that closing it would kill. --force also
+sends SIGKILL to a claude still running after the grace. Asks before
+closing unless --yes; --all closes every session except your own;
+--dry-run prints the plan and touches nothing.`,
   ...PAUSE_DETAILS,
 };
 
@@ -129,6 +144,50 @@ function wholeNumber(v, min) {
   const n = /^\d+$/.test(String(v)) ? Number(v) : NaN;
   if (!Number.isInteger(n) || n < min) throw new Error(`--keep needs a whole number >= ${min}`);
   return n;
+}
+
+async function closeSessions(tabs, keys, opts, {io, out, confirm}) {
+  const live = tabs.liveSessions();
+  const self = tabs.selfPid(live);
+  if (!keys.length && !opts.all) throw new Error('close needs #, NAME, PID, a session id, or --all');
+  const picked = opts.all ? live.filter((r) => r.pid !== self) : keys.map((k) => matchSession(live, k, {numbered: true}));
+  const rows = [...new Map(picked.map((r) => [r.pid, r])).values()];
+  if (!rows.length) {
+    out('nothing to close\n');
+    return 0;
+  }
+  const closer = openClose(io);
+  const ps = closer.table();
+  const plans = rows.map((row) => ({row, plan: closePlan(ps, row.pid)}));
+  const todo = [];
+  for (const p of plans) {
+    const why = closeBlocker(p.row, p.plan, {self});
+    // your own session stays refused even with --force: nothing would be
+    // left to finish the others or report
+    if (why && (!opts.force || p.row.pid === self)) {
+      out(`skip  ${p.row.name}: ${why}${p.row.pid === self ? '' : ' (--force to close anyway)'}\n`);
+      continue;
+    }
+    todo.push(p);
+    const tab = p.plan.tty ? `tab ${p.plan.tty}, shells ${p.plan.shells.join(' ') || 'none (tab stays)'}` : 'no tty';
+    out(`close ${p.row.name.padEnd(20)} ${p.row.session_id.slice(0, 8)}  pid ${p.row.pid}  ${tab}\n`);
+  }
+  if (!todo.length) return 1;
+  if (opts['dry-run']) return 0;
+  if (!opts.yes && !(await confirm(`close ${todo.length} session(s)? [y/N] `))) {
+    out('aborted\n');
+    return 1;
+  }
+  const snap = tabs.save(`${AUTO_SNAPSHOT_PREFIX}closed-${stampLabel(io.nowMs ? io.nowMs() : Date.now())}`,
+    {sessions: todo.map((p) => p.row)});
+  out(`saved as ${snap.label} - \`claudectl session open ${snap.label}\` reopens them\n`);
+  let failed = 0;
+  for (const {row, plan} of todo) {
+    const r = await closer.closeOne(row, plan, {force: Boolean(opts.force)});
+    if (!r.closed) failed++;
+    out(`${r.closed ? 'closed' : 'FAILED'} ${row.name}: ${r.how}${r.closed ? (r.tab ? ', tab closed' : ', tab left') : ''}\n`);
+  }
+  return failed ? 1 : 0;
 }
 
 export async function main(argv, io = {}) {
@@ -300,6 +359,8 @@ export async function main(argv, io = {}) {
       for (const m of r.missed) out(`NOT SAVED: claude pid ${m.pid} in ${m.cwd ?? '?'} - no session id (not registered, not started with --resume)\n`);
       return r.missed.length ? 1 : 0;
     }
+    case 'close':
+      return closeSessions(tabs, rest, opts, {io, out, confirm});
     default:
       throw new Error(`unknown command ${cmd}\n${HELP}`);
   }

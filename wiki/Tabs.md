@@ -14,6 +14,7 @@ claudectl session focus   # pick one of them and raise its tab (or: focus API, f
 claudectl session save    # snapshot it (label = the time, or give one: save before-reboot)
 claudectl session store   # saved snapshots, newest first
 claudectl session open    # pick a snapshot (Enter = newest), reopen it: same windows, one tab per session
+claudectl session close API WEB # end them and close their tabs (snapshot first: open auto-closed-... undoes it)
 claudectl session open --help   # any command's own page (-h, or: claudectl help session open)
 ```
 
@@ -67,6 +68,7 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `show [SNAP] [--json]` | What a snapshot holds, and which of its sessions are running |
 | `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux] [--prompt=TEXT\|--no-prompt]` | Reopen a snapshot in your terminal. No SNAP at a terminal: the 10 newest, then asks which (Enter = the newest); without a terminal, the newest |
 | `purge SNAP... \| --keep=N \| --auto \| --all [--yes]` | Delete snapshots (asks first) |
+| `close #\|NAME\|PID\|ID... \| --all [--force] [--yes] [--dry-run]` | Snapshot them (`auto-closed-<time>`), SIGTERM claude, then SIGHUP the shells that started it on its tty: the tab closes, and its window when it was the last tab. Refuses your own session, a busy one, and a tab running other work, unless `--force` (which also SIGKILLs a claude still up after 10 s). Asks first unless `--yes` |
 | `autosave [--keep=N] [--force]` | What the schedule runs; `--force` (the panels' **Save**) saves now, even unchanged or empty |
 | `pause [NAME...\|--all] [--include-self] [--wait[=S]\|--no-wait] [--json]` | Send the pause protocol, follow each verdict; see [[Pause]] |
 | `resume [NAME...\|--all] [--wait[=S]\|--no-wait] [--terminal=BIN] [--dry-run]` | Resume protocol to running sessions; reopen closed ones with their checkpoint |

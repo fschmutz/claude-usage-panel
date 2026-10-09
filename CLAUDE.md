@@ -319,7 +319,9 @@ Swift twin together, and keep the fixture matching.
   on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
   registry, checked against `/proc` start time; the snapshot store;
-  autosave; Node-only, no port to mirror), `terminals.js` (which terminal
+  autosave; Node-only, no port to mirror), `close.js` (`claudectl session
+  close`: SIGTERM claude, then SIGHUP the shell ancestors on its tty so the
+  tab closes; refuses self, busy and foreign work on the tab; Node-only), `terminals.js` (which terminal
   `session open` uses - the panels' own setting, never a separate one - and
   how it gets a tab per session; `TERMINALS` / `terminalArgv` /
   `pickTerminal` are `lib/pure/sessions.js`, imported), `layout.js`
