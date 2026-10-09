@@ -1,7 +1,8 @@
 // `claudectl waiting`: the live Claude Code sessions that are blocked
 // waiting for the user. claudectl.js dispatches here.
 
-import {focusWaiting, listWaiting} from './waiting.js';
+import {matchSession} from './tabs.js';
+import {focusSession, listWaiting} from './waiting.js';
 
 export const HELP = `claudectl waiting - live Claude Code sessions waiting on you
 
@@ -35,19 +36,8 @@ export async function main(argv, io = {}) {
     const key = args[1];
     if (!key)
       throw new Error('waiting focus needs a name or pid');
-    const rows = listWaiting(io);
-    const pid = /^\d+$/.test(key) ? Number(key) : null;
-    // A pid or a session id names one session; a name may not (two clones
-    // of one repo share a basename), so an ambiguous name is refused.
-    const exact = rows.filter((r) => r.pid === pid || r.sessionId === key);
-    const loose = exact.length ? exact
-      : rows.filter((r) => r.name === key || r.sessionId.startsWith(key));
-    if (!loose.length)
-      throw new Error(`nothing waiting named ${key}`);
-    if (loose.length > 1)
-      throw new Error(`${key} is ambiguous (${loose.map((r) => r.pid).join(', ')}) - pass the pid`);
-    const [row] = loose;
-    if (!focusWaiting(row, io))
+    const row = matchSession(listWaiting(io), key, {what: 'waiting'});
+    if (!focusSession(row, io))
       throw new Error(`could not focus ${row.name}`);
     out(`focused ${row.name}\n`);
     return 0;

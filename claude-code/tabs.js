@@ -104,6 +104,30 @@ export function describeLaunch({how, terminal, windows, tmuxSessions}, n) {
 
 /** Two session lists describe the same set, laid out the same way
  *  (order-insensitive). */
+/**
+ * The one row `key` names in `rows`: its 1-based number in the list (when
+ * `numbered`), a pid, a session id or a unique prefix of one, or a name.
+ * Throws when nothing matches, or a name or prefix fits several (two clones
+ * of one repo share a basename: pass the pid).
+ */
+export function matchSession(rows, key, {numbered = false, what = 'running'} = {}) {
+  const k = String(key ?? '').trim();
+  if (!k) throw new Error('name a session: #, name, pid or session id');
+  const idOf = (r) => r.session_id ?? r.sessionId ?? '';
+  if (/^\d+$/.test(k)) {
+    const n = Number(k);
+    if (numbered && n >= 1 && n <= rows.length) return rows[n - 1];
+    const byPid = rows.find((r) => r.pid === n);
+    if (byPid) return byPid;
+  }
+  const exact = rows.filter((r) => idOf(r) === k);
+  if (exact.length === 1) return exact[0];
+  const loose = rows.filter((r) => r.name === k || idOf(r).startsWith(k));
+  if (!loose.length) throw new Error(`no ${what} session named ${k}`);
+  if (loose.length > 1) throw new Error(`${k} is ambiguous (${loose.map((r) => r.pid).join(', ')}) - pass the pid`);
+  return loose[0];
+}
+
 export function sameSessions(a, b) {
   const key = (rows) => rows.map((r) => `${r.session_id}\t${r.cwd}\t${r.name}\t${r.window ?? ''}\t${r.tab ?? ''}`)
     .sort().join('\n');

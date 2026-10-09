@@ -13,7 +13,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
-import {handleHook, listWaiting, focusWaiting, writeWaitingMarker} from '../claude-code/waiting.js';
+import {handleHook, listWaiting, focusSession, writeWaitingMarker} from '../claude-code/waiting.js';
 import {sessionRegistryDir} from '../claude-code/paths.js';
 import {main as waitingMain} from '../claude-code/waiting-cli.js';
 import {waitingSegment} from '../claude-code/statusline.js';
@@ -211,14 +211,14 @@ test('writeWaitingMarker is atomic and 0600', (t) => {
     assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).reason, 'idle');
 });
 
-test('focusWaiting runs the kitty pid match when nothing is placed', (t) => {
+test('focusSession runs the kitty pid match when nothing is placed', (t) => {
     const io = world(t, {live: [{pid: 11, sessionId: 's1', name: 'API', cwd: '/a'}]});
     const ran = [];
     io.exec = (cmd, args) => {
         ran.push([cmd, ...args]);
         return '';
     };
-    assert.equal(focusWaiting({pid: 11, sessionId: 's1', name: 'API'}, io), true);
+    assert.equal(focusSession({pid: 11, sessionId: 's1', name: 'API'}, io), true);
     assert.ok(ran.some((a) => a.join(' ') === 'kitty @ focus-window --match pid:11'));
 });
 

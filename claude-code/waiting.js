@@ -173,11 +173,13 @@ end tell`;
 }
 
 /**
- * Raise the terminal that holds `row` (pid / session id / name). Uses the
- * same placement sources as `claudectl session save` (tmux, kitty, WezTerm,
- * iTerm, Terminal.app), then the kitty pid match layout.js already uses.
+ * Raise the terminal that holds `row` (pid / session id / name), waiting or
+ * not. Uses the same placement sources as `claudectl session save` (tmux,
+ * kitty, WezTerm, iTerm, Terminal.app), then the kitty pid match layout.js
+ * already uses. false when none of them can: gnome-terminal has no way to
+ * be asked for one tab.
  */
-export function focusWaiting(row, io = {}) {
+export function focusSession(row, io = {}) {
   const wantPid = Number.isInteger(row?.pid) ? row.pid : null;
   const wantId = row?.sessionId ?? row?.session_id ?? '';
   const wantName = row?.name ?? '';
