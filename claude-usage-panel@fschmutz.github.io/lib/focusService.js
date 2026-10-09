@@ -34,8 +34,11 @@ export function exportFocusService() {
         RaiseWindow(busName, windowPath) {
             const windows = global.get_window_actors().map(a => a.meta_window);
             const win = findGtkWindow(windows, busName, windowPath);
+            // A real server timestamp: called from D-Bus there is no input
+            // event, and activating with none reads as focus stealing - Mutter
+            // then only flashes "is ready" instead of raising the window.
             if (win)
-                Main.activateWindow(win);
+                Main.activateWindow(win, global.display.get_current_time_roundtrip());
             return Boolean(win);
         },
     });

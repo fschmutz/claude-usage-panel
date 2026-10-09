@@ -19,7 +19,7 @@ test('findGtkWindow needs both the bus name and the window path to match', async
     assert.equal(findGtkWindow([a], '', '/org/gnome/Terminal/window/1'), null);
 });
 
-test('RaiseWindow activates the matching window and answers whether it found one', async (t) => {
+test('RaiseWindow activates the matching window with a server timestamp, and answers whether it found one', async (t) => {
     const raised = [];
     let impl = null;
     let exportedAt = null;
@@ -32,9 +32,12 @@ test('RaiseWindow activates the matching window and answers whether it found one
             },
         },
     };
-    stub.overrides['resource:///org/gnome/shell/ui/main.js'] = {activateWindow: (w) => raised.push(w)};
+    stub.overrides['resource:///org/gnome/shell/ui/main.js'] = {activateWindow: (w, time) => raised.push([w, time])};
     const b = win(':1.204', '/org/gnome/Terminal/window/2');
-    globalThis.global = {get_window_actors: () => [{meta_window: b}]};
+    globalThis.global = {
+        get_window_actors: () => [{meta_window: b}],
+        display: {get_current_time_roundtrip: () => 4242},
+    };
     t.after(() => {
         stub.overrides = {};
         delete globalThis.global;
@@ -43,7 +46,7 @@ test('RaiseWindow activates the matching window and answers whether it found one
     const unexport = exportFocusService();
     assert.equal(exportedAt, FOCUS_PATH);
     assert.equal(impl.RaiseWindow(':1.204', '/org/gnome/Terminal/window/2'), true);
-    assert.deepEqual(raised, [b]);
+    assert.deepEqual(raised, [[b, 4242]], 'with a real server time, or Mutter treats it as focus stealing');
     assert.equal(impl.RaiseWindow(':1.204', '/org/gnome/Terminal/window/9'), false);
     assert.equal(raised.length, 1);
     unexport();
