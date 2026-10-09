@@ -129,12 +129,16 @@ test('macOS: the app terminalChoice, auto = iTerm when installed', (t) => {
         return value;
     };
     const {home} = sandboxHome(t);
-    const iterm = path.join(home, 'iTerm.app');
-    assert.equal(resolveTerminal({platform: 'darwin', exec: defaults('terminal\n'), itermApp: iterm}), 'terminal');
-    assert.equal(resolveTerminal({platform: 'darwin', exec: defaults('iterm\n'), itermApp: iterm}), 'iterm');
-    assert.equal(resolveTerminal({platform: 'darwin', exec: defaults('auto\n'), itermApp: iterm}), 'terminal');
-    fs.mkdirSync(iterm);
-    assert.equal(resolveTerminal({platform: 'darwin', exec: defaults('auto\n'), itermApp: iterm}), 'iterm');
+    const system = path.join(home, 'system', 'iTerm.app');
+    const mine = path.join(home, 'Applications', 'iTerm.app');
+    const io = (v) => ({platform: 'darwin', exec: defaults(v), itermApps: [system, mine]});
+    assert.equal(resolveTerminal(io('terminal\n')), 'terminal');
+    assert.equal(resolveTerminal(io('iterm\n')), 'iterm');
+    assert.equal(resolveTerminal(io('auto\n')), 'terminal');
+    fs.mkdirSync(mine, {recursive: true});
+    assert.equal(resolveTerminal(io('auto\n')), 'iterm', 'an account without admin keeps iTerm in ~/Applications');
+    // the default list looks in the HOME's own Applications too
+    assert.equal(resolveTerminal({platform: 'darwin', exec: defaults('auto\n'), homedir: home}), 'iterm');
 });
 
 test('onPath: bare names on PATH, paths as given, never a directory', (t) => {

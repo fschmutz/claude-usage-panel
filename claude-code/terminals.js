@@ -26,6 +26,7 @@
 // processes to start. openTabs(io).launch() runs them.
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
@@ -235,7 +236,7 @@ function parseGVariantString(text) {
 
 /**
  * The terminal the panels would open, from the user's own setting.
- * io: platform, env, exec (execFileSync), itermApp, alternativePath. Returns a Linux
+ * io: platform, env, exec (execFileSync), itermApps, homedir, alternativePath. Returns a Linux
  * binary, 'iterm' / 'terminal' on macOS, or null when nothing is found.
  */
 export function resolveTerminal(io = {}) {
@@ -251,8 +252,10 @@ export function resolveTerminal(io = {}) {
   if (platform === 'darwin') {
     const choice = read('defaults', ['read', MAC_DEFAULTS_DOMAIN, 'terminalChoice']).trim();
     if (choice === 'iterm' || choice === 'terminal') return choice;
-    const itermApp = io.itermApp ?? '/Applications/iTerm.app';
-    return fs.existsSync(itermApp) ? 'iterm' : 'terminal';
+    // ~/Applications: where an account without admin rights installs apps
+    const itermApps = io.itermApps ?? ['/Applications/iTerm.app',
+      path.join(io.homedir ?? os.homedir(), 'Applications', 'iTerm.app')];
+    return itermApps.some((p) => fs.existsSync(p)) ? 'iterm' : 'terminal';
   }
   const installed = (bin) => onPath(bin, env.PATH);
   let alternative = null;

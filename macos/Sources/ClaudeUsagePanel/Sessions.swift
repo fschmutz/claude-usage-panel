@@ -202,8 +202,11 @@ enum TerminalLauncher {
         }
     }
 
+    /// /Applications, or ~/Applications on an account without admin rights.
     static func itermInstalled() -> Bool {
-        FileManager.default.fileExists(atPath: "/Applications/iTerm.app")
+        let fm = FileManager.default
+        let mine = fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications/iTerm.app")
+        return fm.fileExists(atPath: "/Applications/iTerm.app") || fm.fileExists(atPath: mine.path)
     }
 
     /// AppleScript that opens a new window running `command`. The command is
