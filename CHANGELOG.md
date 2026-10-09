@@ -6,6 +6,23 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-10-09
+
+### Added
+
+- **`--help` at every depth of claudectl.** `claudectl <group> <command>
+  --help` (or `-h`, or `claudectl help <group> <command>`) prints that
+  command's synopsis and a paragraph on what it does, and runs nothing.
+  A test fails the build when a listed command has no help paragraph.
+
+### Fixed
+
+- **`claudectl session open --help` no longer opens a snapshot**, and no other
+  `<command> --help` runs its command: the flag used to be dropped.
+- **`claudectl session focus` raises the gnome-terminal window** instead of
+  only flashing "is ready": the extension's `RaiseWindow` now activates it with
+  a server timestamp, which Mutter requires before it lets a window take focus.
+
 ## [3.4.0] - 2026-10-09
 
 ### Added
