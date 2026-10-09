@@ -6,6 +6,15 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.2.2] - 2026-10-09
+
+### Fixed
+
+- **The pause waiter no longer dies on an early SIGTERM.** Claude Code ends a
+  session's hooks with SIGTERM; one landing right after the waiter took its
+  lock killed it outright, leaving the lock on disk. The handler is now armed
+  before the lock is taken.
+
 ## [3.2.1] - 2026-10-09
 
 ### Fixed
