@@ -5,7 +5,7 @@
 // (session-cli.js over tabs.js), `claudectl codex …` does for OpenAI Codex
 // logins what `account` does for Claude ones (codex-cli.js over codex.js).
 // This file only dispatches and owns the process edges (exit code, stderr, the
-// TTY confirm); `main` is exported for the tests and runs when the file is
+// TTY questions); `main` is exported for the tests and runs when the file is
 // invoked directly (the install.sh shim, the npm bin symlink).
 
 import fs from 'node:fs';
@@ -21,7 +21,7 @@ const GROUPS = {account, codex, session, waiting};
 const HELP = `claudectl - Claude Code from the command line
 
   claudectl account ...   named logins: list, current, save, use, remove, refresh
-  claudectl session ...   running sessions: list, save, store, show, open, purge, autosave
+  claudectl session ...   running sessions: list, focus, save, store, show, open, purge, autosave
   claudectl codex ...     named OpenAI Codex logins: list, current, save, use, remove, usage
   claudectl waiting ...   live sessions waiting on you: list, focus
 
@@ -39,16 +39,20 @@ export async function main(argv, io = {}) {
   return cli.main(rest, io);
 }
 
-async function ttyConfirm(question) {
-  if (!process.stdin.isTTY) return false;
+// The answer typed at the terminal, or null with no terminal to ask in (a
+// pipe, a scheduler): the caller then keeps its non-interactive default.
+async function ttyAsk(question) {
+  if (!process.stdin.isTTY) return null;
   const {createInterface} = await import('node:readline/promises');
   const rl = createInterface({input: process.stdin, output: process.stdout});
   try {
-    return (await rl.question(question)).trim().toLowerCase() === 'y';
+    return await rl.question(question);
   } finally {
     rl.close();
   }
 }
+
+const ttyConfirm = async (question) => (await ttyAsk(question))?.trim().toLowerCase() === 'y';
 
 // Run when executed directly - including through the npm bin shim, which
 // invokes us via a node_modules/.bin symlink, so compare realpaths.
@@ -60,7 +64,7 @@ const invokedAs = (() => {
   }
 })();
 if (invokedAs === import.meta.url) {
-  main(process.argv.slice(2), {confirm: ttyConfirm}).then(
+  main(process.argv.slice(2), {confirm: ttyConfirm, ask: ttyAsk}).then(
     (code) => process.exit(code),
     (e) => {
       process.stderr.write(`claudectl: ${e.message}\n`);

@@ -6,14 +6,17 @@
 import os from 'node:os';
 
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
-import {AUTO_KEEP, describeLaunch, openTabs, resumePrompt, stampLabel} from './tabs.js';
+import {AUTO_KEEP, describeLaunch, matchSession, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {tabsDir} from './paths.js';
 import {openPause} from './pause.js';
 import {PAUSE_COMMANDS, PAUSE_HELP, runPause} from './pause-cli.js';
+import {focusSession} from './waiting.js';
 
 export const HELP = `claudectl session - save the running Claude Code sessions, reopen them as laid out
 
   claudectl session list [--json]            running sessions (* = the one you are in)
+  claudectl session focus [#|NAME|PID|ID]    raise that session's terminal tab;
+                                             no argument: pick from the list
   claudectl session save [LABEL] [--exclude-self]
                                              snapshot them (LABEL defaults to the time)
   claudectl session store [--json]           saved snapshots, newest first
@@ -31,6 +34,10 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
 ${PAUSE_HELP}
 
 SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
+with no SNAP, typed at a terminal, lists the newest snapshots and asks which
+(Enter = the newest; without a terminal it takes the newest). \`focus\` raises
+tmux, kitty, WezTerm, iTerm and Terminal.app tabs; gnome-terminal has no way
+to be asked for one tab, so it fails there and says so. \`open\`
 skips a session that is still running (--force to try anyway) and one whose
 directory or transcript is gone. It opens the terminal the panels use (GNOME
 preference \`terminal-command\`, then $TERMINAL, then the desktop's default
@@ -64,6 +71,18 @@ function table(out, rows, {mark = null, state = () => ''} = {}) {
   });
 }
 
+// How many snapshots \`open\` offers when it asks; any number or label from
+// \`store\` is still accepted.
+const PICK_SHOWN = 10;
+
+function storeTable(out, all) {
+  const w = Math.max(5, ...all.map((s) => s.label.length));
+  all.forEach((s, i) => {
+    out(`${String(i + 1).padStart(3)}  ${s.label.padEnd(w)}  ${when(s.savedAt)}  ` +
+      `${String(s.sessions.length).padStart(2)}  ${s.sessions.map((r) => r.name).join(', ')}\n`);
+  });
+}
+
 // --keep=N, strictly: a typo must not turn into slice(NaN), which selects
 // every snapshot for deletion.
 function wholeNumber(v, min) {
@@ -76,6 +95,8 @@ export async function main(argv, io = {}) {
   const tabs = openTabs(io);
   const out = io.stdout ?? ((s) => process.stdout.write(s));
   const confirm = io.confirm ?? (() => false);
+  // the answer typed at a terminal; null when there is none to ask in
+  const ask = io.ask ?? (async () => null);
   const args = argv.filter((a) => !a.startsWith('--'));
   const opts = Object.fromEntries(argv.filter((a) => a.startsWith('--'))
     .map((a) => {
@@ -122,11 +143,31 @@ export async function main(argv, io = {}) {
         out(`no snapshots (${tabsDir(io)})\n`);
         return 0;
       }
-      const w = Math.max(5, ...all.map((s) => s.label.length));
-      all.forEach((s, i) => {
-        out(`${String(i + 1).padStart(3)}  ${s.label.padEnd(w)}  ${when(s.savedAt)}  ` +
-          `${String(s.sessions.length).padStart(2)}  ${s.sessions.map((r) => r.name).join(', ')}\n`);
-      });
+      storeTable(out, all);
+      return 0;
+    }
+    case 'focus': {
+      const live = tabs.liveSessions();
+      if (!live.length) {
+        out('no running Claude Code session\n');
+        return 1;
+      }
+      let key = rest[0];
+      if (key === undefined) {
+        table(out, live, {mark: tabs.selfPid(live), state: (r) => tabs.blocker(r) ?? r.status});
+        key = await ask('focus which? [#, name or pid] ');
+        if (key === null) throw new Error('focus needs #, NAME, PID or a session id (no terminal to ask in)');
+        if (!key.trim()) {
+          out('aborted\n');
+          return 1;
+        }
+      }
+      const row = matchSession(live, key, {numbered: true});
+      if (!focusSession(row, io)) {
+        throw new Error(`could not raise ${row.name}: only tmux, kitty, WezTerm, iTerm and Terminal.app ` +
+          'can be asked for one tab (gnome-terminal and the others cannot)');
+      }
+      out(`focused ${row.name}\n`);
       return 0;
     }
     case 'show': {
@@ -142,7 +183,14 @@ export async function main(argv, io = {}) {
     }
     case 'open':
     case 'restore': {
-      const snap = tabs.resolve(rest[0]);
+      let ref = rest[0];
+      const all = ref === undefined ? tabs.snapshots() : [];
+      if (all.length > 1) {
+        storeTable(out, all.slice(0, PICK_SHOWN));
+        const answer = await ask('open which? [1] ');
+        if (answer !== null && answer.trim()) ref = answer.trim();
+      }
+      const snap = tabs.resolve(ref);
       const {open, skipped} = tabs.plan(snap, {only: list(opts.only), skip: list(opts.skip), force: Boolean(opts.force)});
       for (const {row, why} of skipped) out(`skip ${row.name}: ${why}\n`);
       if (!open.length) {

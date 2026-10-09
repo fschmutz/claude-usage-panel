@@ -10,9 +10,10 @@ own session:
 
 ```bash
 claudectl session list    # what is running now (* = the session you type this in)
+claudectl session focus   # pick one of them and raise its tab (or: focus API, focus 2)
 claudectl session save    # snapshot it (label = the time, or give one: save before-reboot)
 claudectl session store   # saved snapshots, newest first
-claudectl session open    # reopen the newest one: same windows, one tab per session
+claudectl session open    # pick a snapshot (Enter = newest), reopen it: same windows, one tab per session
 ```
 
 Both panels put the same thing one click away: the **Reopen** icon in the
@@ -32,7 +33,9 @@ back. A forced save of nothing open hides Reopen until the next session starts.
 schedules `claudectl session autosave` every 30 minutes (systemd user timer,
 launchd agent or cron, whichever the machine has). Autosave writes an `auto-…`
 snapshot only when the set of running sessions changed since the last one, and
-keeps the newest 48 (one day). Manual snapshots are never pruned by it.
+keeps the newest 48: a count, not an age, so with saves only on a change they
+cover a day or several. Manual snapshots are never pruned by it: to keep one,
+save it under a label (`claudectl session save before-reboot`).
 
 ```bash
 systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it scheduled
@@ -44,10 +47,11 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `claudectl session …` | What it does |
 | --- | --- |
 | `list [--json]` | Running sessions: name, session id, state, directory |
+| `focus [#\|NAME\|PID\|ID]` | Raise that session's tab (tmux, kitty, WezTerm, iTerm, Terminal.app; gnome-terminal cannot be asked for one tab). No argument at a terminal: the list, then asks which |
 | `save [LABEL] [--exclude-self]` | Snapshot the running sessions |
 | `store [--json]` | Saved snapshots, newest first, numbered |
 | `show [SNAP] [--json]` | What a snapshot holds, and which of its sessions are running |
-| `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux] [--prompt=TEXT\|--no-prompt]` | Reopen a snapshot in your terminal |
+| `open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run] [--terminal=BIN\|iterm\|terminal\|tmux] [--windows\|--tmux] [--prompt=TEXT\|--no-prompt]` | Reopen a snapshot in your terminal. No SNAP at a terminal: the 10 newest, then asks which (Enter = the newest); without a terminal, the newest |
 | `purge SNAP... \| --keep=N \| --auto \| --all [--yes]` | Delete snapshots (asks first) |
 | `autosave [--keep=N] [--force]` | What the schedule runs; `--force` (the panels' **Save**) saves now, even unchanged or empty |
 | `pause [NAME...\|--all] [--include-self] [--wait[=S]\|--no-wait] [--json]` | Send the pause protocol, follow each verdict; see [[Pause]] |

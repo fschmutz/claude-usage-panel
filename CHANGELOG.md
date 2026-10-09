@@ -6,6 +6,17 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **`claudectl session focus [#|NAME|PID|ID]`** raises a running session's tab:
+  tmux, kitty, WezTerm, iTerm and Terminal.app (gnome-terminal has no way to
+  be asked for one tab, and the error says so). With no argument at a
+  terminal it prints the list and asks which. `claudectl waiting focus` shares
+  the same name / pid / id matching.
+- **`claudectl session open` asks which snapshot** when typed at a terminal
+  with no SNAP: the 10 newest, Enter for the newest. Without a terminal (the
+  panels' Reopen, a script) it still takes the newest.
+
 ## [3.2.2] - 2026-10-09
 
 ### Fixed

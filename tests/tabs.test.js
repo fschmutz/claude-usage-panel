@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-    flagValue, isValidLabel, openTabs, resumePrompt, sameSessions, stampLabel, transcriptPath,
+    flagValue, isValidLabel, matchSession, openTabs, resumePrompt, sameSessions, stampLabel, transcriptPath,
 } from '../claude-code/tabs.js';
 import {HELP, main} from '../claude-code/session-cli.js';
 import {tabsDir} from '../claude-code/paths.js';
@@ -482,6 +482,83 @@ test('CLI: open --dry-run prints the launch, --only narrows it, nothing spawns',
     const none = await cli(io, 'open', 's');
     assert.equal(none.code, 1);
     assert.match(none.text, /skip API: already running/);
+});
+
+test('matchSession: list number, pid, id or prefix, name; a shared name is refused', () => {
+    const rows = [
+        {pid: 101, name: 'API', session_id: 'aaaa1111'},
+        {pid: 202, name: 'WEB', session_id: 'bbbb2222'},
+        {pid: 303, name: 'WEB', sessionId: 'cccc3333'},
+    ];
+    assert.equal(matchSession(rows, '2', {numbered: true}).pid, 202);
+    assert.equal(matchSession(rows, '303').pid, 303, 'not numbered: digits are a pid');
+    assert.equal(matchSession(rows, '101', {numbered: true}).pid, 101, 'past the list: a pid');
+    assert.equal(matchSession(rows, 'cccc').pid, 303);
+    assert.equal(matchSession(rows, 'API').pid, 101);
+    assert.throws(() => matchSession(rows, 'WEB'), /WEB is ambiguous \(202, 303\) - pass the pid/);
+    assert.throws(() => matchSession(rows, 'nope', {what: 'waiting'}), /no waiting session named nope/);
+    assert.throws(() => matchSession(rows, ' '), /name a session/);
+});
+
+test('CLI: focus raises the named session, or asks which with no argument', async (t) => {
+    const io = world(t, [A, B]);
+    const ran = [];
+    io.exec = (cmd, args) => {
+        ran.push([cmd, ...args].join(' '));
+        return '';
+    };
+    const byName = await cli(io, 'focus', 'WEB');
+    assert.equal(byName.code, 0);
+    assert.match(byName.text, /^focused WEB$/m);
+    assert.ok(ran.includes(`kitty @ focus-window --match pid:${B.pid}`));
+
+    const asked = [];
+    let text = '';
+    const picked = await main(['focus'], {...io, stdout: (x) => { text += x; },
+        ask: async (q) => { asked.push(q); return '1'; }});
+    assert.equal(picked, 0);
+    assert.deepEqual(asked, ['focus which? [#, name or pid] ']);
+    assert.match(text, /^\s+1\s+API .*\n\s+2\s+WEB/m);
+    assert.match(text, /^focused API$/m);
+
+    assert.equal((await main(['focus'], {...io, stdout: () => {}, ask: async () => ''})), 1, 'Enter aborts');
+    await assert.rejects(cli(io, 'focus'), /no terminal to ask in/);
+});
+
+test('CLI: focus says which terminals can be raised when none answers', async (t) => {
+    const io = world(t, [A]);
+    io.exec = () => {
+        throw new Error('kitty: not found');
+    };
+    await assert.rejects(cli(io, 'focus', 'API'), /could not raise API: .*gnome-terminal .*cannot/);
+    const none = await cli(world(t, []), 'focus', 'API');
+    assert.equal(none.code, 1);
+    assert.match(none.text, /^no running Claude Code session$/m);
+});
+
+test('CLI: open with no SNAP asks which at a terminal, Enter takes the newest', async (t) => {
+    const io = world(t, [A, B]);
+    const tabs = openTabs(io);
+    tabs.save('older');
+    tabs.save('newer');
+    const run = async (answer) => {
+        let text = '';
+        const asked = [];
+        await main(['open', '--force', '--dry-run', '--terminal=xterm', '--windows'], {...io,
+            stdout: (x) => { text += x; },
+            ask: answer === undefined ? undefined : async (q) => { asked.push(q); return answer; }});
+        return {text, asked};
+    };
+    const enter = await run('');
+    assert.deepEqual(enter.asked, ['open which? [1] ']);
+    assert.match(enter.text, /^ {2}1 {2}newer .*\n {2}2 {2}older/m);
+    assert.match(enter.text, /saved in snapshot newer/);
+    assert.match((await run('2')).text, /saved in snapshot older/);
+    assert.match((await run('old')).text, /saved in snapshot older/, 'a label prefix too');
+    const piped = await run(undefined);
+    assert.deepEqual(piped.asked, []);
+    assert.doesNotMatch(piped.text, /open which/);
+    assert.match(piped.text, /saved in snapshot newer/, 'no terminal: the newest, as before');
 });
 
 test('CLI: purge asks first, --yes skips the question, --auto and --keep select', async (t) => {
