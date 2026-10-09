@@ -65,8 +65,9 @@ node scripts/screenshots/render.mjs --check  # what CI runs; exits 1 on drift
 scripts/update-po.sh          # regenerate po/*.pot, merge into every .po
 scripts/update-po.sh --check  # the i18n-catalogs hook / CI
 
-# Release: bump the version everywhere from one source of truth
-./scripts/bump-version.sh 1.4.0
+# Release: only on a ci-gate-green commit, batched, on demand (PUBLISHING.md)
+scripts/release.sh --dry-run   # the version the commits imply, the guards
+scripts/release.sh             # bump, commit, push, wait for ci-gate, then tag
 
 # Daily auto-update worker (what the timer runs) - safe to run by hand
 ./scripts/auto-update.sh --status    # installed vs newest released tag, last check
@@ -77,9 +78,15 @@ scripts/update-po.sh --check  # the i18n-catalogs hook / CI
 ./scripts/session-ping.sh --force    # ping now, whatever the day is
 ```
 
-Auto-update reads the highest released `vX.Y.Z` tag on `origin`, so **a release
-only reaches users once the tag is pushed** - bumping `package.json` on main is
-not enough. It only ever `merge --ff-only`s, **to that tag** and not to the
+**Never tag, or hand a bump + tag, in the same push as untested code.** Work
+commits go to main with a `CHANGELOG.md` `[Unreleased]` entry and no version
+change; `scripts/release.sh` is the only release path. It cuts a version from
+the conventional commits since the last tag (breaking major, feat minor, else
+patch), refuses a lower one, and tags only once `ci-gate` is green on the
+release commit itself. `release.yml` refuses a tag whose commit is not green,
+and auto-update installs the highest `vX.Y.Z` tag on `origin` **whose GitHub
+Release exists** - bumping `package.json` on main, or a tag release.yml
+refused, reaches nobody. It only ever `merge --ff-only`s, **to that tag** and not to the
 branch tip, and skips a dirty, diverged or detached checkout rather than
 touching it; `tests/autoupdate.test.js` asserts each of those guards against a
 throwaway local bare remote (offline). `docs/install` (the curl one-liner)

@@ -1,8 +1,8 @@
 name: release
 
-# Cut a GitHub Release automatically when a version tag is pushed. The flow is:
-#   scripts/bump-version.sh X.Y.Z  →  commit  →  git tag vX.Y.Z && push --tags
-# and this workflow does the rest: build the GNOME extension zip, pull the notes
+# Cut a GitHub Release automatically when a version tag is pushed. The flow is
+# scripts/release.sh: it tags only a commit whose ci-gate is green, and this
+# workflow refuses any other (a tag pushed by hand), then does the rest: build the GNOME extension zip, pull the notes
 # for that version out of CHANGELOG.md, and publish the Release with the zip
 # attached. Re-runnable for an existing tag via "Run workflow": both jobs check
 # out that tag, whatever branch the run was dispatched from.
@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # read the tag commit's ci-gate check run
+      checks: read
     outputs:
       tag: ${{ steps.t.outputs.tag }}
     steps:
@@ -43,6 +45,22 @@ jobs:
             exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # A release ships to every checkout's auto-update: only a commit CI
+      # passed. scripts/release.sh never tags another; this is the backstop for
+      # a tag pushed by hand. Re-run from "Run workflow" once it is green.
+      - name: Refuse a tag whose commit is not ci-gate green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.t.outputs.tag }}
+        run: |
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)"
+          state="$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/check-runs?check_name=ci-gate" \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions") | .status + ":" + (.conclusion // "")] | first // "none"')"
+          if [ "$state" != "completed:success" ]; then
+            echo "::error::$TAG is commit $sha, whose ci-gate is '$state': no release for a commit CI has not passed" >&2
+            exit 1
+          fi
 
       # Build from the tag, never from the dispatching branch: a re-run for an
       # old tag that checked out main would upload main's code under that tag.

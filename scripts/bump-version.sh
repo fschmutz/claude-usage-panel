@@ -7,7 +7,8 @@
 # CHANGELOG.md gets a dated section above a fresh [Unreleased].
 #
 # Usage:  scripts/bump-version.sh 1.4.0
-# It only edits files - review the diff, then commit. Nothing is pushed.
+# It only edits files; nothing is committed or pushed. Releases go through
+# scripts/release.sh, which calls this.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,9 +38,5 @@ V="$V" DATE="$DATE" perl -pi -e '
 echo "  CHANGELOG.md → ## [$V] - $DATE (with a fresh [Unreleased])"
 
 echo
-echo "Bumped to $V. Review the diff, then commit + tag (the tag push triggers"
-echo "the release workflow, which builds the zip and creates the GitHub Release)."
-echo "Push the tag right behind the commit: plugin/.mcp.json now names v$V, and"
-echo "the plugin cannot install until that tag exists on origin:"
-echo "  git -C \"$ROOT\" add -A && git -C \"$ROOT\" commit -m \"chore(release): v$V\""
-echo "  git -C \"$ROOT\" tag v$V && git -C \"$ROOT\" push-confirm && git -C \"$ROOT\" push-confirm --tags"
+echo "Bumped to $V. This only edits files: scripts/release.sh is what commits,"
+echo "pushes, waits for ci-gate on the release commit and only then tags it."

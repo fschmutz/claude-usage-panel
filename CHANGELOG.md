@@ -6,6 +6,18 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **Releases only ever tag a commit CI passed.** `scripts/release.sh` is the
+  one release path: it checks `ci-gate` is green on `main`, takes the version
+  from the conventional commits since the last tag (breaking major, feat
+  minor, else patch; a lower one is refused), commits and pushes the bump,
+  waits for `ci-gate` on that commit and only then tags it. A red release
+  commit stays untagged and is resumed by running it again.
+- **`release.yml` refuses a tag whose commit is not `ci-gate` green**, and
+  **auto-update installs a tag only once its GitHub Release exists**: a tag
+  pushed by hand on a red commit reaches nobody.
+
 ## [3.5.0] - 2026-10-09
 
 ### Added

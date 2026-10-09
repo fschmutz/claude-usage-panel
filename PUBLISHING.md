@@ -2,13 +2,35 @@
 
 ## Cutting a release
 
-Bump the version everywhere from one command, commit, then tag:
+**A release is only ever a commit CI has passed.** The tag is what every
+checkout's daily auto-update installs, so a tag on an untested commit ships
+untested code to everyone. Fixes and features go to `main` on their own, with
+their entry under `CHANGELOG.md` `[Unreleased]`; nothing bumps the version.
+A release is a separate step, on demand, batching everything since the last
+tag:
 
 ```bash
-scripts/bump-version.sh 1.4.0
-git add -A && git commit -m "chore(release): v1.4.0"
-git tag v1.4.0 && git push-confirm && git push-confirm --tags
+scripts/release.sh             # the version the commits imply, after a y/N
+scripts/release.sh 3.6.0       # that version (refused below what they imply)
+scripts/release.sh --dry-run   # the plan; changes nothing
 ```
+
+| Step | What release.sh does | Stops when |
+| --- | --- | --- |
+| 1 | checks main, clean, equal to `origin/main`, `ci-gate` green on it | any of them is not true |
+| 2 | version from the conventional commits since the last tag: `!` / `BREAKING CHANGE` major, `feat` minor, else patch (`scripts/release-version.mjs`) | the given version is below that, or `[Unreleased]` is empty |
+| 3 | `bump-version.sh`, commits `chore(release): vX.Y.Z`, pushes main | the push is refused |
+| 4 | waits for `ci-gate` on the release commit | red or timed out: left untagged |
+| 5 | tags that commit, pushes the tag | the tag did not land |
+
+A red release commit stays untagged: re-run the failed jobs
+(`gh run rerun --failed`), then run `scripts/release.sh` again. A HEAD that is
+an untagged `chore(release)` commit is resumed at step 4.
+
+Two backstops catch a tag pushed by hand. `release.yml` refuses to build a
+Release for a tag whose commit is not `ci-gate` green (re-run it from the
+Actions tab once it is). And `auto-update.sh` installs a tag only once its
+GitHub Release exists, so a refused tag reaches nobody.
 
 `bump-version.sh` writes `package.json` (`version`), `metadata.json`
 (`version-name`), the Homebrew cask example below, and opens a dated
@@ -29,11 +51,11 @@ plugin names a release nobody can fetch. The macOS
 Developer ID and notarized if the secrets below are configured, ad-hoc signed
 otherwise - see below.
 
-**The tag is also what ships the release to existing users.** Every checkout with
-the `autoupdate` target installed (`scripts/auto-update.sh`, on by default) polls
-for the highest released `v*` tag once a day and installs it - so a version bump
-merged to `main` without a pushed tag reaches nobody. Push the tag, then the
-release is live for humans and for the daily updater alike.
+**The published Release is what ships to existing users.** Every checkout
+with the `autoupdate` target installed (`scripts/auto-update.sh`, on by
+default) looks once a day for the highest `v*` tag whose GitHub Release exists
+and installs it - so a version bump on `main` without a tag, or a tag
+release.yml refused, reaches nobody.
 
 ## GNOME - extensions.gnome.org (EGO)
 
