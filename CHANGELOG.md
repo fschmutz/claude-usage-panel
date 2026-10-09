@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-10-09
+
 ### Changed
 
 - **Releases only ever tag a commit CI passed.** `scripts/release.sh` is the
