@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-10-09
+
 ### Added
 
 - **The macOS app installs without admin rights.** When `/Applications`
