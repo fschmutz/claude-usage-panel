@@ -29,13 +29,29 @@ export const PAUSE_HELP = `
   claudectl session report --request ID --verdict SAFE|NOT_SAFE
                          [--checkpoint P] [--reason TEXT|--reason-file F|-]
                          [--session ID]
-                                             what a paused session runs to answer
+                                             what a paused session runs to answer`;
 
-Pause needs \`./install.sh pause\`: a background hook wakes an idle session
+const NEEDS_HOOKS = `Pause needs \`./install.sh pause\`: a background hook wakes an idle session
 with the request, a tool call of a busy one is held back once to hand it
-over. NAME is a session name, pid or session-id prefix; --all skips the
-session you run it from (--include-self keeps it). Run from inside a Claude
-Code session, the request says so, and each session asks you first.`;
+over.`;
+
+/** One paragraph per command, after its synopsis in `<command> --help`. */
+export const PAUSE_DETAILS = {
+  pause: `${NEEDS_HOOKS} NAME is a session name, pid or session-id prefix; --all
+skips the session you run it from (--include-self keeps it). Run from inside
+a Claude Code session, the request says so, and each session asks you first.
+Each row follows the request: delivered, then SAFE or NOT SAFE with the
+session's reason. --wait takes its value only as --wait=S.`,
+  resume: `${NEEDS_HOOKS} Every session paused and not resumed since, whichever
+request paused it: a running one gets the resume protocol, a closed one with
+a pending checkpoint is reopened in your terminal with it (--terminal=BIN
+picks the terminal, --dry-run prints and runs nothing).`,
+  'pause-status': `The last pause or resume request, from disk: one row per session with
+where its delivery and verdict stand.`,
+  report: `You do not type this: a paused session runs it to answer the request.
+--reason-file (a file, or - for stdin) keeps a reason with quotes away from
+shell quoting.`,
+};
 
 const DEFAULT_WAIT_S = 180;
 // `--wait` takes its value only as --wait=S: `pause --wait API` names API.

@@ -20,6 +20,25 @@ Claude Code sessions keep their old login until restarted. Saved logins are
 kept, mode 0600, in the accounts directory below.`;
 
 // The store's directory is the caller's (io), so it is added at print time.
+/** One paragraph per command, after its synopsis in `<command> --help`. */
+export const DETAILS = {
+  list: `Every saved account, the one Claude Code is logged in as marked, with
+each token's state (valid, stale near expiry, expired). --usage also fetches
+each account's plan usage, refreshing a stale saved token first.`,
+  current: `The saved name of the login Claude Code uses now (matched by its token,
+then its account), or a note that it is not saved.`,
+  save: `Saves the login Claude Code uses now under NAME. --force replaces an
+existing NAME. Names collide ignoring case.`,
+  use: `Makes NAME the login Claude Code uses: the current login is first saved
+back into its own profile (or parked under its email), and a stale NAME is
+refreshed before it is installed, so a failed refresh changes nothing.
+Running sessions keep their old login until restarted.`,
+  remove: `Forgets NAME. The login Claude Code uses now is not touched.`,
+  refresh: `Refreshes the stored token of NAME, or of every saved login. The login
+Claude Code uses now is never refreshed here: Claude Code holds the same
+single-use refresh token.`,
+};
+
 const helpText = (store) => `${HELP}\n  ${store.dir}`;
 
 // "S 42%  W 12%" from normalized cards; "-" for a window the account lacks,

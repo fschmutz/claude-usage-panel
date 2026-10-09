@@ -10,7 +10,7 @@ import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib
 import {AUTO_KEEP, describeLaunch, matchSession, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {tabsDir} from './paths.js';
 import {openPause} from './pause.js';
-import {PAUSE_COMMANDS, PAUSE_HELP, runPause} from './pause-cli.js';
+import {PAUSE_COMMANDS, PAUSE_DETAILS, PAUSE_HELP, runPause} from './pause-cli.js';
 import {focusSession} from './waiting.js';
 import {recordTabs, terminalWindows} from './gnome-terminal.js';
 import {windowGroups} from './terminals.js';
@@ -27,7 +27,8 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
   claudectl session open [SNAP] [--only=A,B] [--skip=A,B] [--force] [--dry-run]
                          [--terminal=BIN|iterm|terminal|tmux] [--windows|--tmux]
                          [--prompt=TEXT|--no-prompt]
-                                             reopen a snapshot, same windows and tabs
+                                             reopen a snapshot, same windows and tabs;
+                                             no SNAP at a terminal: pick one
   claudectl session purge SNAP... | --keep=N | --auto | --all [--yes]
                                              delete snapshots
   claudectl session autosave [--keep=N] [--force]
@@ -36,28 +37,63 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
                                              --force saves now, even an empty set
 ${PAUSE_HELP}
 
-SNAP is a label, a unique prefix of one, or its number in \`store\`. \`open\`
-with no SNAP, typed at a terminal, lists the newest snapshots and asks which
-(Enter = the newest; without a terminal it takes the newest). \`focus\` raises
-tmux, kitty, WezTerm, iTerm and Terminal.app tabs, and a gnome-terminal tab
-that \`open\` opened (it records which window holds which sessions; the GNOME
-extension raises the window). A tab dragged elsewhere is not followed. \`open\`
-skips a session that is still running (--force to try anyway) and one whose
-directory or transcript is gone. It opens the terminal the panels use (GNOME
-preference \`terminal-command\`, then $TERMINAL, then the desktop's default
-terminal, then the first one installed; macOS: the app's Terminal/iTerm
-choice), laid out as saved: the same
-windows, the same tabs in order. iTerm, gnome-terminal and xfce4-terminal get
-native tabs; any other terminal gets one tmux session per saved window
-(claudectl, claudectl-2, ...), each in a window of its own, or without tmux
-one window per session (--windows forces that). Each resumed session
-gets a first message telling it it was restarted: re-read where it stopped,
-re-check git / CI / jobs, re-arm its watchers, report, then carry on
-(--prompt=TEXT replaces it, --no-prompt sends none); a session paused
-with a checkpoint gets the resume protocol and its checkpoint path
-instead. \`./install.sh cli\` also schedules \`autosave\` every 30 minutes
-(keeps ${AUTO_KEEP}, one day).
+SNAP is a label, a unique prefix of one, or its number in \`store\`.
+Each command has its own page: claudectl session <command> --help
 Snapshots: ${tabsDir()}`;
+
+/** One paragraph per command, after its synopsis in `<command> --help`. */
+export const DETAILS = {
+  list: `The interactive sessions in Claude Code's registry whose process is
+really running. * marks the session you type it in. STATE is the session's
+own status, or why it cannot be saved. A \`?\` line is a claude process with
+no session id: it cannot be saved or reopened.`,
+  focus: `Brings the session's terminal window to the front with its tab selected.
+#, a name, a pid, or a session id or its prefix; a name two sessions share is
+refused (pass the pid). With no argument at a terminal it prints the list and
+asks which. Works for tmux, kitty, WezTerm, iTerm and Terminal.app tabs, and
+for gnome-terminal tabs that \`claudectl session open\` opened: it records
+which window holds which sessions in tab order, and the GNOME extension
+raises the window. A tab dragged to another position, a window opened by
+hand or from before gnome-terminal restarted is refused, never guessed.`,
+  save: `LABEL defaults to the local time (2026-09-23_192140). A labelled snapshot
+is never pruned by autosave: save one before a reboot you care about.
+--exclude-self leaves out the session you type it in.`,
+  store: `Newest first and numbered: the number is a SNAP for show, open and purge.
+Columns: label, saved at, how many sessions, their names.`,
+  show: `Every session of the snapshot, and whether it is running now or why it
+cannot be reopened (its directory or transcript is gone).`,
+  open: `With no SNAP, typed at a terminal, it lists the 10 newest snapshots and
+asks which (Enter = the newest); without a terminal (the panels' Reopen, a
+script) it takes the newest. It skips a session that is still running
+(--force to try anyway) and one whose directory or transcript is gone;
+--only / --skip narrow it by name.
+
+It opens the terminal the panels use (GNOME preference \`terminal-command\`,
+then $TERMINAL, then the desktop's default terminal, then the first one
+installed; macOS: the app's Terminal/iTerm choice), laid out as saved: the
+same windows, the same tabs in order. iTerm, gnome-terminal and
+xfce4-terminal get native tabs; any other terminal gets one tmux session per
+saved window (claudectl, claudectl-2, ...), each in a window of its own, or
+without tmux one window per session (--windows forces that). --dry-run prints
+the commands and runs nothing.
+
+Each resumed session gets a first message telling it it was restarted:
+re-read where it stopped, re-check git / CI / jobs, re-arm its watchers,
+report, then carry on (--prompt=TEXT replaces it, --no-prompt sends none). A
+session paused with a checkpoint gets the resume protocol and its checkpoint
+path instead.`,
+  purge: `Asks before deleting unless --yes. SNAP... names them; --keep=N keeps the
+newest N of all snapshots; --auto removes every \`auto-\` one; --all removes
+everything.`,
+  autosave: `What \`./install.sh cli\` schedules every 30 minutes. It writes an
+\`auto-\` snapshot only when the set of running sessions changed since the last
+one, and keeps the newest ${AUTO_KEEP} autos: a count, not an age, so they cover a day
+or several. Labelled snapshots are never pruned. It exits 1 when a running
+claude cannot be identified, so the schedule goes red instead of skipping it.`,
+  ...PAUSE_DETAILS,
+};
+
+export const ALIASES = {ls: 'list', restore: 'open', snapshots: 'store'};
 
 // Local time, like the labels: 2026-09-23 19:21.
 function when(ms) {

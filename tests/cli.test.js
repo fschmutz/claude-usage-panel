@@ -9,6 +9,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {main} from '../claude-code/claudectl.js';
+import {commandSynopsis, helpRequest} from '../claude-code/cli-help.js';
+import * as accountCli from '../claude-code/account-cli.js';
+import * as codexCli from '../claude-code/codex-cli.js';
+import * as sessionCli from '../claude-code/session-cli.js';
+import * as waitingCli from '../claude-code/waiting-cli.js';
 import {run, sandboxHome, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,6 +45,51 @@ test('each group gets the rest of the argv', async (t) => {
     assert.match((await cli(io, 'waiting', 'help')).text, /^claudectl waiting - live/);
     assert.match((await cli(io, 'account', 'list')).text, /no saved accounts/);
     assert.match((await cli(io, 'session', 'list')).text, /no running Claude Code session/);
+});
+
+test('helpRequest: --help / -h anywhere, `help` only as the first or second word', () => {
+    assert.deepEqual(helpRequest(['session', 'open', '--help']), {group: 'session', cmd: 'open'});
+    assert.deepEqual(helpRequest(['account', 'use', 'PRO', '-h']), {group: 'account', cmd: 'use'});
+    assert.deepEqual(helpRequest(['help', 'session', 'focus']), {group: 'session', cmd: 'focus'});
+    assert.deepEqual(helpRequest(['session', 'help', 'open']), {group: 'session', cmd: 'open'});
+    assert.deepEqual(helpRequest(['--help']), {group: undefined, cmd: undefined});
+    assert.equal(helpRequest(['session', 'report', '--request', 'x', '--reason', 'help']), null);
+    assert.equal(helpRequest(['session', 'open']), null);
+});
+
+const GROUPS = {account: accountCli, codex: codexCli, session: sessionCli, waiting: waitingCli};
+
+test('every command a group lists has its own --help page with a details paragraph', async (t) => {
+    const io = sandboxHome(t);
+    for (const [group, cli_] of Object.entries(GROUPS)) {
+        const cmds = [...cli_.HELP.matchAll(new RegExp(`^\\s*claudectl ${group} \\[?([a-z][a-z-]*)`, 'gm'))].map((m) => m[1]);
+        assert.ok(cmds.length > 1, group);
+        assert.deepEqual(Object.keys(cli_.DETAILS).sort(), [...new Set(cmds)].sort(),
+            `${group}: DETAILS must cover exactly the commands its HELP lists`);
+        for (const cmd of cmds) {
+            assert.ok(commandSynopsis(cli_.HELP, group, cmd), `${group} ${cmd}`);
+            const r = await cli(io, group, cmd, '--help');
+            assert.equal(r.code, 0, `${group} ${cmd} --help`);
+            assert.ok(r.text.includes(cli_.DETAILS[cmd].trim().split('\n')[0]), `${group} ${cmd} prints its details`);
+            assert.match(r.text, new RegExp(`All ${group} commands: claudectl ${group} --help`));
+        }
+    }
+});
+
+test('--help never runs the command, at any depth, and aliases resolve', async (t) => {
+    const io = sandboxHome(t);
+    io.spawn = () => assert.fail('--help must not launch anything');
+    io.exec = () => assert.fail('--help must not run anything');
+    for (const argv of [['session', 'open', '--help'], ['session', 'purge', '--all', '-h'],
+        ['account', 'use', 'PRO', '--help'], ['session', 'pause', '--all', '--help'], ['help', 'codex', 'use']]) {
+        const r = await cli(io, ...argv);
+        assert.equal(r.code, 0, argv.join(' '));
+        assert.match(r.text, /^ {2}claudectl /, argv.join(' '));
+    }
+    assert.match((await cli(io, 'session', 'ls', '--help')).text, /claudectl session list/);
+    assert.match((await cli(io, 'session', 'restore', '--help')).text, /claudectl session open/);
+    assert.match((await cli(io, 'session', '--help')).text, /^claudectl session - save/);
+    await assert.rejects(cli(io, 'session', 'nope', '--help'), /unknown command session nope/);
 });
 
 test('an unknown group or an old flat command is refused with the help', async (t) => {

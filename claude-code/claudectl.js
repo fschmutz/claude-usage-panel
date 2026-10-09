@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 import * as account from './account-cli.js';
+import {commandHelp, helpRequest} from './cli-help.js';
 import * as codex from './codex-cli.js';
 import * as session from './session-cli.js';
 import * as waiting from './waiting-cli.js';
@@ -25,18 +26,36 @@ const HELP = `claudectl - Claude Code from the command line
   claudectl codex ...     named OpenAI Codex logins: list, current, save, use, remove, usage
   claudectl waiting ...   live sessions waiting on you: list, focus
 
-  claudectl <group> help  the commands of one group`;
+  claudectl <group> --help            the commands of one group
+  claudectl <group> <command> --help  one command, in full (help and -h work too)`;
 
 export async function main(argv, io = {}) {
   const out = io.stdout ?? ((s) => process.stdout.write(s));
+  // answered before any command runs: `session open --help` must not open
+  const asked = helpRequest(argv);
+  if (asked) return help(asked, out, io);
   const [group, ...rest] = argv;
-  if (group === undefined || group === 'help' || group === '-h' || group === '--help') {
+  if (group === undefined) {
     out(`${HELP}\n`);
     return 0;
   }
   const cli = GROUPS[group];
   if (!cli) throw new Error(`unknown command ${group}\n${HELP}`);
   return cli.main(rest, io);
+}
+
+async function help({group, cmd}, out, io) {
+  if (group === undefined) {
+    out(`${HELP}\n`);
+    return 0;
+  }
+  const cli = GROUPS[group];
+  if (!cli) throw new Error(`unknown command ${group}\n${HELP}`);
+  if (cmd === undefined) return cli.main(['help'], io);
+  const page = commandHelp({help: cli.HELP, details: cli.DETAILS, aliases: cli.ALIASES}, group, cmd);
+  if (!page) throw new Error(`unknown command ${group} ${cmd} - claudectl ${group} --help lists them`);
+  out(`${page}\n`);
+  return 0;
 }
 
 // The answer typed at the terminal, or null with no terminal to ask in (a

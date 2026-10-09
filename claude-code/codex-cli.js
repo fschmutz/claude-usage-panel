@@ -31,6 +31,21 @@ Codex CLI itself recorded on its last turn. They are real figures, read at that
 moment and not now, and are labelled est. accordingly.`;
 
 // The store's directories are the caller's (io), so they are added at print time.
+/** One paragraph per command, after its synopsis in `<command> --help`. */
+export const DETAILS = {
+  list: `Every saved Codex login, the active one marked. A login is its ChatGPT
+workspace AND user: Team members share the workspace id. Listing never writes.`,
+  current: `The saved name of the auth.json the Codex CLI uses now, or a note that it
+is not saved.`,
+  save: `Saves the current $CODEX_HOME/auth.json under NAME. --force replaces an
+existing NAME.`,
+  use: `Installs NAME as $CODEX_HOME/auth.json, after saving the current login
+back into its own name. Running Codex processes keep the old login.`,
+  remove: `Forgets NAME. The active auth.json is not touched.`,
+  usage: `The newest rate limits the Codex CLI wrote into its session transcripts:
+real figures, read at that moment and not now, so labelled est.`,
+};
+
 const helpText = (store) => `${HELP}\n\n  logins:   ${store.dir}\n  reads:    ${store.authPath}`;
 
 const WHY = {

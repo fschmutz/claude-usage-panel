@@ -15,6 +15,15 @@ PreToolUse, PostToolUse and SessionEnd clear the mark. Dead pids, and a
 pid reused by a later session, are ignored. Focus by pid when two sessions
 share a name.`;
 
+/** One paragraph per command, after its synopsis in `<command> --help`. */
+export const DETAILS = {
+  list: `Live sessions blocked on you, oldest wait first: a permission prompt, a
+question, or idle at the prompt. Needs \`./install.sh waiting\` (the hooks
+that mark them).`,
+  focus: `Raises that waiting session's terminal tab, the same way \`claudectl
+session focus\` does. By pid when two sessions share a name.`,
+};
+
 function table(out, rows) {
   const w = Math.max(4, ...rows.map((r) => r.name.length));
   out(`  ${'NAME'.padEnd(w)}  REASON       AGE   CWD\n`);

@@ -14,6 +14,7 @@ claudectl session focus   # pick one of them and raise its tab (or: focus API, f
 claudectl session save    # snapshot it (label = the time, or give one: save before-reboot)
 claudectl session store   # saved snapshots, newest first
 claudectl session open    # pick a snapshot (Enter = newest), reopen it: same windows, one tab per session
+claudectl session open --help   # any command's own page (-h, or: claudectl help session open)
 ```
 
 Both panels put the same thing one click away: the **Reopen** icon in the

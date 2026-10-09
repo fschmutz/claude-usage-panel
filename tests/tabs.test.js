@@ -10,7 +10,7 @@ import path from 'node:path';
 import {
     flagValue, isValidLabel, matchSession, openTabs, resumePrompt, sameSessions, stampLabel, transcriptPath,
 } from '../claude-code/tabs.js';
-import {HELP, main} from '../claude-code/session-cli.js';
+import {DETAILS, main} from '../claude-code/session-cli.js';
 import {tabsDir} from '../claude-code/paths.js';
 import {TMUX_SESSION} from '../claude-code/terminals.js';
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
@@ -650,9 +650,9 @@ test('the GNOME summary picks the newest snapshot the CLI lists first', async (t
     assert.deepEqual(summarizeSnapshots([]), {count: 0, autos: 0, newest: null});
 });
 
-test('HELP names every step pickTerminal takes, in its order', () => {
+test('open --help names every step pickTerminal takes, in its order', () => {
     // terminals.js pickTerminal: setting, $TERMINAL, desktop default, first installed
-    assert.match(HELP.replace(/\s+/g, ' '),
+    assert.match(DETAILS.open.replace(/\s+/g, ' '),
         /terminal-command`, then \$TERMINAL, then the desktop's default terminal, then the first one installed/);
 });
 

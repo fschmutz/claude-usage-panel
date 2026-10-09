@@ -202,6 +202,7 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
 ├── layout.js           # which window and tab each session sits in (tmux, kitty, WezTerm, iTerm, Terminal.app)
 ├── gnome-terminal.js   # the windows and tab order `session open` created there; focus selects the tab
+├── cli-help.js         # --help at every depth of claudectl, answered before any command runs
 ├── tools.js            # finding and querying tmux / ps / osascript from a scheduler's minimal PATH
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── codex-cli.js        # `claudectl codex`: the CLI over the Codex store
