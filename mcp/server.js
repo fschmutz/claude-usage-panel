@@ -32,7 +32,7 @@ import {WAITING_TOOL, getWaiting} from './waiting.js';
 import {withTrend} from './warehouse.js';
 
 // Bumped by scripts/bump-version.sh - keep in sync with package.json.
-export const VERSION = '3.2.2';
+export const VERSION = '3.3.0';
 
 // Newest first; initialize echoes the client's requested version when we
 // support it, otherwise answers with our newest (per the MCP spec).

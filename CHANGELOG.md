@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-09
+
 ### Added
 
 - **`claudectl session focus [#|NAME|PID|ID]`** raises a running session's tab:
