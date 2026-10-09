@@ -273,10 +273,39 @@ mark_update_pending() {
 # Both results are globals, not stdout: a `$(...)` would run the lookup in a
 # subshell and the error would die with it, which is exactly how every failure
 # came back as an empty string in the first place.
+# A tag is installed only once its GitHub Release exists: release.yml
+# publishes one only for a commit whose ci-gate is green, so a tag pushed by
+# hand on a red commit (which release.yml refuses) never reaches anyone.
+# 0 published, 1 not (yet), 2 cannot tell. CUP_RELEASE_PROBE replaces the
+# check (the tests). An origin that is not on GitHub has no Releases: there
+# the tag is the release, as before.
+release_published() {
+    local tag="$1" url slug code
+    if [ -n "${CUP_RELEASE_PROBE:-}" ]; then
+        "$CUP_RELEASE_PROBE" "$tag" && return 0 || return $?
+    fi
+    url="$(git -C "$ROOT" remote get-url origin 2>/dev/null)" || return 2
+    case "$url" in
+        *github.com[:/]*)
+            slug="${url#*github.com[:/]}"
+            slug="${slug%.git}"
+            ;;
+        *) return 0 ;;
+    esac
+    command -v curl >/dev/null 2>&1 || return 2
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+        "https://github.com/$slug/releases/tag/v$tag" 2>/dev/null)" || return 2
+    case "$code" in
+        200) return 0 ;;
+        404) return 1 ;;
+        *) return 2 ;;
+    esac
+}
+
 LATEST_REMOTE=""
 REMOTE_ERROR=""
 lookup_remote() {
-    local ref tag best="" out status=0
+    local ref tag best="" out status=0 tags="" rc
     LATEST_REMOTE=""
     REMOTE_ERROR=""
     out="$(git -C "$ROOT" ls-remote --tags --refs origin 'v*' 2>&1)" || status=$?
@@ -294,10 +323,23 @@ lookup_remote() {
         tag="${ref#refs/tags/}"
         tag="${tag#v}"
         [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
-        if [ -z "$best" ] || [ "$(version_compare "$tag" "$best")" = "1" ]; then
-            best="$tag"
-        fi
+        tags="$tags$tag"$'\n'
     done <<<"$out"
+    # Newest first; the first one with a published Release wins.
+    for tag in $(printf '%s' "$tags" | sort -t. -k1,1nr -k2,2nr -k3,3nr); do
+        rc=0
+        release_published "$tag" || rc=$?
+        if [ "$rc" -eq 0 ]; then
+            best="$tag"
+            break
+        fi
+        if [ "$rc" -eq 1 ]; then
+            log "v$tag is tagged but has no published release (red CI, or still publishing) - skipped"
+            continue
+        fi
+        REMOTE_ERROR="cannot confirm v$tag has a published release on GitHub"
+        return 0
+    done
     LATEST_REMOTE="$best"
     [ -n "$best" ] || REMOTE_ERROR="the remote has no vX.Y.Z release tag"
 }

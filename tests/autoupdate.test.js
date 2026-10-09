@@ -125,6 +125,40 @@ test('--check reports an available update with exit code 10', (t) => {
     assert.match(r.stdout, /update available: v1\.5\.0 → v1\.6\.0/);
 });
 
+// A probe standing in for the GitHub Release lookup: `published` answer 0,
+// `unknown` 2, anything else 1 (tagged, no Release).
+function probe(c, {published = [], unknown = []}) {
+    const file = path.join(c.dir, 'probe.sh');
+    fs.writeFileSync(file, `#!/bin/sh
+case " ${published.join(' ')} " in *" $1 "*) exit 0 ;; esac
+case " ${unknown.join(' ')} " in *" $1 "*) exit 2 ;; esac
+exit 1
+`, {mode: 0o755});
+    return file;
+}
+
+test('a tag without a published GitHub Release is never offered: the newest released one is', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.4.0', tags: ['v1.4.0', 'v1.5.0', 'v1.6.0']});
+    const r = run('bash', [path.join(c.work, 'scripts', 'auto-update.sh'), '--check'], {
+        env: {...env(c.dir), CUP_RELEASE_PROBE: probe(c, {published: ['1.4.0', '1.5.0']})}, cwd: c.work,
+    });
+    assert.equal(r.status, 10);
+    assert.match(r.stdout, /update available: v1\.4\.0 → v1\.5\.0/, 'v1.6.0 has no Release: skipped');
+    const none = run('bash', [path.join(c.work, 'scripts', 'auto-update.sh'), '--check'], {
+        env: {...env(c.dir), CUP_RELEASE_PROBE: probe(c, {published: ['1.4.0']})}, cwd: c.work,
+    });
+    assert.equal(none.status, 0, 'nothing newer is published: up to date');
+});
+
+test('a Release that cannot be confirmed (GitHub unreachable) installs nothing', (t) => {
+    const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0', 'v1.6.0']});
+    const r = run('bash', [path.join(c.work, 'scripts', 'auto-update.sh'), '--check'], {
+        env: {...env(c.dir), CUP_RETRY_TRIES: '1', CUP_RELEASE_PROBE: probe(c, {unknown: ['1.6.0']})}, cwd: c.work,
+    });
+    assert.notEqual(r.status, 10);
+    assert.match(r.stdout + r.stderr, /cannot confirm v1\.6\.0 has a published release/);
+});
+
 test('--check is quiet and exits 0 when the newest tag is already installed', (t) => {
     const c = makeCheckout(t, {localVersion: '1.6.0', tags: ['v1.5.0', 'v1.6.0']});
     const r = runScript(c, ['--check']);
