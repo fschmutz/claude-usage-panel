@@ -122,6 +122,13 @@ final class UsageModel: ObservableObject {
     @Published var showAutoSwitchInMenu: Bool {
         didSet { UserDefaults.standard.set(showAutoSwitchInMenu, forKey: "showAutoSwitchInMenu") }
     }
+    /// Show each saved login's email on its own line under the name in the
+    /// popup; off keeps it in the row's tooltip only.
+    @Published var showAccountEmailInMenu: Bool {
+        didSet {
+            UserDefaults.standard.set(showAccountEmailInMenu, forKey: "showAccountEmailInMenu")
+        }
+    }
 
     // Today's sessions: the work the plan was actually spent on, ranked by the
     // tokens each one burned, each resumable in a terminal with one click.
@@ -216,6 +223,8 @@ final class UsageModel: ObservableObject {
             UserDefaults.standard.object(forKey: "showAccountInMenuBar") as? Bool ?? true
         showAutoSwitchInMenu =
             UserDefaults.standard.object(forKey: "showAutoSwitchInMenu") as? Bool ?? true
+        showAccountEmailInMenu =
+            UserDefaults.standard.object(forKey: "showAccountEmailInMenu") as? Bool ?? true
         // Key lives in the Keychain. Migrate a value stored in UserDefaults by
         // pre-Keychain versions once, then scrub it from the plist.
         if let legacy = UserDefaults.standard.string(forKey: "cursorApiKey"), !legacy.isEmpty {
