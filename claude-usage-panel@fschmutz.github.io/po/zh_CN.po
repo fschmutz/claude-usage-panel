@@ -692,6 +692,14 @@ msgstr "未找到 Claude Code 登录"
 msgid "login expired - sign in and save it again"
 msgstr "登录已过期 - 请重新登录并再次保存"
 
+#: prefs/accounts.js:89
+msgid "Rename"
+msgstr "重命名"
+
+#: prefs/accounts.js:98
+msgid "Rename this saved login"
+msgstr "重命名此已保存的登录"
+
 #: prefs/accounts.js:105
 msgid "Forget this saved login"
 msgstr "忘记此已保存的登录"

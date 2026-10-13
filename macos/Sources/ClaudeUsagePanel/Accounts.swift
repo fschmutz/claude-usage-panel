@@ -246,6 +246,19 @@ extension UsageModel {
         }
     }
 
+    func renameAccount(_ from: String, to: String) {
+        Task {
+            do {
+                let p = try await AccountStore.renameProfile(from, to: to)
+                accountsError = nil
+                setOutcome("rename:\(p.name)", ok: true, "renamed from \(from)")
+                await refreshAccounts()
+            } catch {
+                setOutcome("rename:\(from)", ok: false, error.localizedDescription)
+            }
+        }
+    }
+
     // MARK: - Notice repairs
     //
     // Every notice carries exactly one action, and this is where each one is

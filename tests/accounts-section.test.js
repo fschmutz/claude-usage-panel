@@ -495,3 +495,29 @@ test('a refresh the token endpoint answers 503 leaves the row unreachable, not r
     assert.equal(row.health, 'unreachable');
     assert.deepEqual(c._state.notices.map(n => [n.kind, n.action]), [['unreachable', 'retry']]);
 });
+
+test('renameProfile moves the profile and its cached entries under the refresh lock', async t => {
+    const {files} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PRO.json`]: profile('PRO', 'u-pro'),
+            [`${ACCOUNTS}/PERSO.json`]: profile('PERSO', 'u-perso'),
+            [`${ACCOUNTS}/.usage-cache.json`]: JSON.stringify({at: 1, accounts: {PRO: {worst: 40}}}),
+            [`${ACCOUNTS}/.weekly-resets.json`]: JSON.stringify({PRO: 5, PERSO: 6}),
+            ...liveLogin('PRO', 'u-pro'),
+        },
+    });
+    const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
+    assert.equal((await store.renameProfile('PRO', 'WORK')).name, 'WORK');
+    assert.deepEqual(store.listProfiles().map(p => p.name), ['PERSO', 'WORK']);
+    assert.equal(`${ACCOUNTS}/PRO.json` in files, false);
+    assert.equal(store.liveAccountName(), 'WORK');
+    assert.deepEqual(JSON.parse(files[`${ACCOUNTS}/.usage-cache.json`]).accounts, {WORK: {worst: 40}});
+    assert.deepEqual(JSON.parse(files[`${ACCOUNTS}/.weekly-resets.json`]), {PERSO: 6, WORK: 5});
+    assert.equal(Object.keys(files).some(f => f.includes('/.refresh-')), false, 'the lock is released');
+
+    await store.renameProfile('WORK', 'Work');
+    assert.deepEqual(store.listProfiles().map(p => p.name), ['PERSO', 'Work']);
+    await assert.rejects(store.renameProfile('Work', 'perso'), /PERSO already exists/);
+    files[`${ACCOUNTS}/.switch-pending.json`] = JSON.stringify({at: 1, from: 'Work', to: 'PERSO'});
+    await assert.rejects(store.renameProfile('Work', 'X'), /switch to PERSO did not finish/);
+});

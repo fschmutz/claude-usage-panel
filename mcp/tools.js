@@ -317,6 +317,29 @@ export const ACCOUNT_TOOLS = [
     },
     annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true},
   },
+  {
+    name: 'rename_account',
+    title: 'Rename a saved Claude account',
+    description:
+      'Rename a saved account, keeping its login, its cached usage and its kept ' +
+      'weekly reset. The current Claude Code login is not touched. The new name ' +
+      'must be free, ignoring case; changing only the case is fine.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from: {type: 'string', pattern: NAME_RE.source},
+        to: {type: 'string', pattern: NAME_RE.source},
+      },
+      required: ['from', 'to'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {from: {type: 'string'}, to: {type: 'string'}},
+      required: ['from', 'to'],
+    },
+    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false},
+  },
 ];
 
 // One line: "Account: PRO (pro@example.com, max)".
@@ -382,6 +405,13 @@ export async function callAccountTool(name, args, store) {
           (r.running ? ` ${r.running} Claude Code session${r.running > 1 ? 's are' : ' is'} still running on the old login - including this one - and will use ${r.to} once restarted.` : '')
         : `**${r.to}** is already the current login.`;
       return {content: [{type: 'text', text}], structuredContent: r};
+    }
+    case 'rename_account': {
+      const p = await store.renameProfile(args?.from, args?.to);
+      return {
+        content: [{type: 'text', text: `Renamed **${args?.from}** → **${p.name}**.`}],
+        structuredContent: {from: args?.from, to: p.name},
+      };
     }
     default:
       throw new Error(`Unknown account tool: ${name}`);

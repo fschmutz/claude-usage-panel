@@ -6,6 +6,18 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Rename a saved account without removing it.** `claudectl account rename
+  NAME NEW`, the `rename_account` MCP tool, a pencil per login in the GNOME
+  preferences and a **Rename** button in macOS Settings. The login, its cached
+  usage and its kept weekly reset move with it; `~/.claude` is not touched.
+  NEW must be free ignoring case (changing only the case is fine), and a
+  rename is refused while a switch is unfinished. It runs under the login's
+  refresh lock so a concurrent refresh cannot write the old file back. The
+  rule is `renameRefusal` / `renameKey`, pinned in every port by
+  `tests/fixtures/accounts.json`.
+
 ## [3.10.1] - 2026-10-13
 
 ### Fixed

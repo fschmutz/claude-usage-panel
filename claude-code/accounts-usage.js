@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  REFRESH_LOCK, refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, tokenState,
+  REFRESH_LOCK, refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, renameKey, tokenState,
   usageCacheEntry,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {normalizeExtraUsage, normalizeUsage, usageFailure} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
@@ -37,6 +37,9 @@ const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
 const USAGE_CACHE_MAX_AGE_MS = 30 * 60_000;
 const FETCH_TIMEOUT_MS = 10_000;
 const USAGE_CACHE_FILE = '.usage-cache.json';
+// The panels' kept weekly reset per account ({NAME: epochMs}); the Node side
+// only carries its entries across a rename.
+const WEEKLY_RESETS_FILE = '.weekly-resets.json';
 
 /**
  * An error the UI has to classify rather than just print. `code` is the string
@@ -308,8 +311,31 @@ export function bindUsage(ctx) {
     return cache.accounts && typeof cache.accounts === 'object' ? cache : null;
   }
 
+  /** Run `fn` holding `name`'s refresh lock, so no refresh rewrites the
+   *  profile while `fn` moves it. */
+  async function withRefreshLock(name, fn) {
+    const lock = await acquireLock(name);
+    try {
+      return fn();
+    } finally {
+      releaseLock(lock);
+    }
+  }
+
+  // A renamed account keeps its cached usage and its kept weekly reset.
+  function renameCacheEntries(from, to) {
+    const cachePath = path.join(dir, USAGE_CACHE_FILE);
+    const cache = readJSON(cachePath);
+    if (cache?.accounts && Object.hasOwn(cache.accounts, from)) {
+      writePrivate(cachePath, JSON.stringify({...cache, accounts: renameKey(cache.accounts, from, to)}));
+    }
+    const resetsPath = path.join(dir, WEEKLY_RESETS_FILE);
+    const resets = readJSON(resetsPath);
+    if (resets && Object.hasOwn(resets, from)) writePrivate(resetsPath, JSON.stringify(renameKey(resets, from, to)));
+  }
+
   return {
     refreshProfile, accessTokenFor, fetchUsageWith, fetchLiveUsage, usageFor, usageForAll,
-    writeUsageCache, readUsageCache,
+    writeUsageCache, readUsageCache, withRefreshLock, renameCacheEntries,
   };
 }

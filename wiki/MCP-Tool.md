@@ -15,7 +15,8 @@ Zero dependencies, stdio transport. `get_usage` and `list_accounts` read the
 live login (`~/.claude/.credentials.json` on Linux, the login Keychain on
 macOS) and write only the account store (the live login's profile when Claude
 Code rotated its token, a stale profile's refreshed token) and caches;
-`save_account` writes one profile file; `switch_account` replaces the live
+`save_account` writes one profile file; `rename_account` moves one (and its
+cached entries); `switch_account` replaces the live
 credentials (file or Keychain item) and the `oauthAccount` block of
 `~/.claude.json`, only when you ask for the switch.
 
@@ -100,6 +101,7 @@ Three more tools manage the saved logins (every install form has them):
 | --- | --- |
 | `list_accounts` | Every saved login with its plan usage (read with that account's own stored token, refreshed when needed), which one is active, and its `tokenState` (`valid` / `stale` / `expired`). Never touches the live login; writes only refreshed tokens and the usage snapshot to the account store. |
 | `save_account {name, force?}` | Save the login Claude Code holds now under `name`. |
+| `rename_account {from, to}` | Rename a saved account; its login, cached usage and kept weekly reset move with it. The current login is not touched. |
 | `switch_account {name}` | Make a saved account the current login. The reply says how many Claude Code sessions are still running on the old login - including the one you are asking from, which keeps its login until restarted. |
 
 So *"switch me to PERSO"* works in the conversation. Ask *"which account has

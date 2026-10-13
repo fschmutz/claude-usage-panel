@@ -232,7 +232,7 @@ install_mcp() {
         return 0
     fi
     ok "installed to $dest - ask 'how much of my plan have I used?' in either app"
-    echo "  Saved accounts show up as list_accounts / save_account / switch_account tools."
+    echo "  Saved accounts show up as list_accounts / save_account / switch_account / rename_account tools."
 }
 
 uninstall_mcp() {

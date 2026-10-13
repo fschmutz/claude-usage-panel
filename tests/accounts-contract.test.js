@@ -111,3 +111,10 @@ test('keepWeeklyResets matches the shared fixture', () => {
 test('usageCacheEntry: worst, session and weekly-all of one account', () => {
     for (const c of FIX.usageCacheEntry) assert.deepEqual(accounts.usageCacheEntry(c.cards, NOW), c.expected, c.name);
 });
+test('renameRefusal: invalid, then missing, then a pending switch, then a taken name', () => {
+    for (const c of FIX.renameRefusal)
+        assert.deepEqual(accounts.renameRefusal(profiles, c.from, c.to, c.pending), c.expected, c.name);
+});
+test('renameKey moves one entry of a name-keyed map', () => {
+    for (const c of FIX.renameKey) assert.deepEqual(accounts.renameKey(c.map, c.from, c.to), c.expected, c.name);
+});

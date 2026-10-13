@@ -16,8 +16,8 @@ claudectl account use PRO         # from now on: no browser, no logout
 Every client shows the same thing: the GNOME dropdown and the macOS menu list
 the saved accounts with each one's usage and switch on a click, the status line
 tags the session with its account (`[PRO]`), and the MCP tool grows
-`list_accounts` / `save_account` / `switch_account` so you can say *"switch me
-to PERSO"* in the conversation.
+`list_accounts` / `save_account` / `switch_account` / `rename_account` so you
+can say *"switch me to PERSO"* in the conversation.
 
 ## Install
 
@@ -79,8 +79,13 @@ One file per account, mode `0600`, in a `0700` directory:
 Names are one path segment: letters, digits, `.` `_` `-`, up to 32 characters,
 no leading dot or dash. Names are case-insensitive: `pro` and `PRO` are the
 same account (the macOS disk is), so a name differing from a saved one only by
-case is refused. `remove NAME` forgets one; `--uninstall accounts` keeps
-them (delete the folder yourself).
+case is refused. `rename NAME NEW` renames one (also a pencil in the GNOME
+preferences and a **Rename** button in macOS Settings): the login, its cached
+usage and its kept weekly reset move with it, `~/.claude` is not touched, and
+NEW must be free ignoring case - changing only the case is fine. A rename runs
+under that login's refresh lock and is refused while a switch is unfinished.
+`remove NAME` forgets one; `--uninstall accounts` keeps them (delete the
+folder yourself).
 
 ## Token refresh - the one thing written outside `~/.claude`
 
@@ -143,7 +148,7 @@ Settings:
 | *NAME*: login expired / the stored login was refused | see the table above | **Copy sign-in command** (`claude auth login`) |
 | *NAME*: no usage reading right now | `unreachable` | **Retry** |
 
-The answer to pressing one of those - and to a switch, a save or a remove -
+The answer to pressing one of those - and to a switch, a save, a rename or a remove -
 appears beside the control that caused it and clears itself after a few seconds
 or on the next action.
 
@@ -179,6 +184,7 @@ claudectl account list [--usage] [--json]         saved accounts, the active one
 claudectl account current [--json]                the active account's name (exit 1 if unsaved)
 claudectl account save NAME [--force]             save the current login as NAME
 claudectl account use NAME [--json]               make NAME the current login
+claudectl account rename NAME NEW                 rename a saved account
 claudectl account remove NAME                     forget a saved account
 claudectl account refresh [NAME]                  refresh the stored token(s) now
 ```

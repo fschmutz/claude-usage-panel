@@ -143,6 +143,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── Model.swift               # normalization, pace, forecast
     │   ├── CursorModel.swift         # Cursor spend math
     │   ├── Accounts.swift            # named-account rules
+    │   ├── AccountRename.swift       # rename rules (renameRefusal, renameKey)
     │   ├── Notices.swift             # account health, inline notices, button outcomes, rotation
     │   ├── Codex.swift               # named OpenAI Codex logins (twin of pure/codex.js)
     │   ├── Warehouse.swift           # the 90-day history rules

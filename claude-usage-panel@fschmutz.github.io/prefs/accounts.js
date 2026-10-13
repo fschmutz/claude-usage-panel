@@ -8,7 +8,7 @@ import Gtk from 'gi://Gtk';
 import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {accountSummary, isValidName} from '../lib/pure.js';
 import {
-    listProfiles, liveAccountName, readLiveAccount, removeProfile, saveCurrent,
+    listProfiles, liveAccountName, readLiveAccount, removeProfile, renameProfile, saveCurrent,
 } from '../lib/accounts.js';
 
 // ── Saved accounts ──────────────────────────────────────────────────────
@@ -75,12 +75,45 @@ export function buildAccountsGroups(prefs, settings, page) {
     settings.bind('panel-show-account', showRow, 'active', 0);
     accounts.add(showRow);
 
-    // One row per saved login, rebuilt after every save or remove.
+    // One row per saved login, rebuilt after every save, rename or remove.
     const listGroup = new Adw.PreferencesGroup();
     page.add(listGroup);
     for (const w of [loginRow, saveRow, autoRow, thresholdRow, menuToggleRow, showRow, listGroup])
         settings.bind('accounts-enabled', w, 'visible', 0);
     const accountRows = [];
+    // A pencil per row opening a one-entry popover: the new name, Enter or
+    // the button renames. The store keeps the login, its cached usage and its
+    // weekly reset; nothing in ~/.claude changes.
+    const renameButton = name => {
+        const entry = new Gtk.Entry({text: name, width_chars: 16});
+        const apply = new Gtk.Button({label: _('Rename')});
+        const box = new Gtk.Box({spacing: 6});
+        box.append(entry);
+        box.append(apply);
+        const popover = new Gtk.Popover({child: box});
+        const button = new Gtk.MenuButton({
+            icon_name: 'document-edit-symbolic',
+            valign: Gtk.Align.CENTER,
+            has_frame: false,
+            tooltip_text: _('Rename this saved login'),
+            popover,
+        });
+        const rename = async () => {
+            const to = entry.text.trim();
+            popover.popdown();
+            errorRow.visible = false;
+            try {
+                await renameProfile(name, to);
+            } catch (e) {
+                errorRow.title = e.message;
+                errorRow.visible = true;
+            }
+            renderAccounts();
+        };
+        apply.connect('clicked', () => rename().catch(logError));
+        entry.connect('activate', () => rename().catch(logError));
+        return button;
+    };
     const renderAccounts = () => {
         accountRows.splice(0).forEach(row => listGroup.remove(row));
         const live = readLiveAccount();
@@ -113,6 +146,7 @@ export function buildAccountsGroups(prefs, settings, page) {
                 }
                 renderAccounts();
             });
+            row.add_suffix(renameButton(profile.name));
             row.add_suffix(remove);
             listGroup.add(row);
             accountRows.push(row);

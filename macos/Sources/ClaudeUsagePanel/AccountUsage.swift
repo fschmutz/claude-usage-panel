@@ -128,6 +128,16 @@ extension AccountStore {
         try? FileManager.default.removeItem(at: lock.url)
     }
 
+    /// Run `body` holding `name`'s refresh lock, so no refresh rewrites the
+    /// profile while `body` moves it.
+    static func withRefreshLock<T: Sendable>(
+        _ name: String, _ body: @Sendable () throws -> T
+    ) async throws -> T {
+        let lock = try await acquireRefreshLock(name)
+        defer { releaseRefreshLock(lock) }
+        return try body()
+    }
+
     // MARK: token refresh (our store only)
 
     /// The token exchange itself: the new OAuth block, or a coded throw.
@@ -294,10 +304,30 @@ extension AccountStore {
     // Each account's weekly reset, kept past the poll that read it, so a
     // login that cannot be read right now still shows when its week restarts.
     // Same file and shape as GNOME ({NAME: epochMs}); keepWeeklyResets decides.
+    static var weeklyResetsURL: URL { directory.appendingPathComponent(".weekly-resets.json") }
+
+    // A renamed account keeps its cached usage and its kept weekly reset.
+    static func renameCacheEntries(from: String, to: String) {
+        if var cache = readJSON(usageCacheURL) as? [String: Any],
+            let accounts = cache["accounts"] as? [String: Any], accounts[from] != nil
+        {
+            cache["accounts"] = Accounts.renameKey(accounts, from: from, to: to)
+            if let data = try? JSONSerialization.data(withJSONObject: cache) {
+                try? writePrivate(data, to: usageCacheURL)
+            }
+        }
+        if let resets = readJSON(weeklyResetsURL) as? [String: Any], resets[from] != nil,
+            let data = try? JSONSerialization.data(
+                withJSONObject: Accounts.renameKey(resets, from: from, to: to))
+        {
+            try? writePrivate(data, to: weeklyResetsURL)
+        }
+    }
+
     static func updateWeeklyResets(
         _ usage: [String: [LimitCard]], names: [String], now: Date = Date()
     ) -> [String: Double] {
-        let url = directory.appendingPathComponent(".weekly-resets.json")
+        let url = weeklyResetsURL
         let prev = readJSON(url) as? [String: Any]
         let kept = Accounts.keepWeeklyResets(prev, fresh: usage, names: names, now: now)
         if !Accounts.sameJSON(prev ?? [:], kept),

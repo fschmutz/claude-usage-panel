@@ -178,7 +178,7 @@ process: `wiki/CI.md`.
 
 `claude-code/accounts.js` is the single implementation behind the
 `claudectl account` CLI (`claude-code/account-cli.js`), the MCP server's
-`list_accounts` / `save_account` / `switch_account` tools (`mcp/tools.js`) and
+`list_accounts` / `save_account` / `switch_account` / `rename_account` tools (`mcp/tools.js`) and
 the status line's `account` segment - all static imports. Its pure half is
 `lib/pure/accounts.js`, the same module the GNOME extension imports;
 `openStore(io)` binds the I/O (home, platform, clock, fetch, exec -
@@ -193,7 +193,8 @@ must agree on: profile validity + names, which saved profile the live login is
 expired once the refresh token is gone), and `autoSwitchTarget` (threshold 90,
 margin 15, cooldown 5 min, most headroom wins, ties by code-point name order),
 `liveLogin`, `syncBack` (torn / pending / no account block), `sameName`,
-`parkName`, `formatUsage`, the Keychain services and the `keychainWrite` run
+`renameRefusal` (invalid / missing / pending switch / taken ignoring case) and
+`renameKey`, `parkName`, `formatUsage`, the Keychain services and the `keychainWrite` run
 (stdin line under 4096 bytes, argv beyond).
 
 A profile is `{version, name, savedAt, account: <oauthAccount block of
@@ -282,7 +283,7 @@ Swift twin together, and keep the fixture matching.
   code imports the `lib/pure.js` barrel, the Node code the module it needs
   (the barrel is not installed into the Node tree).
 - **`macos/Sources/ClaudeUsageCore/`** - Foundation-only mirror of `pure.js`
- (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `Notices.swift`,
+ (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `AccountRename.swift`, `Notices.swift`,
  `Codex.swift`, `Warehouse.swift`,
  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
  `Snapshots.swift`, `Waiting.swift`, `Pause.swift`, `SessionBoard.swift`, `ShellQuote.swift`, `DataProvenance.swift`,

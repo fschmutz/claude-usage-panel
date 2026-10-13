@@ -36,7 +36,7 @@ import {execFileSync} from 'node:child_process';
 
 import {
   PROFILE_VERSION, accountSummary, isTorn, isValidName, keychainServices, keychainWrite,
-  liveProfileName, parkName, parseProfile, saveRefusal, sameJSON, switchPlan, syncBackPlan, tokenState,
+  liveProfileName, parkName, parseProfile, renameRefusal, sameJSON, sameName, saveRefusal, switchPlan, syncBackPlan, tokenState,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {accountHealth, accountNotices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/notices.js';
 import {bindUsage, coded} from './accounts-usage.js';
@@ -132,6 +132,42 @@ export function openStore(io = {}) {
   function removeProfile(name) {
     if (!readProfile(name)) throw new Error(`no saved account named ${name}`);
     fs.rmSync(profilePath(name), {force: true});
+  }
+
+  function renameError(from, to, refusal) {
+    switch (refusal.kind) {
+      case 'invalid': return new Error(`invalid name "${to}": letters, digits, . _ - only, up to 32 characters`);
+      case 'missing': return new Error(`no saved account named ${from}`);
+      case 'pending': return new Error(`the switch to ${refusal.profile} did not finish - ` +
+        `\`claudectl account use ${refusal.profile}\` completes it, then rename`);
+      default: return new Error(`${refusal.profile} already exists - names ignore case, pick another name`);
+    }
+  }
+
+  /**
+   * Rename saved account `from` to `to`, under `from`'s refresh lock so a
+   * refresh cannot write the old file back. The live login is matched by its
+   * token and account, never by name, so nothing in ~/.claude changes. The
+   * new file is written before the old one goes; a change of case renames
+   * the file itself, since writing over a case-insensitive name keeps the
+   * old spelling.
+   */
+  async function renameProfile(from, to) {
+    const check = () => {
+      const refusal = renameRefusal(listProfiles(), from, to, readPendingSwitch());
+      if (refusal) throw renameError(from, to, refusal);
+    };
+    check();
+    if (from === to) return readProfile(from);
+    return usage.withRefreshLock(from, () => {
+      check(); // a switch or a save may have landed while we waited
+      const profile = readProfile(from);
+      if (sameName(from, to)) fs.renameSync(profilePath(from), profilePath(to));
+      const renamed = writeProfile({...profile, name: to});
+      if (!sameName(from, to)) fs.rmSync(profilePath(from), {force: true});
+      usage.renameCacheEntries(from, to);
+      return renamed;
+    });
   }
 
   // ── The live login ──────────────────────────────────────────────────────────
@@ -419,7 +455,7 @@ export function openStore(io = {}) {
 
   return {
     dir, credentialsPath: credsPath, configPath, now,
-    listProfiles, readProfile, writeProfile, removeProfile,
+    listProfiles, readProfile, writeProfile, removeProfile, renameProfile,
     readLiveCredentials, liveAccessToken, readLiveAccount, liveAccountName, readPendingSwitch,
     syncBack, saveCurrent, runningClaudeCount,
     writeLastSwitch, readLastSwitchMs, switchTo, listAccounts,

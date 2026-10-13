@@ -708,6 +708,14 @@ msgstr "Nenhum login do Claude Code encontrado"
 msgid "login expired - sign in and save it again"
 msgstr "login expirado - inicie sessão e guarde-o novamente"
 
+#: prefs/accounts.js:89
+msgid "Rename"
+msgstr "Mudar o nome"
+
+#: prefs/accounts.js:98
+msgid "Rename this saved login"
+msgstr "Mudar o nome deste login guardado"
+
 #: prefs/accounts.js:105
 msgid "Forget this saved login"
 msgstr "Esquecer este login guardado"

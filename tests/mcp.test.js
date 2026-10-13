@@ -172,7 +172,7 @@ test('ping - empty result', async () => {
 test('tools/list - exposes get_usage, waiting, the account tools and the Codex ones', async () => {
     const r = await handleRequest({method: 'tools/list'});
     assert.deepEqual(r.tools.map(t => t.name), [
-        'get_usage', 'waiting', 'list_accounts', 'save_account', 'switch_account',
+        'get_usage', 'waiting', 'list_accounts', 'save_account', 'switch_account', 'rename_account',
         'list_codex_accounts', 'save_codex_account', 'switch_codex_account', 'get_codex_usage',
     ]);
     const tool = r.tools[0];
@@ -569,6 +569,14 @@ test('save_account / list_accounts / switch_account round-trip through the serve
     r = await call('switch_account', {name: 'NOPE'});
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /no saved account named NOPE/);
+
+    r = await call('rename_account', {from: 'PRO', to: 'WORK'});
+    assert.match(r.content[0].text, /Renamed \*\*PRO\*\* → \*\*WORK\*\*/);
+    assert.deepEqual(r.structuredContent, {from: 'PRO', to: 'WORK'});
+    assert.deepEqual(store.listProfiles().map(p => p.name), ['PERSO', 'WORK']);
+    r = await call('rename_account', {from: 'WORK', to: 'perso'});
+    assert.equal(r.isError, true);
+    assert.match(r.content[0].text, /PERSO already exists/);
 });
 
 // ── Plugin manifests ────────────────────────────────────────────────────────────

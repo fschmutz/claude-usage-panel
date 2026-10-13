@@ -277,6 +277,46 @@ test('removeProfile deletes the file and refuses unknown names', () => {
     assert.throws(() => s.removeProfile('PRO'), /no saved account/);
 });
 
+test('renameProfile moves the profile and its cached entries; the live login stays matched', async () => {
+    const {io, home, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    const dir = accountsDir(io);
+    fs.writeFileSync(path.join(dir, '.usage-cache.json'),
+        JSON.stringify({at: NOW, accounts: {PRO: {worst: 40}, PERSO: {worst: 10}}}));
+    fs.writeFileSync(path.join(dir, '.weekly-resets.json'), JSON.stringify({PRO: NOW + 1000}));
+    const liveBefore = fs.readFileSync(path.join(home, '.claude', '.credentials.json'), 'utf8');
+
+    const p = await s.renameProfile('PRO', 'WORK');
+    assert.equal(p.name, 'WORK');
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PERSO', 'WORK']);
+    assert.equal(fs.existsSync(path.join(dir, 'PRO.json')), false);
+    assert.equal(fs.statSync(path.join(dir, 'WORK.json')).mode & 0o777, 0o600);
+    assert.equal(s.liveAccountName(), 'WORK');
+    assert.equal(fs.readFileSync(path.join(home, '.claude', '.credentials.json'), 'utf8'), liveBefore);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.usage-cache.json'), 'utf8')).accounts,
+        {PERSO: {worst: 10}, WORK: {worst: 40}});
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.weekly-resets.json'), 'utf8')), {WORK: NOW + 1000});
+    assert.equal(fs.readdirSync(dir).some((f) => f.startsWith('.refresh-')), false, 'the lock is released');
+});
+
+test('renameProfile changes only the case, and refuses what renameRefusal refuses', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    const dir = accountsDir(io);
+    await s.renameProfile('PRO', 'Pro');
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PERSO', 'Pro']);
+    assert.ok(fs.readdirSync(dir).includes('Pro.json'));
+    assert.equal((await s.renameProfile('Pro', 'Pro')).name, 'Pro');
+    await assert.rejects(s.renameProfile('Pro', 'perso'), /PERSO already exists/);
+    await assert.rejects(s.renameProfile('NOPE', 'X'), /no saved account named NOPE/);
+    await assert.rejects(s.renameProfile('Pro', 'bad name'), /invalid name/);
+    fs.writeFileSync(path.join(dir, '.switch-pending.json'), JSON.stringify({at: NOW, from: 'Pro', to: 'PERSO'}));
+    await assert.rejects(s.renameProfile('Pro', 'WORK'), /switch to PERSO did not finish/);
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PERSO', 'Pro']);
+});
+
 test('listProfiles skips foreign, dot and mismatched files', () => {
     const {io, s} = world();
     s.saveCurrent('PRO');

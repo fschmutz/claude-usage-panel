@@ -267,6 +267,35 @@ final class AccountsParityTests: XCTestCase {
         }
     }
 
+    func testRenameRefusal() throws {
+        let fix = try fixture()
+        let ps = profiles(fix)
+        for c in fix["renameRefusal"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            let got = Accounts.renameRefusal(
+                profiles: ps, from: c["from"] as! String, to: c["to"] as! String,
+                pendingTo: (c["pending"] as? [String: Any])?["to"] as? String)
+            guard let e = c["expected"] as? [String: Any] else {
+                XCTAssertNil(got, name)
+                continue
+            }
+            XCTAssertEqual(
+                got,
+                RenameRefusal(
+                    kind: RenameRefusal.Kind(rawValue: e["kind"] as! String)!,
+                    profile: e["profile"] as? String, email: e["email"] as? String), name)
+        }
+    }
+
+    func testRenameKey() throws {
+        for c in try fixture()["renameKey"] as! [[String: Any]] {
+            let got = Accounts.renameKey(
+                c["map"], from: c["from"] as! String, to: c["to"] as! String)
+            XCTAssertEqual(
+                got as NSDictionary, c["expected"] as! NSDictionary, c["name"] as! String)
+        }
+    }
+
     func testRefreshedOauth() throws {
         let fix = try fixture()
         let now = (fix["now"] as! NSNumber).doubleValue

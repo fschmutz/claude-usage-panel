@@ -389,5 +389,25 @@
     {"name": "another process rotated both", "sent": {"accessToken": "a1", "refreshToken": "r1"}, "stored": {"accessToken": "a2", "refreshToken": "r2"}, "expected": true},
     {"name": "a new access token alone (the server kept the refresh token)", "sent": {"accessToken": "a1", "refreshToken": "r1"}, "stored": {"accessToken": "a2", "refreshToken": "r1"}, "expected": true},
     {"name": "the refresh token went away", "sent": {"accessToken": "a1", "refreshToken": "r1"}, "stored": {"accessToken": "a1"}, "expected": true}
+  ],
+  "renameRefusal": [
+    {"name": "a free name", "from": "PRO", "to": "WORK", "pending": null, "expected": null},
+    {"name": "the same name is nothing to refuse", "from": "PRO", "to": "PRO", "pending": null, "expected": null},
+    {"name": "a change of case on the profile itself", "from": "PRO", "to": "Pro", "pending": null, "expected": null},
+    {"name": "an invalid new name", "from": "PRO", "to": "my pro", "pending": null, "expected": {"kind": "invalid", "profile": null, "email": null}},
+    {"name": "an invalid name wins over a missing profile", "from": "NOPE", "to": "-x", "pending": null, "expected": {"kind": "invalid", "profile": null, "email": null}},
+    {"name": "no profile by that name", "from": "NOPE", "to": "WORK", "pending": null, "expected": {"kind": "missing", "profile": "NOPE", "email": null}},
+    {"name": "the old name is matched exactly, not ignoring case", "from": "pro", "to": "WORK", "pending": null, "expected": {"kind": "missing", "profile": "pro", "email": null}},
+    {"name": "an unfinished switch blocks every rename", "from": "PRO", "to": "WORK", "pending": {"at": 1, "from": "PRO", "to": "PERSO"}, "expected": {"kind": "pending", "profile": "PERSO", "email": null}},
+    {"name": "a name another profile holds", "from": "PRO", "to": "PERSO", "pending": null, "expected": {"kind": "taken", "profile": "PERSO", "email": "perso@example.com"}},
+    {"name": "a case variant of another profile", "from": "PRO", "to": "perso", "pending": null, "expected": {"kind": "taken", "profile": "PERSO", "email": "perso@example.com"}}
+  ],
+  "renameKey": [
+    {"name": "the entry moves", "map": {"PRO": 1, "PERSO": 2}, "from": "PRO", "to": "WORK", "expected": {"PERSO": 2, "WORK": 1}},
+    {"name": "a change of case moves too", "map": {"PRO": 1}, "from": "PRO", "to": "Pro", "expected": {"Pro": 1}},
+    {"name": "no entry, nothing moves", "map": {"PERSO": 2}, "from": "PRO", "to": "WORK", "expected": {"PERSO": 2}},
+    {"name": "the same name leaves the map as is", "map": {"PRO": 1}, "from": "PRO", "to": "PRO", "expected": {"PRO": 1}},
+    {"name": "not a map is an empty one", "map": [1], "from": "PRO", "to": "WORK", "expected": {}},
+    {"name": "null is an empty map", "map": null, "from": "PRO", "to": "WORK", "expected": {}}
   ]
 }
