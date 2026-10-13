@@ -81,6 +81,12 @@ semantic versioning.
   outside the repo (`PRIVATE_MAILMAP`), so an old work address is mapped away
   without being written into the public tree. Commits released before the
   guard ran are declared by id in `.github/private-names-history`.
+- **macOS: account rows no longer end in "…".** The popup's 340 pt row put
+  the name, the email and the usage side by side, so all three were cut and
+  the weekly reset was lost. The name and the full usage now share the first
+  line and the email sits under the name. A new Settings toggle, "Show each
+  account's email in the menu" (`showAccountEmailInMenu`, on by default),
+  hides that line; the email stays in the row's tooltip.
 
 ## [3.10.1] - 2026-10-13
 

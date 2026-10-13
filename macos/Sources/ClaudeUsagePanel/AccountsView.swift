@@ -62,20 +62,28 @@ struct AccountsSectionView: View {
         }
     }
 
+    // Two lines so nothing is cut at the popup's width: the name and the full
+    // usage (it carries the weekly reset) on top, the email under the name.
     private func line(_ row: AccountRow) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 6) {
             // A filled dot marks the login in use; the others are actions.
             Text(row.active ? "\u{25cf}" : "\u{25cb}")
                 .font(.system(size: 11))
                 .foregroundColor(row.active ? .cuAccent : .secondary)
-            Text(row.name).font(.system(size: 12, weight: row.active ? .bold : .semibold))
-            if let email = row.email {
-                Text(email).font(.system(size: 11)).foregroundColor(.secondary)
-                    .lineLimit(1).truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 6) {
+                    Text(row.name).font(.system(size: 12, weight: row.active ? .bold : .semibold))
+                        .lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Text(row.usageText).font(.system(size: 11))
+                        .foregroundColor(row.needsAttention ? .cuCritical : .secondary)
+                        .fixedSize()
+                }
+                if model.showAccountEmailInMenu, let email = row.email {
+                    Text(email).font(.system(size: 10)).foregroundColor(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                }
             }
-            Spacer()
-            Text(row.usageText).font(.system(size: 11))
-                .foregroundColor(row.needsAttention ? .cuCritical : .secondary)
         }
     }
 }
@@ -166,6 +174,7 @@ struct AccountsSettingsSection: View {
             Toggle("Show the account name in the menu bar", isOn: $model.showAccountInMenuBar)
             Toggle(
                 "Show the auto-switch button in the menu header", isOn: $model.showAutoSwitchInMenu)
+            Toggle("Show each account's email in the menu", isOn: $model.showAccountEmailInMenu)
             if let err = model.accountsError {
                 Text(err).font(.footnote).foregroundColor(.cuCritical)
             }
