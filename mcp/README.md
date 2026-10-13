@@ -8,9 +8,9 @@ Anthropic usage endpoint, the same data as the GNOME and macOS panels.
 **`waiting`** lists live Claude Code sessions blocked on a permission prompt,
 a question, or idle after Stop. **`awake`** reports (and can start or stop)
 a session that keeps this machine from sleeping while Claude Code works; it
-cannot switch closed-lid mode on. **`list_accounts`**, **`save_account`** and
-**`switch_account`** manage named Claude Code logins, so *"switch me to PERSO"*
-works in-conversation. Four more do the same for OpenAI Codex logins.
+cannot switch closed-lid mode on. **`list_accounts`**, **`save_account`**,
+**`switch_account`** and **`rename_account`** manage named Claude Code
+logins, so *"switch me to PERSO"* works in-conversation. Four more do the same for OpenAI Codex logins.
 
 Zero dependencies, stdio transport. What each tool touches:
 
@@ -21,6 +21,7 @@ Zero dependencies, stdio transport. What each tool touches:
 | `awake` | the awake session, journal and config under the state dir, plus the live-session registry | with `action: on` / `off`: the awake session and journal, and the holder it starts (never closed-lid mode) |
 | `list_accounts` | the live login and the saved profiles | the usage cache, the live login's profile when its token rotated, a stale profile's refreshed token |
 | `save_account` | the live login | one profile file in the account store |
+| `rename_account` | the saved profiles | the renamed profile file, its entries in the usage cache and the kept weekly resets |
 | `switch_account` | the target profile | **the live credentials** (file or Keychain item), the `oauthAccount` block of `~/.claude.json`, and the store (outgoing profile, switch stamp) |
 | `list_codex_accounts` | `$CODEX_HOME/auth.json` (else `~/.codex/auth.json`) and the saved Codex profiles | the live Codex login's profile when the `codex` CLI rotated its token |
 | `save_codex_account` | the live Codex login | one profile file in the Codex store |
@@ -88,9 +89,9 @@ own normal / warning / critical. Errors (no token, expired session, network)
 come back as tool errors with a one-line fix hint. `account` names the saved
 account the numbers belong to (`null` if the current login was never saved).
 
-Three more tools manage the saved logins: `list_accounts` (every saved login with its own
-usage and whether it is active), `save_account {name}` and `switch_account
-{name}` - so "switch me to PERSO" works in-conversation. What a switch touches,
+Four more tools manage the saved logins: `list_accounts` (every saved login with its own
+usage and whether it is active), `save_account {name}`, `switch_account
+{name}` and `rename_account {from, to}` - so "switch me to PERSO" works in-conversation. What a switch touches,
 and the token refresh behind it, is on the
 [Accounts wiki page](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts).
 

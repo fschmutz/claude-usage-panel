@@ -210,6 +210,38 @@ export function saveRefusal(profiles, name, account, force = false) {
 }
 
 /**
+ * Why saved account `from` cannot be renamed `to` right now, or null when it
+ * can: `invalid` (not a valid name), `missing` (no profile `from`), `pending`
+ * (an unfinished switch names profiles, so nothing moves until it is done),
+ * then `taken` (another profile already holds `to`, ignoring case - a change
+ * of case on `from` itself is allowed). Renaming to the same name is null.
+ */
+export function renameRefusal(profiles, from, to, pending = null) {
+    if (!isValidName(to))
+        return {kind: 'invalid', profile: null, email: null};
+    if (!profiles.some(p => p.name === from))
+        return {kind: 'missing', profile: from, email: null};
+    if (pending)
+        return {kind: 'pending', profile: typeof pending.to === 'string' ? pending.to : null, email: null};
+    const taken = profiles.find(p => p.name !== from && sameName(p.name, to));
+    return taken ? {
+        kind: 'taken', profile: taken.name,
+        email: typeof taken.account?.emailAddress === 'string' ? taken.account.emailAddress : null,
+    } : null;
+}
+
+/** A name-keyed store map ({NAME: value}) with `from`'s entry moved to `to`.
+ *  Anything that is not a plain object is an empty map. */
+export function renameKey(map, from, to) {
+    const out = map && typeof map === 'object' && !Array.isArray(map) ? {...map} : {};
+    if (from !== to && Object.hasOwn(out, from)) {
+        out[to] = out[from];
+        delete out[from];
+    }
+    return out;
+}
+
+/**
  * The OAuth block after a refresh-token exchange answered with `body`, or
  * null when the answer carries no access token. A rotated refresh token and a
  * scope list replace ours when present. `expires_in` (seconds) moves

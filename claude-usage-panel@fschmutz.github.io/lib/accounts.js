@@ -22,7 +22,8 @@ import {claudeConfigPath, credentialsPath, stateDir} from './paths.js';
 import {run} from './proc.js';
 import {
     PROFILE_VERSION, REFRESH_LOCK, isTorn, isValidName, liveProfileName, parkName, parseProfile,
-    refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, saveRefusal, sameJSON,
+    refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, renameKey, renameRefusal,
+    sameName, saveRefusal, sameJSON,
     switchPlan, syncBackPlan, tokenState, usageCacheEntry, keepWeeklyResets,
 } from './pure.js';
 
@@ -60,6 +61,10 @@ function usageCachePath() {
 
 function lastSwitchPath() {
     return GLib.build_filenamev([accountsDir(), LAST_SWITCH_FILE]);
+}
+
+function weeklyResetsPath() {
+    return GLib.build_filenamev([accountsDir(), WEEKLY_RESETS_FILE]);
 }
 
 function pendingSwitchPath() {
@@ -124,6 +129,65 @@ export function removeProfile(name) {
         Gio.File.new_for_path(profilePath(name)).delete(null);
     } catch (e) {
         throw new Error(`could not remove ${name}: ${e.message}`);
+    }
+}
+
+function renameError(from, to, refusal) {
+    switch (refusal.kind) {
+    case 'invalid':
+        return new Error(`invalid name "${to}": letters, digits, . _ - only, up to 32 characters`);
+    case 'missing':
+        return new Error(`no saved account named ${from}`);
+    case 'pending':
+        return new Error(`the switch to ${refusal.profile} did not finish - switch to it again, then rename`);
+    default:
+        return new Error(`${refusal.profile} already exists - names ignore case, pick another name`);
+    }
+}
+
+// A renamed account keeps its cached usage and its kept weekly reset.
+function renameCacheEntries(from, to) {
+    const cache = readJSON(usageCachePath());
+    if (cache?.accounts && Object.hasOwn(cache.accounts, from)) {
+        writePrivate(usageCachePath(),
+            JSON.stringify({...cache, accounts: renameKey(cache.accounts, from, to)}));
+    }
+    const resets = readJSON(weeklyResetsPath());
+    if (resets && Object.hasOwn(resets, from))
+        writePrivate(weeklyResetsPath(), JSON.stringify(renameKey(resets, from, to)));
+}
+
+/**
+ * Rename saved account `from` to `to` (Node claude-code/accounts.js
+ * renameProfile, Swift AccountStore.rename), under `from`'s refresh lock so a
+ * refresh cannot write the old file back. The live login is matched by token
+ * and account, never by name, so nothing in ~/.claude changes. The new file
+ * is written before the old one goes; a change of case moves the file itself.
+ */
+export async function renameProfile(from, to) {
+    const check = () => {
+        const refusal = renameRefusal(listProfiles(), from, to, readPendingSwitch());
+        if (refusal)
+            throw renameError(from, to, refusal);
+    };
+    check();
+    if (from === to)
+        return readProfile(from);
+    const lock = await acquireRefreshLock(from);
+    try {
+        check(); // a switch or a save may have landed while we waited
+        const profile = readProfile(from);
+        if (sameName(from, to)) {
+            Gio.File.new_for_path(profilePath(from)).move(
+                Gio.File.new_for_path(profilePath(to)), Gio.FileCopyFlags.NONE, null, null);
+        }
+        const renamed = writeProfile({...profile, name: to});
+        if (!sameName(from, to))
+            Gio.File.new_for_path(profilePath(from)).delete(null);
+        renameCacheEntries(from, to);
+        return renamed;
+    } finally {
+        releaseRefreshLock(lock);
     }
 }
 
@@ -551,7 +615,7 @@ export function writeUsageCache(results, nowMs = Date.now()) {
 // cannot be read right now still shows when its week restarts. Same file and
 // shape as the macOS app ({NAME: epochMs}); keepWeeklyResets decides.
 export function updateWeeklyResets(results, names, nowMs = Date.now()) {
-    const path = GLib.build_filenamev([accountsDir(), WEEKLY_RESETS_FILE]);
+    const path = weeklyResetsPath();
     const prev = readJSON(path);
     const fresh = Object.fromEntries(
         Object.entries(results).filter(([, r]) => r?.ok).map(([name, r]) => [name, r.cards]));

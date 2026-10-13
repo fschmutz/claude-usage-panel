@@ -776,6 +776,14 @@ msgstr "Claude Code のログインが見つかりません"
 msgid "login expired - sign in and save it again"
 msgstr "ログイン期限切れ - 再度サインインして保存し直してください"
 
+#: prefs/accounts.js:89
+msgid "Rename"
+msgstr "名前を変更"
+
+#: prefs/accounts.js:98
+msgid "Rename this saved login"
+msgstr "この保存済みログインの名前を変更"
+
 #: prefs/accounts.js:105
 msgid "Forget this saved login"
 msgstr "この保存済みログインを削除"

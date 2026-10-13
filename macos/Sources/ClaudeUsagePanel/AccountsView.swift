@@ -110,6 +110,9 @@ struct AccountNoticesView: View {
 struct AccountsSettingsSection: View {
     @ObservedObject var model: UsageModel
     @State private var newName = ""
+    /// The row being renamed in place, and the name typed so far.
+    @State private var renaming: String?
+    @State private var renameText = ""
 
     private var nameIsValid: Bool {
         Accounts.isValidName(newName.trimmingCharacters(in: .whitespaces))
@@ -148,19 +151,33 @@ struct AccountsSettingsSection: View {
             AccountNoticesView(model: model)
             ForEach(model.accounts) { row in
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Text(row.name).fontWeight(row.active ? .bold : .regular)
-                        if let email = row.email {
-                            Text(email).foregroundColor(.secondary).lineLimit(1)
-                                .truncationMode(.middle)
+                    if renaming == row.name {
+                        HStack {
+                            TextField("New name", text: $renameText).onSubmit { rename(row.name) }
+                            Button("Rename") { rename(row.name) }
+                                .disabled(!Accounts.isValidName(trimmedRename))
+                            Button("Cancel") { renaming = nil }
                         }
-                        if let plan = row.plan { Text(plan).foregroundColor(.secondary) }
-                        if row.needsAttention {
-                            Text(row.usageText).foregroundColor(.cuCritical)
+                    } else {
+                        HStack {
+                            Text(row.name).fontWeight(row.active ? .bold : .regular)
+                            if let email = row.email {
+                                Text(email).foregroundColor(.secondary).lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            if let plan = row.plan { Text(plan).foregroundColor(.secondary) }
+                            if row.needsAttention {
+                                Text(row.usageText).foregroundColor(.cuCritical)
+                            }
+                            Spacer()
+                            Button("Rename") {
+                                renameText = row.name
+                                renaming = row.name
+                            }
+                            Button("Remove") { model.removeAccount(row.name) }
                         }
-                        Spacer()
-                        Button("Remove") { model.removeAccount(row.name) }
                     }
+                    if let o = model.outcome("rename:\(row.name)") { OutcomeText(o) }
                     if let o = model.outcome("remove:\(row.name)") { OutcomeText(o) }
                 }
             }
@@ -188,6 +205,14 @@ struct AccountsSettingsSection: View {
             )
             .font(.footnote).foregroundColor(.secondary)
         }
+    }
+
+    private var trimmedRename: String { renameText.trimmingCharacters(in: .whitespaces) }
+
+    private func rename(_ from: String) {
+        guard Accounts.isValidName(trimmedRename) else { return }
+        model.renameAccount(from, to: trimmedRename)
+        renaming = nil
     }
 
     private func save() {

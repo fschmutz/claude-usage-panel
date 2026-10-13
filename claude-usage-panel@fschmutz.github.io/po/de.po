@@ -783,6 +783,14 @@ msgstr "Keine Claude-Code-Anmeldung gefunden"
 msgid "login expired - sign in and save it again"
 msgstr "Anmeldung abgelaufen - neu anmelden und erneut speichern"
 
+#: prefs/accounts.js:89
+msgid "Rename"
+msgstr "Umbenennen"
+
+#: prefs/accounts.js:98
+msgid "Rename this saved login"
+msgstr "Diese gespeicherte Anmeldung umbenennen"
+
 #: prefs/accounts.js:105
 msgid "Forget this saved login"
 msgstr "Diese gespeicherte Anmeldung vergessen"

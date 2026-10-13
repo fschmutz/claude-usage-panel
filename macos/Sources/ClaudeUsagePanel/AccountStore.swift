@@ -171,6 +171,55 @@ enum AccountStore {
         try FileManager.default.removeItem(at: profileURL(name))
     }
 
+    /// Rename saved account `from` to `to` (the Node port's renameProfile), under
+    /// `from`'s refresh lock so a refresh cannot write the old file back. The
+    /// live login is matched by token and account, never by name, so nothing
+    /// in ~/.claude changes. The new file is written before the old one goes;
+    /// a change of case renames the file itself, since writing over a
+    /// case-insensitive name keeps the old spelling.
+    @discardableResult
+    static func renameProfile(_ from: String, to: String) async throws -> AccountProfile {
+        @Sendable func check() throws {
+            guard
+                let refusal = Accounts.renameRefusal(
+                    profiles: list(), from: from, to: to, pendingTo: readPendingSwitch()?.to)
+            else { return }
+            switch refusal.kind {
+            case .invalid:
+                throw AccountError.message(
+                    "invalid name \"\(to)\": letters, digits, . _ - only, up to 32 characters")
+            case .missing: throw AccountError.message("no saved account named \(from)")
+            case .pending:
+                throw AccountError.message(
+                    "the switch to \(refusal.profile ?? "?") did not finish - "
+                        + "switch to it again, then rename")
+            case .taken:
+                throw AccountError.message(
+                    "\(refusal.profile ?? to) already exists - names ignore case, pick another name"
+                )
+            }
+        }
+        try check()
+        if from == to, let same = read(from) { return same }
+        return try await withRefreshLock(from) {
+            try check()  // a switch or a save may have landed while we waited
+            guard let profile = read(from) else {
+                throw AccountError.message("no saved account named \(from)")
+            }
+            let caseOnly = Accounts.sameName(from, to)
+            if caseOnly, rename(profileURL(from).path, profileURL(to).path) != 0 {
+                throw AccountError.message("could not rename \(from): errno \(errno)")
+            }
+            let renamed = try write(
+                AccountProfile(
+                    name: to, savedAt: profile.savedAt, account: profile.account,
+                    credentials: profile.credentials))
+            if !caseOnly { try FileManager.default.removeItem(at: profileURL(from)) }
+            renameCacheEntries(from: from, to: to)
+            return renamed
+        }
+    }
+
     // MARK: the live login
 
     private static func parseCredentials(_ data: Data) -> [String: Any]? {

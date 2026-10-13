@@ -38,6 +38,9 @@ test('CLI: save, list, current, use, remove', async () => {
     assert.equal(asJson.active, 'PERSO');
     assert.deepEqual(asJson.accounts.map((a) => [a.name, a.active]), [['PERSO', true], ['PRO', false]]);
 
+    assert.match((await run(['rename', 'PRO', 'WORK'], io)).text, /renamed PRO -> WORK/);
+    assert.deepEqual(JSON.parse((await run(['rename', 'WORK', 'PRO', '--json'], io)).text), {from: 'WORK', to: 'PRO'});
+    await assert.rejects(run(['rename', 'PRO'], io), /rename needs a NAME and a NEW name/);
     assert.match((await run(['remove', 'PRO'], io)).text, /removed PRO/);
     await assert.rejects(run(['use', 'PRO'], io), /no saved account named PRO/);
     await assert.rejects(run(['bogus'], io), /unknown command bogus/);

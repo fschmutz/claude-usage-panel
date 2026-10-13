@@ -12,6 +12,7 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
   claudectl account current [--json]          the active account's name
   claudectl account save NAME [--force]       save the current login as NAME
   claudectl account use NAME [--json]         make NAME the current login
+  claudectl account rename NAME NEW           rename a saved account
   claudectl account remove NAME               forget a saved account
   claudectl account refresh [NAME]            refresh the stored token(s) now
 
@@ -33,6 +34,9 @@ existing NAME. Names collide ignoring case.`,
 back into its own profile (or parked under its email), and a stale NAME is
 refreshed before it is installed, so a failed refresh changes nothing.
 Running sessions keep their old login until restarted.`,
+  rename: `Renames saved account NAME to NEW, keeping its login, its cached
+usage and its kept weekly reset. The login Claude Code uses now is not
+touched. NEW must be free, ignoring case; changing only the case is fine.`,
   remove: `Forgets NAME. The login Claude Code uses now is not touched.`,
   refresh: `Refreshes the stored token of NAME, or of every saved login. The login
 Claude Code uses now is never refreshed here: Claude Code holds the same
@@ -60,7 +64,7 @@ export async function main(argv, io = {}) {
   const args = argv.filter((a) => !a.startsWith('--'));
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
   const json = flags.has('--json');
-  const [cmd, name] = args;
+  const [cmd, name, newName] = args;
   switch (cmd) {
     case undefined:
     case 'help':
@@ -117,6 +121,12 @@ export async function main(argv, io = {}) {
           out(`${plural(r.running, 'Claude Code session')} still running on the old login - restart to use ${r.to}\n`);
         }
       }
+      return 0;
+    }
+    case 'rename': {
+      if (!name || !newName) throw new Error('rename needs a NAME and a NEW name');
+      const p = await store.renameProfile(name, newName);
+      out(json ? `${JSON.stringify({from: name, to: p.name})}\n` : `renamed ${name} -> ${p.name}\n`);
       return 0;
     }
     case 'remove': {

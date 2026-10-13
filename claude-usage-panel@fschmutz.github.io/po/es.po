@@ -780,6 +780,14 @@ msgstr "No se encontró ningún inicio de sesión de Claude Code"
 msgid "login expired - sign in and save it again"
 msgstr "sesión caducada - inicia sesión y guárdala de nuevo"
 
+#: prefs/accounts.js:89
+msgid "Rename"
+msgstr "Renombrar"
+
+#: prefs/accounts.js:98
+msgid "Rename this saved login"
+msgstr "Renombrar este inicio de sesión guardado"
+
 #: prefs/accounts.js:105
 msgid "Forget this saved login"
 msgstr "Olvidar este inicio de sesión guardado"
