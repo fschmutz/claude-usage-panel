@@ -1,4 +1,5 @@
 import ClaudeUsageCore
+import Darwin
 import Foundation
 
 /// Keep this Mac awake while Claude Code works, for a timer, or both.
@@ -250,33 +251,40 @@ final class AwakeController: ObservableObject {
 
     /// Journal the claim, make the change, read it back. A bit that does not
     /// stick drops the claim again rather than leaving one nothing owns.
+    /// What one attempt at closed-lid mode came to. `busy` is the lock: the
+    /// one answer that is never "it worked" and never a failed command either.
+    enum LidOutcome: Sendable {
+        case on
+        case failed(AwakeStore.ChangeFailure)
+        case busy
+    }
+
     private func enableLid() async {
-        let outcome = await Task.detached(priority: .userInitiated) {
-            () -> AwakeStore.ChangeFailure?? in
-            AwakeStore.withLock { () -> AwakeStore.ChangeFailure? in
+        let outcome = await Task.detached(priority: .userInitiated) { () -> LidOutcome in
+            AwakeStore.withLock { () -> LidOutcome in
                 guard let journal = AwakeStore.readJournal() else {
-                    return .commandFailed("no journal")
+                    return .failed(.commandFailed("no journal"))
                 }
                 AwakeStore.write(
                     journal: AwakeJournal(
                         version: journal.version, at: journal.at, endsAt: journal.endsAt,
                         owner: journal.owner, sleepDisabled: true, lowPower: journal.lowPower))
-                let failure = AwakeStore.setLidDisabled(true)
-                if failure != nil {
-                    _ = AwakeStore.setLidDisabled(false, settleSeconds: 0)
-                    AwakeStore.write(journal: journal)
-                }
-                return failure
-            }
+                guard let failure = AwakeStore.setLidDisabled(true) else { return .on }
+                // It did not stick, so nothing is owed. Try the undo anyway in
+                // case it half-took, then drop the claim.
+                _ = AwakeStore.setLidDisabled(false, settleSeconds: 0)
+                AwakeStore.write(journal: journal)
+                return .failed(failure)
+            } ?? .busy
         }.value
         switch outcome {
-        case .some(nil):
+        case .on:
             lidHeld = true
             AwakeStore.log("lid mode on")
-        case .some(.some(let failure)):
+        case .failed(let failure):
             actionError = Self.describe(failure)
             AwakeStore.log("lid mode NOT on: \(Self.describe(failure))")
-        case nil:
+        case .busy:
             actionError = "another process is changing the awake session right now"
         }
     }
@@ -348,11 +356,11 @@ final class AwakeController: ObservableObject {
     }
 
     private func setLowPower(_ on: Bool, cause: String?) async {
-        let outcome = await Task.detached(priority: .utility) { () -> AwakeStore.ChangeFailure?? in
-            AwakeStore.withLock { () -> AwakeStore.ChangeFailure? in
-                guard let journal = AwakeStore.readJournal() else {
-                    return .commandFailed("no journal")
-                }
+        let changed = await Task.detached(priority: .utility) { () -> Bool in
+            AwakeStore.withLock { () -> Bool in
+                guard let journal = AwakeStore.readJournal() else { return false }
+                // Claim before the change, drop the claim once it is undone -
+                // or if it never took.
                 let claim = { (owned: Bool) in
                     AwakeStore.write(
                         journal: AwakeJournal(
@@ -363,10 +371,10 @@ final class AwakeController: ObservableObject {
                 if on { claim(true) }
                 let failure = AwakeStore.setLowPower(on)
                 if failure != nil || !on { claim(failure == nil && on) }
-                return failure
-            }
+                return failure == nil
+            } ?? false
         }.value
-        guard case .some(nil) = outcome else { return }
+        guard changed else { return }
         lowPowerSetByUs = on
         AwakeStore.log("low power \(on ? "on" : "off")\(cause.map { " (\($0))" } ?? "")")
     }

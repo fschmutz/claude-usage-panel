@@ -1,4 +1,5 @@
 import ClaudeUsageCore
+import Darwin
 import Foundation
 
 // The Awake session's I/O on macOS: the two files under Application Support,
@@ -152,9 +153,9 @@ enum AwakeStore {
             let held = (try? String(contentsOf: lockURL, encoding: .utf8))?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let pid = Int(held ?? "") ?? 0
-            let modified =
-                (try? FileManager.default.attributesOfItem(atPath: lockURL.path))?[
-                    .modificationDate] as? Date
+            let attributes =
+                (try? FileManager.default.attributesOfItem(atPath: lockURL.path)) ?? [:]
+            let modified = attributes[.modificationDate] as? Date
             let stale = modified.map { Date().timeIntervalSince($0) > lockStale } ?? true
             if (pid > 0 && kill(pid_t(pid), 0) != 0 && errno == ESRCH) || stale {
                 unlink(lockURL.path)
@@ -183,7 +184,7 @@ enum AwakeStore {
         return Awake.thermal(speedLimitOutput: Shell.run("/usr/bin/pmset", ["-g", "therm"]).out)
     }
 
-    enum ChangeFailure: Equatable {
+    enum ChangeFailure: Equatable, Sendable {
         case commandFailed(String)
         case reverted
         case unreadable
