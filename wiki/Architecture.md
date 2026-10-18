@@ -77,7 +77,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
 │   ├── accounts.js     # Accounts tab: saved logins and auto-switch
 │   ├── sessions.js     # Sessions tab: today's sessions, saved snapshots
 │   ├── pings.js        # Sessions tab: scheduled session pings
-│   └── integrations.js # Integrations tab: cost, Cursor, OpenAI Codex
+│   └── integrations.js # Integrations tab: cost, Cursor, Waiting, Pause, Awake, OpenAI Codex
 ├── stylesheet.css
 ├── schemas/            # GSettings schema
 ├── po/                 # translation catalogs (compiled to locale/ at pack time)
@@ -99,7 +99,8 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     │   ├── waiting.js  # waiting-on-you list: hook events, markers, age, focus plan
     │   ├── pause.js    # pause / resume: request, delivery and verdict shapes, row state, the protocol texts
-    │   └── board.js    # the session board: waiting + pause + today's sessions joined per session id
+    │   ├── board.js    # the session board: waiting + pause + today's sessions joined per session id
+    │   └── awake.js    # keep-awake: session math, the battery/thermal floors, the recovery journal, every platform argv
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
     ├── claudeUsage.js  # /oauth/usage fetch (live or saved token)
     ├── accounts.js     # the account store's GJS I/O
@@ -120,6 +121,9 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── sessionGroup.js # waiting + pause + today's sessions + the board: read each, draw once per layout
     ├── pause.js        # pause / resume rows from the claudectl store (async reads; the panel never writes)
     ├── pauseSection.js # the dropdown's Pause all / Resume all, per-session Pause + state, via claudectl
+    ├── awake.js        # the awake session + journal (async reads) and the claudectl argv
+    ├── awakeSection.js # the dropdown's Awake controls, countdown badge and recovery warning
+    ├── samples.js      # the per-limit sample history, the forecasts and the alert latches
     ├── sessionPing.js  # reads/writes the systemd units + the last-ping stamp
     ├── sessionPingUnit.js # the unit text itself (pure, shared with install.sh)
     ├── snapshots.js    # reads the claudectl snapshot store for the preferences
@@ -161,7 +165,9 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── ReleaseTags.swift         # newest released tag from the smart-HTTP ref list
     │   ├── NotifyScript.swift        # the osascript argv for one notification
     │   ├── Countdown.swift           # the "Resets in 3h 05m" countdown + sparkline
-    │   └── PlanLabel.swift           # header plan label from the credentials (twin of pure/usage.js planLabel, pinned by tests/fixtures/plan-label.json)
+    │   ├── PlanLabel.swift           # header plan label from the credentials (twin of pure/usage.js planLabel, pinned by tests/fixtures/plan-label.json)
+    │   ├── Awake.swift               # keep-awake session math, state and recovery journal (twin of pure/awake.js)
+    │   └── AwakePower.swift          # the floors' platform half and every awake command (same twin, split for the 700-line ceiling)
     └── ClaudeUsagePanel/
         ├── ClaudeUsagePanelApp.swift # the App + MenuBarExtra scene, palette
         ├── UsageModel.swift          # the view model
@@ -184,6 +190,8 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── Waiting.swift             # live-session registry + waiting markers + focus
         ├── PauseState.swift          # pause / resume through claudectl, followed until terminal
         ├── PauseView.swift           # the opt-in Pause section in the popup and Settings
+        ├── AwakeState.swift          # the awake session: the caffeinate child, the journal, the floors
+        ├── AwakeView.swift           # the opt-in Awake section in the popup and Settings
         ├── SessionBoardView.swift    # the merged / tabbed Sessions section in the popup
         ├── SavedSessions.swift       # the claudectl snapshot store in Settings
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
@@ -221,6 +229,9 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── pause.js            # openPause(io): the pause request, deliveries, verdicts, waiter locks, checkpoints
 ├── pause-hook.js       # Claude Code hook: asyncRewake waiter (SessionStart / Stop) + PreToolUse backstop
 ├── pause-cli.js        # `claudectl session pause | resume | report | pause-status`
+├── awake.js            # openAwake(io): the awake session, the recovery journal, the lock, the readings
+├── awake-worker.js     # the detached holder: owns the inhibitor child and the floors for one session
+├── awake-cli.js        # `claudectl awake`: status, on, off, extend, recover
 └── claudectl.js        # the claudectl entry point: dispatches to the groups
 
 mcp/                    # MCP server (Claude Code, Cursor…)
@@ -228,6 +239,7 @@ mcp/                    # MCP server (Claude Code, Cursor…)
 ├── tools.js            # tool schemas, renderers, the account tool calls
 ├── sessions.js         # today's sessions + session-ping index
 ├── waiting.js          # the `waiting` tool (sessions blocked on the user)
+├── awake.js            # the `awake` tool (status + start/stop; never closed-lid mode)
 ├── codex.js            # the OpenAI Codex tools (vault + the recorded rate limits)
 └── warehouse.js        # the 90-day usage history reader
 
@@ -239,9 +251,10 @@ install.sh              # installer entrypoint: argument loop + dispatch
 scripts/install/        # one file per target, sourced by install.sh
 ├── ui.sh               # info/ok/skip/act and the --dry-run wrapper
 ├── scheduler.sh        # the systemd-timer / launchd-agent / cron triple, once
-└── gnome.sh macos.sh node.sh cli.sh autoupdate.sh sessionping.sh cost.sh waiting.sh pause.sh targets.sh
+└── gnome.sh macos.sh node.sh cli.sh autoupdate.sh sessionping.sh cost.sh waiting.sh pause.sh awake.sh targets.sh
 scripts/auto-update.sh  # daily: newest released tag → ff-only → install.sh update
 scripts/session-ping.sh # scheduled: 1-turn haiku ping so the 5h window opens on time
+scripts/awake-backstop.sh # every minute: undo an awake session's machine changes from the journal alone
 scripts/lib.sh          # log/say/die/lock, shared by the two standalone workers
 scripts/pack-gnome.sh   # assemble the extension dir (install.sh gnome + the release zip)
 scripts/json-edit.mjs   # the one JSON reader/writer install.sh drives

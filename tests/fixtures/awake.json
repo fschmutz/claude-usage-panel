@@ -1,0 +1,496 @@
+{
+  "_comment": "Shared Awake contract: lib/pure/awake.js (tests/awake.test.js) and ClaudeUsageCore/Awake.swift (AwakeParityTests) are asserted against this same file. Change one port, change the fixture, or the other port goes red.",
+  "version": 1,
+  "holds": ["timer", "sessions"],
+  "endReasons": [
+    "timer",
+    "sessions",
+    "max-session",
+    "user",
+    "battery",
+    "battery-unreadable",
+    "thermal",
+    "recovery"
+  ],
+  "journalKeys": ["sleepDisabled", "lowPower"],
+  "thermalStates": ["nominal", "fair", "serious", "critical"],
+  "minSeconds": 60,
+  "maxSeconds": 43200,
+  "backstopGraceMs": 120000,
+  "pollSeconds": 30,
+  "defaults": {
+    "lowPowerFloor": 40,
+    "endFloor": 10,
+    "maxSeconds": 43200,
+    "thermalRules": true
+  },
+  "sudoCommands": [
+    ["/usr/bin/pmset", "-a", "disablesleep", "1"],
+    ["/usr/bin/pmset", "-a", "disablesleep", "0"],
+    ["/usr/bin/pmset", "-b", "lowpowermode", "1"],
+    ["/usr/bin/pmset", "-b", "lowpowermode", "0"]
+  ],
+
+  "parseDuration": [
+    {"text": "2h", "expected": 7200},
+    {"text": "90m", "expected": 5400},
+    {"text": "1h30m", "expected": 5400},
+    {"text": "2h30", "expected": 9000},
+    {"text": "1d", "expected": 86400},
+    {"text": "1d2h", "expected": 93600},
+    {"text": "45s", "expected": 45},
+    {"text": "90", "expected": 5400},
+    {"text": " 2H ", "expected": 7200},
+    {"text": "1h 30m", "expected": 5400},
+    {"text": "0", "expected": null},
+    {"text": "0h", "expected": null},
+    {"text": "", "expected": null},
+    {"text": "h", "expected": null},
+    {"text": "2x", "expected": null},
+    {"text": "-1h", "expected": null},
+    {"text": "2.5h", "expected": null}
+  ],
+
+  "formatDuration": [
+    {"seconds": 0, "expected": "0s"},
+    {"seconds": 30, "expected": "30s"},
+    {"seconds": 60, "expected": "1m"},
+    {"seconds": 100, "expected": "1m 40s"},
+    {"seconds": 3600, "expected": "1h"},
+    {"seconds": 9000, "expected": "2h 30m"},
+    {"seconds": 86400, "expected": "1d"},
+    {"seconds": 93600, "expected": "1d 2h"},
+    {"seconds": 90061, "expected": "1d 1h"},
+    {"seconds": -5, "expected": "0s"}
+  ],
+
+  "countdown": [
+    {"remainingMs": 0, "expected": "00:00"},
+    {"remainingMs": 1, "expected": "00:01"},
+    {"remainingMs": 1000, "expected": "00:01"},
+    {"remainingMs": 1800000, "expected": "30:00"},
+    {"remainingMs": 3600000, "expected": "1:00:00"},
+    {"remainingMs": 3661000, "expected": "1:01:01"},
+    {"remainingMs": 90061000, "expected": "1d 1:01:01"},
+    {"remainingMs": -500, "expected": "00:00"}
+  ],
+
+  "clampDuration": [
+    {"seconds": 0, "maxSeconds": 43200, "expected": 60},
+    {"seconds": 30, "maxSeconds": 43200, "expected": 60},
+    {"seconds": 7200, "maxSeconds": 43200, "expected": 7200},
+    {"seconds": 86400, "maxSeconds": 43200, "expected": 43200},
+    {"seconds": 7200, "maxSeconds": 10, "expected": 60}
+  ],
+
+  "normalizeConfig": [
+    {
+      "config": {},
+      "expected": {"lowPowerFloor": 40, "endFloor": 10, "maxSeconds": 43200, "thermalRules": true}
+    },
+    {
+      "config": {"lowPowerFloor": 20, "endFloor": 5},
+      "expected": {"lowPowerFloor": 20, "endFloor": 5, "maxSeconds": 43200, "thermalRules": true}
+    },
+    {
+      "_why": "floors out of order are repaired by RAISING the low-power one",
+      "config": {"lowPowerFloor": 10, "endFloor": 30},
+      "expected": {"lowPowerFloor": 31, "endFloor": 30, "maxSeconds": 43200, "thermalRules": true}
+    },
+    {
+      "_why": "an end floor of 0 turns the battery end off and leaves the other alone",
+      "config": {"lowPowerFloor": 0, "endFloor": 0},
+      "expected": {"lowPowerFloor": 0, "endFloor": 0, "maxSeconds": 43200, "thermalRules": true}
+    },
+    {
+      "config": {"lowPowerFloor": 500, "endFloor": -5, "maxSeconds": 999999, "thermalRules": false},
+      "expected": {"lowPowerFloor": 100, "endFloor": 0, "maxSeconds": 43200, "thermalRules": false}
+    }
+  ],
+
+  "nowMs": 1770000000000,
+
+  "newSession": [
+    {
+      "args": {"seconds": 7200, "whileSessions": false, "lid": false},
+      "expected": {"startedAt": 1770000000000, "endsAt": 1770007200000, "timed": true, "whileSessions": false, "lid": false}
+    },
+    {
+      "_why": "no duration of its own still gets the hard ceiling as a deadline",
+      "args": {"seconds": null, "whileSessions": true, "lid": false},
+      "expected": {"startedAt": 1770000000000, "endsAt": 1770043200000, "timed": false, "whileSessions": true, "lid": false}
+    },
+    {
+      "args": {"seconds": 86400, "whileSessions": true, "lid": true},
+      "expected": {"startedAt": 1770000000000, "endsAt": 1770043200000, "timed": true, "whileSessions": true, "lid": true}
+    }
+  ],
+
+  "parseSession": [
+    {"raw": null, "expected": null},
+    {"raw": [], "expected": null},
+    {"raw": {"startedAt": 1, "endsAt": "2"}, "expected": null},
+    {"raw": {"endsAt": 2}, "expected": null},
+    {
+      "raw": {"version": 1, "startedAt": 1770000000000, "endsAt": 1770007200000, "timed": true, "whileSessions": true, "lid": false, "owner": {"pid": 42, "host": "mac", "kind": "cli"}},
+      "expected": {"startedAt": 1770000000000, "endsAt": 1770007200000, "timed": true, "whileSessions": true, "lid": false, "ownerPid": 42, "ownerKind": "cli"}
+    },
+    {
+      "_why": "a missing `timed` is a timer: older files only had a deadline",
+      "raw": {"startedAt": 1770000000000, "endsAt": 1770007200000},
+      "expected": {"startedAt": 1770000000000, "endsAt": 1770007200000, "timed": true, "whileSessions": false, "lid": false, "ownerPid": 0, "ownerKind": ""}
+    }
+  ],
+
+  "extend": [
+    {
+      "session": {"startedAt": 1770000000000, "endsAt": 1770003600000, "timed": true},
+      "extraSeconds": 3600,
+      "expectedEndsAt": 1770007200000
+    },
+    {
+      "_why": "the ceiling is on the session, so a chain of extensions cannot walk past it",
+      "session": {"startedAt": 1770000000000, "endsAt": 1770040000000, "timed": true},
+      "extraSeconds": 36000,
+      "expectedEndsAt": 1770043200000
+    },
+    {
+      "_why": "extending an expired session restarts from now",
+      "session": {"startedAt": 1769990000000, "endsAt": 1769993600000, "timed": true},
+      "extraSeconds": 1800,
+      "expectedEndsAt": 1770001800000
+    }
+  ],
+
+  "state": [
+    {
+      "name": "a running timer holds, and draws a countdown",
+      "session": {"startedAt": 1770000000000, "endsAt": 1770003600000, "timed": true},
+      "sessions": 0,
+      "expected": {"active": true, "holds": ["timer"], "countdown": "1:00:00", "endReason": null, "badge": "1:00:00"}
+    },
+    {
+      "name": "a while-sessions hold with work running",
+      "session": {"startedAt": 1770000000000, "endsAt": 1770043200000, "timed": false, "whileSessions": true},
+      "sessions": 2,
+      "expected": {"active": true, "holds": ["sessions"], "countdown": "", "endReason": null, "badge": "\u221e"}
+    },
+    {
+      "name": "a while-sessions hold with nothing running is over",
+      "session": {"startedAt": 1770000000000, "endsAt": 1770043200000, "timed": false, "whileSessions": true},
+      "sessions": 0,
+      "expected": {"active": false, "holds": [], "countdown": "", "endReason": "sessions", "badge": ""}
+    },
+    {
+      "name": "both: the timer alone keeps it up once the work stops",
+      "session": {"startedAt": 1770000000000, "endsAt": 1770003600000, "timed": true, "whileSessions": true},
+      "sessions": 0,
+      "expected": {"active": true, "holds": ["timer"], "countdown": "1:00:00", "endReason": null, "badge": "1:00:00"}
+    },
+    {
+      "name": "past the deadline a timer ended on its timer",
+      "session": {"startedAt": 1769990000000, "endsAt": 1769999000000, "timed": true},
+      "sessions": 3,
+      "expected": {"active": false, "holds": [], "countdown": "", "endReason": "timer", "badge": ""}
+    },
+    {
+      "name": "past the deadline a session-only hold ended on the ceiling, work or not",
+      "session": {"startedAt": 1769950000000, "endsAt": 1769999000000, "timed": false, "whileSessions": true},
+      "sessions": 3,
+      "expected": {"active": false, "holds": [], "countdown": "", "endReason": "max-session", "badge": ""}
+    },
+    {
+      "name": "no session at all",
+      "session": null,
+      "sessions": 1,
+      "expected": {"active": false, "holds": [], "countdown": "", "endReason": null, "badge": ""}
+    }
+  ],
+
+  "floors": [
+    {
+      "name": "charging below both floors does nothing",
+      "input": {"percent": 5, "charging": true, "hasBattery": true},
+      "expected": []
+    },
+    {
+      "name": "below the end floor on battery ends the session",
+      "input": {"percent": 9, "charging": false, "hasBattery": true},
+      "expected": [{"action": "end", "reason": "battery"}]
+    },
+    {
+      "name": "between the floors asks for low power",
+      "input": {"percent": 30, "charging": false, "hasBattery": true},
+      "expected": [{"action": "low-power-on", "cause": "battery"}]
+    },
+    {
+      "name": "already in low power for the battery: nothing to do",
+      "input": {"percent": 30, "charging": false, "hasBattery": true, "lowPowerSetByUs": true},
+      "expected": []
+    },
+    {
+      "name": "back on the charger gives the mode back",
+      "input": {"percent": 30, "charging": true, "hasBattery": true, "lowPowerSetByUs": true},
+      "expected": [{"action": "low-power-off"}]
+    },
+    {
+      "name": "serious thermal asks for low power even on the charger",
+      "input": {"percent": 100, "charging": true, "hasBattery": true, "thermal": "serious"},
+      "expected": [{"action": "low-power-on", "cause": "thermal"}]
+    },
+    {
+      "name": "critical thermal ends the session",
+      "input": {"percent": 100, "charging": true, "hasBattery": true, "thermal": "critical"},
+      "expected": [{"action": "end", "reason": "thermal"}]
+    },
+    {
+      "name": "thermal rules off leaves a hot machine alone",
+      "input": {"percent": 100, "charging": true, "hasBattery": true, "thermal": "critical", "config": {"thermalRules": false}},
+      "expected": []
+    },
+    {
+      "name": "a closed lid asks for low power on its own",
+      "input": {"percent": 100, "charging": true, "hasBattery": true, "lidClosed": true},
+      "expected": [{"action": "low-power-on", "cause": "lid"}]
+    },
+    {
+      "name": "one failed battery read is tolerated",
+      "input": {"percent": null, "charging": false, "hasBattery": true, "unreadableMisses": 1},
+      "expected": []
+    },
+    {
+      "name": "two failed reads on battery end the session: no floor can be applied",
+      "input": {"percent": null, "charging": false, "hasBattery": true, "unreadableMisses": 2},
+      "expected": [{"action": "end", "reason": "battery-unreadable"}]
+    },
+    {
+      "name": "an end floor of 0 turns that end off",
+      "input": {"percent": null, "charging": false, "hasBattery": true, "unreadableMisses": 5, "config": {"endFloor": 0, "lowPowerFloor": 40}},
+      "expected": []
+    },
+    {
+      "name": "a desktop has no battery and no floor",
+      "input": {"percent": null, "charging": false, "hasBattery": false, "unreadableMisses": 5},
+      "expected": []
+    },
+    {
+      "name": "thermal outranks the battery when both hold",
+      "input": {"percent": 30, "charging": false, "hasBattery": true, "thermal": "serious"},
+      "expected": [{"action": "low-power-on", "cause": "thermal"}]
+    }
+  ],
+
+  "journal": [
+    {
+      "name": "not an object",
+      "raw": "nope",
+      "parsed": false,
+      "dirty": false,
+      "steps": []
+    },
+    {
+      "name": "a key of the wrong JSON type makes the whole journal unreadable",
+      "raw": {"version": 1, "at": 1, "endsAt": 2, "sleepDisabled": "yes"},
+      "parsed": false,
+      "dirty": false,
+      "steps": []
+    },
+    {
+      "name": "clean",
+      "raw": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000},
+      "parsed": true,
+      "dirty": false,
+      "steps": []
+    },
+    {
+      "name": "sleep alone",
+      "raw": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "sleepDisabled": true},
+      "parsed": true,
+      "dirty": true,
+      "steps": ["sleepDisabled"]
+    },
+    {
+      "name": "everything, in undo order",
+      "raw": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "lowPower": true, "sleepDisabled": true},
+      "parsed": true,
+      "dirty": true,
+      "steps": ["sleepDisabled", "lowPower"]
+    }
+  ],
+
+  "backstopDue": [
+    {
+      "name": "a clean journal is never due",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1769990000000},
+      "nowMs": 1770000000000,
+      "force": false,
+      "expected": false
+    },
+    {
+      "name": "a live session is left alone",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "sleepDisabled": true},
+      "nowMs": 1770000000000,
+      "force": false,
+      "expected": false
+    },
+    {
+      "name": "inside the grace window, still not due",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "sleepDisabled": true},
+      "nowMs": 1770003660000,
+      "force": false,
+      "expected": false
+    },
+    {
+      "name": "past the grace window it is the backstop's job",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "sleepDisabled": true},
+      "nowMs": 1770003720000,
+      "force": false,
+      "expected": true
+    },
+    {
+      "name": "--force overrides the deadline but not a clean journal",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "sleepDisabled": true},
+      "nowMs": 1770000000000,
+      "force": true,
+      "expected": true
+    }
+  ],
+
+  "recoveryNotice": [
+    {
+      "name": "clean",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1769990000000},
+      "nowMs": 1770000000000,
+      "expected": null
+    },
+    {
+      "name": "dirty but the session is still running",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "sleepDisabled": true},
+      "nowMs": 1770000000000,
+      "expected": null
+    },
+    {
+      "name": "dirty and over: the dropdown has to say so",
+      "journal": {"version": 1, "at": 1770000000000, "endsAt": 1770003600000, "sleepDisabled": true, "lowPower": true},
+      "nowMs": 1770004320000,
+      "expected": {"codes": ["sleepDisabled", "lowPower"], "endedAgoMs": 720000, "endedAgo": "12m"}
+    }
+  ],
+
+  "inhibitArgv": [
+    {
+      "platform": "darwin",
+      "args": {"seconds": 3600, "pid": 4242},
+      "expected": ["/usr/bin/caffeinate", "-i", "-w", "4242"]
+    },
+    {
+      "platform": "linux",
+      "args": {"seconds": 3600, "pid": 4242},
+      "expected": ["systemd-inhibit", "--what=idle:sleep", "--mode=block", "--who=claude-usage-panel", "--why=Claude Code is working", "sleep", "3600"]
+    },
+    {"platform": "win32", "args": {"seconds": 3600, "pid": 1}, "expected": null}
+  ],
+
+  "lidArgv": [
+    {
+      "platform": "darwin",
+      "on": true,
+      "expected": ["/usr/bin/sudo", "-n", "/usr/bin/pmset", "-a", "disablesleep", "1"]
+    },
+    {
+      "platform": "darwin",
+      "on": false,
+      "expected": ["/usr/bin/sudo", "-n", "/usr/bin/pmset", "-a", "disablesleep", "0"]
+    },
+    {
+      "platform": "linux",
+      "on": true,
+      "args": {"seconds": 1800},
+      "expected": ["systemd-inhibit", "--what=handle-lid-switch", "--mode=block", "--who=claude-usage-panel", "--why=Claude Code is working with the lid closed", "sleep", "1800"]
+    },
+    {"platform": "linux", "on": false, "expected": null},
+    {"platform": "win32", "on": true, "expected": null}
+  ],
+
+  "lowPowerArgv": [
+    {
+      "platform": "darwin",
+      "on": true,
+      "expected": ["/usr/bin/sudo", "-n", "/usr/bin/pmset", "-b", "lowpowermode", "1"]
+    },
+    {
+      "platform": "darwin",
+      "on": false,
+      "expected": ["/usr/bin/sudo", "-n", "/usr/bin/pmset", "-b", "lowpowermode", "0"]
+    },
+    {"platform": "linux", "on": true, "expected": null}
+  ],
+
+  "sudoersBody": {
+    "user": "ada",
+    "expected": "# Installed by claude-usage-panel (./install.sh awakelid).\n# Exactly four commands, nothing else. Remove with ./install.sh --uninstall awakelid.\nada ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1\nada ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0\nada ALL=(root) NOPASSWD: /usr/bin/pmset -b lowpowermode 1\nada ALL=(root) NOPASSWD: /usr/bin/pmset -b lowpowermode 0\n"
+  },
+
+  "sleepDisabled": [
+    {"output": "SleepDisabled\t1\n", "expected": true},
+    {"output": " SleepDisabled  0 \n", "expected": false},
+    {"output": "hibernatemode 3\nSleepDisabled 1\n", "expected": true},
+    {"output": "SleepDisabled\n", "expected": null},
+    {"output": "SleepDisabled x\n", "expected": null},
+    {"output": "nothing here\n", "expected": null},
+    {"output": "", "expected": null}
+  ],
+
+  "pmsetBattery": [
+    {
+      "_why": "a MacBook on battery",
+      "output": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t73%; discharging; 4:12 remaining present: true\n",
+      "expected": {"percent": 73, "charging": false, "hasBattery": true}
+    },
+    {
+      "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234)\t91%; charging; 0:21 remaining present: true\n",
+      "expected": {"percent": 91, "charging": true, "hasBattery": true}
+    },
+    {
+      "output": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234)\t100%; charged; 0:00 remaining present: true\n",
+      "expected": {"percent": 100, "charging": true, "hasBattery": true}
+    },
+    {
+      "_why": "a desktop: no battery line at all, so no floor applies",
+      "output": "Now drawing from 'AC Power'\n",
+      "expected": {"percent": null, "charging": true, "hasBattery": false}
+    },
+    {
+      "_why": "a battery that is present but printed no percentage",
+      "output": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t(no estimate); discharging; present: true\n",
+      "expected": {"percent": null, "charging": false, "hasBattery": true}
+    }
+  ],
+
+  "sysfsBattery": [
+    {"input": {"capacity": "73", "status": "Discharging"}, "expected": {"percent": 73, "charging": false, "hasBattery": true}},
+    {"input": {"capacity": "91", "status": "Charging"}, "expected": {"percent": 91, "charging": true, "hasBattery": true}},
+    {"input": {"capacity": "100", "status": "Full"}, "expected": {"percent": 100, "charging": true, "hasBattery": true}},
+    {"input": {"capacity": "88", "status": "Not charging"}, "expected": {"percent": 88, "charging": true, "hasBattery": true}},
+    {"input": {"capacity": null, "status": "Discharging"}, "expected": {"percent": null, "charging": false, "hasBattery": true}},
+    {"input": {"capacity": "oops", "status": "Unknown"}, "expected": {"percent": null, "charging": false, "hasBattery": true}},
+    {"input": {"present": false}, "expected": {"percent": null, "charging": true, "hasBattery": false}}
+  ],
+
+  "thermalMilli": [
+    {"milli": 0, "expected": "nominal"},
+    {"milli": 45000, "expected": "nominal"},
+    {"milli": 78000, "expected": "fair"},
+    {"milli": 86000, "expected": "serious"},
+    {"milli": 96000, "expected": "critical"},
+    {"milli": -1, "expected": "nominal"}
+  ],
+
+  "thermalSpeedLimit": [
+    {"output": "CPU_Speed_Limit \t= 100\n", "expected": "nominal"},
+    {"output": "CPU_Speed_Limit \t= 80\n", "expected": "fair"},
+    {"output": "CPU_Speed_Limit \t= 60\n", "expected": "serious"},
+    {"output": "CPU_Speed_Limit \t= 30\n", "expected": "critical"},
+    {"output": "no therm data\n", "expected": "nominal"}
+  ]
+}

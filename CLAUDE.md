@@ -270,12 +270,12 @@ import it. **The Node side never copies a pure module** - it imports
 I/O and its terminal-specific labels (`claude-code/stamps.js` `resetHint`, the
 MCP markdown). Swift (`ClaudeUsageCore`) is the only separate port. When you
 change normalization, severity, sparkline, reset-formatting, accounts,
-notices, Codex, sessions or Cursor summarization, change `lib/pure/` and the
-Swift twin together, and keep the fixture matching.
+notices, Codex, sessions, awake or Cursor summarization, change `lib/pure/`
+and the Swift twin together, and keep the fixture matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
- sessions,accounts,notices,codex,snapshots,layout,waiting,pause,board}.js` (`layout.js`, the dropdown
+ sessions,accounts,notices,codex,snapshots,layout,waiting,pause,board,awake}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
   imports anywhere under `pure/`, so it all runs under plain `node` for tests
   and in the Node clients. This is the reference implementation: the GNOME
@@ -288,7 +288,7 @@ Swift twin together, and keep the fixture matching.
  `Snapshots.swift`, `Waiting.swift`, `Pause.swift`, `SessionBoard.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
  `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
  `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
- `PlanLabel.swift`).
+ `PlanLabel.swift`, `Awake.swift` + `AwakePower.swift`).
   No networking/SwiftUI, so it unit-tests on Linux CI. The files say "Mirrors
   the GNOME extension's lib/pure.js" - keep it that way.
 - **`claude-code/`** - the Node clients' I/O over `lib/pure/`, one concern
