@@ -50,10 +50,14 @@ command; re-run to change):
 ```
 
 - `--segments` - any order of `context`, `limits`, `tokens`, `ping`, `account`,
-  `sessions`, `waiting`. Default: `context,limits,tokens,ping`.
+  `sessions`, `waiting`, `awake`. Default: `context,limits,tokens,ping`.
 - `waiting` (opt-in) renders `wait N` when a live session is blocked on a
   permission prompt, a question, or idle after Stop. Silent at zero. See
   [[Waiting]].
+- `awake` (opt-in) renders `awake 1:04:12` while this machine is being held
+  awake for Claude Code (`awake ∞` while the sessions alone hold it). Silent at
+  rest, and loud - `awake? sleepDisabled` in red - when a session ended without
+  giving a setting back. See [[Awake]].
 - `account` (opt-in) renders `[PRO]`: the saved account this session runs on
   (nothing until a login is saved, see [[Accounts]]). When this session is at the
   auto-switch threshold and the panels' last snapshot says another saved

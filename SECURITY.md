@@ -31,4 +31,25 @@ and MCP server send it hex-encoded on stdin to `security -i`, and every write is
 read back. Nothing is sent anywhere else. Uninstalling keeps the saved logins; delete
 the directory to forget them.
 
+The only part of this project that ever runs as root is the **closed-lid half
+of Awake on macOS**, and only after you install it on purpose
+(`./install.sh awakelid`). That step writes
+`/etc/sudoers.d/claude-usage-panel-awake`, validated with `visudo -c` and then
+proven with `sudo -n -l`, granting your account exactly four commands and
+nothing else: `/usr/bin/pmset -a disablesleep 0|1` and
+`/usr/bin/pmset -b lowpowermode 0|1`. Every call is `sudo -n`, so it never
+prompts. **The grant is not exclusive to this project**: any process running as
+that account can invoke those four commands too. `./install.sh --uninstall
+awakelid` removes the file after giving sleep back. On Linux the same mode
+needs no root at all - a `systemd-logind` lid inhibitor taken as your own user,
+which changes no system file and goes away with the holder - and no
+`logind.conf` drop-in is ever installed.
+
+Awake's own state (the session, the recovery journal, the floors, the lock) is
+`0600` in a `0700` directory under the state dir, like the saved logins. The
+machine is held awake by a child process, so the assertion is released whatever
+happens to the holder, and `scripts/awake-backstop.sh` - run every minute by a
+launchd agent or a systemd user timer - undoes a journaled `pmset` setting from
+that file alone if nothing of ours is left to do it.
+
 Secrets are never committed - `gitleaks` runs in pre-commit and CI.

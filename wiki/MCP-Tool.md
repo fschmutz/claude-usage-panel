@@ -92,6 +92,18 @@ to refresh it."*
 a question, or idle after Stop - the same rows the desktop panels show.
 Oldest wait first. Dead pids are ignored. See [[Waiting]].
 
+## Awake
+
+**`awake`** reports whether this machine is being held awake for Claude Code,
+what is holding it and for how long, and whether a past session left a setting
+that was not given back. With `action: "on"` it starts a session (a `duration`
+like `"2h"`, and/or `whileSessions`); with `"off"` it ends one and releases
+everything. Every session has a deadline and is capped at 12 hours.
+
+It deliberately **cannot** switch closed-lid mode on: that needs a sudoers
+rule, a hard ventilated surface and a human who has read the warning, so it
+stays a `claudectl awake on --lid` / panel-toggle decision. See [[Awake]].
+
 ## Account tools
 
 Three more tools manage the saved logins (every install form has them):

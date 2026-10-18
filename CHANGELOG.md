@@ -6,6 +6,47 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Awake: keep the machine up while Claude Code works.** A new opt-in target,
+  `./install.sh awake`, holds the machine awake while any Claude Code session
+  is running or waiting on you, and/or for a timer, and releases it the moment
+  that stops being true. The hold is a **child process** (`caffeinate -i -w`
+  on macOS, `systemd-inhibit --what=idle:sleep` on Linux), so the kernel gives
+  the assertion back whatever happens to the holder - SIGKILL included.
+  Surfaces: an `Awake` section with a countdown badge in the GNOME dropdown
+  and the macOS menu bar, `claudectl awake [status|on|off|extend|recover]`, an
+  MCP `awake` tool, and an opt-in `awake` status-line segment. The shared
+  contract is `lib/pure/awake.js` + `ClaudeUsageCore/{Awake,AwakePower}.swift`,
+  pinned by `tests/fixtures/awake.json`. Details:
+  [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake).
+- **Closed-lid mode (experimental, opt-in, a separate install step).**
+  `./install.sh awakelid` lets an Awake session keep running with the lid shut:
+  on macOS through `pmset -a disablesleep`, granted by a narrow sudoers rule
+  for exactly four `pmset` commands (validated with `visudo -c`, then proven
+  with `sudo -n -l`, and every call `sudo -n` so it never prompts); on Linux
+  through a `systemd-logind` `handle-lid-switch` inhibitor, which needs no root
+  and changes no system file. **A machine that cannot sleep with the lid shut
+  must stay on a hard, well-ventilated surface, never in a closed bag.**
+- **Awake safety: a recovery journal, a backstop, floors and a ceiling.** Every
+  persistent change is journaled before it is made and its flag cleared only
+  after the undo succeeded; `scripts/awake-backstop.sh` runs every minute and
+  repairs the machine from that file alone, with no node, no Swift and no panel
+  (it takes the holder's own lock and refuses to cut a live session short); a
+  disable is read back after a settle, because `pmset` can exit 0 while
+  something else puts the bit straight back; the battery floors (low power
+  below 40%, end below 10%, both configurable, plus a battery that is present
+  but unreadable twice in a row) and the thermal rules end a session rather
+  than warn about it; and every session is capped at 12 hours, measured from
+  now on every extension. The safety design is adapted from
+  [Insomnia](https://github.com/krishhgg/Insomnia) (MIT).
+
+### Changed
+
+- The GNOME extension's sample history, forecasts and alert latches moved from
+  `extension.js` into `lib/samples.js`. No behaviour change; `extension.js` was
+  at the 700-line ceiling.
+
 ## [3.10.1] - 2026-10-13
 
 ### Fixed

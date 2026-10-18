@@ -1,12 +1,14 @@
 # Claude Usage MCP server
 
-Nine MCP tools for any MCP client (Claude Code, Cursor, Claude Desktop…).
+Ten MCP tools for any MCP client (Claude Code, Cursor, Claude Desktop…).
 **`get_usage`** returns your Claude plan usage (session, weekly, and per-model
 limits with percent, severity, and reset time): ask *"how much of my plan have
 I used?"* and the assistant answers with live numbers from the official
 Anthropic usage endpoint, the same data as the GNOME and macOS panels.
 **`waiting`** lists live Claude Code sessions blocked on a permission prompt,
-a question, or idle after Stop. **`list_accounts`**, **`save_account`** and
+a question, or idle after Stop. **`awake`** reports (and can start or stop)
+a session that keeps this machine from sleeping while Claude Code works; it
+cannot switch closed-lid mode on. **`list_accounts`**, **`save_account`** and
 **`switch_account`** manage named Claude Code logins, so *"switch me to PERSO"*
 works in-conversation. Four more do the same for OpenAI Codex logins.
 
@@ -16,6 +18,7 @@ Zero dependencies, stdio transport. What each tool touches:
 | --- | --- | --- |
 | `get_usage` | the live login (`~/.claude/.credentials.json` on Linux, the login Keychain on macOS) | the live login's saved profile when Claude Code rotated its token; a stale profile's refreshed token when the live token is missing; the shared pace history (`claude-usage-history.json` in the per-user scratch dir); the session index cache (`sessions.json` in the cache dir) |
 | `waiting` | the live-session registry and `<pid>.waiting.json` markers | nothing |
+| `awake` | the awake session, journal and config under the state dir, plus the live-session registry | with `action: on` / `off`: the awake session and journal, and the holder it starts (never closed-lid mode) |
 | `list_accounts` | the live login and the saved profiles | the usage cache, the live login's profile when its token rotated, a stale profile's refreshed token |
 | `save_account` | the live login | one profile file in the account store |
 | `switch_account` | the target profile | **the live credentials** (file or Keychain item), the `oauthAccount` block of `~/.claude.json`, and the store (outgoing profile, switch stamp) |

@@ -29,6 +29,7 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 - [[Tabs]] - snapshot the running Claude Code sessions, reopen them in the same windows and tabs
 - [[Waiting]] - live sessions blocked on a permission prompt, a question, or idle after Stop
 - [[Pause]] - pause every live session safely (checkpoint + verdict per session), resume them later
+- [[Awake]] - keep the machine up while Claude Code works, with floors, a ceiling and a recovery backstop
 - [[Troubleshooting]] - common issues and fixes
 - [[Architecture]] - how the code is laid out
 - [[CI]] - what gates a merge, and the workflow supply-chain rules

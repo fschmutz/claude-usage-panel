@@ -52,6 +52,8 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `cost` | Installs the pinned [`ccusage`](https://github.com/ryoppippi/ccusage) and turns the session-cost line on (opt-in; `update` keeps it on the pin) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Troubleshooting#cost-shows-unavailable) |
 | `plan` | Recommend `sessionping` times for your working day (`./install.sh plan --compare 09:00`) | read-only helper |
 | `sessionping` | Scheduled `claude` pings that open the 5h session window at your chosen times (opt-in, one haiku turn per ping) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#session-pings) |
+| `awake` | Keep the machine awake while Claude Code works (`claudectl awake`, the panel section, the recovery backstop) (opt-in) | [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake) |
+| `awakelid` | Closed-lid mode for the `awake` target: the narrow four-command sudoers rule on macOS, a logind lid inhibitor on Linux (opt-in, **experimental**) | [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake#closed-lid-mode) |
 
 **Two subscriptions, one machine.** `claudectl account save PRO`, sign in to the
 other one once, `claudectl account save PERSO` - then switch from any client in one
@@ -82,6 +84,23 @@ checkpoint, verify, then answer `SAFE TO CLOSE` or `NOT SAFE: <why>`. You get
 one row per session (delivered? safe?), and `claudectl session resume` (or a
 later reopen) hands each one its checkpoint back. Opt-in:
 `./install.sh pause`. Details: [wiki/Pause](https://github.com/fschmutz/claude-usage-panel/wiki/Pause).
+
+**Don't let the laptop nap mid-run.** `claudectl awake on --while-sessions`
+keeps the machine up while any Claude Code session is running or waiting on
+you; `--for 2h` keeps it up on a timer. The GNOME top bar and the macOS menu
+bar show the countdown, the dropdown has the controls, and the MCP `awake`
+tool can start and stop one in-conversation. The machine is held by a *child*
+process (`caffeinate -i -w` / `systemd-inhibit`), so the assertion is released
+whatever happens to the holder; every session has a deadline (12 h, always);
+the battery and thermal floors end one rather than warn about it; and a
+recovery backstop undoes anything a crashed session left behind. Opt-in:
+`./install.sh awake`. Closed-lid mode is a second, explicit step
+(`./install.sh awakelid`) and is **experimental** - a machine that cannot
+sleep with the lid shut has to stay on a hard, well-ventilated surface, never
+in a closed bag
+([Apple's guidance](https://support.apple.com/en-us/102336)). The safety
+design is adapted from [Insomnia](https://github.com/krishhgg/Insomnia) (MIT).
+Details: [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake).
 
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list
 today's sessions ranked by the tokens each one spent; clicking one opens your
@@ -168,6 +187,7 @@ plus terminal and in-conversation projections.
 | 👥 **Named accounts** | Save each login as `PRO` / `PERSO`, see every account's limits side by side, switch in one click (or let it switch for you at 90%) - no logout, no browser |
 | 🪝 **Run your own command** | One setting: a shell command fired when a limit crosses 90/100% or a window resets, with the event, label, percent and threshold substituted (shell-quoted) |
 | 🗓 **90 days of history** | Every poll that moved is kept locally, so each card can say "peak 71% this week · 84% last" long after Claude's own 30-day cleanup |
+| ☕ **Stays awake for the run** | Hold the machine up while Claude Code works or on a timer, with a countdown in the bar, battery and thermal floors that end a session rather than warn about it, and a backstop that undoes anything a crash left behind |
 | 💤 **Polls when it matters** | Idle windows back off to 15 min, a poll always lands just after a reset, and both panels refresh on wake from sleep and when the network returns |
 | 💲 **Optional extras** | Local [`ccusage`](https://github.com/ryoppippi/ccusage) session cost · Cursor team spend via Admin API |
 | 🌍 **Translated GNOME extension** | English + 7 translations (French, German, Spanish, Italian, Portuguese, Japanese, Simplified Chinese), catalogs gated in CI. The macOS app, status line and MCP server are English-only |
@@ -214,6 +234,7 @@ with your own admin key.
 | [mcp/README.md](mcp/README.md) | MCP server, `get_usage` + account tools, all four install paths |
 | [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) | Named accounts: what a switch touches, token refresh, auto-switch, CLI |
 | [wiki/Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) | Session tabs: snapshot the running sessions, reopen them as tabs, autosave |
+| [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake) | Keeping the machine awake: the holds, the floors, the recovery journal, closed-lid mode and its risks |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, pre-commit hooks, parity-test contract |
 | [PUBLISHING.md](PUBLISHING.md) | Store listings, release flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |

@@ -18,76 +18,58 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: extension.js:200
+#: extension.js:206
 msgid "Extra usage"
 msgstr ""
 
-#: extension.js:310
+#: extension.js:325
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr ""
 
-#: extension.js:347
+#: extension.js:362
 #, javascript-format
 msgid "Updated %s"
 msgstr ""
 
-#: extension.js:384
+#: extension.js:400
 msgid "Session cost: computing…"
 msgstr ""
 
-#: extension.js:389
+#: extension.js:405
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr ""
 
-#: extension.js:391
+#: extension.js:407
 msgid "Session cost: unavailable (install ccusage)"
 msgstr ""
 
-#: extension.js:421
+#: extension.js:437
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr ""
 
-#: extension.js:438
+#: extension.js:454
 #, javascript-format
 msgid "last %s"
 msgstr ""
 
-#: extension.js:438 prefs/pings.js:96
+#: extension.js:454 prefs/pings.js:96
 msgid "never"
 msgstr ""
 
-#: extension.js:442
+#: extension.js:458
 #, javascript-format
 msgid "next %s"
 msgstr ""
 
-#: extension.js:444
+#: extension.js:460
 #, javascript-format
 msgid "Session pings: %s"
 msgstr ""
 
-#: extension.js:456 extension.js:460 lib/accountsSection.js:535
-#: lib/boardSection.js:212 lib/boardSection.js:218 lib/headerBar.js:42
-#: lib/pauseSection.js:211 lib/pauseSection.js:222 lib/sessionsSection.js:175
-#: lib/sessionsSection.js:185 lib/waitingSection.js:121
-#: lib/waitingSection.js:128 lib/waitingSection.js:136
-msgid "Claude usage"
-msgstr ""
-
-#: extension.js:457
-#, javascript-format
-msgid "%s reached %d%%"
-msgstr ""
-
-#: extension.js:461
-#, javascript-format
-msgid "%s is on pace to run out before it resets"
-msgstr ""
-
-#: extension.js:599
+#: extension.js:569
 msgid "Claude ?"
 msgstr ""
 
@@ -142,7 +124,7 @@ msgstr ""
 msgid "Retry"
 msgstr ""
 
-#: lib/accountsSection.js:129 prefs/accounts.js:22 prefs.js:37
+#: lib/accountsSection.js:129 prefs/accounts.js:22 prefs.js:39
 msgid "Accounts"
 msgstr ""
 
@@ -213,9 +195,75 @@ msgid_plural " - %d running sessions keep the old login until restarted"
 msgstr[0] ""
 msgstr[1] ""
 
+#: lib/accountsSection.js:535 lib/awakeSection.js:167 lib/awakeSection.js:181
+#: lib/boardSection.js:212 lib/boardSection.js:218 lib/headerBar.js:42
+#: lib/pauseSection.js:211 lib/pauseSection.js:222 lib/samples.js:67
+#: lib/samples.js:71 lib/sessionsSection.js:175 lib/sessionsSection.js:185
+#: lib/waitingSection.js:121 lib/waitingSection.js:128
+#: lib/waitingSection.js:136
+msgid "Claude usage"
+msgstr ""
+
 #: lib/accountsSection.js:539
 #, javascript-format
 msgid "now on %s"
+msgstr ""
+
+#: lib/awakeSection.js:35
+#, javascript-format
+msgid "off (last session ended: %s)"
+msgstr ""
+
+#: lib/awakeSection.js:35
+msgid "off"
+msgstr ""
+
+#: lib/awakeSection.js:37
+#, javascript-format
+msgid "timer %s"
+msgstr ""
+
+#: lib/awakeSection.js:38
+#, javascript-format
+msgid "%d live session(s)"
+msgstr ""
+
+#: lib/awakeSection.js:41
+#, javascript-format
+msgid "%s · lid mode"
+msgstr ""
+
+#: lib/awakeSection.js:49
+#, javascript-format
+msgid "Sleep was not given back (%s), %s ago. Click Recover."
+msgstr ""
+
+#: lib/awakeSection.js:77
+msgid "Awake"
+msgstr ""
+
+#: lib/awakeSection.js:144
+msgid "Recover"
+msgstr ""
+
+#: lib/awakeSection.js:146
+msgid "+30m"
+msgstr ""
+
+#: lib/awakeSection.js:147
+msgid "Off"
+msgstr ""
+
+#: lib/awakeSection.js:154
+msgid "While sessions"
+msgstr ""
+
+#: lib/awakeSection.js:168
+msgid "Install claudectl (./install.sh awake) to keep this machine awake."
+msgstr ""
+
+#: lib/awakeSection.js:182
+msgid "Could not change the awake state"
 msgstr ""
 
 #: lib/boardSection.js:32 lib/waitingSection.js:108
@@ -238,7 +286,7 @@ msgstr ""
 msgid "running"
 msgstr ""
 
-#: lib/boardSection.js:65 prefs.js:39
+#: lib/boardSection.js:65 prefs.js:41
 msgid "Sessions"
 msgstr ""
 
@@ -526,6 +574,16 @@ msgstr ""
 msgid "Could not pause the sessions"
 msgstr ""
 
+#: lib/samples.js:68
+#, javascript-format
+msgid "%s reached %d%%"
+msgstr ""
+
+#: lib/samples.js:72
+#, javascript-format
+msgid "%s is on pace to run out before it resets"
+msgstr ""
+
 #: lib/savedSessions.js:45
 #, javascript-format
 msgid "Reopen %s (%d session)"
@@ -776,52 +834,52 @@ msgid ""
 "\"%e at %p%%\""
 msgstr ""
 
-#: prefs/integrations.js:12
+#: prefs/integrations.js:14
 msgid "Cost"
 msgstr ""
 
-#: prefs/integrations.js:13
+#: prefs/integrations.js:15
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires ccusage installed: npm i "
-"-g ccusage)."
+"this to compute it locally with ccusage (requires ccusage installed: npm i -"
+"g ccusage)."
 msgstr ""
 
-#: prefs/integrations.js:16
+#: prefs/integrations.js:18
 msgid "Show session cost"
 msgstr ""
 
-#: prefs/integrations.js:17
+#: prefs/integrations.js:19
 msgid "Runs `ccusage blocks --active` on each refresh"
 msgstr ""
 
-#: prefs/integrations.js:26
+#: prefs/integrations.js:28
 msgid "Cursor (optional)"
 msgstr ""
 
-#: prefs/integrations.js:27
+#: prefs/integrations.js:29
 msgid ""
-"Show Cursor team spend using the Cursor Admin API. Create a key at "
-"cursor.com → team → Settings → Admin API. Stored in the system keyring."
+"Show Cursor team spend using the Cursor Admin API. Create a key at cursor."
+"com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
 
-#: prefs/integrations.js:30
+#: prefs/integrations.js:32
 msgid "Show Cursor usage"
 msgstr ""
 
-#: prefs/integrations.js:31
+#: prefs/integrations.js:33
 msgid "Adds a Cursor spend section to the dropdown"
 msgstr ""
 
-#: prefs/integrations.js:40
+#: prefs/integrations.js:42
 msgid "Cursor Admin API key"
 msgstr ""
 
-#: prefs/integrations.js:68
+#: prefs/integrations.js:70
 msgid "Waiting on you (optional)"
 msgstr ""
 
-#: prefs/integrations.js:69
+#: prefs/integrations.js:71
 msgid ""
 "The live Claude Code sessions blocked on a permission prompt, a question, or "
 "idle after their turn, as a section and a count on the top bar. Off by "
@@ -830,19 +888,19 @@ msgid ""
 "of every session."
 msgstr ""
 
-#: prefs/integrations.js:72
+#: prefs/integrations.js:74
 msgid "Show sessions waiting on you"
 msgstr ""
 
-#: prefs/integrations.js:73
+#: prefs/integrations.js:75
 msgid "Adds a Waiting on you section and a top-bar count"
 msgstr ""
 
-#: prefs/integrations.js:82
+#: prefs/integrations.js:84
 msgid "Pause and resume (optional)"
 msgstr ""
 
-#: prefs/integrations.js:83
+#: prefs/integrations.js:85
 msgid ""
 "Send the pause protocol to every live Claude Code session in one click: each "
 "one stops its jobs, writes a checkpoint and answers SAFE or NOT SAFE, shown "
@@ -853,19 +911,75 @@ msgid ""
 "waiter per session and run node on every tool call."
 msgstr ""
 
-#: prefs/integrations.js:86
+#: prefs/integrations.js:88
 msgid "Show pause and resume"
 msgstr ""
 
-#: prefs/integrations.js:87
+#: prefs/integrations.js:89
 msgid "Adds Pause all, Resume all and a per-session state to the dropdown"
 msgstr ""
 
-#: prefs/integrations.js:96
+#: prefs/integrations.js:98
+msgid "Awake (optional)"
+msgstr ""
+
+#: prefs/integrations.js:99
+msgid ""
+"Keep this machine from sleeping while Claude Code is running or waiting on "
+"you, and/or for a timer, with a countdown on the top bar. Off by default. "
+"The machine is held by a child process (systemd-inhibit), so the assertion "
+"is released whatever happens to the holder, and a recovery backstop undoes "
+"anything a crashed session left behind. It needs `./install.sh awake`, which "
+"installs that backstop and turns this on."
+msgstr ""
+
+#: prefs/integrations.js:102
+msgid "Show the Awake section"
+msgstr ""
+
+#: prefs/integrations.js:103
+msgid "Adds Awake to the dropdown and a countdown to the top bar"
+msgstr ""
+
+#: prefs/integrations.js:111
+msgid "Keep running with the lid closed (experimental)"
+msgstr ""
+
+#: prefs/integrations.js:112
+msgid ""
+"Needs `./install.sh awakelid`. A machine that cannot sleep with the lid shut "
+"must stay on a hard, ventilated surface - never in a closed bag."
+msgstr ""
+
+#: prefs/integrations.js:126
+msgid "Low-power floor (percent)"
+msgstr ""
+
+#: prefs/integrations.js:127
+msgid "Below this, on battery, the session asks for Low Power Mode"
+msgstr ""
+
+#: prefs/integrations.js:128
+msgid "End floor (percent)"
+msgstr ""
+
+#: prefs/integrations.js:129
+msgid "Below this, on battery, the session ends itself. 0 turns it off."
+msgstr ""
+
+#: prefs/integrations.js:141
+msgid "Longest session (hours)"
+msgstr ""
+
+#: prefs/integrations.js:142
+msgid "The hard ceiling on one session, however often it is extended"
+msgstr ""
+
+#: prefs/integrations.js:148
 msgid "OpenAI Codex (optional)"
 msgstr ""
 
-#: prefs/integrations.js:97
+#: prefs/integrations.js:149
 msgid ""
 "A sibling section for the ChatGPT logins the codex CLI holds: save them "
 "under a name and switch without a browser. Off by default - with it off, "
@@ -875,30 +989,30 @@ msgid ""
 "no token is ever minted here."
 msgstr ""
 
-#: prefs/integrations.js:100
+#: prefs/integrations.js:152
 msgid "Show saved Codex logins"
 msgstr ""
 
-#: prefs/integrations.js:101
+#: prefs/integrations.js:153
 msgid "Adds an OpenAI Codex section below the Claude ones"
 msgstr ""
 
-#: prefs/integrations.js:108
+#: prefs/integrations.js:160
 msgid "Usage figures are est."
 msgstr ""
 
-#: prefs/integrations.js:109
+#: prefs/integrations.js:161
 msgid ""
 "OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
 "ones the codex CLI recorded when the API last returned them, stamped with "
 "when. Manage the logins with `claudectl codex`."
 msgstr ""
 
-#: prefs.js:33
+#: prefs.js:35
 msgid "General"
 msgstr ""
 
-#: prefs.js:44
+#: prefs.js:46
 msgid "Integrations"
 msgstr ""
 

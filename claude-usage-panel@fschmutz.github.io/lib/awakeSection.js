@@ -36,7 +36,8 @@ export function awakeStateText(state) {
     const parts = state.holds.map(hold => (hold === 'timer'
         ? _('timer %s').format(state.countdown)
         : _('%d live session(s)').format(state.sessions)));
-    const text = parts.join(_(' + '));
+    // ' + ' is punctuation, not a sentence: it is the same in every language.
+    const text = parts.join(' + ');
     return state.lid ? _('%s · lid mode').format(text) : text;
 }
 

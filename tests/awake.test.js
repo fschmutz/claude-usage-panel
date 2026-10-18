@@ -118,6 +118,14 @@ test('awakeEndReason with no session at all is the user ending it', () => {
     assert.equal(pure.awakeEndReason(null, {nowMs: NOW}), 'user');
 });
 
+test('awakeHolds is what awakeState lists, and empty past the deadline', () => {
+    const both = {startedAt: NOW, endsAt: NOW + 1000, timed: true, whileSessions: true};
+    assert.deepEqual(pure.awakeHolds(both, {nowMs: NOW, sessions: 1}), ['timer', 'sessions']);
+    assert.deepEqual(pure.awakeHolds(both, {nowMs: NOW, sessions: 0}), ['timer']);
+    assert.deepEqual(pure.awakeHolds(both, {nowMs: NOW + 1000, sessions: 1}), []);
+    assert.deepEqual(pure.awakeHolds(null, {nowMs: NOW}), []);
+});
+
 for (const c of fix.floors) {
     test(`awakeFloorActions - ${c.name}`, () =>
         assert.deepEqual(pure.awakeFloorActions(c.input), c.expected));

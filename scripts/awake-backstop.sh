@@ -138,8 +138,11 @@ pid_alive() { # PID
 # than the stale window, is removed and the create retried once.
 take_hold_lock() {
     mkdir -p "$AWAKE_DIR" 2>/dev/null || return 1
-    local attempt held age
-    for attempt in 1 2; do
+    local held age
+    # Two passes: the first may find a stale lock and remove it, the second
+    # takes it. A third would mean another live holder, and then doing nothing
+    # is the right answer.
+    for _ in 1 2; do
         if (
             set -C
             printf '%s\n' "$$" >"$HOLD_LOCK"
@@ -150,7 +153,7 @@ take_hold_lock() {
         fi
         held="$(head -1 "$HOLD_LOCK" 2>/dev/null || echo 0)"
         age=""
-        [ -n "$(find "$HOLD_LOCK" -maxdepth 0 -mmin "+1" 2>/dev/null)" ] && age=stale
+        [ -n "$(find "$HOLD_LOCK" -maxdepth 0 -mmin "+$((LOCK_STALE_SECONDS / 60))" 2>/dev/null)" ] && age=stale
         if ! pid_alive "$held" || [ -n "$age" ]; then
             rm -f "$HOLD_LOCK"
             continue

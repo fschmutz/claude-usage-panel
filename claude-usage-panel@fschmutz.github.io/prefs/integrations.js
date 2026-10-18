@@ -123,9 +123,9 @@ export function buildAwake(prefs, settings) {
         awake.add(spin);
         return spin;
     };
-    const lowPower = floor('awake-battery-floor', _('Low-power floor (%)'),
+    const lowPower = floor('awake-battery-floor', _('Low-power floor (percent)'),
         _('Below this, on battery, the session asks for Low Power Mode'), 0, 100);
-    const end = floor('awake-end-floor', _('End floor (%)'),
+    const end = floor('awake-end-floor', _('End floor (percent)'),
         _('Below this, on battery, the session ends itself. 0 turns it off.'), 0, 100);
     // The two floors must not cross: the end floor is the one that protects
     // the machine, so the other one moves out of its way (the same repair

@@ -16,76 +16,58 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: extension.js:200
+#: extension.js:206
 msgid "Extra usage"
 msgstr "Zusätzliche Nutzung"
 
-#: extension.js:310
+#: extension.js:325
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr "%s - neuer Versuch, letzte Messung wird angezeigt"
 
-#: extension.js:347
+#: extension.js:362
 #, javascript-format
 msgid "Updated %s"
 msgstr "Aktualisiert %s"
 
-#: extension.js:384
+#: extension.js:400
 msgid "Session cost: computing…"
 msgstr "Sitzungskosten: werden berechnet…"
 
-#: extension.js:389
+#: extension.js:405
 #, javascript-format
 msgid "Session cost: $%s · %s tokens (est.)"
 msgstr "Sitzungskosten: $%s · %s Tokens (geschätzt)"
 
-#: extension.js:391
+#: extension.js:407
 msgid "Session cost: unavailable (install ccusage)"
 msgstr "Sitzungskosten: nicht verfügbar (ccusage installieren)"
 
-#: extension.js:421
+#: extension.js:437
 #, javascript-format
 msgid "%s (%d%% of the cap)"
 msgstr "%s (%d%% des Limits)"
 
-#: extension.js:438
+#: extension.js:454
 #, javascript-format
 msgid "last %s"
 msgstr "zuletzt %s"
 
-#: extension.js:438 prefs/pings.js:96
+#: extension.js:454 prefs/pings.js:96
 msgid "never"
 msgstr "nie"
 
-#: extension.js:442
+#: extension.js:458
 #, javascript-format
 msgid "next %s"
 msgstr "nächste %s"
 
-#: extension.js:444
+#: extension.js:460
 #, javascript-format
 msgid "Session pings: %s"
 msgstr "Sitzungs-Pings: %s"
 
-#: extension.js:456 extension.js:460 lib/accountsSection.js:535
-#: lib/boardSection.js:212 lib/boardSection.js:218 lib/headerBar.js:42
-#: lib/pauseSection.js:211 lib/pauseSection.js:222 lib/sessionsSection.js:175
-#: lib/sessionsSection.js:185 lib/waitingSection.js:121
-#: lib/waitingSection.js:128 lib/waitingSection.js:136
-msgid "Claude usage"
-msgstr "Claude-Nutzung"
-
-#: extension.js:457
-#, javascript-format
-msgid "%s reached %d%%"
-msgstr "%s hat %d%% erreicht"
-
-#: extension.js:461
-#, javascript-format
-msgid "%s is on pace to run out before it resets"
-msgstr "%s wird im aktuellen Tempo vor dem Zurücksetzen aufgebraucht"
-
-#: extension.js:599
+#: extension.js:569
 msgid "Claude ?"
 msgstr "Claude ?"
 
@@ -142,7 +124,7 @@ msgstr "Anmeldebefehl kopieren"
 msgid "Retry"
 msgstr "Erneut versuchen"
 
-#: lib/accountsSection.js:129 prefs/accounts.js:22 prefs.js:37
+#: lib/accountsSection.js:129 prefs/accounts.js:22 prefs.js:39
 msgid "Accounts"
 msgstr "Konten"
 
@@ -215,10 +197,79 @@ msgstr[0] " - %d laufende Sitzung behält die alte Anmeldung bis zum Neustart"
 msgstr[1] ""
 " - %d laufende Sitzungen behalten die alte Anmeldung bis zum Neustart"
 
+#: lib/accountsSection.js:535 lib/awakeSection.js:167 lib/awakeSection.js:181
+#: lib/boardSection.js:212 lib/boardSection.js:218 lib/headerBar.js:42
+#: lib/pauseSection.js:211 lib/pauseSection.js:222 lib/samples.js:67
+#: lib/samples.js:71 lib/sessionsSection.js:175 lib/sessionsSection.js:185
+#: lib/waitingSection.js:121 lib/waitingSection.js:128
+#: lib/waitingSection.js:136
+msgid "Claude usage"
+msgstr "Claude-Nutzung"
+
 #: lib/accountsSection.js:539
 #, javascript-format
 msgid "now on %s"
 msgstr "jetzt auf %s"
+
+#: lib/awakeSection.js:35
+#, javascript-format
+msgid "off (last session ended: %s)"
+msgstr "aus (letzte Sitzung endete: %s)"
+
+#: lib/awakeSection.js:35
+msgid "off"
+msgstr "aus"
+
+#: lib/awakeSection.js:37
+#, javascript-format
+msgid "timer %s"
+msgstr "Timer %s"
+
+#: lib/awakeSection.js:38
+#, javascript-format
+msgid "%d live session(s)"
+msgstr "%d laufende Sitzung(en)"
+
+#: lib/awakeSection.js:41
+#, javascript-format
+msgid "%s · lid mode"
+msgstr "%s · Deckel-Modus"
+
+#: lib/awakeSection.js:49
+#, javascript-format
+msgid "Sleep was not given back (%s), %s ago. Click Recover."
+msgstr ""
+"Der Ruhezustand wurde nicht zurückgegeben (%s), vor %s. Auf Zurücksetzen "
+"klicken."
+
+#: lib/awakeSection.js:77
+msgid "Awake"
+msgstr "Wach"
+
+#: lib/awakeSection.js:144
+msgid "Recover"
+msgstr "Zurücksetzen"
+
+#: lib/awakeSection.js:146
+msgid "+30m"
+msgstr "+30 Min"
+
+#: lib/awakeSection.js:147
+msgid "Off"
+msgstr "Aus"
+
+#: lib/awakeSection.js:154
+msgid "While sessions"
+msgstr "Solange Sitzungen laufen"
+
+#: lib/awakeSection.js:168
+msgid "Install claudectl (./install.sh awake) to keep this machine awake."
+msgstr ""
+"Installiere claudectl (./install.sh awake), um diesen Rechner wach zu halten."
+
+#: lib/awakeSection.js:182
+msgid "Could not change the awake state"
+msgstr "Der Wach-Zustand konnte nicht geändert werden"
 
 #: lib/boardSection.js:32 lib/waitingSection.js:108
 msgid "permission"
@@ -240,7 +291,7 @@ msgstr "wartet"
 msgid "running"
 msgstr "läuft"
 
-#: lib/boardSection.js:65 prefs.js:39
+#: lib/boardSection.js:65 prefs.js:41
 msgid "Sessions"
 msgstr "Sitzungen"
 
@@ -538,6 +589,16 @@ msgstr "Die Sitzungen konnten nicht fortgesetzt werden"
 msgid "Could not pause the sessions"
 msgstr "Die Sitzungen konnten nicht pausiert werden"
 
+#: lib/samples.js:68
+#, javascript-format
+msgid "%s reached %d%%"
+msgstr "%s hat %d%% erreicht"
+
+#: lib/samples.js:72
+#, javascript-format
+msgid "%s is on pace to run out before it resets"
+msgstr "%s wird im aktuellen Tempo vor dem Zurücksetzen aufgebraucht"
+
 #: lib/savedSessions.js:45
 #, javascript-format
 msgid "Reopen %s (%d session)"
@@ -813,58 +874,58 @@ msgstr ""
 "Schwelle · %k Schlüssel · %% ein wörtliches %. Leer deaktiviert es. "
 "Beispiel: notify-send \"Claude %l\" \"%e bei %p%%\""
 
-#: prefs/integrations.js:12
+#: prefs/integrations.js:14
 msgid "Cost"
 msgstr "Kosten"
 
-#: prefs/integrations.js:13
+#: prefs/integrations.js:15
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires ccusage installed: npm i "
-"-g ccusage)."
+"this to compute it locally with ccusage (requires ccusage installed: npm i -"
+"g ccusage)."
 msgstr ""
 "Die offizielle API liefert für Abo-Tarife keine Dollarkosten. Aktivieren, um "
 "sie lokal mit ccusage zu berechnen (erfordert ein installiertes ccusage: npm "
 "i -g ccusage)."
 
-#: prefs/integrations.js:16
+#: prefs/integrations.js:18
 msgid "Show session cost"
 msgstr "Sitzungskosten anzeigen"
 
-#: prefs/integrations.js:17
+#: prefs/integrations.js:19
 msgid "Runs `ccusage blocks --active` on each refresh"
 msgstr "Führt bei jeder Aktualisierung `ccusage blocks --active` aus"
 
-#: prefs/integrations.js:26
+#: prefs/integrations.js:28
 msgid "Cursor (optional)"
 msgstr "Cursor (optional)"
 
-#: prefs/integrations.js:27
+#: prefs/integrations.js:29
 msgid ""
-"Show Cursor team spend using the Cursor Admin API. Create a key at "
-"cursor.com → team → Settings → Admin API. Stored in the system keyring."
+"Show Cursor team spend using the Cursor Admin API. Create a key at cursor."
+"com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
 "Cursor-Teamausgaben über die Cursor-Admin-API anzeigen. Schlüssel unter "
 "cursor.com → Team → Settings → Admin API erstellen. Wird im "
 "Systemschlüsselbund gespeichert."
 
-#: prefs/integrations.js:30
+#: prefs/integrations.js:32
 msgid "Show Cursor usage"
 msgstr "Cursor-Nutzung anzeigen"
 
-#: prefs/integrations.js:31
+#: prefs/integrations.js:33
 msgid "Adds a Cursor spend section to the dropdown"
 msgstr "Fügt dem Menü einen Cursor-Ausgabenbereich hinzu"
 
-#: prefs/integrations.js:40
+#: prefs/integrations.js:42
 msgid "Cursor Admin API key"
 msgstr "Cursor-Admin-API-Schlüssel"
 
-#: prefs/integrations.js:68
+#: prefs/integrations.js:70
 msgid "Waiting on you (optional)"
 msgstr "Wartet auf Sie (optional)"
 
-#: prefs/integrations.js:69
+#: prefs/integrations.js:71
 msgid ""
 "The live Claude Code sessions blocked on a permission prompt, a question, or "
 "idle after their turn, as a section and a count on the top bar. Off by "
@@ -879,21 +940,21 @@ msgstr ""
 "install.sh waiting` installiert; sie starten node bei jedem Werkzeugaufruf "
 "jeder Sitzung."
 
-#: prefs/integrations.js:72
+#: prefs/integrations.js:74
 msgid "Show sessions waiting on you"
 msgstr "Sitzungen anzeigen, die auf Sie warten"
 
-#: prefs/integrations.js:73
+#: prefs/integrations.js:75
 msgid "Adds a Waiting on you section and a top-bar count"
 msgstr ""
 "Fügt einen Abschnitt „Wartet auf Sie“ und einen Zähler in der oberen Leiste "
 "hinzu"
 
-#: prefs/integrations.js:82
+#: prefs/integrations.js:84
 msgid "Pause and resume (optional)"
 msgstr "Pausieren und fortsetzen (optional)"
 
-#: prefs/integrations.js:83
+#: prefs/integrations.js:85
 msgid ""
 "Send the pause protocol to every live Claude Code session in one click: each "
 "one stops its jobs, writes a checkpoint and answers SAFE or NOT SAFE, shown "
@@ -912,22 +973,91 @@ msgstr ""
 "Code-Hooks, die `./install.sh pause` installiert; sie halten pro Sitzung "
 "einen ruhenden node-Waiter und starten node bei jedem Tool-Aufruf."
 
-#: prefs/integrations.js:86
+#: prefs/integrations.js:88
 msgid "Show pause and resume"
 msgstr "Pausieren und Fortsetzen anzeigen"
 
-#: prefs/integrations.js:87
+#: prefs/integrations.js:89
 msgid "Adds Pause all, Resume all and a per-session state to the dropdown"
 msgstr ""
 "Fügt dem Dropdown Alle pausieren, Alle fortsetzen und einen Status pro "
 "Sitzung hinzu"
 
+#: prefs/integrations.js:98
+msgid "Awake (optional)"
+msgstr "Wach (optional)"
+
+#: prefs/integrations.js:99
+msgid ""
+"Keep this machine from sleeping while Claude Code is running or waiting on "
+"you, and/or for a timer, with a countdown on the top bar. Off by default. "
+"The machine is held by a child process (systemd-inhibit), so the assertion "
+"is released whatever happens to the holder, and a recovery backstop undoes "
+"anything a crashed session left behind. It needs `./install.sh awake`, which "
+"installs that backstop and turns this on."
+msgstr ""
+"Hält diesen Rechner wach, solange eine Claude-Code-Sitzung läuft oder auf "
+"dich wartet, und/oder für eine eingestellte Dauer, mit Countdown in der "
+"oberen Leiste. Standardmäßig aus. Der Rechner wird von einem Kindprozess "
+"(systemd-inhibit) wach gehalten, die Sperre wird also freigegeben, was auch "
+"immer mit dem Halter geschieht, und ein Rückfallnetz macht alles rückgängig, "
+"was eine abgestürzte Sitzung hinterlassen hat. Erfordert `./install.sh "
+"awake`, das dieses Netz installiert und diese Option einschaltet."
+
+#: prefs/integrations.js:102
+msgid "Show the Awake section"
+msgstr "Abschnitt Wach anzeigen"
+
+#: prefs/integrations.js:103
+msgid "Adds Awake to the dropdown and a countdown to the top bar"
+msgstr ""
+"Fügt dem Menü den Abschnitt Wach und der oberen Leiste einen Countdown hinzu"
+
+#: prefs/integrations.js:111
+msgid "Keep running with the lid closed (experimental)"
+msgstr "Mit geschlossenem Deckel weiterlaufen (experimentell)"
+
+#: prefs/integrations.js:112
+msgid ""
+"Needs `./install.sh awakelid`. A machine that cannot sleep with the lid shut "
+"must stay on a hard, ventilated surface - never in a closed bag."
+msgstr ""
+"Erfordert `./install.sh awakelid`. Ein Rechner, der mit geschlossenem Deckel "
+"nicht mehr in den Ruhezustand geht, muss auf einer harten, belüfteten Fläche "
+"bleiben, niemals in einer geschlossenen Tasche."
+
+#: prefs/integrations.js:126
+msgid "Low-power floor (percent)"
+msgstr "Energiesparmodus-Schwelle (Prozent)"
+
+#: prefs/integrations.js:127
+msgid "Below this, on battery, the session asks for Low Power Mode"
+msgstr "Darunter fordert die Sitzung im Akkubetrieb den Energiesparmodus an"
+
+#: prefs/integrations.js:128
+msgid "End floor (percent)"
+msgstr "Abbruch-Schwelle (Prozent)"
+
+#: prefs/integrations.js:129
+msgid "Below this, on battery, the session ends itself. 0 turns it off."
+msgstr ""
+"Darunter beendet sich die Sitzung im Akkubetrieb selbst. 0 schaltet das ab."
+
+#: prefs/integrations.js:141
+msgid "Longest session (hours)"
+msgstr "Längste Sitzung (Stunden)"
+
+#: prefs/integrations.js:142
+msgid "The hard ceiling on one session, however often it is extended"
+msgstr ""
+"Die absolute Obergrenze einer Sitzung, egal wie oft sie verlängert wird"
+
 #
-#: prefs/integrations.js:96
+#: prefs/integrations.js:148
 msgid "OpenAI Codex (optional)"
 msgstr "OpenAI Codex (optional)"
 
-#: prefs/integrations.js:97
+#: prefs/integrations.js:149
 msgid ""
 "A sibling section for the ChatGPT logins the codex CLI holds: save them "
 "under a name and switch without a browser. Off by default - with it off, "
@@ -944,20 +1074,20 @@ msgstr ""
 "darin. Nichts wird hochgeladen, und hier wird nie ein Token erzeugt."
 
 #
-#: prefs/integrations.js:100
+#: prefs/integrations.js:152
 msgid "Show saved Codex logins"
 msgstr "Gespeicherte Codex-Anmeldungen anzeigen"
 
 #
-#: prefs/integrations.js:101
+#: prefs/integrations.js:153
 msgid "Adds an OpenAI Codex section below the Claude ones"
 msgstr "Fügt unter den Claude-Abschnitten einen OpenAI-Codex-Abschnitt hinzu"
 
-#: prefs/integrations.js:108
+#: prefs/integrations.js:160
 msgid "Usage figures are est."
 msgstr "Die Werte sind Schätzungen"
 
-#: prefs/integrations.js:109
+#: prefs/integrations.js:161
 msgid ""
 "OpenAI publishes no plan-usage endpoint, so the percentages shown are the "
 "ones the codex CLI recorded when the API last returned them, stamped with "
@@ -968,11 +1098,11 @@ msgstr ""
 "API aufgezeichnet hat - mit Zeitstempel. Die Anmeldungen verwaltet "
 "`claudectl codex`."
 
-#: prefs.js:33
+#: prefs.js:35
 msgid "General"
 msgstr "Allgemein"
 
-#: prefs.js:44
+#: prefs.js:46
 msgid "Integrations"
 msgstr "Integrationen"
 

@@ -12,9 +12,9 @@ import {
     forecast, formatForecast, formatResets, latchCrossings, latchPaceAlerts, normalizeHistory,
 } from './pure.js';
 
-/** Samples kept per limit - enough for the forecast's 6 h regression window at
- *  the 10-minute default (~15 h of context). The sparkline shows the last 12. */
-export const HISTORY_MAX = 90;
+// Samples kept per limit - enough for the forecast's 6 h regression window at
+// the 10-minute default (~15 h of context). The sparkline shows the last 12.
+const HISTORY_MAX = 90;
 
 export class SampleHistory {
     /**

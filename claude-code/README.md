@@ -49,7 +49,7 @@ optional flags (baked into the installed command; re-run to change them):
 ```
 
 - **`--segments`** - any order of `context`, `limits`, `tokens`, `ping`,
-  `account`, `sessions`, `waiting`; left-to-right on the line. Unknown names are dropped; omitting the
+  `account`, `sessions`, `waiting`, `awake`; left-to-right on the line. Unknown names are dropped; omitting the
   flag shows the default set (`context,limits,tokens,ping`).
   - **`ping`** - `ping 05:30`, when a scheduled session ping last opened the 5h
     window. It is in the default set because it renders **nothing** until you
@@ -62,6 +62,11 @@ optional flags (baked into the installed command; re-run to change them):
   - **`waiting`** - `wait 2`, live sessions blocked on a permission prompt, a
     question, or idle after Stop. Opt-in; silent at zero. See
     [wiki/Waiting](https://github.com/fschmutz/claude-usage-panel/wiki/Waiting).
+  - **`awake`** - `awake 1:04:12`, how much longer this machine is being held
+    awake for Claude Code. Opt-in; silent at rest, and loud
+    (`awake? sleepDisabled`) when a session ended without giving a setting
+    back. See
+    [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake).
 - **`--tokens`** - `all` (include cache reads; the true throughput) or `fresh`
   (only new tokens). Defaults to `all`.
 

@@ -23,13 +23,15 @@ uninstalls every client.
 | `./install.sh` | auto-detect OS → the sensible set |
 | `./install.sh gnome` | GNOME Shell extension |
 | `./install.sh statusline` | Claude Code status line |
-| `./install.sh mcp` | `get_usage` + `waiting` MCP tools → Claude Code + Cursor |
+| `./install.sh mcp` | `get_usage`, `waiting` + `awake` MCP tools → Claude Code + Cursor |
 | `./install.sh macos` | build + install the macOS `.app` |
 | `./install.sh autoupdate` | daily check for a new release + auto-install |
 | `./install.sh sessionping [HH:MM …] [--days=…]` | scheduled `claude` pings that open the 5h session window (opt-in) |
 | `./install.sh cost` | pinned `ccusage` + the session-cost line on (opt-in) |
 | `./install.sh waiting` | Claude Code hooks for **Waiting on you** + the panel section on (opt-in: they run node per tool call) |
 | `./install.sh pause` | Claude Code hooks so `claudectl session pause` / `resume` reach every live session, idle ones included (opt-in; installs `cli` when missing) |
+| `./install.sh awake` | Keep the machine awake while Claude Code works: `claudectl awake`, the panel section, and the recovery backstop that releases it if the holder dies (opt-in; installs `cli` when missing) |
+| `./install.sh awakelid` | Closed-lid mode for `awake` (opt-in, **experimental**): on macOS the narrow sudoers rule for four exact `pmset` commands, on Linux a logind lid inhibitor that needs no root |
 | `./install.sh update [target…]` | reinstall what's already installed (upgrade) |
 | `./install.sh update --pull` | `git pull` first, then upgrade |
 | `./install.sh --uninstall [target…]` | reverse an install (default: everything installed, sessionping included) |
