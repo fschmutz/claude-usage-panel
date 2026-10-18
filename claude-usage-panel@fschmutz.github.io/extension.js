@@ -25,6 +25,8 @@ import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
 import {fetchActiveCost} from './lib/cost.js';
 import {readLastPing, readSchedule} from './lib/sessionPing.js';
 import {AccountsController} from './lib/accountsSection.js';
+import {AwakeController} from './lib/awakeSection.js';
+import {SampleHistory} from './lib/samples.js';
 import {CodexController} from './lib/codexSection.js';
 import {CursorController} from './lib/cursorSection.js';
 import {SessionGroup} from './lib/sessionGroup.js';
@@ -38,8 +40,7 @@ import {writeText} from './lib/fs.js';
 import {stateDir} from './lib/paths.js';
 import {SavedSessionsController} from './lib/savedSessions.js';
 import {
-    severityClass, panelGauge, formatResets, latchCrossings, latchPaceAlerts, refreshSections, isRetryableFailure,
-    forecast, formatForecast, normalizeHistory,
+    severityClass, panelGauge, refreshSections, isRetryableFailure,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
     formatLastPing, nextPing, compactTokens, formatClock, panelCard, panelText, popupWidth, usageReading,
@@ -49,10 +50,6 @@ import {
 // How long to let a resume or a network change settle before polling: DNS and
 // the token file are not necessarily ready the instant logind says "resumed".
 const WAKE_SETTLE_SECONDS = 5;
-// Timestamped samples kept per limit - enough for the forecast's 6 h regression
-// window at the 10-minute default (~15 h of context). The sparkline shows the
-// last 12.
-const HISTORY_MAX = 90;
 
 const ClaudeUsageButton = GObject.registerClass(
 class ClaudeUsageButton extends PanelMenu.Button {
@@ -80,10 +77,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._retryAfter = null;
         this._refreshing = false;
         this._destroyed = false;
-        this._history = this._loadHistory();  // limit id -> [[epochMs, percent], …]
-        this._alertFired = new Map();  // limit id -> highest threshold already alerted
-        this._paceAlerted = new Set();  // limit ids already warned about projected exhaustion
-        this._forecasts = new Map();   // limit id -> latest forecast (or null)
+        // The sample history, the forecasts and the alert latches.
+        this._samples = new SampleHistory({
+            settings: this._settings, notify: (t, b) => Main.notify(t, b)});
 
         // Panel button: the live gauge + compact worst-limit readout.
         const box = new St.BoxLayout({style_class: 'cu-panel'});
@@ -101,6 +97,15 @@ class ClaudeUsageButton extends PanelMenu.Button {
             visible: false,
         });
         box.add_child(this._panelWait);
+        // "1:04:12" while this machine is being held awake, so a glance at the
+        // bar says the laptop will not drop off mid-run.
+        this._panelAwake = new St.Label({
+            text: '',
+            style_class: 'cu-panel-awake',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
+        box.add_child(this._panelAwake);
         box.add_child(this._panelLabel);
         this.add_child(box);
 
@@ -145,6 +150,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'changed::waiting-enabled', () => this.refresh(),
             'changed::sessions-layout', () => this._sessionGroup.render(),
             'changed::pause-enabled', () => this.refresh(),
+            'changed::awake-enabled', () => this.refresh(),
             'changed::accounts-auto-switch', () => this._accounts.syncToggle(),
             'changed::accounts-switch-threshold', () => this._accounts.syncToggle(),
             'changed::accounts-menu-toggle', () => this._accounts.syncToggle(),
@@ -226,6 +232,15 @@ class ClaudeUsageButton extends PanelMenu.Button {
             setBadge: n => {
                 this._panelWait.text = n ? String(n) : '';
                 this._panelWait.visible = n > 0;
+            },
+        });
+        // Awake sits right under the session sections it exists for: what is
+        // keeping the machine up is only interesting next to what is running.
+        this._awake = new AwakeController({
+            ...deps,
+            setBadge: badge => {
+                this._panelAwake.text = badge;
+                this._panelAwake.visible = Boolean(badge);
             },
         });
         this._cursor = new CursorController(deps);
@@ -340,7 +355,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         }
         this._runEventCommand(detectEvents(this._latest, result.cards));
         this._latest = result.cards;
-        this._recordSamples(result.cards, now);
+        this._samples.record(result.cards, now);
         this._renderCards(result.cards, now);
         this._renderExtraUsage(result.extraUsage);
         this._renderPanel();
@@ -359,6 +374,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             waiting: () => this._sessionGroup.read('waiting'),
             pause: () => this._sessionGroup.read('pause'),
             sessions: () => this._sessionGroup.read('today'),
+            awake: () => this._awake.refresh(),
             cursor: () => this._cursor.refresh(),
             accounts: cards => this._accounts.refresh(cards),
             codex: () => this._codex.refresh(),
@@ -445,22 +461,14 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._pingLabel.visible = true;
     }
 
-    // Notify when a limit first crosses 90% or 100%, and once per window when
-    // the pace projects it running dry at least 1 h before its reset. The
-    // latches (lib/pure/events.js) hold the hysteresis; this only notifies.
+    // Thin shims over lib/samples.js, which owns the history, the forecasts
+    // and the latches.
+    get _forecasts() {
+        return this._samples.forecasts;
+    }
+
     _checkAlerts(cards) {
-        if (!this._settings.get_boolean('alerts-enabled'))
-            return;
-        for (const {card, threshold} of latchCrossings(this._alertFired, cards)) {
-            const tail = card.resetsAt ? ` - ${formatResets(card.resetsAt)}` : '';
-            Main.notify(_('Claude usage'),
-                _('%s reached %d%%').format(card.label, threshold) + tail);
-        }
-        for (const {card, forecast: fc} of latchPaceAlerts(this._paceAlerted, cards, this._forecasts)) {
-            Main.notify(_('Claude usage'),
-                _('%s is on pace to run out before it resets').format(card.label) +
-                ` - ${formatForecast(fc)}`);
-        }
+        this._samples.checkAlerts(cards);
     }
 
     // The dropdown takes a share of the monitor rather than a fixed width, so
@@ -488,44 +496,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
             this.menu.box.add_style_class_name('cu-light');
     }
 
-    _loadHistory() {
-        // Entries are [epochMs, percent] pairs; history written by versions that
-        // stored bare percents migrates via normalizeHistory (sparkline keeps
-        // working, the forecast simply ignores the timestampless entries).
-        try {
-            const obj = JSON.parse(this._settings.get_string('history'));
-            return new Map(Object.entries(obj)
-                .map(([k, v]) => [k, normalizeHistory(v).slice(-HISTORY_MAX)]));
-        } catch {
-            return new Map();
-        }
-    }
-
-    _saveHistory() {
-        try {
-            this._settings.set_string('history',
-                JSON.stringify(Object.fromEntries(this._history)));
-        } catch {
-            // non-fatal: sparkline history is best-effort
-        }
-    }
-
-    // The bookkeeping a poll does before anything is drawn: one timestamped
-    // sample per limit (sparkline + burn-rate forecast), the forecasts, and
-    // the alerts they may fire. Rendering below only reads what this wrote.
-    _recordSamples(cards, now) {
-        for (const card of cards) {
-            const hist = this._history.get(card.key) ?? [];
-            hist.push([now, card.percent]);
-            if (hist.length > HISTORY_MAX)
-                hist.shift();
-            this._history.set(card.key, hist);
-            this._forecasts.set(card.key, forecast(hist, card.resetsAt, now));
-        }
-        this._saveHistory();
-        this._checkAlerts(cards);
-    }
-
     // The cards the dropdown lists and the top bar ranks (shownCards):
     // per-model limits only while the user wants them.
     _shown(cards) {
@@ -551,7 +521,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._cardsBox.add_child(widget);
             }
             widget.setCompact(compact);
-            widget.update(card, this._history.get(card.key) ?? [], this._forecasts.get(card.key),
+            widget.update(card, this._samples.history(card.key), this._forecasts.get(card.key),
                 weekOverWeek(this._warehouse, card.key, now, this._warehouseAccount));
         }
         // Drop cards that disappeared.
@@ -621,6 +591,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         this._unwatchWake?.();
         this._unwatchWake = null;
         this._sessionGroup.destroy();
+        this._awake.destroy();
         this._accounts.destroy();
         this._settings?.disconnectObject(this);
         this._ifaceSettings?.disconnectObject(this);

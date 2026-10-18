@@ -4,7 +4,9 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 
 import {buildAccountsGroups} from './prefs/accounts.js';
 import {buildBehavior} from './prefs/general.js';
-import {buildCodex, buildCost, buildCursor, buildPause, buildWaiting} from './prefs/integrations.js';
+import {
+    buildAwake, buildCodex, buildCost, buildCursor, buildPause, buildWaiting,
+} from './prefs/integrations.js';
 import {buildPings} from './prefs/pings.js';
 import {buildSessions, buildSnapshots} from './prefs/sessions.js';
 import {buildUpdates} from './prefs/updates.js';
@@ -46,6 +48,7 @@ export default class ClaudeUsagePanelPrefs extends ExtensionPreferences {
         integrations.add(buildCursor(this, settings));
         integrations.add(buildWaiting(this, settings));
         integrations.add(buildPause(this, settings));
+        integrations.add(buildAwake(this, settings));
         integrations.add(buildCodex(this, settings));
     }
 

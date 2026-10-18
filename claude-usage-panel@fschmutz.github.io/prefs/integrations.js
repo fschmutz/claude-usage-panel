@@ -1,8 +1,10 @@
-// The Integrations tab: session cost, Cursor spend, OpenAI Codex.
+// The Integrations tab: session cost, Cursor spend, Waiting, Pause, Awake,
+// OpenAI Codex.
 // Split out of prefs.js by tab: `prefs` is the ExtensionPreferences
 // instance, for its path, its cancellable and `_closed()` (see prefs.js).
 
 import Adw from 'gi://Adw';
+import Gtk from 'gi://Gtk';
 
 import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {storeSecret, lookupSecret} from '../lib/secretStore.js';
@@ -89,6 +91,56 @@ export function buildPause(prefs, settings) {
     settings.bind('pause-enabled', row, 'active', 0);
     pause.add(row);
     return pause;
+}
+
+export function buildAwake(prefs, settings) {
+    const awake = new Adw.PreferencesGroup({
+        title: _('Awake (optional)'),
+        description: _('Keep this machine from sleeping while Claude Code is running or waiting on you, and/or for a timer, with a countdown on the top bar. Off by default. The machine is held by a child process (systemd-inhibit), so the assertion is released whatever happens to the holder, and a recovery backstop undoes anything a crashed session left behind. It needs `./install.sh awake`, which installs that backstop and turns this on.'),
+    });
+    const row = new Adw.SwitchRow({
+        title: _('Show the Awake section'),
+        subtitle: _('Adds Awake to the dropdown and a countdown to the top bar'),
+    });
+    settings.bind('awake-enabled', row, 'active', 0);
+    awake.add(row);
+
+    // The dangerous half gets its own switch, its own warning, and a separate
+    // install step. It is never implied by turning the section on.
+    const lidRow = new Adw.SwitchRow({
+        title: _('Keep running with the lid closed (experimental)'),
+        subtitle: _('Needs `./install.sh awakelid`. A machine that cannot sleep with the lid shut must stay on a hard, ventilated surface - never in a closed bag.'),
+    });
+    settings.bind('awake-lid-enabled', lidRow, 'active', 0);
+    awake.add(lidRow);
+
+    const floor = (key, title, subtitle, min, max) => {
+        const spin = new Adw.SpinRow({
+            title, subtitle,
+            adjustment: new Gtk.Adjustment({lower: min, upper: max, step_increment: 1}),
+        });
+        settings.bind(key, spin, 'value', 0);
+        awake.add(spin);
+        return spin;
+    };
+    const lowPower = floor('awake-battery-floor', _('Low-power floor (%)'),
+        _('Below this, on battery, the session asks for Low Power Mode'), 0, 100);
+    const end = floor('awake-end-floor', _('End floor (%)'),
+        _('Below this, on battery, the session ends itself. 0 turns it off.'), 0, 100);
+    // The two floors must not cross: the end floor is the one that protects
+    // the machine, so the other one moves out of its way (the same repair
+    // normalizeAwakeConfig makes when a stored pair is out of order).
+    lowPower.connect('notify::value', row => {
+        if (end.get_value() > 0 && row.get_value() <= end.get_value())
+            end.set_value(Math.max(0, row.get_value() - 1));
+    });
+    end.connect('notify::value', row => {
+        if (row.get_value() > 0 && lowPower.get_value() <= row.get_value())
+            lowPower.set_value(Math.min(100, row.get_value() + 1));
+    });
+    floor('awake-max-hours', _('Longest session (hours)'),
+        _('The hard ceiling on one session, however often it is extended'), 1, 12);
+    return awake;
 }
 
 export function buildCodex(prefs, settings) {

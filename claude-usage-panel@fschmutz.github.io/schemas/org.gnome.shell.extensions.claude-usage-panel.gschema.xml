@@ -82,6 +82,48 @@
         installs (and that turns this on).
       </description>
     </key>
+    <key name="awake-enabled" type="b">
+      <default>false</default>
+      <summary>Show the Awake section</summary>
+      <description>
+        Add an "Awake" section that keeps this machine from sleeping while
+        Claude Code is running or waiting on you, and/or for a timer, with a
+        countdown in the top bar. Off by default; with it off nothing is read.
+        It needs the recovery backstop that `./install.sh awake` installs (and
+        that turns this on). The machine is held by a child process, so the
+        assertion is released whatever happens to the holder.
+      </description>
+    </key>
+    <key name="awake-lid-enabled" type="b">
+      <default>false</default>
+      <summary>Also stop the lid from sleeping the machine (experimental)</summary>
+      <description>
+        EXPERIMENTAL. Let an Awake session keep running with the lid closed: a
+        systemd-logind handle-lid-switch inhibitor on Linux, and on macOS
+        `pmset -a disablesleep`, which needs the narrow sudoers rule
+        `./install.sh awakelid` installs. A machine that cannot sleep with the
+        lid shut has to stay on a hard, ventilated surface - never in a closed
+        bag. Off by default, and never implied by a click.
+      </description>
+    </key>
+    <key name="awake-battery-floor" type="i">
+      <default>40</default>
+      <summary>Low-power floor (percent)</summary>
+      <description>Below this battery percentage on battery power, an Awake session asks for Low Power Mode. Kept above the end floor.</description>
+      <range min="0" max="100"/>
+    </key>
+    <key name="awake-end-floor" type="i">
+      <default>10</default>
+      <summary>End floor (percent)</summary>
+      <description>Below this battery percentage on battery power, an Awake session ends itself. 0 turns that off; a battery that cannot be read twice in a row ends it too.</description>
+      <range min="0" max="100"/>
+    </key>
+    <key name="awake-max-hours" type="i">
+      <default>12</default>
+      <summary>Longest Awake session (hours)</summary>
+      <description>The hard ceiling on one session, whatever is asked for and however often it is extended.</description>
+      <range min="1" max="12"/>
+    </key>
     <key name="sessions-layout" type="s">
       <default>'merged'</default>
       <summary>How the session sections are laid out</summary>
