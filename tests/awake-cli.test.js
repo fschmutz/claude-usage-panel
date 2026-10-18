@@ -136,6 +136,27 @@ test('`off` with nothing held says so and leaves no files behind', async (t) => 
   assert.equal(fs.existsSync(awake.sessionFile()), false);
 });
 
+test('`off` never signals a panel that holds the session itself', async (t) => {
+  // A macOS holder is the user's menu-bar app: a SIGTERM would quit it.
+  const {io, awake, text} = world(t);
+  const signalled = [];
+  awake.writeSession({
+    ...awake.newSession({seconds: 3600}),
+    owner: {pid: process.pid, host: 'box', kind: 'macos'},
+  });
+  const realKill = process.kill;
+  process.kill = (pid, signal) => {
+    if (signal === 0) return realKill.call(process, pid, signal);
+    signalled.push([pid, signal]);
+    return true;
+  };
+  t.after(() => { process.kill = realKill; });
+  assert.equal(await main(['off'], io), 0);
+  assert.deepEqual(signalled, [], 'the app is asked by dropping the session file, not by a signal');
+  assert.equal(fs.existsSync(awake.sessionFile()), false);
+  assert.match(text(), /awake off/);
+});
+
 test('`extend` pushes the deadline out, and refuses with nothing to extend', async (t) => {
   const {io, awake, text} = world(t);
   await assert.rejects(() => main(['extend', '--for', '30m'], io), /nothing to extend/);

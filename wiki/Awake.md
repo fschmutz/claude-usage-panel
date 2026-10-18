@@ -77,6 +77,14 @@ child is bounded by its own `sleep`, so even an orphan expires on time.
 One holder at a time, recorded in `session.json` with its pid and host. A
 second starter sees the live owner and refuses rather than double-holding.
 
+Who the holder is depends on who started the session. `claudectl awake on`
+(and the GNOME dropdown, which runs it) spawns a detached holder of its own;
+the macOS app holds its session itself. `claudectl awake off` therefore signals
+only its own holder: a session held by the menu-bar app is ended by dropping
+the session file, which the app notices on its next 30-second poll, with the
+undo done by the CLI right away. Sending the app a `SIGTERM` would quit it,
+which is not what "end this awake session" should mean.
+
 ## When a session ends
 
 A session ends on the first of:

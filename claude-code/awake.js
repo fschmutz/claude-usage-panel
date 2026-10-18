@@ -364,7 +364,11 @@ export function openAwake(io = {}) {
    */
   function stop({waitMs = 6_000} = {}) {
     const owner = liveOwner();
-    if (owner) {
+    // Only OUR detached holder is signalled. A panel that holds the session
+    // itself (kind 'macos') is the user's menu-bar app: SIGTERM would quit it.
+    // Dropping the session file is the signal it reads instead - it lets go of
+    // its own child on its next poll - and the undo below is done here.
+    if (owner && owner.kind === 'cli') {
       try {
         process.kill(owner.pid, 'SIGTERM');
       } catch {
