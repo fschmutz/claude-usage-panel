@@ -3,7 +3,9 @@
 // named logins (account-cli.js over accounts.js), `claudectl session …`
 // snapshots the running Claude Code sessions and reopens them as tabs
 // (session-cli.js over tabs.js), `claudectl codex …` does for OpenAI Codex
-// logins what `account` does for Claude ones (codex-cli.js over codex.js).
+// logins what `account` does for Claude ones (codex-cli.js over codex.js),
+// `claudectl awake …` keeps the machine from sleeping while they run
+// (awake-cli.js over awake.js).
 // This file only dispatches and owns the process edges (exit code, stderr, the
 // TTY questions); `main` is exported for the tests and runs when the file is
 // invoked directly (the install.sh shim, the npm bin symlink).
@@ -12,12 +14,13 @@ import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 import * as account from './account-cli.js';
+import * as awake from './awake-cli.js';
 import {commandHelp, helpRequest} from './cli-help.js';
 import * as codex from './codex-cli.js';
 import * as session from './session-cli.js';
 import * as waiting from './waiting-cli.js';
 
-const GROUPS = {account, codex, session, waiting};
+const GROUPS = {account, awake, codex, session, waiting};
 
 const HELP = `claudectl - Claude Code from the command line
 
@@ -25,6 +28,7 @@ const HELP = `claudectl - Claude Code from the command line
   claudectl session ...   running sessions: list, focus, save, store, show, open, purge, autosave
   claudectl codex ...     named OpenAI Codex logins: list, current, save, use, remove, usage
   claudectl waiting ...   live sessions waiting on you: list, focus
+  claudectl awake ...     keep this machine awake: status, on, off, extend, recover
 
   claudectl <group> --help            the commands of one group
   claudectl <group> <command> --help  one command, in full (help and -h work too)`;

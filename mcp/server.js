@@ -22,6 +22,7 @@ import {openCodexStore} from '../claude-code/codex.js';
 import {liveLoginUsage} from '../claude-code/login-usage.js';
 import {withPace} from '../claude-code/pace.js';
 import {historyPath, warehousePath} from '../claude-code/paths.js';
+import {AWAKE_TOOL, callAwakeTool} from './awake.js';
 import {CODEX_TOOL_NAMES, CODEX_TOOLS, callCodexTool} from './codex.js';
 import {readLastPing, refreshSessions, renderPing, renderSessions} from './sessions.js';
 import {
@@ -100,12 +101,19 @@ export async function handleRequest(msg, io = {}) {
     case 'ping':
       return {};
     case 'tools/list':
-      return {tools: [GET_USAGE_TOOL, WAITING_TOOL, ...ACCOUNT_TOOLS, ...CODEX_TOOLS]};
+      return {tools: [GET_USAGE_TOOL, WAITING_TOOL, AWAKE_TOOL, ...ACCOUNT_TOOLS, ...CODEX_TOOLS]};
     case 'tools/call': {
       const name = msg.params?.name;
       if (name === 'waiting') {
         try {
           return getWaiting(io);
+        } catch (e) {
+          return {content: [{type: 'text', text: e.message}], isError: true};
+        }
+      }
+      if (name === 'awake') {
+        try {
+          return callAwakeTool(msg.params?.arguments, io);
         } catch (e) {
           return {content: [{type: 'text', text: e.message}], isError: true};
         }

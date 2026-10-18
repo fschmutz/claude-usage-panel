@@ -169,12 +169,19 @@ test('ping - empty result', async () => {
     assert.deepEqual(await handleRequest({method: 'ping'}), {});
 });
 
-test('tools/list - exposes get_usage, waiting, the account tools and the Codex ones', async () => {
+test('tools/list - exposes get_usage, waiting, awake, the account tools and the Codex ones', async () => {
     const r = await handleRequest({method: 'tools/list'});
     assert.deepEqual(r.tools.map(t => t.name), [
-        'get_usage', 'waiting', 'list_accounts', 'save_account', 'switch_account',
+        'get_usage', 'waiting', 'awake', 'list_accounts', 'save_account', 'switch_account',
         'list_codex_accounts', 'save_codex_account', 'switch_codex_account', 'get_codex_usage',
     ]);
+    // awake can change how this machine sleeps, so it is NOT read-only - and
+    // it must never be able to switch closed-lid mode on.
+    const awake = r.tools.find(t => t.name === 'awake');
+    assert.equal(awake.annotations.readOnlyHint, false);
+    assert.deepEqual(Object.keys(awake.inputSchema.properties),
+        ['action', 'duration', 'whileSessions']);
+    assert.deepEqual(awake.inputSchema.properties.action.enum, ['status', 'on', 'off']);
     const tool = r.tools[0];
     assert.equal(tool.inputSchema.type, 'object');
     assert.deepEqual(tool.outputSchema.required, ['limits']);

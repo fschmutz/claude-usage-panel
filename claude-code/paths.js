@@ -106,6 +106,12 @@ export function pauseDir(io) {
   return path.join(stateDir(io), 'pause');
 }
 
+/** Awake: the session being held, the recovery journal the backstop undoes
+ *  from, the holder's lock, and its log (lib/pure/awake.js names). */
+export function awakeDir(io) {
+  return path.join(stateDir(io), 'awake');
+}
+
 /** 90 days of poll samples, one JSONL line per poll that moved. */
 export function warehousePath(io) {
   return path.join(stateDir(io), 'history.jsonl');

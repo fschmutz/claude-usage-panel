@@ -14,6 +14,9 @@
         "claude-code/statusline.js",
         "claude-code/waiting-hook.js",
         "claude-code/pause-hook.js",
+        // The detached Awake holder: claude-code/awake.js spawns it by path
+        // (`node <tree>/claude-code/awake-worker.js`), so nothing imports it.
+        "claude-code/awake-worker.js",
         // Run by scripts/install/node.sh to merge the hooks into settings.json.
         "scripts/install/hooks-edit.mjs",
         // Run by hand or by waybar/tmux/polybar; no install target.

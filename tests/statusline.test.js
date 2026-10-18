@@ -146,6 +146,7 @@ test('parseConfig picks segments/order and token mode, dropping unknowns', () =>
         parseConfig(['--segments=nope,']).segments, ['context', 'limits', 'tokens', 'ping']);
     assert.deepEqual(parseConfig(['--segments=sessions']).segments, ['sessions']);
     assert.deepEqual(parseConfig(['--segments=waiting,limits']).segments, ['waiting', 'limits']);
+    assert.deepEqual(parseConfig(['--segments=awake,limits']).segments, ['awake', 'limits']);
     assert.equal(parseConfig(['--tokens=fresh']).includeCacheRead, false);
     assert.equal(parseConfig(['--tokens=all']).includeCacheRead, true);
 });
@@ -301,4 +302,27 @@ test('accountSegment names the active account, and points at a freer one from th
     // a switch just made (by anyone) holds the hint back for the cooldown
     store.writeLastSwitch({from: 'PERSO', to: 'PRO'});
     assert.equal(strip(accountSegment(rateLimits(95, 40), {io, nowMs: NOW + 60_000})), '[PRO]');
+});
+
+// ── The awake segment ───────────────────────────────────────────────────────
+
+import {awakeSegment} from '../claude-code/statusline.js';
+import {openAwake} from '../claude-code/awake.js';
+import {sandboxHome} from './helpers.js';
+
+test('awakeSegment is silent at rest, counts down while held, and shouts when sleep is owed', (t) => {
+    const io = {...sandboxHome(t, {prefix: 'cup-sl-awake-'}), liveSessions: () => 0};
+    assert.equal(awakeSegment({io}), '', 'nothing held: the line stays short');
+
+    const awake = openAwake(io);
+    awake.writeSession({
+        ...awake.newSession({seconds: 3600}),
+        owner: {pid: process.pid, host: 'box', kind: 'cli'},
+    });
+    assert.match(strip(awakeSegment({io})), /^awake (0:59|1:00):\d\d$/);
+
+    // A session that ended without giving the setting back is the one case
+    // this segment is loud about.
+    awake.writeJournal(awake.newJournal({endsAt: Date.now() - 600_000, sleepDisabled: true}));
+    assert.equal(strip(awakeSegment({io})), 'awake? sleepDisabled');
 });

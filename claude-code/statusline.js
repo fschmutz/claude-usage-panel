@@ -24,9 +24,11 @@ import {
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {clockPace} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pace.js';
 import {formatLastPing, localDay} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
+import {awakeBadge} from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js';
 import {clampPercent, usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 import {warehouseAccount} from '../claude-usage-panel@fschmutz.github.io/lib/pure/warehouse.js';
 import {openStore} from './accounts.js';
+import {openAwake} from './awake.js';
 import {forecastMap} from './pace.js';
 import {lastPingPath, sessionIndexPath} from './paths.js';
 import {resetHint} from './stamps.js';
@@ -269,6 +271,18 @@ export function waitingSegment({io = {}} = {}) {
   return n ? `${SEV_COLOR.warning}wait ${n}${RESET}` : '';
 }
 
+// "awake 1:04:12": this machine is being held awake for Claude Code, and for
+// how much longer ("awake ∞" while it is held by the sessions alone). Silent
+// when nothing holds it - and loud, in the warning colour, when a session
+// ended without giving a setting back. Opt-in (--segments=…,awake).
+export function awakeSegment({io = {}} = {}) {
+  const state = openAwake(io).status();
+  if (state.recovery)
+    return `${SEV_COLOR.critical}awake? ${state.recovery.codes.join(',')}${RESET}`;
+  const badge = awakeBadge(state);
+  return badge ? `${DIM}awake ${badge}${RESET}` : '';
+}
+
 export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
   try {
     const store = openStore({...io, nowMs});
@@ -321,10 +335,11 @@ const SEGMENTS = {
   ping: () => pingSegment(),
   sessions: () => sessionsSegment(),
   waiting: () => waitingSegment(),
+  awake: () => awakeSegment(),
 };
 // `ping` is in the default list but renders nothing until session pings are
 // scheduled, so it costs an unconfigured user no width. `account`,
-// `sessions` and `waiting` are opt-in (--segments=account,…).
+// `sessions`, `waiting` and `awake` are opt-in (--segments=account,…).
 const DEFAULT_SEGMENTS = ['context', 'limits', 'tokens', 'ping'];
 
 // Configure the line from the command's argv (install.sh bakes these into the
