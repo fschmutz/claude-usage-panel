@@ -107,12 +107,15 @@ export function openAwake(io = {}) {
   }
 
   /** The whole picture: what holds, what is left, and whether anything is
-   *  owed back. Never throws - every surface renders from this. */
+   *  owed back. Never throws - every surface renders from this.
+   *
+   *  The registry is walked only for a hold that actually depends on it: the
+   *  status line renders this on every prompt, and a `ps` / `/proc` sweep per
+   *  render for a count nothing reads is not free. */
   function status() {
-    const sessions = liveSessions();
-    return awakeState({
-      session: readSession(), journal: readJournal(), sessions, nowMs: now(),
-    });
+    const session = readSession();
+    const sessions = session?.whileSessions ? liveSessions() : 0;
+    return awakeState({session, journal: readJournal(), sessions, nowMs: now()});
   }
 
   // ── the lock ────────────────────────────────────────────────────────────

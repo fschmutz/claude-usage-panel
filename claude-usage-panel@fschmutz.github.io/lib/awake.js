@@ -57,15 +57,18 @@ export function syncAwakeConfig(settings) {
  */
 export async function readAwakeState({nowMs = Date.now()} = {}) {
     const dir = awakeDir();
-    const [session, journal, live, waiting] = await Promise.all([
+    const [session, journal] = await Promise.all([
         readJSONAsync(GLib.build_filenamev([dir, 'session.json'])),
         readJSONAsync(GLib.build_filenamev([dir, 'journal.json'])),
-        listLiveSessions(),
-        listWaiting({nowMs}),
     ]);
-    // A session parked on a permission prompt counts: an unanswered prompt is
+    // The registry is walked only for a hold that actually depends on it. A
+    // session parked on a permission prompt counts: an unanswered prompt is
     // exactly when the machine must not drop off.
-    const sessions = live.length > 0 ? live.length : waiting.length;
+    let sessions = 0;
+    if (session?.whileSessions === true) {
+        const [live, waiting] = await Promise.all([listLiveSessions(), listWaiting({nowMs})]);
+        sessions = live.length > 0 ? live.length : waiting.length;
+    }
     return awakeState({session, journal, sessions, nowMs});
 }
 

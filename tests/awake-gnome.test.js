@@ -215,6 +215,28 @@ test('the floors reach the holder through config.json, written only when they mo
         {lowPowerFloor: 40, endFloor: 10, maxSeconds: 43200, thermalRules: true});
 });
 
+test('the registry is only walked for a hold that depends on it', async t => {
+    t.after(() => { stub.overrides = {}; });
+    const files = {[`${AWAKE}/session.json`]: session()};
+    install(files);
+    const gio = stub.overrides['gi://Gio'].File;
+    const real = gio.new_for_path;
+    const read = [];
+    gio.new_for_path = path => {
+        read.push(path);
+        return real(path);
+    };
+    const {readAwakeState} = await import('../claude-usage-panel@fschmutz.github.io/lib/awake.js');
+    await readAwakeState();
+    assert.deepEqual(read.filter(p => p.includes('/sessions')), [],
+        'a timer-only hold never touches the session registry');
+
+    read.length = 0;
+    files[`${AWAKE}/session.json`] = session({timed: false, whileSessions: true});
+    await readAwakeState();
+    assert.ok(read.some(p => p.endsWith('/sessions')), 'a while-sessions hold does');
+});
+
 test('off (the default): no file is read, no badge, no section', async t => {
     t.after(() => { stub.overrides = {}; });
     install({});

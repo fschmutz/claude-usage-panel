@@ -91,8 +91,14 @@ final class AwakeController: ObservableObject {
             return
         }
         let now = Date().timeIntervalSince1970 * 1000
+        // The registry is walked only for a hold that actually depends on it:
+        // this runs on every poll and on the holder's own 30 s loop, and a `ps`
+        // sweep for a count nothing reads is not free.
         let (session, journal, sessions) = await Task.detached(priority: .utility) {
-            (AwakeStore.readSession(), AwakeStore.readJournal(), Self.liveSessionCount())
+            () -> (AwakeSession?, AwakeJournal?, Int) in
+            let session = AwakeStore.readSession()
+            let sessions = session?.whileSessions == true ? Self.liveSessionCount() : 0
+            return (session, AwakeStore.readJournal(), sessions)
         }.value
         state = Awake.state(session: session, journal: journal, sessions: sessions, nowMs: now)
     }

@@ -56,6 +56,26 @@ test('status with nothing held reads clean, and nothing is created', (t) => {
   assert.equal(fs.existsSync(awakeDir(io)), false, 'a read must not create the store');
 });
 
+test('status only walks the session registry for a hold that depends on it', (t) => {
+  // The status line renders this on every prompt: a /proc sweep for a count
+  // nothing reads is not free.
+  let scans = 0;
+  const {io, awake} = world(t, {platform: 'linux'});
+  const counted = openAwake({...io, liveSessions: () => (scans += 1)});
+  awake.writeSession({
+    ...awake.newSession({seconds: 3600}), owner: {pid: process.pid, host: 'box', kind: 'cli'},
+  });
+  counted.status();
+  assert.equal(scans, 0, 'a timer-only hold never asks');
+
+  awake.writeSession({
+    ...awake.newSession({seconds: null, whileSessions: true}),
+    owner: {pid: process.pid, host: 'box', kind: 'cli'},
+  });
+  counted.status();
+  assert.equal(scans, 1);
+});
+
 test('the config comes from config.json, with the floors repaired', (t) => {
   const {awake} = world(t);
   assert.deepEqual(awake.config(),
