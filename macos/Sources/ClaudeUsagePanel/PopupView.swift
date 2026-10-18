@@ -159,6 +159,9 @@ struct PopupView: View {
                 }
                 SettingsIcon()
                 HeaderIcon(systemImage: "xmark", title: "Quit") {
+                    // A closed-lid session outlives this process, so give it
+                    // back here rather than leave it to the backstop.
+                    model.awake.releaseNow()
                     NSApplication.shared.terminate(nil)
                 }
             }
@@ -239,6 +242,12 @@ struct PopupView: View {
                 if model.showSessions && !model.sessions.isEmpty {
                     SessionsSectionView(model: model)
                 }
+            }
+
+            // Right under the session sections it exists for: what is
+            // keeping this Mac up is only interesting next to what is running.
+            if model.awake.enabled {
+                AwakeSectionView(awake: model.awake)
             }
 
             if model.cursorEnabled {

@@ -191,6 +191,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── PauseState.swift          # pause / resume through claudectl, followed until terminal
         ├── PauseView.swift           # the opt-in Pause section in the popup and Settings
         ├── AwakeState.swift          # the awake session: the caffeinate child, the journal, the floors
+        ├── AwakeStore.swift          # the awake files, the shared lock and the pmset calls
         ├── AwakeView.swift           # the opt-in Awake section in the popup and Settings
         ├── SessionBoardView.swift    # the merged / tabbed Sessions section in the popup
         ├── SavedSessions.swift       # the claudectl snapshot store in Settings

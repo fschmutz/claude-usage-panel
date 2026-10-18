@@ -22,6 +22,7 @@ struct SettingsView: View {
                 todaysSessions
                 waitingOnYou
                 PauseSettingsSection(pause: model.pause)
+                AwakeSettingsSection(awake: model.awake)
                 SavedSessionsSection()
                 SessionPingSection(pings: model.sessionPing)
             }

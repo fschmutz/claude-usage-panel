@@ -158,6 +158,8 @@ final class UsageModel: ObservableObject {
     let saved = SavedSessions()
     /// Pause / resume every live session (opt-in, `pauseEnabled`).
     let pause = PauseState()
+    /// Keep this Mac awake while Claude Code works (opt-in, `awakeEnabled`).
+    let awake = AwakeController()
     private var forwarders: [AnyCancellable] = []
 
     /// Per-limit [epochMs, percent] samples - sparkline + burn-rate forecast.
@@ -255,7 +257,7 @@ final class UsageModel: ObservableObject {
         // see; assumeIsolated says so, and traps if it ever were not.
         for child in [
             sessionPing.objectWillChange, updates.objectWillChange, saved.objectWillChange,
-            pause.objectWillChange,
+            pause.objectWillChange, awake.objectWillChange,
         ] {
             forwarders.append(
                 child.sink { [weak self] _ in
@@ -378,6 +380,7 @@ final class UsageModel: ObservableObject {
         await refreshSessions()
         await refreshWaiting()
         await pause.refresh()
+        await awake.refresh()
         await refreshCursor()
         await refreshAccounts()
         refreshCodex()
@@ -543,8 +546,9 @@ final class UsageModel: ObservableObject {
         let name = showAccount ? activeAccount ?? "" : ""
         let text = PanelReadout.text(
             account: name, label: worst.label, percent: worst.percent, known: reading.known)
+        let awakeBadge = awake.badge.isEmpty ? "" : "\(awake.badge) · "
         let wait = waiting.isEmpty ? "" : "\(waiting.count) · "
-        return "\(wait)\(text)"
+        return "\(awakeBadge)\(wait)\(text)"
     }
 
     static let timeFormatter: DateFormatter = {
