@@ -83,6 +83,7 @@ _prune_node_tree() {
     _mcp_installed && return 0
     _waiting_installed && return 0 # scripts/install/waiting.sh: the hook runs from it
     _pause_installed && return 0   # scripts/install/pause.sh: same
+    _awake_installed && return 0   # scripts/install/awake.sh: the holder runs from it
     act rm -rf "$NODE_TREE"
 }
 
@@ -157,7 +158,7 @@ install_statusline() {
     _json set "$CLAUDE_SETTINGS" statusLine \
         "{\"type\": \"command\", \"command\": $(_json encode "$command")}"
     ok "installed to $dest (segments: $SL_SEGMENTS, tokens: $SL_TOKENS)"
-    echo "  Customize: re-run with --segments=context,limits,tokens,ping,account,sessions,waiting and --tokens=all|fresh."
+    echo "  Customize: re-run with --segments=context,limits,tokens,ping,account,sessions,waiting,awake and --tokens=all|fresh."
     echo "  Open a Claude Code session or run /statusline to see it."
 }
 

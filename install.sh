@@ -25,6 +25,13 @@
 #   ./install.sh pause              Claude Code hooks so `claudectl session pause|resume`
 #                                   reaches every live session, idle ones included, and
 #                                   reports per session (opt-in; needs cli, installs it)
+#   ./install.sh awake             keep this machine awake while Claude Code works:
+#                                   `claudectl awake`, the panel section, and the
+#                                   recovery backstop that releases it if the holder
+#                                   dies (opt-in; needs cli, installs it)
+#   ./install.sh awakelid           closed-lid mode for the awake target (EXPERIMENTAL):
+#                                   on macOS the narrow sudoers rule for four exact
+#                                   pmset commands, on Linux a logind lid inhibitor
 #   ./install.sh plan [--day HH:MM-HH:MM] [--pings N] [--compare a,b]
 #                                   recommend sessionping times for your working
 #                                   day, and score the schedule you already have
@@ -38,7 +45,7 @@
 #                                          swift build (automatic without a Swift toolchain)
 #   ./install.sh macos --appdir=DIR        install the app in DIR (default: /Applications
 #                                          when writable, else ~/Applications - no admin)
-#   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions,waiting] \
+#   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions,waiting,awake] \
 #                           --tokens=all|fresh
 #                                          choose status-line segments + token mode
 #   ./install.sh --list             show detected + installed targets
@@ -77,6 +84,8 @@ UUID="claude-usage-panel@fschmutz.github.io"
 . "$ROOT/scripts/install/waiting.sh"
 # shellcheck source=scripts/install/pause.sh
 . "$ROOT/scripts/install/pause.sh"
+# shellcheck source=scripts/install/awake.sh
+. "$ROOT/scripts/install/awake.sh"
 # shellcheck source=scripts/install/targets.sh
 . "$ROOT/scripts/install/targets.sh"
 
