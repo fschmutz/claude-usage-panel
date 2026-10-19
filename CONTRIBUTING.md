@@ -62,6 +62,8 @@ wiki page.
 ├── wiki/                    # source of the GitHub wiki (published by wiki.yml)
 ├── tests/                   # node --test suites + the shared cross-port fixtures
 ├── scripts/                 # install/ targets · pack-gnome · auto-update · session-ping · versions
+│   ├── attribution-guard.sh # the attribution gate (copied from the template; do not fork)
+│   └── tests/               # its fixtures and shell suite (everything else tests from tests/)
 └── install.sh               # unified installer (gnome · statusline · mcp · cli · macos · autoupdate · sessionping)
 ```
 
