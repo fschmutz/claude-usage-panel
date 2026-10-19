@@ -44,13 +44,28 @@ is the human who owns the change. It fails a pull request whose commits are
 authored or committed by an address that
 [`.github/attribution-allow.txt`](https://github.com/fschmutz/claude-usage-panel/blob/main/.github/attribution-allow.txt)
 does not name, that carry a `Co-authored-by:` trailer naming anyone else, or
-that end in an assistant footer - and the same for the pull request body (the
-agent body markers, a link to an agent run, an "Open in …" footer, a
-"Generated with …" line). It is deliberately narrow about prose: the bare word
-"cursor" is a database cursor far more often than it is a tool, so only footer
-shapes, trailer keys and URLs count. `scripts/tests/attribution-guard-test.sh`
-runs first, against `scripts/tests/fixtures/` - a guard that has quietly
-stopped matching is worse than no guard, because the check is green either way.
+that end in an assistant footer - and the same for the pull request **title and
+body** (the agent body markers, a link to an agent run, an "Open in …" footer,
+a "Generated with …" line).
+
+The **name** beside the address is a check of its own, and an allow-listed
+address does not excuse it: a commit authored by "Cursor Agent" or "Claude"
+fails whatever address it carries, because an assistant committing through
+somebody's account still signs the history with its own name. A real person
+whose name collides - a Jean-Claude, a Gemini - is exempted by a `name:` line
+in the allow file, and nothing else gets past that rule.
+
+It is deliberately narrow about prose: the bare word "cursor" is a database
+cursor far more often than it is a tool, so only footer shapes, trailer keys
+and URLs count, and the two bare agent phrases are matched at the head of a
+line only. A commit message naming three assistants mid-sentence - which is
+what a commit changing this guard looks like - passes.
+
+Deleting the allow file does not open the gate: the guard warns, falls back to
+the address built into the script, and keeps failing everybody else.
+`scripts/tests/attribution-guard-test.sh` runs first, 30 cases over
+`scripts/tests/fixtures/` - a guard that has quietly stopped matching is worse
+than no guard, because the check is green either way.
 
 The script, its suite and its fixtures are copied **byte for byte** from the
 shared template repository, which is why they are formatted to that repo's
@@ -62,14 +77,15 @@ pull request from a new contributor is red until a maintainer adds it in its
 own commit. Widening the list is never a step on the way to a green check.
 
 The guard reads the commits through `repos/:repo/pulls/:number/commits`, so it
-runs on pull requests only; nothing reaches `main` another way. A pull request
-**body** is editable after the fact, and `ci.yml` does not run on the `edited`
+runs on pull requests only; nothing reaches `main` another way. A title and a
+body are editable after the fact, and `ci.yml` does not run on the `edited`
 type, so the separate
 [`attribution-guard.yml`](https://github.com/fschmutz/claude-usage-panel/blob/main/.github/workflows/attribution-guard.yml)
 workflow runs the same two commands on exactly that event, as
-`attribution guard (edited body)`. It is the one gate that is deliberately not
-behind `ci-gate`: a description edited after the last push would otherwise
-rebuild every other job, macOS included.
+`attribution guard (edited title or body)`, and the script re-reads both fields
+from the API rather than trusting the payload's snapshot of the edit. It is the
+one gate that is deliberately not behind `ci-gate`: a description edited after
+the last push would otherwise rebuild every other job, macOS included.
 
 `bash32` runs `scripts/bash32-smoke.sh` inside a `bash:3.2` container - the
 version macOS still ships as `/bin/bash`, and the one the launchd agents

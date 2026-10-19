@@ -44,16 +44,22 @@ semantic versioning.
   `scripts/attribution-guard.sh` fails a pull request whose commits are
   authored or committed by an address `.github/attribution-allow.txt` does not
   name, carry a `Co-authored-by:` trailer naming anyone else, or end in an
-  assistant footer, and checks the pull request body for the same (the agent
-  body markers, a link to an agent run, an "Open in …" footer, a
-  "Generated with …" line). It is narrow about prose on purpose: only footer
-  shapes, trailer keys and URLs count, so a commit about a database cursor
-  passes. It runs as the `attribution guard` job behind `ci-gate`, preceded by
-  `scripts/tests/attribution-guard-test.sh` over `scripts/tests/fixtures/`, and
-  as `attribution guard (edited body)` from its own workflow on the one event
-  `ci.yml` does not see. The script, its suite and its fixtures are copied byte
-  for byte from a shared template repository; only the allow list is this
-  repo's.
+  assistant footer, and checks the pull request title and body for the same
+  (the agent body markers, a link to an agent run, an "Open in …" footer, a
+  "Generated with …" line). The **name** beside the address is its own check:
+  "Cursor Agent" or "Claude" fails whatever address it carries, and a real
+  person whose name collides is exempted by a `name:` line. It is narrow about
+  prose on purpose - only footer shapes, trailer keys and URLs count, and the
+  bare agent phrases only at the head of a line - so a commit about a database
+  cursor, or one naming three assistants mid-sentence, passes. Deleting the
+  allow file warns and falls back to the built-in address rather than failing
+  open. It runs as the `attribution guard` job behind `ci-gate`, preceded by
+  `scripts/tests/attribution-guard-test.sh` (30 cases over
+  `scripts/tests/fixtures/`), and as
+  `attribution guard (edited title or body)` from its own workflow on the one
+  event `ci.yml` does not see. The script, its suite and its fixtures are
+  copied byte for byte from a shared template repository; only the allow list
+  is this repo's.
 
 ### Changed
 

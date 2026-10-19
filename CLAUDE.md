@@ -137,18 +137,24 @@ The `attribution guard` job runs `scripts/attribution-guard.sh`: **the author
 of record is the human who owns the change.** It fails a commit whose author or
 committer address is not on `.github/attribution-allow.txt` (plus the built-in
 `committer:noreply@github.com` and the `dependabot[bot]` /
-`github-actions[bot]` / `renovate[bot]` logins), a `Co-authored-by:` trailer
+`github-actions[bot]` / `renovate[bot]` logins), whose author or committer
+NAME reads as a tool whatever address it carries (a real person who collides
+needs a `name:` line; nothing else gets past it), a `Co-authored-by:` trailer
 naming anyone else, an assistant footer in a commit message, and the same in
-the PR body. The script, `scripts/tests/attribution-guard-test.sh` and
+the PR title and body. Prose is safe on purpose: only footer shapes, trailer
+keys and URLs count, and the bare agent phrases only at the head of a line. A
+missing or unreadable allow file warns and falls back to the built-in address
+rather than failing open. The script,
+`scripts/tests/attribution-guard-test.sh` (30 cases) and
 `scripts/tests/fixtures/` are copied BYTE FOR BYTE from the shared
 GITHUB-TEMPLATE repository: fix a rule there and copy it again, never fork it
 in place - which is why they keep that repo's formatting and are the one
 exclusion in the `no-em-dash` hook. Only the allow list is ours. The guard
 needs the pull request (it reads `pulls/:number/commits`), so the ci.yml job
 runs it on `pull_request` only, and `.github/workflows/attribution-guard.yml`
-re-runs the same two commands on the `edited` type - the body is editable after
-the fact, and rebuilding every other gate for a description edit is not worth
-it. It is the one gate deliberately outside `ci-gate`.
+re-runs the same two commands on the `edited` type - the title and body are
+editable after the fact, and rebuilding every other gate for a description edit
+is not worth it. It is the one gate deliberately outside `ci-gate`.
 
 The `plugin-validate` job runs `claude plugin validate` on the marketplace
 and on `plugin/` with the CLI pinned in `.github/claude-cli` (Dependabot's npm
