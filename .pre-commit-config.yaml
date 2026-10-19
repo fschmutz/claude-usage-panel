@@ -46,7 +46,7 @@ repos:
 
   # JavaScript (GNOME Shell / GJS)
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: 809d037d62978decc620b5a55e8ee5b8b54d8d65  # frozen: v10.11.0
+    rev: 10e29bbf6681d33cb90d555ea2f7ea71e162d259  # frozen: v10.12.0
     hooks:
       - id: eslint
         files: \.m?js$
