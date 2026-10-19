@@ -167,6 +167,13 @@ install_awakelid() {
         ok "dry-run: no changes written"
         return 0
     fi
+    # `update` runs from the daily scheduler, with no terminal to type a
+    # password into: a rule already in force is kept as is, asked with
+    # `sudo -n` only. Rewriting it there failed the update every day.
+    if [ "${action:-install}" = update ] && _awake_rule_effective; then
+        ok "sudoers rule in force, kept"
+        return 0
+    fi
     local tmp
     tmp="$(mktemp)"
     node -e '

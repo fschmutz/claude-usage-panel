@@ -226,6 +226,37 @@ test('install.sh --dry-run awakelid never touches sudoers, and says what it woul
   assert.doesNotMatch(r.stderr, /sudo ran/, 'a dry run must never invoke sudo');
 });
 
+test('install.sh update awakelid never asks for a password when the rule is in force', (t) => {
+  // The daily auto-update reinstalls every installed target from a scheduler,
+  // with no terminal: a sudo that has to prompt fails there, the target fails,
+  // and the update is retried forever without ever being recorded.
+  const home = stubbedHome(t, {prefix: 'cup-awakelid-up-'});
+  const calls = path.join(home, 'sudo-calls.log');
+  const env = {
+    ...process.env,
+    HOME: home,
+    XDG_STATE_HOME: path.join(home, 'state'),
+    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    CUP_TEST_SCHEDULER: 'cron',
+  };
+  fs.writeFileSync(path.join(home, 'bin', 'uname'),
+    '#!/bin/sh\ncase "$1" in -s|"") echo Darwin ;; *) /bin/uname "$@" ;; esac\n');
+  fs.chmodSync(path.join(home, 'bin', 'uname'), 0o755);
+  fs.writeFileSync(path.join(home, 'bin', 'defaults'), '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(path.join(home, 'bin', 'defaults'), 0o755);
+  // `sudo -n -l` grants all four commands (the rule is in force); anything
+  // else would need a password, which a scheduler cannot type.
+  fs.writeFileSync(path.join(home, 'bin', 'sudo'),
+    `#!/bin/sh\necho "sudo $*" >>"${calls}"\n[ "$1" = -n ] && [ "$2" = -l ] && exit 0\nexit 1\n`);
+  fs.chmodSync(path.join(home, 'bin', 'sudo'), 0o755);
+
+  const r = run('bash', [INSTALL, 'update', 'awakelid'], {env});
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const sudo = fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8') : '';
+  assert.doesNotMatch(sudo, /^sudo (?!-n -l )/m, `only non-interactive checks may run: ${sudo}`);
+  assert.match(sudo, /^sudo -n -l \/usr\/bin\/pmset/m, 'the rule is checked, not assumed');
+});
+
 test('the backstop grace window and lock staleness match the JS contract', async () => {
   const {AWAKE_BACKSTOP_GRACE_MS} =
     await import('../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js');
