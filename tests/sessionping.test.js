@@ -169,7 +169,10 @@ const runInstall = (home, args) =>
 test('install.sh --dry-run sessionping writes nothing and shows the schedule', (t) => {
     const home = makeSandbox(t);
     fs.rmSync(path.join(home, 'bin'), {recursive: true}); // keep readdir clean
-    const r = runInstall(home, ['--dry-run', 'sessionping', '5:30', '10:35', '--days=mon,wed,fri']);
+    // The scheduler is pinned, not taken from the host: a machine with none
+    // (a container) answered "skip" and the assertion below tested the host.
+    const r = run('bash', [INSTALL, '--dry-run', 'sessionping', '5:30', '10:35', '--days=mon,wed,fri'],
+        {env: {...env(home), CUP_TEST_SCHEDULER: 'cron'}});
     assert.equal(r.status, 0);
     assert.match(r.stdout, /schedule: at 05:30 10:35 on days 1,3,5/);
     assert.match(r.stdout, /would: write .*sessionping\.(timer|service|plist)|would: add crontab line/);

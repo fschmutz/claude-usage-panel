@@ -534,7 +534,9 @@ test('install.sh --dry-run autoupdate writes nothing', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-home-'));
     try {
         const r = run('bash', [path.join(ROOT, 'install.sh'), '--dry-run', 'autoupdate'], {
-            env: {...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config')},
+            // The scheduler is pinned, not taken from the host: a machine with
+            // none (a container) answered "skip" and this tested the host.
+            env: {...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), CUP_TEST_SCHEDULER: 'cron'},
         });
         assert.equal(r.status, 0);
         assert.match(r.stdout, /would: write .*claude-usage-panel-update\.(timer|service)|would: (write .*\.plist|add crontab line)/);
