@@ -282,7 +282,9 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/attribution-guard.sh
+        # --refresh-text reads the live title and body, so a re-run after a
+        # description fix sees the fix instead of the original event payload.
+        run: ./scripts/attribution-guard.sh --refresh-text
 
   # Every pinned version (actions, hook revs, npm/pip tool pins, Docker
   # images, the Node lines) against its upstream, and every pin and tool tree
