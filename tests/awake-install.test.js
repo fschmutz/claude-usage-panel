@@ -209,6 +209,9 @@ test('install.sh --dry-run awakelid never touches sudoers, and says what it woul
     PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
   };
+  // No USER, as under a scheduler or `env -i`: the target asks the system who
+  // it runs as (set -u killed it on an unset USER before it said anything).
+  delete env.USER;
   // uname says Darwin, so the privileged branch is the one exercised.
   fs.writeFileSync(path.join(home, 'bin', 'uname'),
     '#!/bin/sh\ncase "$1" in -s|"") echo Darwin ;; *) /bin/uname "$@" ;; esac\n');

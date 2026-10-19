@@ -156,8 +156,13 @@ install_awakelid() {
 
     # macOS: the ONLY privileged step this project has. Four exact commands,
     # nothing else, for this user alone - the shape Insomnia's installer uses.
+    # The user is asked of the system, never read from $USER: a scheduler
+    # (the daily update) or `env -i` may not set it, and under `set -u` an
+    # unset USER killed the target before it said anything.
+    local me
+    me="$(id -un)"
     if $DRY; then
-        echo "  would: write $AW_SUDOERS (four pmset commands for $USER, validated with visudo -c)"
+        echo "  would: write $AW_SUDOERS (four pmset commands for $me, validated with visudo -c)"
         echo "  would: verify 'sudo -n -l /usr/bin/pmset …' grants all four"
         ok "dry-run: no changes written"
         return 0
@@ -167,7 +172,7 @@ install_awakelid() {
     node -e '
       import("'"$ROOT"'/claude-usage-panel@fschmutz.github.io/lib/pure/awake.js")
         .then((m) => process.stdout.write(m.awakeSudoersBody(process.argv[1])));
-    ' "$USER" >"$tmp" || {
+    ' "$me" >"$tmp" || {
         rm -f "$tmp"
         skip_fatal "awakelid: could not render the sudoers rule (node failed)"
         return 0
