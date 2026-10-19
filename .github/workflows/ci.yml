@@ -245,6 +245,43 @@ jobs:
             fi
           done
 
+  # The author of record is the human who owns the change: no commit here is
+  # authored or committed by an address .github/attribution-allow.txt does not
+  # name, carries a `Co-authored-by:` trailer naming anyone else, or ends in an
+  # assistant footer - and neither does the pull request body. Attribution is
+  # appended by TOOLS, after the author stopped looking (a commit-msg hook, a
+  # platform's PR footer, a default git identity in a container), so it is
+  # invisible at the moment it happens and permanent once pushed.
+  #
+  # scripts/attribution-guard.sh and its fixtures are copied byte for byte from
+  # the shared GITHUB-TEMPLATE repository: fix a rule THERE and copy it again,
+  # never fork it in place. The fixtures run first, because a guard that has
+  # quietly stopped matching is worse than no guard - the check is green either
+  # way. .github/workflows/attribution-guard.yml runs the same two commands on
+  # a `pull_request` of type `edited`, the one event this workflow does not see.
+  attribution-guard:
+    name: attribution guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # the PR's own commits and body, read through the API
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The guard still catches what it is for
+        run: ./scripts/tests/attribution-guard-test.sh
+      # Pull requests only: the guard reads the commits through
+      # repos/:repo/pulls/:number/commits, so a push, a merge-queue run or the
+      # weekly schedule has nothing for it to read. Everything reaches main
+      # through a pull request, so nothing escapes that way.
+      - name: This pull request carries no foreign attribution
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/attribution-guard.sh
+
   # Every pinned version (actions, hook revs, npm/pip tool pins, Docker
   # images, the Node lines) against its upstream, and every pin and tool tree
   # against OSV / npm audit: scripts/check-deps.mjs. Current, or DECLARED in
@@ -278,7 +315,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [lint, js, screenshots, i18n, swift-core, macos-app, bash32, plugin-validate, deps]
+    needs: [lint, js, screenshots, i18n, swift-core, macos-app, bash32, plugin-validate, attribution-guard, deps]
     runs-on: ubuntu-latest
     permissions: {} # reads only the needs context, never the repo
     timeout-minutes: 5

@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "9999999999999999999999999999999999999999",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "GitHub", "email": "noreply@github.com" },
+      "message": "feat(report): add the weekly digest\n\nCo-authored-by: fschmutz <fschmutz@premaccess.com>\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "web-flow" }
+  }
+]

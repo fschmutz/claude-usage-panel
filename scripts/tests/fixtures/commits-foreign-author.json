@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "3333333333333333333333333333333333333333",
+    "commit": {
+      "author": { "name": "Somebody Else", "email": "somebody@example.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "feat(api): add the endpoint\n"
+    },
+    "author": { "login": "somebody" },
+    "committer": { "login": "fschmutz" }
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "chore(ci): retry the flaky step\n\nCo-Authored-By: Cursor Agent <cursoragent@cursor.com>\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  }
+]

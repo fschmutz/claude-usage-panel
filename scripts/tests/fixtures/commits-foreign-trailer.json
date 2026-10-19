@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "8888888888888888888888888888888888888888",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "feat(report): add the weekly digest\n\nCo-authored-by: Somebody Else <somebody@example.com>\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  }
+]

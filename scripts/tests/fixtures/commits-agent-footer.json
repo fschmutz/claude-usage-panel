@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "fix(auth): refresh the token before it expires\n\n\ud83e\udd16 Generated with [Claude Code](https://claude.ai/code)\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  }
+]

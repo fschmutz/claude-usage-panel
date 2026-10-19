@@ -1,0 +1,30 @@
+# Who may appear as the author or committer of a commit in this repository,
+# and who may be named in a Co-authored-by: trailer.
+#
+# scripts/attribution-guard.sh reads this file and fails the pull request on
+# anything that is not listed. Widening it is a reviewed decision, taken in its
+# own commit - never a step on the way to a green check.
+#
+# One entry per line:
+#
+#   ADDRESS             allowed as author and as committer
+#   committer:ADDRESS   allowed as committer only
+#   bot:LOGIN           allowed as the GitHub account behind a commit
+#
+# Three entries are built into the script and need no line here:
+# committer:noreply@github.com (a merge made through the GitHub web UI), and
+# the dependabot[bot], github-actions[bot] and renovate[bot] logins. That last
+# one covers the cask push scripts/publish-cask.sh makes on release, which
+# commits as 41898282+github-actions[bot]@users.noreply.github.com.
+
+# The maintainer, under both addresses the history uses: the work address and
+# the GitHub forwarding address a push from the web or a squash merge carries.
+# scripts/release.sh commits the version bump as the first of the two.
+fschmutz@premaccess.com
+6752695+fschmutz@users.noreply.github.com
+
+# Contributors whose commits are already in this repository's history. Listed
+# so a new pull request from one of them is not red before anyone has read it;
+# drop the line when the contribution is done.
+giovanni.bthx@gmail.com
+124669058+Giovannibthx@users.noreply.github.com

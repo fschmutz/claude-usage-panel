@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "dddddddddddddddddddddddddddddddddddddddd",
+    "commit": {
+      "author": { "name": "Ops Deputy", "email": "deputy@example.org" },
+      "committer": { "name": "Ops Deputy", "email": "deputy@example.org" },
+      "message": "chore(infra): rotate the runner image\n"
+    },
+    "author": { "login": "deputy" },
+    "committer": { "login": "deputy" }
+  }
+]

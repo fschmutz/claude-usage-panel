@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "5555555555555555555555555555555555555555",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "GitHub", "email": "noreply@github.com" },
+      "message": "docs(wiki): fix the Getting Started link\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "web-flow" }
+  }
+]

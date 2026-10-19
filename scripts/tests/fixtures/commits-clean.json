@@ -1,0 +1,22 @@
+[
+  {
+    "sha": "1111111111111111111111111111111111111111",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "feat(guard): refuse a commit nobody owns\n\nThe author of record is the human who owns the change.\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  },
+  {
+    "sha": "2222222222222222222222222222222222222222",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "docs(guard): say what the check does\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "cccccccccccccccccccccccccccccccccccccccc",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "fix(db): close the cursor when the query throws\n\nThe server-side cursor outlived the request and held a connection open.\nThe fixture below was generated with Playwright, not by hand.\nSee https://cursor.com/pricing for why we moved off the paid tier.\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  }
+]

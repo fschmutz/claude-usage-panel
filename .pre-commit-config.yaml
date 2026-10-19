@@ -94,11 +94,18 @@ repos:
       # Em-dashes (U+2014) are banned everywhere in this repo: docs, UI strings,
       # code. The pattern is built from escape bytes so this config line itself
       # stays clean.
+      #
+      # The exclusion is the attribution guard and its fixtures, which are
+      # copied BYTE FOR BYTE from the shared GITHUB-TEMPLATE repository and
+      # re-copied whenever a rule there changes. Reformatting them here is
+      # forking them in place, which is the one thing that file asks us not to
+      # do; the house style applies to what this repo writes.
       - id: no-em-dash
         name: no em-dash
         language: system
         entry: bash -c 'd=$(printf "\342\200\224"); out=$(grep -Hn "$d" "$@" || true); if [ -n "$out" ]; then echo "$out"; echo "em-dash (U+2014) is forbidden; use - or rephrase"; exit 1; fi' --
         types: [text]
+        exclude: ^(scripts/attribution-guard\.sh|scripts/tests/.*|\.github/workflows/attribution-guard\.yml)$
       # Swift (uses the toolchain's built-in swift-format)
       - id: swift-format
         name: swift-format lint
