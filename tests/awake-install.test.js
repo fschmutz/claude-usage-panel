@@ -269,3 +269,21 @@ test('the backstop grace window and lock staleness match the JS contract', async
   assert.match(text, /HOLD_LOCK="\$AWAKE_DIR\/\.hold\.lock"/);
   assert.match(text, /Library\/Application Support\/claude-usage-panel/);
 });
+
+test('every runner install.sh makes executable is committed executable', () => {
+  // install.sh chmods each scheduled runner in the checkout itself. One
+  // committed 0644 turns that chmod into a local mode change, `git status
+  // --porcelain` reports the checkout dirty, and auto-update then refuses to
+  // touch it ever again - the awake backstop shipped exactly so.
+  const dir = path.join(ROOT, 'scripts', 'install');
+  const runners = fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.sh'))
+    .flatMap((f) => [...fs.readFileSync(path.join(dir, f), 'utf8')
+      .matchAll(/runner="\$ROOT\/([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(runners.includes('scripts/awake-backstop.sh'), `runners found: ${runners}`);
+  for (const rel of runners) {
+    const r = run('git', ['-C', ROOT, 'ls-files', '-s', '--', rel]);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^100755 /, `${rel} is committed as ${r.stdout.split(' ')[0] || 'untracked'}`);
+  }
+});
