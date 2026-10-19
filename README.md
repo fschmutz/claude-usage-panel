@@ -235,6 +235,7 @@ with your own admin key.
 | [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) | Named accounts: what a switch touches, token refresh, auto-switch, CLI |
 | [wiki/Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) | Session tabs: snapshot the running sessions, reopen them as tabs, autosave |
 | [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake) | Keeping the machine awake: the holds, the floors, the recovery journal, closed-lid mode and its risks |
+| [wiki/CI](https://github.com/fschmutz/claude-usage-panel/wiki/CI) | The one required check, every gate behind it, and the attribution guard |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, pre-commit hooks, parity-test contract |
 | [PUBLISHING.md](PUBLISHING.md) | Store listings, release flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |

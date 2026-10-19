@@ -133,6 +133,23 @@ Shell changes are gated on **bash 3.2** (`bash32` job, `scripts/bash32-smoke.sh`
 in a container) because that is what macOS ships as `/bin/bash`; ubuntu's bash 5
 hides real traps, notably `"${arr[@]}"` on an empty array under `set -u`.
 
+The `attribution guard` job runs `scripts/attribution-guard.sh`: **the author
+of record is the human who owns the change.** It fails a commit whose author or
+committer address is not on `.github/attribution-allow.txt` (plus the built-in
+`committer:noreply@github.com` and the `dependabot[bot]` /
+`github-actions[bot]` / `renovate[bot]` logins), a `Co-authored-by:` trailer
+naming anyone else, an assistant footer in a commit message, and the same in
+the PR body. The script, `scripts/tests/attribution-guard-test.sh` and
+`scripts/tests/fixtures/` are copied BYTE FOR BYTE from the shared
+GITHUB-TEMPLATE repository: fix a rule there and copy it again, never fork it
+in place - which is why they keep that repo's formatting and are the one
+exclusion in the `no-em-dash` hook. Only the allow list is ours. The guard
+needs the pull request (it reads `pulls/:number/commits`), so the ci.yml job
+runs it on `pull_request` only, and `.github/workflows/attribution-guard.yml`
+re-runs the same two commands on the `edited` type - the body is editable after
+the fact, and rebuilding every other gate for a description edit is not worth
+it. It is the one gate deliberately outside `ci-gate`.
+
 The `plugin-validate` job runs `claude plugin validate` on the marketplace
 and on `plugin/` with the CLI pinned in `.github/claude-cli` (Dependabot's npm
 ecosystem), and fails on any warning.

@@ -19,6 +19,7 @@ swift-core ────────┼──▶ ci-gate ──▶ the only conte
 macos-app ─────────┤
 bash32 ────────────┤
 plugin-validate ───┤
+attribution-guard ─┤
 deps ──────────────┘
 ```
 
@@ -37,6 +38,38 @@ pinned, so a hold expires when upstream moves on; a hold that matches nothing
 fails). A release still inside Dependabot's window (weekly + 7-day cooldown,
 14 days) or with its Dependabot PR open is in flight, not stale. An upstream
 that does not answer is UNKNOWN and fails.
+
+`attribution guard` runs `scripts/attribution-guard.sh`: the author of record
+is the human who owns the change. It fails a pull request whose commits are
+authored or committed by an address that
+[`.github/attribution-allow.txt`](https://github.com/fschmutz/claude-usage-panel/blob/main/.github/attribution-allow.txt)
+does not name, that carry a `Co-authored-by:` trailer naming anyone else, or
+that end in an assistant footer - and the same for the pull request body (the
+agent body markers, a link to an agent run, an "Open in …" footer, a
+"Generated with …" line). It is deliberately narrow about prose: the bare word
+"cursor" is a database cursor far more often than it is a tool, so only footer
+shapes, trailer keys and URLs count. `scripts/tests/attribution-guard-test.sh`
+runs first, against `scripts/tests/fixtures/` - a guard that has quietly
+stopped matching is worse than no guard, because the check is green either way.
+
+The script, its suite and its fixtures are copied **byte for byte** from the
+shared template repository, which is why they are formatted to that repo's
+style and are excluded from the `no-em-dash` hook: fix a rule there and copy it
+again, never fork it in place. Only the allow list is this repo's own.
+
+Your own address has to be on that list before your commits pass, so a first
+pull request from a new contributor is red until a maintainer adds it in its
+own commit. Widening the list is never a step on the way to a green check.
+
+The guard reads the commits through `repos/:repo/pulls/:number/commits`, so it
+runs on pull requests only; nothing reaches `main` another way. A pull request
+**body** is editable after the fact, and `ci.yml` does not run on the `edited`
+type, so the separate
+[`attribution-guard.yml`](https://github.com/fschmutz/claude-usage-panel/blob/main/.github/workflows/attribution-guard.yml)
+workflow runs the same two commands on exactly that event, as
+`attribution guard (edited body)`. It is the one gate that is deliberately not
+behind `ci-gate`: a description edited after the last push would otherwise
+rebuild every other job, macOS included.
 
 `bash32` runs `scripts/bash32-smoke.sh` inside a `bash:3.2` container - the
 version macOS still ships as `/bin/bash`, and the one the launchd agents

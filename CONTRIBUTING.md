@@ -74,6 +74,31 @@ import the module directly - never copy it into `claude-code/`) and macOS
 the two identical against one shared fixture (`tests/fixtures/normalize.json`):
 change `lib/pure/`, the Swift twin and the fixture together.
 
+## Attribution
+
+The author of record is the human who owns the change. CI's `attribution guard`
+job (`scripts/attribution-guard.sh`) fails a pull request whose commits are
+authored or committed by an address that `.github/attribution-allow.txt` does
+not name, that carry a `Co-authored-by:` trailer naming anyone else, or that
+end in an assistant footer, and it checks the pull request body for the same.
+Use whatever tools you like - then commit as yourself, and strip whatever they
+appended (`git commit --amend --author="NAME <ADDRESS>" --reset-author`, or
+`--no-verify` is never the answer).
+
+Your address has to be on that list, so a first pull request from a new
+contributor is red until a maintainer adds it; say so in the description and it
+is one commit. Widening the list to land a change is not a thing we do.
+
+The script, `scripts/tests/attribution-guard-test.sh` and
+`scripts/tests/fixtures/` are copied byte for byte from a shared template
+repository and keep its formatting (they are the one exclusion in the
+`no-em-dash` hook). Fix a rule there and copy the file again; do not fork it
+here. Run the suite before you touch it:
+
+```bash
+scripts/tests/attribution-guard-test.sh
+```
+
 ## Rules
 
 - Keep changes read-only with respect to the user's credentials.

@@ -299,5 +299,12 @@ Code pipes on stdin - no credentials, no network.
 beyond the file-hygiene set it runs `gitleaks`, `private-names` + `private-names-message`,
 `eslint`, `shellcheck`, `shfmt`, `markdownlint`, `actionlint`, `zizmor`, `no-em-dash`,
 `swift-format`, `check-versions`, `file-size` (the 700-line ceiling), `i18n-catalogs` and `knip`
-(unused files, exports and dependencies; `knip.jsonc`). `npm test` + `swift test` cover the
+(unused files, exports and dependencies; `knip.jsonc`).
+The attribution guard is not a hook - it needs the pull request - but it belongs to the same
+set: `scripts/attribution-guard.sh` fails a commit author, committer or `Co-authored-by:`
+trailer that [`.github/attribution-allow.txt`](https://github.com/fschmutz/claude-usage-panel/blob/main/.github/attribution-allow.txt)
+does not name, and an assistant footer in a commit message or in the pull request body. It is
+copied byte for byte from the shared template repository, with
+`scripts/tests/attribution-guard-test.sh` + `scripts/tests/fixtures/` as its suite; fix a rule
+there and copy it again rather than forking it here. `npm test` + `swift test` cover the
 pure logic and the cross-port parity contract; the rest of CI is on [[CI]].
