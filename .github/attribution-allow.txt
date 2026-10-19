@@ -10,21 +10,34 @@
 #   ADDRESS             allowed as author and as committer
 #   committer:ADDRESS   allowed as committer only
 #   bot:LOGIN           allowed as the GitHub account behind a commit
+#   name:FULL NAME      a person whose name would otherwise read as a tool
 #
 # Three entries are built into the script and need no line here:
 # committer:noreply@github.com (a merge made through the GitHub web UI), and
-# the dependabot[bot], github-actions[bot] and renovate[bot] logins. That last
-# one covers the cask push scripts/publish-cask.sh makes on release, which
-# commits as 41898282+github-actions[bot]@users.noreply.github.com.
+# the dependabot[bot], github-actions[bot] and renovate[bot] logins.
+#
+# The name beside the address is checked separately, and an allow-listed
+# address does not excuse it: a commit authored by "Cursor Agent", "Claude" or
+# "AI assistant" fails whatever address it carries. A real person whose name
+# collides - a Jean-Claude, a Gemini - needs a `name:` line here, which is the
+# only way past that rule.
+#
+# Delete this file and the guard still runs: it warns, falls back to the
+# address built into the script, and keeps failing everybody else.
+#
+# An outside contributor's address is not here. Their first pull request is red
+# until a maintainer adds it, which is one commit; see CONTRIBUTING.md.
 
-# The maintainer, under both addresses the history uses: the work address and
-# the GitHub forwarding address a push from the web or a squash merge carries.
-# scripts/release.sh commits the version bump as the first of the two.
+# The maintainer, under both addresses this repository's history uses: the work
+# address, and the GitHub forwarding address a squash merge or a commit made
+# through the web UI carries. scripts/release.sh commits the version bump as
+# the first of the two.
 fschmutz@premaccess.com
 6752695+fschmutz@users.noreply.github.com
 
-# Contributors whose commits are already in this repository's history. Listed
-# so a new pull request from one of them is not red before anyone has read it;
-# drop the line when the contribution is done.
-giovanni.bthx@gmail.com
-124669058+Giovannibthx@users.noreply.github.com
+# Dependabot opens the bumps the `deps` gate expects (.github/dependabot.yml
+# covers github-actions, pre-commit, pip, docker and npm). The login is built
+# into the script as well; it is written out here because this repository
+# depends on it, and a default that moves upstream should not quietly take the
+# dependency with it.
+bot:dependabot[bot]

@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "feat(parser): regenerate the grammar\n\nGenerated with Codex\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  }
+]

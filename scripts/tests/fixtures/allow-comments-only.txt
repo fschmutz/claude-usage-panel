@@ -1,0 +1,2 @@
+# An allow file that was started and never filled in: comments, no address.
+# The guard falls back to the built-in default rather than trusting nobody.

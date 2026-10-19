@@ -247,11 +247,13 @@ jobs:
 
   # The author of record is the human who owns the change: no commit here is
   # authored or committed by an address .github/attribution-allow.txt does not
-  # name, carries a `Co-authored-by:` trailer naming anyone else, or ends in an
-  # assistant footer - and neither does the pull request body. Attribution is
-  # appended by TOOLS, after the author stopped looking (a commit-msg hook, a
-  # platform's PR footer, a default git identity in a container), so it is
-  # invisible at the moment it happens and permanent once pushed.
+  # name, under a NAME that reads as a tool whatever address it carries,
+  # carries a `Co-authored-by:` trailer naming anyone else, or ends in an
+  # assistant footer - and neither does the pull request title or body.
+  # Attribution is appended by TOOLS, after the author stopped looking (a
+  # commit-msg hook, a platform's PR footer, a default git identity in a
+  # container), so it is invisible at the moment it happens and permanent once
+  # pushed.
   #
   # scripts/attribution-guard.sh and its fixtures are copied byte for byte from
   # the shared GITHUB-TEMPLATE repository: fix a rule THERE and copy it again,

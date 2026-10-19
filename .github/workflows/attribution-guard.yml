@@ -4,25 +4,27 @@ name: attribution-guard
 #
 # The author of record is the human who owns the change. This job fails a pull
 # request that carries somebody else's name: a commit authored or committed by
-# an address that is not on `.github/attribution-allow.txt`, a
-# `Co-authored-by:` trailer naming anyone else, an assistant footer in a commit
-# message, or one in the pull request body.
+# an address that is not on `.github/attribution-allow.txt`, or under a name
+# that reads as a tool, a `Co-authored-by:` trailer naming anyone else, an
+# assistant footer in a commit message, or one in the title or the body.
 #
 # It is a separate workflow rather than a job in `ci.yml` for one reason: the
-# body is editable after the fact. `ci.yml` runs on the default pull_request
-# types, which do not include `edited`, so a footer pasted into the description
-# ten minutes after the last push would never be looked at again.
+# title and the body are editable after the fact. `ci.yml` runs on the default
+# pull_request types, which do not include `edited`, so a footer pasted into
+# the description ten minutes after the last push would never be looked at
+# again.
 #
 # Everything it knows lives in `scripts/attribution-guard.sh`, which reads the
-# commits through the API and the body out of the event payload. The fixtures
-# run first: a guard that has quietly stopped matching is worse than no guard,
-# because the check is green either way.
+# commits through the API and the title and body out of the event payload,
+# re-reading both from the API on `edited`. The fixtures run first: a guard
+# that has quietly stopped matching is worse than no guard, because the check
+# is green either way.
 #
 # ADAPTED for this repository, which requires exactly ONE status check
 # (`ci-gate`, the fan-in job of `ci.yml`) and never adds a second to the
 # ruleset: the push side of the guard is the `attribution-guard` job of
 # `ci.yml`, behind that gate, and this workflow keeps only the `edited` type -
-# the one `ci.yml` cannot see without rebuilding every other gate on a
+# the one `ci.yml` cannot see without rebuilding every other gate on a title or
 # description edit. Both run the same two commands against the same script, so
 # neither can drift; only the trigger and the check name differ.
 on:
@@ -39,7 +41,7 @@ concurrency:
 
 jobs:
   guard:
-    name: attribution guard (edited body)
+    name: attribution guard (edited title or body)
     runs-on: ubuntu-latest
     permissions:
       contents: read

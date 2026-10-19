@@ -1,0 +1,18 @@
+[
+  {
+    "sha": "e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+    "commit": {
+      "author": {
+        "name": "Jean-Claude Dubois",
+        "email": "jc.dubois@scalemenow.example"
+      },
+      "committer": {
+        "name": "Jean-Claude Dubois",
+        "email": "jc.dubois@scalemenow.example"
+      },
+      "message": "docs(runbook): add the failover drill\n"
+    },
+    "author": { "login": "jcdubois" },
+    "committer": { "login": "jcdubois" }
+  }
+]

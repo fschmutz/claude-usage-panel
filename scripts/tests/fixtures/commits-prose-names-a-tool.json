@@ -1,0 +1,12 @@
+[
+  {
+    "sha": "a1b2a1b2a1b2a1b2a1b2a1b2a1b2a1b2a1b2a1b2",
+    "commit": {
+      "author": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "committer": { "name": "fschmutz", "email": "fschmutz@premaccess.com" },
+      "message": "feat(attribution): check the name beside the address\n\nAuthor and committer names are now checked separately: Cursor Agent,\nClaude, Copilot and their neighbours fail even when the address is the\nowner's. Claude Code and the background agent footers were already caught\nby the trailer and link rules.\n"
+    },
+    "author": { "login": "fschmutz" },
+    "committer": { "login": "fschmutz" }
+  }
+]

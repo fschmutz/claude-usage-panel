@@ -1,0 +1,1 @@
+[Cursor Agent] fix(db): close the cursor when the query throws

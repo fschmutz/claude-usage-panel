@@ -2,8 +2,8 @@
   {
     "sha": "dddddddddddddddddddddddddddddddddddddddd",
     "commit": {
-      "author": { "name": "Ops Deputy", "email": "deputy@example.org" },
-      "committer": { "name": "Ops Deputy", "email": "deputy@example.org" },
+      "author": { "name": "Ops Deputy", "email": "deputy@scalemenow.example" },
+      "committer": { "name": "Ops Deputy", "email": "deputy@scalemenow.example" },
       "message": "chore(infra): rotate the runner image\n"
     },
     "author": { "login": "deputy" },
