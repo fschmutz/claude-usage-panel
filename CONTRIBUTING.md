@@ -98,7 +98,7 @@ The script, `scripts/tests/attribution-guard-test.sh` and
 `scripts/tests/fixtures/` are copied byte for byte from a shared template
 repository and keep its formatting (they are the one exclusion in the
 `no-em-dash` hook). Fix a rule there and copy the file again; do not fork it
-here. Run the suite (30 cases) before you touch it:
+here. Run the suite (32 cases) before you touch it:
 
 ```bash
 scripts/tests/attribution-guard-test.sh

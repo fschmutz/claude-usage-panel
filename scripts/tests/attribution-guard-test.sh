@@ -128,6 +128,24 @@ else
   echo "skip an unreadable allow file warns and falls back (running as root)"
 fi
 
+# GitHub sends `"author": null` for an email it cannot map to an account. The
+# name check must still see the name: an empty login once shifted every later
+# field one slot left, and "Claude" was read as a committer login.
+run_case "a tool-named author is caught when the author login is absent" 1 "author name \"Claude\"" \
+  --commits-file "${FIXTURES}/commits-tool-name-no-login.json" --commits-only
+
+# A refresh that cannot reach the API must fail, not fall back to the payload.
+stub="$(mktemp -d)"
+printf '#!/bin/sh\nexit 1\n' >"${stub}/gh"
+chmod +x "${stub}/gh"
+saved_path="${PATH}"
+PATH="${stub}:${PATH}"
+run_case "a failed re-read of the title and body is an error" 2 "could not re-read" \
+  -R owner/repo --pr 1 --refresh-text \
+  --commits-file "${FIXTURES}/commits-clean.json"
+PATH="${saved_path}"
+rm -rf "${stub}"
+
 # --- the allow-list is configurable -------------------------------------------
 
 run_case "an address off the list fails" 1 "author <deputy@scalemenow.example>" \

@@ -54,7 +54,7 @@ semantic versioning.
   cursor, or one naming three assistants mid-sentence, passes. Deleting the
   allow file warns and falls back to the built-in address rather than failing
   open. It runs as the `attribution guard` job behind `ci-gate`, preceded by
-  `scripts/tests/attribution-guard-test.sh` (30 cases over
+  `scripts/tests/attribution-guard-test.sh` (32 cases over
   `scripts/tests/fixtures/`), and as
   `attribution guard (edited title or body)` from its own workflow on the one
   event `ci.yml` does not see. The script, its suite and its fixtures are

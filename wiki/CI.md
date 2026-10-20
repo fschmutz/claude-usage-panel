@@ -63,7 +63,7 @@ what a commit changing this guard looks like - passes.
 
 Deleting the allow file does not open the gate: the guard warns, falls back to
 the address built into the script, and keeps failing everybody else.
-`scripts/tests/attribution-guard-test.sh` runs first, 30 cases over
+`scripts/tests/attribution-guard-test.sh` runs first, 32 cases over
 `scripts/tests/fixtures/` - a guard that has quietly stopped matching is worse
 than no guard, because the check is green either way.
 

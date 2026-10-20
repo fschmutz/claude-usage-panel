@@ -430,13 +430,14 @@ load_pull_request_text() {
   fi
   # On `edited` the payload is a snapshot of the edit that triggered the run;
   # re-reading is what makes a second edit, to either field, still checked.
-  if [ "${refresh_text}" = true ] && [ -n "${repo}" ] && [ -n "${pr}" ] &&
-    command -v gh >/dev/null 2>&1; then
-    json="$(gh api "repos/${repo}/pulls/${pr}")"
-    if [ -n "${json}" ]; then
-      pr_title="$(printf '%s' "${json}" | jq -r '.title // ""')"
-      pr_body="$(printf '%s' "${json}" | jq -r '.body // ""')"
-    fi
+  # A refresh that cannot happen is an error, never a pass on the stale
+  # payload: the edit that triggered the run is exactly what it would miss.
+  if [ "${refresh_text}" = true ] && [ -n "${repo}" ] && [ -n "${pr}" ]; then
+    command -v gh >/dev/null 2>&1 || die "gh is required to re-read the pull request title and body"
+    json="$(gh api "repos/${repo}/pulls/${pr}")" ||
+      die "could not re-read the pull request title and body from the API"
+    pr_title="$(printf '%s' "${json}" | jq -r '.title // ""')" || die "the API answer for the pull request is not JSON"
+    pr_body="$(printf '%s' "${json}" | jq -r '.body // ""')" || die "the API answer for the pull request is not JSON"
   fi
   if [ -n "${title_file}" ]; then
     [ -f "${title_file}" ] || die "${title_file} does not exist"
@@ -514,19 +515,24 @@ if [ "${count}" -eq 0 ]; then
   die "the pull request has no commits — nothing to check, which is never right"
 fi
 
-while IFS=$'\t' read -r kind sha f3 f4 f5 f6 f7 f8; do
+# The fields are split on the unit separator, never a tab: a tab is IFS
+# whitespace, so two in a row collapse into one, and an absent author login
+# (an email GitHub cannot map to an account) would shift the names one slot to
+# the left and let a tool-named author through the name check.
+while IFS=$'\037' read -r kind sha f3 f4 f5 f6 f7 f8; do
   case "${kind}" in
     C) check_identity "${sha}" "${f3}" "${f4}" "${f5}" "${f6}" "${f7}" "${f8}" ;;
     M) check_message_line "${sha}" "${f3}" ;;
   esac
 done <<EOF
 $(printf '%s' "${commits}" | jq -r '
+  def f: (. // "") | tostring | gsub("\u001f"; " ");
   .[] | . as $c
-  | ( [ "C", $c.sha,
-        ($c.commit.author.email // ""), ($c.commit.committer.email // ""),
-        ($c.author.login // ""), ($c.committer.login // ""),
-        ($c.commit.author.name // ""), ($c.commit.committer.name // "") ] | @tsv ),
-    ( ($c.commit.message // "") | split("\n")[] | [ "M", $c.sha, . ] | @tsv )
+  | ( [ "C", ($c.sha | f),
+        ($c.commit.author.email | f), ($c.commit.committer.email | f),
+        ($c.author.login | f), ($c.committer.login | f),
+        ($c.commit.author.name | f), ($c.commit.committer.name | f) ] | join("\u001f") ),
+    ( ($c.commit.message // "") | split("\n")[] | [ "M", ($c.sha | f), f ] | join("\u001f") )
 ')
 EOF
 
