@@ -317,6 +317,18 @@ test('renameProfile changes only the case, and refuses what renameRefusal refuse
     assert.deepEqual(s.listProfiles().map((x) => x.name), ['PERSO', 'Pro']);
 });
 
+test('renameProfile puts a case-only rename back when the write fails', async () => {
+    // The file is renamed first; a write that then fails must not leave a
+    // Pro.json that still says PRO, which no port lists and no command reaches.
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    const dir = accountsDir(io);
+    fs.mkdirSync(path.join(dir, `Pro.json.${process.pid}.tmp`)); // writePrivate cannot clear a dir
+    await assert.rejects(s.renameProfile('PRO', 'Pro'));
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PRO']);
+    assert.ok(fs.readdirSync(dir).includes('PRO.json'));
+});
+
 test('listProfiles skips foreign, dot and mismatched files', () => {
     const {io, s} = world();
     s.saveCurrent('PRO');

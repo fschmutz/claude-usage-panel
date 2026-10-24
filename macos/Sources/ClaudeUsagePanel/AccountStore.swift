@@ -210,10 +210,18 @@ enum AccountStore {
             if caseOnly, rename(profileURL(from).path, profileURL(to).path) != 0 {
                 throw AccountError.message("could not rename \(from): errno \(errno)")
             }
-            let renamed = try write(
-                AccountProfile(
-                    name: to, savedAt: profile.savedAt, account: profile.account,
-                    credentials: profile.credentials))
+            let renamed: AccountProfile
+            do {
+                renamed = try write(
+                    AccountProfile(
+                        name: to, savedAt: profile.savedAt, account: profile.account,
+                        credentials: profile.credentials))
+            } catch {
+                // A file named `to` that still says `from` is listed by no
+                // port: put the name back before failing.
+                if caseOnly { _ = rename(profileURL(to).path, profileURL(from).path) }
+                throw error
+            }
             if !caseOnly { try FileManager.default.removeItem(at: profileURL(from)) }
             renameCacheEntries(from: from, to: to)
             return renamed

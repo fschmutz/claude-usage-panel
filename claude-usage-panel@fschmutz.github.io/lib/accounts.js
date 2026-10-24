@@ -177,11 +177,23 @@ export async function renameProfile(from, to) {
     try {
         check(); // a switch or a save may have landed while we waited
         const profile = readProfile(from);
-        if (sameName(from, to)) {
-            Gio.File.new_for_path(profilePath(from)).move(
-                Gio.File.new_for_path(profilePath(to)), Gio.FileCopyFlags.NONE, null, null);
+        // OVERWRITE: on a case-insensitive directory `to` IS `from`, and NONE
+        // refuses it as an existing target. Nothing else can sit there: names
+        // collide ignoring case, so renameRefusal already ruled other files out.
+        const caseOnly = sameName(from, to);
+        const move = (a, b) => Gio.File.new_for_path(profilePath(a)).move(
+            Gio.File.new_for_path(profilePath(b)), Gio.FileCopyFlags.OVERWRITE, null, null);
+        if (caseOnly)
+            move(from, to);
+        let renamed;
+        try {
+            renamed = writeProfile({...profile, name: to});
+        } catch (e) {
+            // a file named `to` that still says `from` is listed by no port
+            if (caseOnly)
+                move(to, from);
+            throw e;
         }
-        const renamed = writeProfile({...profile, name: to});
         if (!sameName(from, to))
             Gio.File.new_for_path(profilePath(from)).delete(null);
         renameCacheEntries(from, to);

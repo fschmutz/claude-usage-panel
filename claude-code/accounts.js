@@ -162,8 +162,17 @@ export function openStore(io = {}) {
     return usage.withRefreshLock(from, () => {
       check(); // a switch or a save may have landed while we waited
       const profile = readProfile(from);
-      if (sameName(from, to)) fs.renameSync(profilePath(from), profilePath(to));
-      const renamed = writeProfile({...profile, name: to});
+      const caseOnly = sameName(from, to);
+      if (caseOnly) fs.renameSync(profilePath(from), profilePath(to));
+      let renamed;
+      try {
+        renamed = writeProfile({...profile, name: to});
+      } catch (e) {
+        // A file named `to` that still says `from` is listed by no port and
+        // reachable by no command: put the name back before failing.
+        if (caseOnly) fs.renameSync(profilePath(to), profilePath(from));
+        throw e;
+      }
       if (!sameName(from, to)) fs.rmSync(profilePath(from), {force: true});
       usage.renameCacheEntries(from, to);
       return renamed;
