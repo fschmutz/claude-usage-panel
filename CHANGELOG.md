@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.11.0] - 2026-10-24
+
 ### Added
 
 - **Awake: keep the machine up while Claude Code works.** A new opt-in target,
