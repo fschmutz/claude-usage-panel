@@ -409,5 +409,42 @@
     {"name": "the same name leaves the map as is", "map": {"PRO": 1}, "from": "PRO", "to": "PRO", "expected": {"PRO": 1}},
     {"name": "not a map is an empty one", "map": [1], "from": "PRO", "to": "WORK", "expected": {}},
     {"name": "null is an empty map", "map": null, "from": "PRO", "to": "WORK", "expected": {}}
+  ],
+  "renamePending": [
+    {"name": "a usable journal", "raw": {"at": 1000000, "from": "PRO", "to": "WORK"}, "expected": {"at": 1000000, "from": "PRO", "to": "WORK"}},
+    {"name": "a change of case is a rename", "raw": {"at": 1000000, "from": "PRO", "to": "Pro"}, "expected": {"at": 1000000, "from": "PRO", "to": "Pro"}},
+    {"name": "the same name is nothing", "raw": {"at": 1000000, "from": "PRO", "to": "PRO"}, "expected": null},
+    {"name": "a path in a name is unusable", "raw": {"at": 1000000, "from": "PRO", "to": "../x"}, "expected": null},
+    {"name": "no timestamp", "raw": {"from": "PRO", "to": "WORK"}, "expected": null},
+    {"name": "a string timestamp", "raw": {"at": "1", "from": "PRO", "to": "WORK"}, "expected": null},
+    {"name": "not an object", "raw": ["PRO", "WORK"], "expected": null},
+    {"name": "no journal", "raw": null, "expected": null}
+  ],
+  "renameHides": [
+    {"name": "both files stand: the old one is hidden", "names": ["PRO", "WORK"], "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "expected": "PRO"},
+    {"name": "the new file is not written yet", "names": ["PRO"], "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "expected": null},
+    {"name": "the old file is already gone", "names": ["WORK"], "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "expected": null},
+    {"name": "a change of case never hides", "names": ["PRO", "Pro"], "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "expected": null},
+    {"name": "no journal", "names": ["PRO", "WORK"], "pending": null, "expected": null}
+  ],
+  "renameBlocksSnapshot": [
+    {"name": "the old name", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "profile": "PRO", "expected": true},
+    {"name": "the new name", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "profile": "WORK", "expected": true},
+    {"name": "a case variant of either", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "profile": "work", "expected": true},
+    {"name": "another profile", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "profile": "PERSO", "expected": false},
+    {"name": "no journal", "pending": null, "profile": "PRO", "expected": false}
+  ],
+  "renameRecovery": [
+    {"name": "no journal", "pending": null, "atFrom": "PRO", "atTo": null, "now": 1030000, "expected": {"action": "drop", "removeFrom": false, "moveBack": false}},
+    {"name": "younger than the stale age: maybe in flight", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "atFrom": "PRO", "atTo": "WORK", "now": 1029999, "expected": {"action": "wait", "removeFrom": false, "moveBack": false}},
+    {"name": "crashed before the new file: nothing to undo", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "atFrom": "PRO", "atTo": null, "now": 1030000, "expected": {"action": "rollback", "removeFrom": false, "moveBack": false}},
+    {"name": "crashed between the new file and the removal: finish it", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "atFrom": "PRO", "atTo": "WORK", "now": 1030000, "expected": {"action": "finish", "removeFrom": true, "moveBack": false}},
+    {"name": "crashed after the removal: only the cache and the journal", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "atFrom": null, "atTo": "WORK", "now": 1030000, "expected": {"action": "finish", "removeFrom": false, "moveBack": false}},
+    {"name": "a file at the old path that is not the old profile stays", "pending": {"at": 1000000, "from": "PRO", "to": "WORK"}, "atFrom": "OTHER", "atTo": "WORK", "now": 1030000, "expected": {"action": "finish", "removeFrom": false, "moveBack": false}},
+    {"name": "case: crashed after the file rename, before the write", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": null, "atTo": "PRO", "now": 1030000, "expected": {"action": "rollback", "removeFrom": false, "moveBack": true}},
+    {"name": "case-insensitive dir: both paths read the unwritten file", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": "PRO", "atTo": "PRO", "now": 1030000, "expected": {"action": "rollback", "removeFrom": false, "moveBack": true}},
+    {"name": "case: crashed before the file rename", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": "PRO", "atTo": null, "now": 1030000, "expected": {"action": "rollback", "removeFrom": false, "moveBack": false}},
+    {"name": "case: the write landed", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": null, "atTo": "Pro", "now": 1030000, "expected": {"action": "finish", "removeFrom": false, "moveBack": false}},
+    {"name": "case-insensitive dir: the write landed, the old path is the same file", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": "Pro", "atTo": "Pro", "now": 1030000, "expected": {"action": "finish", "removeFrom": false, "moveBack": false}}
   ]
 }

@@ -296,6 +296,54 @@ final class AccountsParityTests: XCTestCase {
         }
     }
 
+    private func pending(_ v: Any?) -> RenamePending? {
+        guard let o = v as? [String: Any] else { return nil }
+        return RenamePending(
+            at: (o["at"] as! NSNumber).doubleValue, from: o["from"] as! String,
+            to: o["to"] as! String)
+    }
+
+    func testRenamePending() throws {
+        for c in try fixture()["renamePending"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.parseRenamePending(c["raw"]), pending(c["expected"]),
+                c["name"] as! String)
+        }
+    }
+
+    func testRenameHides() throws {
+        for c in try fixture()["renameHides"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.renameHides(
+                    names: c["names"] as! [String], pending: pending(c["pending"])),
+                c["expected"] as? String, c["name"] as! String)
+        }
+    }
+
+    func testRenameBlocksSnapshot() throws {
+        for c in try fixture()["renameBlocksSnapshot"] as! [[String: Any]] {
+            XCTAssertEqual(
+                Accounts.renameBlocksSnapshot(
+                    pending: pending(c["pending"]), name: c["profile"] as? String),
+                c["expected"] as! Bool, c["name"] as! String)
+        }
+    }
+
+    func testRenameRecovery() throws {
+        for c in try fixture()["renameRecovery"] as! [[String: Any]] {
+            let e = c["expected"] as! [String: Any]
+            XCTAssertEqual(
+                Accounts.renameRecovery(
+                    pending: pending(c["pending"]), atFrom: c["atFrom"] as? String,
+                    atTo: c["atTo"] as? String, nowMs: (c["now"] as! NSNumber).doubleValue),
+                RenameRecovery(
+                    action: RenameRecovery.Action(rawValue: e["action"] as! String)!,
+                    removeFrom: e["removeFrom"] as! Bool, moveBack: e["moveBack"] as! Bool),
+                c["name"] as! String)
+        }
+        XCTAssertEqual(Accounts.renameStaleMs, Accounts.RefreshLock.staleMs)
+    }
+
     func testRefreshedOauth() throws {
         let fix = try fixture()
         let now = (fix["now"] as! NSNumber).doubleValue

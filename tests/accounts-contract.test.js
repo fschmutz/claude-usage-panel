@@ -118,3 +118,20 @@ test('renameRefusal: invalid, then missing, then a pending switch, then a taken 
 test('renameKey moves one entry of a name-keyed map', () => {
     for (const c of FIX.renameKey) assert.deepEqual(accounts.renameKey(c.map, c.from, c.to), c.expected, c.name);
 });
+test('parseRenamePending: a journal with a time and two valid, different names', () => {
+    for (const c of FIX.renamePending) assert.deepEqual(accounts.parseRenamePending(c.raw), c.expected, c.name);
+});
+test('renameHides: the old file once the new one stands beside it, never on a change of case', () => {
+    for (const c of FIX.renameHides) assert.equal(accounts.renameHides(c.names, c.pending), c.expected, c.name);
+});
+test('renameBlocksSnapshot: either name of a standing rename, ignoring case', () => {
+    for (const c of FIX.renameBlocksSnapshot)
+        assert.equal(accounts.renameBlocksSnapshot(c.pending, c.profile), c.expected, c.name);
+});
+test('renameRecovery: wait while fresh, then finish what was written or undo what was not', () => {
+    for (const c of FIX.renameRecovery)
+        assert.deepEqual(accounts.renameRecovery(c.pending, {atFrom: c.atFrom, atTo: c.atTo}, c.now), c.expected, c.name);
+});
+test('a rename journal goes stale exactly when the refresh lock it runs under does', () => {
+    assert.equal(accounts.RENAME_STALE_MS, accounts.REFRESH_LOCK.staleMs);
+});

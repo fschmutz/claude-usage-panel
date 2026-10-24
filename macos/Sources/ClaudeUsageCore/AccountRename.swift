@@ -1,9 +1,37 @@
 import Foundation
 
 // Renaming a saved account. Mirrors the GNOME extension's lib/pure.js
-// (renameRefusal, renameKey); tests/fixtures/accounts.json pins both.
+// (renameRefusal, renameKey, parseRenamePending, renameHides,
+// renameBlocksSnapshot, renameRecovery); tests/fixtures/accounts.json pins them.
 
 /// Why a saved account cannot be renamed (see `Accounts.renameRefusal`).
+/// `.rename-pending.json`: a rename journaled before its first file moved.
+public struct RenamePending: Equatable, Sendable {
+    public let at: Double
+    public let from: String
+    public let to: String
+
+    public init(at: Double, from: String, to: String) {
+        self.at = at
+        self.from = from
+        self.to = to
+    }
+}
+
+/// What to do with a rename journal left on disk (see `Accounts.renameRecovery`).
+public struct RenameRecovery: Equatable, Sendable {
+    public enum Action: String, Sendable { case drop, wait, finish, rollback }
+    public let action: Action
+    public let removeFrom: Bool
+    public let moveBack: Bool
+
+    public init(action: Action, removeFrom: Bool = false, moveBack: Bool = false) {
+        self.action = action
+        self.removeFrom = removeFrom
+        self.moveBack = moveBack
+    }
+}
+
 public struct RenameRefusal: Equatable, Sendable {
     public enum Kind: String, Sendable {
         case invalid, missing, pending, taken
@@ -47,5 +75,48 @@ extension Accounts {
         var out = map as? [String: Any] ?? [:]
         if from != to, let value = out.removeValue(forKey: from) { out[to] = value }
         return out
+    }
+
+    /// A journal younger than this may still be in flight in another process:
+    /// the age the refresh lock it runs under goes stale at.
+    public static let renameStaleMs: Double = RefreshLock.staleMs
+
+    /// The journal as {at, from, to}, or nil when it is unusable.
+    public static func parseRenamePending(_ raw: Any?) -> RenamePending? {
+        guard let o = raw as? [String: Any], let n = o["at"] as? NSNumber, !isJSONBool(n),
+            n.doubleValue.isFinite, let from = o["from"] as? String, let to = o["to"] as? String,
+            isValidName(from), isValidName(to), from != to
+        else { return nil }
+        return RenamePending(at: n.doubleValue, from: from, to: to)
+    }
+
+    /// The name a listing hides while a rename stands: `from`, once `to` is on
+    /// disk beside it. Never on a change of case.
+    public static func renameHides(names: [String], pending: RenamePending?) -> String? {
+        guard let p = pending, !sameName(p.from, p.to), names.contains(p.from), names.contains(p.to)
+        else { return nil }
+        return p.from
+    }
+
+    /// No sync-back may write either name of a standing rename.
+    public static func renameBlocksSnapshot(pending: RenamePending?, name: String?) -> Bool {
+        guard let p = pending, let name else { return false }
+        return sameName(name, p.from) || sameName(name, p.to)
+    }
+
+    /// Wait while fresh; then finish what was written (`removeFrom` when the
+    /// old file still stands) or undo what was not (`moveBack` for a change of
+    /// case whose file was already renamed). `atFrom` / `atTo`: the `name` in
+    /// the file at each path, nil when absent or unreadable.
+    public static func renameRecovery(
+        pending: RenamePending?, atFrom: String?, atTo: String?, nowMs: Double
+    ) -> RenameRecovery {
+        guard let p = pending else { return RenameRecovery(action: .drop) }
+        if nowMs - p.at < renameStaleMs { return RenameRecovery(action: .wait) }
+        let caseOnly = sameName(p.from, p.to)
+        if atTo == p.to {
+            return RenameRecovery(action: .finish, removeFrom: !caseOnly && atFrom == p.from)
+        }
+        return RenameRecovery(action: .rollback, moveBack: caseOnly && atTo == p.from)
     }
 }

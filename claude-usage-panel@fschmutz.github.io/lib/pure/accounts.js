@@ -241,6 +241,54 @@ export function renameKey(map, from, to) {
     return out;
 }
 
+/** A rename journal younger than this may still be in flight in another
+ *  process (a rename takes milliseconds; the refresh lock it runs under goes
+ *  stale at the same age), so no reader may finish or undo it yet. */
+export const RENAME_STALE_MS = 30_000;
+
+/** `.rename-pending.json` as {at, from, to}, or null when it is unusable. */
+export function parseRenamePending(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return null;
+    const {at, from, to} = raw;
+    return Number.isFinite(at) && isValidName(from) && isValidName(to) && from !== to
+        ? {at, from, to} : null;
+}
+
+/** The name a listing hides while a rename stands: `from`, once its new file
+ *  `to` is on disk beside it (the two would be twins on one refresh token). */
+export function renameHides(names, pending) {
+    if (!pending || sameName(pending.from, pending.to))
+        return null;
+    return names.includes(pending.from) && names.includes(pending.to) ? pending.from : null;
+}
+
+/** No sync-back may write either name of a standing rename: it could bring
+ *  the old file back after the rename removed it. */
+export function renameBlocksSnapshot(pending, name) {
+    return Boolean(pending && name && (sameName(name, pending.from) || sameName(name, pending.to)));
+}
+
+/**
+ * What to do with a rename journal left on disk. `atFrom` / `atTo` are the
+ * `name` fields of the files at from's and to's paths (null when absent or
+ * unreadable; on a case-insensitive directory both read the same file).
+ * `wait`: maybe still in flight. `drop`: nothing to repair. `finish`: the new
+ * file is written - remove the old one when it still stands (`removeFrom`)
+ * and move the cached entries. `rollback`: the new file never got written - a
+ * change of case already renamed the file, so put the name back (`moveBack`).
+ */
+export function renameRecovery(pending, {atFrom = null, atTo = null} = {}, nowMs) {
+    if (!pending)
+        return {action: 'drop', removeFrom: false, moveBack: false};
+    if (nowMs - pending.at < RENAME_STALE_MS)
+        return {action: 'wait', removeFrom: false, moveBack: false};
+    const caseOnly = sameName(pending.from, pending.to);
+    if (atTo === pending.to)
+        return {action: 'finish', removeFrom: !caseOnly && atFrom === pending.from, moveBack: false};
+    return {action: 'rollback', removeFrom: false, moveBack: caseOnly && atTo === pending.from};
+}
+
 /**
  * The OAuth block after a refresh-token exchange answered with `body`, or
  * null when the answer carries no access token. A rotated refresh token and a
