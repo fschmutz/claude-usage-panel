@@ -69,7 +69,10 @@ semantic versioning.
   rename is refused while a switch is unfinished. It runs under the login's
   refresh lock so a concurrent refresh cannot write the old file back. The
   rule is `renameRefusal` / `renameKey`, pinned in every port by
-  `tests/fixtures/accounts.json`.
+  `tests/fixtures/accounts.json`. A rename is journaled in
+  `.rename-pending.json`: one killed half-way is finished or undone by the
+  next store operation instead of leaving two names on one single-use refresh
+  token, and no sync-back can bring the old name back while it runs.
 
 ### Changed
 

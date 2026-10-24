@@ -64,6 +64,8 @@ enum AccountStore {
     // touched and removed once both halves are installed. While it is there no
     // client snapshots the live login (Accounts.syncBackPlan).
     private static let switchPendingFile = ".switch-pending.json"
+    // A rename in progress (the Node port's RENAME_PENDING_FILE).
+    private static let renamePendingFile = ".rename-pending.json"
 
     // MARK: paths
 
@@ -148,7 +150,36 @@ enum AccountStore {
             else { continue }
             out.append(p)
         }
-        return Accounts.sortedByName(out)
+        let hidden = Accounts.renameHides(names: out.map(\.name), pending: readPendingRename())
+        return Accounts.sortedByName(out.filter { $0.name != hidden })
+    }
+
+    static var renamePendingURL: URL { directory.appendingPathComponent(renamePendingFile) }
+
+    static func readPendingRename() -> RenamePending? {
+        Accounts.parseRenamePending(readJSON(renamePendingURL))
+    }
+
+    /// The `name` inside the file at `name`'s path, whatever it says.
+    private static func nameAt(_ name: String) -> String? {
+        AccountProfile.parse(readJSON(profileURL(name)))?.name
+    }
+
+    /// Finish or undo a rename a crash left behind (Accounts.renameRecovery);
+    /// a fresh one is left alone, it may be running in another process.
+    static func recoverRename() {
+        guard FileManager.default.fileExists(atPath: renamePendingURL.path) else { return }
+        let p = readPendingRename()
+        let plan = Accounts.renameRecovery(
+            pending: p, atFrom: p.flatMap { nameAt($0.from) }, atTo: p.flatMap { nameAt($0.to) },
+            nowMs: nowMs())
+        if plan.action == .wait { return }
+        if let p {
+            if plan.removeFrom { try? FileManager.default.removeItem(at: profileURL(p.from)) }
+            if plan.moveBack { _ = rename(profileURL(p.to).path, profileURL(p.from).path) }
+            if plan.action == .finish { renameCacheEntries(from: p.from, to: p.to) }
+        }
+        try? FileManager.default.removeItem(at: renamePendingURL)
     }
 
     static func read(_ name: String) -> AccountProfile? {
@@ -165,6 +196,7 @@ enum AccountStore {
     }
 
     static func remove(_ name: String) throws {
+        recoverRename()
         guard read(name) != nil else {
             throw AccountError.message("no saved account named \(name)")
         }
@@ -179,7 +211,12 @@ enum AccountStore {
     /// case-insensitive name keeps the old spelling.
     @discardableResult
     static func renameProfile(_ from: String, to: String) async throws -> AccountProfile {
+        recoverRename()
         @Sendable func check() throws {
+            if let standing = readPendingRename() {
+                throw AccountError.message(
+                    "a rename of \(standing.from) is in progress - try again in a moment")
+            }
             guard
                 let refusal = Accounts.renameRefusal(
                     profiles: list(), from: from, to: to, pendingTo: readPendingSwitch()?.to)
@@ -207,8 +244,15 @@ enum AccountStore {
                 throw AccountError.message("no saved account named \(from)")
             }
             let caseOnly = Accounts.sameName(from, to)
+            // Journaled first: a crash below is finished or undone by recoverRename.
+            try writePrivate(
+                JSONSerialization.data(
+                    withJSONObject: ["at": nowMs(), "from": from, "to": to] as [String: Any]),
+                to: renamePendingURL)
             if caseOnly, rename(profileURL(from).path, profileURL(to).path) != 0 {
-                throw AccountError.message("could not rename \(from): errno \(errno)")
+                let code = errno
+                try? FileManager.default.removeItem(at: renamePendingURL)
+                throw AccountError.message("could not rename \(from): errno \(code)")
             }
             let renamed: AccountProfile
             do {
@@ -220,10 +264,12 @@ enum AccountStore {
                 // A file named `to` that still says `from` is listed by no
                 // port: put the name back before failing.
                 if caseOnly { _ = rename(profileURL(to).path, profileURL(from).path) }
+                try? FileManager.default.removeItem(at: renamePendingURL)
                 throw error
             }
             if !caseOnly { try FileManager.default.removeItem(at: profileURL(from)) }
             renameCacheEntries(from: from, to: to)
+            try? FileManager.default.removeItem(at: renamePendingURL)
             return renamed
         }
     }
@@ -368,6 +414,7 @@ enum AccountStore {
     /// is named but never written (Accounts.syncBackPlan).
     @discardableResult
     static func syncBack() throws -> String? {
+        recoverRename()
         guard let creds = readLiveCredentials() else { return nil }
         let account = readLiveAccount()
         let profiles = list()
@@ -381,6 +428,10 @@ enum AccountStore {
         {
             return name
         }
+        // A rename that started since the plan: the snapshot would revive the old name.
+        guard !Accounts.renameBlocksSnapshot(pending: readPendingRename(), name: name),
+            read(name) != nil
+        else { return name }
         try write(
             AccountProfile(name: name, savedAt: stamp(), account: account, credentials: creds))
         return name
@@ -391,6 +442,7 @@ enum AccountStore {
     /// (Accounts.saveRefusal).
     @discardableResult
     static func saveCurrent(_ name: String, force: Bool = false) throws -> AccountProfile {
+        recoverRename()
         guard Accounts.isValidName(name) else {
             throw AccountError.message(
                 "invalid name \"\(name)\": letters, digits, . _ - only, up to 32 characters")

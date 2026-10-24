@@ -241,7 +241,12 @@ other panel counts for everyone. Every `switchTo` also writes
 live login and removes it once both halves are in. While it stands, no port
 snapshots the live login (`syncBackPlan`), and re-running the switch finishes
 it. Everything the credentials write needs is resolved before the mark, so a
-write that cannot happen leaves the login untouched. Profile names collide
+write that cannot happen leaves the login untouched. A rename writes
+`<accounts dir>/.rename-pending.json` (`{at, from, to}`) before its first file
+moves and removes it last: listings hide `from` once `to` stands beside it
+(`renameHides`), no sync-back writes either name (`renameBlocksSnapshot`), and
+a journal older than the refresh lock's stale age is finished or undone by the
+next store operation (`renameRecovery`). Profile names collide
 ignoring case (APFS). On macOS the Keychain item follows Claude Code:
 `Claude Code-credentials-<sha256(NFC CLAUDE_CONFIG_DIR)[0:8]>` when
 `CLAUDE_CONFIG_DIR` is set (`CLAUDE_SECURESTORAGE_CONFIG_DIR` wins). Every

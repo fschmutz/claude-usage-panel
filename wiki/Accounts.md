@@ -84,6 +84,9 @@ preferences and a **Rename** button in macOS Settings): the login, its cached
 usage and its kept weekly reset move with it, `~/.claude` is not touched, and
 NEW must be free ignoring case - changing only the case is fine. A rename runs
 under that login's refresh lock and is refused while a switch is unfinished.
+It is journaled before the first file moves, so a rename killed half-way is
+finished (or undone, if the new file never got written) by the next save,
+switch or remove - never left as two names on one login.
 `remove NAME` forgets one; `--uninstall accounts` keeps them (delete the
 folder yourself).
 

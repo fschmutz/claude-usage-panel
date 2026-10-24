@@ -23,7 +23,7 @@ import {run} from './proc.js';
 import {
     PROFILE_VERSION, REFRESH_LOCK, isTorn, isValidName, liveProfileName, parkName, parseProfile,
     refreshFailureCode, refreshLockFile, refreshRaced, refreshedOauth, renameKey, renameRefusal,
-    sameName, saveRefusal, sameJSON,
+    parseRenamePending, renameBlocksSnapshot, renameHides, renameRecovery, sameName, saveRefusal, sameJSON,
     switchPlan, syncBackPlan, tokenState, usageCacheEntry, keepWeeklyResets,
 } from './pure.js';
 
@@ -43,6 +43,8 @@ const WEEKLY_RESETS_FILE = '.weekly-resets.json';
 // touched and removed once both halves are installed. While it is there no
 // client snapshots the live login (see syncBackPlan in lib/pure.js).
 const SWITCH_PENDING_FILE = '.switch-pending.json';
+// A rename in progress (claude-code/accounts.js RENAME_PENDING_FILE).
+const RENAME_PENDING_FILE = '.rename-pending.json';
 
 // ── Paths ───────────────────────────────────────────────────────────────────────
 
@@ -69,6 +71,37 @@ function weeklyResetsPath() {
 
 function pendingSwitchPath() {
     return GLib.build_filenamev([accountsDir(), SWITCH_PENDING_FILE]);
+}
+
+const renamePendingPath = () => GLib.build_filenamev([accountsDir(), RENAME_PENDING_FILE]);
+const readPendingRename = () => parseRenamePending(readJSON(renamePendingPath()));
+const nameAt = name => parseProfile(readJSON(profilePath(name)))?.name ?? null;
+const removeFile = path => {
+    try {
+        Gio.File.new_for_path(path).delete(null);
+    } catch {
+        // already gone
+    }
+};
+
+/** Finish or undo a rename a crash left behind (renameRecovery); a fresh one
+ *  is left alone, it may be running in another process. */
+function recoverRename() {
+    if (!GLib.file_test(renamePendingPath(), GLib.FileTest.EXISTS))
+        return;
+    const p = readPendingRename();
+    const plan = renameRecovery(p, p ? {atFrom: nameAt(p.from), atTo: nameAt(p.to)} : {}, Date.now());
+    if (plan.action === 'wait')
+        return;
+    if (plan.removeFrom)
+        removeFile(profilePath(p.from));
+    if (plan.moveBack) {
+        Gio.File.new_for_path(profilePath(p.to)).move(
+            Gio.File.new_for_path(profilePath(p.from)), Gio.FileCopyFlags.OVERWRITE, null, null);
+    }
+    if (plan.action === 'finish')
+        renameCacheEntries(p.from, p.to);
+    removeFile(renamePendingPath());
 }
 
 // Everything in the store is a secret: created 0600, never world-readable.
@@ -104,7 +137,8 @@ export function listProfiles() {
         if (profile && `${profile.name}.json` === file)
             out.push(profile);
     }
-    return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const hidden = renameHides(out.map(p => p.name), readPendingRename());
+    return out.filter(p => p.name !== hidden).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 function readProfile(name) {
@@ -123,6 +157,7 @@ function writeProfile(profile) {
 }
 
 export function removeProfile(name) {
+    recoverRename();
     if (!readProfile(name))
         throw new Error(`no saved account named ${name}`);
     try {
@@ -165,7 +200,11 @@ function renameCacheEntries(from, to) {
  * is written before the old one goes; a change of case moves the file itself.
  */
 export async function renameProfile(from, to) {
+    recoverRename();
     const check = () => {
+        const standing = readPendingRename();
+        if (standing)
+            throw new Error(`a rename of ${standing.from} is in progress - try again in a moment`);
         const refusal = renameRefusal(listProfiles(), from, to, readPendingSwitch());
         if (refusal)
             throw renameError(from, to, refusal);
@@ -183,6 +222,8 @@ export async function renameProfile(from, to) {
         const caseOnly = sameName(from, to);
         const move = (a, b) => Gio.File.new_for_path(profilePath(a)).move(
             Gio.File.new_for_path(profilePath(b)), Gio.FileCopyFlags.OVERWRITE, null, null);
+        // journaled first: a crash below is finished or undone by recoverRename
+        writePrivate(renamePendingPath(), JSON.stringify({at: Date.now(), from, to}));
         if (caseOnly)
             move(from, to);
         let renamed;
@@ -192,11 +233,13 @@ export async function renameProfile(from, to) {
             // a file named `to` that still says `from` is listed by no port
             if (caseOnly)
                 move(to, from);
+            removeFile(renamePendingPath());
             throw e;
         }
-        if (!sameName(from, to))
+        if (!caseOnly)
             Gio.File.new_for_path(profilePath(from)).delete(null);
         renameCacheEntries(from, to);
+        removeFile(renamePendingPath());
         return renamed;
     } finally {
         releaseRefreshLock(lock);
@@ -243,6 +286,7 @@ function snapshotLive(name) {
  * but never written (syncBackPlan).
  */
 export function syncBack() {
+    recoverRename();
     const creds = readLiveCredentials();
     if (!creds)
         return null;
@@ -256,7 +300,8 @@ export function syncBack() {
         return plan.name;
     const stored = profiles.find(p => p.name === plan.name);
     const same = stored && sameJSON(stored.credentials, creds) && sameJSON(stored.account, account);
-    if (!same)
+    // a rename that started since the plan: the snapshot would revive the old name
+    if (!same && !renameBlocksSnapshot(readPendingRename(), plan.name) && readProfile(plan.name))
         snapshotLive(plan.name);
     return plan.name;
 }
@@ -264,6 +309,7 @@ export function syncBack() {
 /** Save the live login as `name`. `force` overrules a name that already holds
  *  a different account, never a case variant or a twin (saveRefusal). */
 export function saveCurrent(name, {force = false} = {}) {
+    recoverRename();
     if (!isValidName(name)) {
         throw new Error(
             `invalid name "${name}": letters, digits, . _ - only, up to 32 characters`);

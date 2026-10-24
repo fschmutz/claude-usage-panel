@@ -574,3 +574,61 @@ test('a refresh that failed for a reason other than the login leaves it unreacha
         assert.equal(s.readProfile('PERSO').credentials.claudeAiOauth.refreshToken, 'rt-perso', `${label}: profile untouched`);
     }
 });
+
+// A rename killed half-way: the journal it wrote first lets the next store
+// operation finish or undo it. Fresh, it may still be running elsewhere.
+function crashedRename(io, s, from, to, {age = 30_000} = {}) {
+    const dir = accountsDir(io);
+    fs.writeFileSync(path.join(dir, '.rename-pending.json'), JSON.stringify({at: NOW - age, from, to}));
+    return dir;
+}
+
+test('a rename killed after the new file: listed once, then finished, not left as twins', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({...s.readProfile('PRO'), name: 'WORK'});
+    const dir = crashedRename(io, s, 'PRO', 'WORK', {age: 0});
+    fs.writeFileSync(path.join(dir, '.usage-cache.json'), JSON.stringify({at: NOW, accounts: {PRO: {worst: 40}}}));
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['WORK'], 'the old twin is hidden at once');
+    await assert.rejects(s.renameProfile('WORK', 'X'), /rename of PRO is in progress/);
+    s.syncBack();
+    assert.ok(fs.existsSync(path.join(dir, 'PRO.json')), 'fresh: maybe still running, left alone');
+    crashedRename(io, s, 'PRO', 'WORK');
+    s.syncBack();
+    assert.equal(fs.existsSync(path.join(dir, 'PRO.json')), false);
+    assert.equal(fs.existsSync(path.join(dir, '.rename-pending.json')), false);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.usage-cache.json'), 'utf8')).accounts, {WORK: {worst: 40}});
+});
+
+test('a change of case killed before the write is put back', () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    const dir = crashedRename(io, s, 'PRO', 'Pro');
+    fs.renameSync(path.join(dir, 'PRO.json'), path.join(dir, 'Pro.json'));
+    assert.deepEqual(s.listProfiles(), [], 'Pro.json still says PRO: no port lists it');
+    s.syncBack();
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PRO']);
+    assert.equal(fs.existsSync(path.join(dir, '.rename-pending.json')), false);
+});
+
+test('a rename killed before the new file is dropped, the old profile untouched', () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    const dir = crashedRename(io, s, 'PRO', 'WORK');
+    s.syncBack();
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PRO']);
+    assert.equal(fs.existsSync(path.join(dir, '.rename-pending.json')), false);
+});
+
+test('sync-back never writes a name a rename is moving', () => {
+    const {io, home, s} = world();
+    s.saveCurrent('PRO');
+    const before = fs.readFileSync(path.join(accountsDir(io), 'PRO.json'), 'utf8');
+    // Claude Code rotated the refresh token: normally written back to PRO
+    const live = JSON.parse(fs.readFileSync(path.join(home, '.claude', '.credentials.json'), 'utf8'));
+    live.claudeAiOauth.refreshToken = 'rotated';
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), JSON.stringify(live));
+    crashedRename(io, s, 'PRO', 'WORK', {age: 0});
+    assert.equal(s.syncBack(), 'PRO');
+    assert.equal(fs.readFileSync(path.join(accountsDir(io), 'PRO.json'), 'utf8'), before);
+});

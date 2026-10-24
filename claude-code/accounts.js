@@ -36,7 +36,8 @@ import {execFileSync} from 'node:child_process';
 
 import {
   PROFILE_VERSION, accountSummary, isTorn, isValidName, keychainServices, keychainWrite,
-  liveProfileName, parkName, parseProfile, renameRefusal, sameJSON, sameName, saveRefusal, switchPlan, syncBackPlan, tokenState,
+  liveProfileName, parkName, parseProfile, parseRenamePending, renameBlocksSnapshot, renameHides, renameRecovery,
+  renameRefusal, sameJSON, sameName, saveRefusal, switchPlan, syncBackPlan, tokenState,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {accountHealth, accountNotices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/notices.js';
 import {bindUsage, coded} from './accounts-usage.js';
@@ -48,6 +49,10 @@ const LAST_SWITCH_FILE = '.last-switch.json';
 // touched and removed once both halves are installed. While it is there no
 // port snapshots the live login (see syncBackPlan).
 const SWITCH_PENDING_FILE = '.switch-pending.json';
+// A rename in progress: {at, from, to}, written before the first file moves
+// and removed once the old one is gone. A stale one is finished or undone by
+// the next store operation (renameRecovery).
+const RENAME_PENDING_FILE = '.rename-pending.json';
 
 const sha256Hex = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
@@ -113,7 +118,8 @@ export function openStore(io = {}) {
       const profile = parseProfile(readJSON(path.join(dir, file)));
       if (profile && `${profile.name}.json` === file) out.push(profile);
     }
-    return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const hidden = renameHides(out.map((p) => p.name), readPendingRename());
+    return out.filter((p) => p.name !== hidden).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   }
 
   function readProfile(name) {
@@ -129,7 +135,26 @@ export function openStore(io = {}) {
     return clean;
   }
 
+  const renamePendingPath = () => path.join(dir, RENAME_PENDING_FILE);
+  const readPendingRename = () => parseRenamePending(readJSON(renamePendingPath()));
+  /** The `name` inside the file at `name`'s path, whatever it says. */
+  const nameAt = (name) => parseProfile(readJSON(profilePath(name)))?.name ?? null;
+
+  /** Finish or undo a rename a crash left behind; a fresh one is left alone
+   *  (it may be running in another process). */
+  function recoverRename() {
+    if (!fs.existsSync(renamePendingPath())) return;
+    const pending = readPendingRename();
+    const plan = renameRecovery(pending, pending ? {atFrom: nameAt(pending.from), atTo: nameAt(pending.to)} : {}, now());
+    if (plan.action === 'wait') return;
+    if (plan.removeFrom) fs.rmSync(profilePath(pending.from), {force: true});
+    if (plan.moveBack) fs.renameSync(profilePath(pending.to), profilePath(pending.from));
+    if (plan.action === 'finish') usage.renameCacheEntries(pending.from, pending.to);
+    fs.rmSync(renamePendingPath(), {force: true});
+  }
+
   function removeProfile(name) {
+    recoverRename();
     if (!readProfile(name)) throw new Error(`no saved account named ${name}`);
     fs.rmSync(profilePath(name), {force: true});
   }
@@ -153,7 +178,10 @@ export function openStore(io = {}) {
    * old spelling.
    */
   async function renameProfile(from, to) {
+    recoverRename();
     const check = () => {
+      const standing = readPendingRename();
+      if (standing) throw new Error(`a rename of ${standing.from} is in progress - try again in a moment`);
       const refusal = renameRefusal(listProfiles(), from, to, readPendingSwitch());
       if (refusal) throw renameError(from, to, refusal);
     };
@@ -163,6 +191,9 @@ export function openStore(io = {}) {
       check(); // a switch or a save may have landed while we waited
       const profile = readProfile(from);
       const caseOnly = sameName(from, to);
+      // Journaled first: a crash anywhere below is finished or undone by the
+      // next store operation, never left as twins or an unlisted file.
+      writePrivate(renamePendingPath(), JSON.stringify({at: now(), from, to}));
       if (caseOnly) fs.renameSync(profilePath(from), profilePath(to));
       let renamed;
       try {
@@ -171,10 +202,12 @@ export function openStore(io = {}) {
         // A file named `to` that still says `from` is listed by no port and
         // reachable by no command: put the name back before failing.
         if (caseOnly) fs.renameSync(profilePath(to), profilePath(from));
+        fs.rmSync(renamePendingPath(), {force: true});
         throw e;
       }
-      if (!sameName(from, to)) fs.rmSync(profilePath(from), {force: true});
+      if (!caseOnly) fs.rmSync(profilePath(from), {force: true});
       usage.renameCacheEntries(from, to);
+      fs.rmSync(renamePendingPath(), {force: true});
       return renamed;
     });
   }
@@ -299,6 +332,7 @@ export function openStore(io = {}) {
    * named but never written (syncBackPlan).
    */
   function syncBack() {
+    recoverRename();
     const creds = readLiveCredentials();
     if (!creds) return null;
     const account = readLiveAccount();
@@ -309,13 +343,17 @@ export function openStore(io = {}) {
     if (!plan.name || !plan.snapshot) return plan.name;
     const stored = profiles.find((p) => p.name === plan.name);
     const same = stored && sameJSON(stored.credentials, creds) && sameJSON(stored.account, account);
-    if (!same) snapshotLive(plan.name);
+    // A rename that started since the plan could see the old name gone: the
+    // snapshot would bring it back beside the new one.
+    if (!same && !renameBlocksSnapshot(readPendingRename(), plan.name) && readProfile(plan.name))
+      snapshotLive(plan.name);
     return plan.name;
   }
 
   /** Save the live login as `name`. `force` overrules a name that already
    *  holds a different account, never a case variant or a twin (saveRefusal). */
   function saveCurrent(name, {force = false} = {}) {
+    recoverRename();
     if (!isValidName(name)) {
       throw new Error(`invalid name "${name}": letters, digits, . _ - only, up to 32 characters`);
     }
