@@ -53,9 +53,7 @@ jobs:
           persist-credentials: false
 
       - name: The guard still catches what it is for
-        # Without the live event: its `edited` action would switch every
-        # fixture case to --refresh-text and send it to the API.
-        run: env -u GITHUB_EVENT_PATH ./scripts/tests/attribution-guard-test.sh
+        run: ./scripts/tests/attribution-guard-test.sh
 
       # GH_TOKEN is the pull request's own read-only token: the script calls
       # repos/:repo/pulls/:number/commits, and nothing else.

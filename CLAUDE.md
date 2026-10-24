@@ -145,7 +145,7 @@ the PR title and body. Prose is safe on purpose: only footer shapes, trailer
 keys and URLs count, and the bare agent phrases only at the head of a line. A
 missing or unreadable allow file warns and falls back to the built-in address
 rather than failing open. The script,
-`scripts/tests/attribution-guard-test.sh` (32 cases) and
+`scripts/tests/attribution-guard-test.sh` (33 cases) and
 `scripts/tests/fixtures/` are copied BYTE FOR BYTE from the shared
 GITHUB-TEMPLATE repository: fix a rule there and copy it again, never fork it
 in place - which is why they keep that repo's formatting and are the one

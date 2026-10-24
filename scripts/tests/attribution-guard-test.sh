@@ -35,10 +35,18 @@ indent() {
 }
 
 # run_case NAME WANT_STATUS WANT_TEXT -- ARGS…  (WANT_TEXT empty: any output)
+#
+# Every case runs without the live runner context. Inside a workflow the
+# runner's GITHUB_EVENT_PATH and GITHUB_REPOSITORY would otherwise reach the
+# guard, and an `edited` event turns on the title and body re-read against a
+# fixture pull request number that does not exist. A case that tests the
+# re-read passes -R, --pr and --refresh-text itself.
 run_case() {
   local name="$1" want_status="$2" want_text="$3" output status
   shift 3
-  output="$(GITHUB_ACTIONS=false ATTRIBUTION_ALLOW="${case_allow}" "${GUARD}" "$@" 2>&1)"
+  output="$(env -u GITHUB_EVENT_PATH -u GITHUB_EVENT_NAME -u GITHUB_REPOSITORY \
+    -u GH_TOKEN -u GITHUB_TOKEN \
+    GITHUB_ACTIONS=false ATTRIBUTION_ALLOW="${case_allow}" "${GUARD}" "$@" 2>&1)"
   status=$?
   case_allow=""
 
@@ -216,6 +224,23 @@ run_case "an \"Open in …\" footer fails" 1 "PR body:" \
 run_case "a \"Generated with\" footer fails" 1 "PR body:" \
   --commits-file "${FIXTURES}/commits-clean.json" \
   --body-file "${FIXTURES}/body-generated-with.md"
+
+# --- the runner's own context -------------------------------------------------
+
+# This suite runs inside the `edited` workflow too. The runner exports its
+# event and repository; they must not reach a fixture case, or every case that
+# reads the title and body tries the API for a pull request that is not there.
+runner_event="$(mktemp)"
+printf '%s\n' '{"action":"edited","pull_request":{"number":45,"title":"x","body":""}}' >"${runner_event}"
+saved_event_path="${GITHUB_EVENT_PATH-}" saved_event_set="${GITHUB_EVENT_PATH+set}"
+saved_repository="${GITHUB_REPOSITORY-}" saved_repository_set="${GITHUB_REPOSITORY+set}"
+export GITHUB_EVENT_PATH="${runner_event}" GITHUB_REPOSITORY="owner/repo"
+run_case "an edited event in the runner's env does not reach a case" 0 "no foreign attribution" \
+  --commits-file "${FIXTURES}/commits-clean.json" \
+  --body-file "${FIXTURES}/body-clean.md"
+if [ -n "${saved_event_set}" ]; then export GITHUB_EVENT_PATH="${saved_event_path}"; else unset GITHUB_EVENT_PATH; fi
+if [ -n "${saved_repository_set}" ]; then export GITHUB_REPOSITORY="${saved_repository}"; else unset GITHUB_REPOSITORY; fi
+rm -f "${runner_event}"
 
 # --- refusals -----------------------------------------------------------------
 
