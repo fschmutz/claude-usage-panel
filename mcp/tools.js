@@ -338,7 +338,7 @@ export const ACCOUNT_TOOLS = [
       properties: {from: {type: 'string'}, to: {type: 'string'}},
       required: ['from', 'to'],
     },
-    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false},
+    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false},
   },
 ];
 
