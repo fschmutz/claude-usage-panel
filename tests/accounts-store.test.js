@@ -329,6 +329,20 @@ test('renameProfile puts a case-only rename back when the write fails', async ()
     assert.ok(fs.readdirSync(dir).includes('PRO.json'));
 });
 
+test('renameProfile that cannot move the file leaves no journal behind', async () => {
+    // A directory already sits at the new name, so the case-only file move
+    // fails before any profile is written. The journal written first must not
+    // outlive the failure: it would block every rename for its stale age.
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    const dir = accountsDir(io);
+    fs.mkdirSync(path.join(dir, 'Pro.json'));
+    if (fs.readdirSync(dir).filter((n) => n.toLowerCase() === 'pro.json').length !== 2) return; // case-insensitive volume
+    await assert.rejects(s.renameProfile('PRO', 'Pro'));
+    assert.equal(fs.existsSync(path.join(dir, '.rename-pending.json')), false);
+    assert.deepEqual(s.listProfiles().map((x) => x.name), ['PRO']);
+});
+
 test('listProfiles skips foreign, dot and mismatched files', () => {
     const {io, s} = world();
     s.saveCurrent('PRO');

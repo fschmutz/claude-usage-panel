@@ -224,16 +224,23 @@ export async function renameProfile(from, to) {
             Gio.File.new_for_path(profilePath(b)), Gio.FileCopyFlags.OVERWRITE, null, null);
         // journaled first: a crash below is finished or undone by recoverRename
         writePrivate(renamePendingPath(), JSON.stringify({at: Date.now(), from, to}));
-        if (caseOnly)
-            move(from, to);
         let renamed;
+        let moved = false;
         try {
+            if (caseOnly) {
+                move(from, to);
+                moved = true;
+            }
             renamed = writeProfile({...profile, name: to});
         } catch (e) {
-            // a file named `to` that still says `from` is listed by no port
-            if (caseOnly)
-                move(to, from);
-            removeFile(renamePendingPath());
+            // a file named `to` that still says `from` is listed by no port;
+            // a move that itself failed left only the journal to remove
+            try {
+                if (moved)
+                    move(to, from);
+            } finally {
+                removeFile(renamePendingPath());
+            }
             throw e;
         }
         if (!caseOnly)
