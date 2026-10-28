@@ -194,15 +194,23 @@ export function openStore(io = {}) {
       // Journaled first: a crash anywhere below is finished or undone by the
       // next store operation, never left as twins or an unlisted file.
       writePrivate(renamePendingPath(), JSON.stringify({at: now(), from, to}));
-      if (caseOnly) fs.renameSync(profilePath(from), profilePath(to));
       let renamed;
+      let moved = false;
       try {
+        if (caseOnly) {
+          fs.renameSync(profilePath(from), profilePath(to));
+          moved = true;
+        }
         renamed = writeProfile({...profile, name: to});
       } catch (e) {
         // A file named `to` that still says `from` is listed by no port and
-        // reachable by no command: put the name back before failing.
-        if (caseOnly) fs.renameSync(profilePath(to), profilePath(from));
-        fs.rmSync(renamePendingPath(), {force: true});
+        // reachable by no command: put the name back before failing. A move
+        // that itself failed left nothing to put back, only the journal.
+        try {
+          if (moved) fs.renameSync(profilePath(to), profilePath(from));
+        } finally {
+          fs.rmSync(renamePendingPath(), {force: true});
+        }
         throw e;
       }
       if (!caseOnly) fs.rmSync(profilePath(from), {force: true});
