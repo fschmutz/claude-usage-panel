@@ -211,7 +211,8 @@ consumer threads paths around. The GNOME extension (that same
 controller) and the macOS app (`ClaudeUsageCore/Accounts.swift` +
 `AccountStore.swift` + `Accounts.swift`) do the I/O their own way; `tests/fixtures/accounts.json` pins what they
 must agree on: profile validity + names, which saved profile the live login is
-(the live access token first, then the account block: uuid, then email),
+(the live access token first, then the account block: uuid, then email,
+within its org - one person in two orgs is two logins, pinned by `orgs`),
 `tokenState` (valid / stale within 5 min of expiry /
 expired once the refresh token is gone), and `autoSwitchTarget` (threshold 90,
 margin 15, cooldown 5 min, most headroom wins, ties by code-point name order),

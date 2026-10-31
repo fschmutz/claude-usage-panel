@@ -304,9 +304,10 @@ export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
 // burn rate; the render appends a "⚠full …" marker only when one is on pace
 // to run out before its reset, so the line stays short in the good case.
 //
-// The samples are filed under the live login (its oauthAccount uuid, else its
-// email - the MCP server files under the same key): two logins are two quota
-// pools, and one series across a switch reads a 10 % -> 60 % jump as a burn.
+// The samples are filed under the live login (warehouseAccount: its uuid or
+// email, plus its org - the MCP server files under the same key): two logins
+// are two quota pools, and one series across a switch reads a 10 % -> 60 %
+// jump as a burn.
 // Like accountSegment this reads only the account block, never a token.
 export function limitsSegment(stdinText, {nowMs = Date.now(), historyPath, io = {}} = {}) {
   const cards = cardsFromStdin(stdinText);

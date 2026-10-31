@@ -235,9 +235,22 @@ public enum Accounts {
         profiles.sorted { $0.name.unicodeScalars.lexicographicallyPrecedes($1.name.unicodeScalars) }
     }
 
-    /// Which saved profile the live login is - by account id, else by email.
+    /// One person in two orgs (a personal plan and a team seat) is two logins
+    /// with one accountUuid and email. An org known on only one side matches.
+    static func sameOrg(_ a: [String: Any], _ b: [String: Any]) -> Bool {
+        let org = { (x: [String: Any]) -> String? in
+            guard let o = x["organizationUuid"] as? String, !o.isEmpty else { return nil }
+            return o
+        }
+        guard let x = org(a), let y = org(b) else { return true }
+        return x == y
+    }
+
+    /// Which saved profile the live login is - by account id, else by email,
+    /// within the live login's org (sameOrg).
     public static func activeName(profiles: [AccountProfile], live: [String: Any]?) -> String? {
         guard let live else { return nil }
+        let profiles = profiles.filter { sameOrg($0.account, live) }
         if let uuid = live["accountUuid"] as? String,
             let hit = profiles.first(where: { $0.accountUuid == uuid })
         {
@@ -331,7 +344,7 @@ public enum Accounts {
     /// Why the live login (its account block `account`) may not be saved as
     /// `name`, or nil when it may. First hit wins: `variant` (a saved name
     /// differs only by case - one file on APFS), `taken` (`name` holds a
-    /// different account, both uuids known; `force` overrules it only), `twin`
+    /// different account or org, both uuids known; `force` overrules it only), `twin`
     /// (this account is already saved under another name: two profiles with
     /// one identity make `activeName` a coin toss and an auto-switch between
     /// them a no-op).
@@ -351,7 +364,7 @@ public enum Accounts {
         }
         if !force, let existing = profiles.first(where: { $0.name == name }),
             let liveUuid = uuid(live), let storedUuid = uuid(existing.account),
-            storedUuid != liveUuid
+            storedUuid != liveUuid || !sameOrg(existing.account, live)
         {
             return refusal(.taken, existing)
         }

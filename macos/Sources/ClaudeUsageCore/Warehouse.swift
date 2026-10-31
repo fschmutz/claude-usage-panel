@@ -68,13 +68,16 @@ public enum Warehouse {
     }
 
     /// The identity an entry is filed under: the `oauthAccount` block's uuid,
-    /// else its email, else nil. The file is shared by every login on the
-    /// machine; a peak read without it would show one login's 100% week on
-    /// the card of the login that replaced it.
+    /// else its email, else nil, then `/` and its org uuid when it has one
+    /// (one person in two orgs is two quota pools). The file is shared by
+    /// every login on the machine; a peak read without it would show one
+    /// login's 100% week on the card of the login that replaced it.
     public static func account(_ live: [String: Any]?) -> String? {
         guard let live else { return nil }
-        if let uuid = live["accountUuid"] as? String, !uuid.isEmpty { return uuid }
-        if let email = live["emailAddress"] as? String, !email.isEmpty { return email }
+        var org = ""
+        if let o = live["organizationUuid"] as? String, !o.isEmpty { org = "/" + o }
+        if let uuid = live["accountUuid"] as? String, !uuid.isEmpty { return uuid + org }
+        if let email = live["emailAddress"] as? String, !email.isEmpty { return email + org }
         return nil
     }
 

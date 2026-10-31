@@ -60,14 +60,20 @@ final class AccountsParityTests: XCTestCase {
         for n in fix["invalidNames"] as! [String] { XCTAssertFalse(Accounts.isValidName(n), n) }
     }
 
+    /// The fixture, then its `orgs` section: the same cases against its own profiles.
+    private func sections(_ fix: [String: Any]) -> [[String: Any]] {
+        [fix, fix["orgs"] as! [String: Any]]
+    }
+
     func testActiveName() throws {
-        let fix = try fixture()
-        let ps = profiles(fix)
-        for c in fix["active"] as! [[String: Any]] {
-            let name = c["name"] as! String
-            let live = c["live"] as? [String: Any]
-            XCTAssertEqual(
-                Accounts.activeName(profiles: ps, live: live), c["expected"] as? String, name)
+        for fix in sections(try fixture()) {
+            let ps = profiles(fix)
+            for c in fix["active"] as! [[String: Any]] {
+                let name = c["name"] as! String
+                let live = c["live"] as? [String: Any]
+                XCTAssertEqual(
+                    Accounts.activeName(profiles: ps, live: live), c["expected"] as? String, name)
+            }
         }
     }
 
@@ -127,18 +133,19 @@ final class AccountsParityTests: XCTestCase {
     }
 
     func testSyncBackPlan() throws {
-        let fix = try fixture()
-        let ps = profiles(fix)
-        for c in fix["syncBack"] as! [[String: Any]] {
-            let e = c["expected"] as! [String: Any]
-            XCTAssertEqual(
-                Accounts.syncBackPlan(
-                    profiles: ps, token: c["token"] as? String,
-                    account: c["account"] as? [String: Any],
-                    pendingTo: (c["pending"] as? [String: Any])?["to"] as? String),
-                SyncBackPlan(
-                    name: e["name"] as? String, snapshot: e["snapshot"] as! Bool,
-                    pendingDone: e["pendingDone"] as! Bool), c["name"] as! String)
+        for fix in sections(try fixture()) {
+            let ps = profiles(fix)
+            for c in fix["syncBack"] as! [[String: Any]] {
+                let e = c["expected"] as! [String: Any]
+                XCTAssertEqual(
+                    Accounts.syncBackPlan(
+                        profiles: ps, token: c["token"] as? String,
+                        account: c["account"] as? [String: Any],
+                        pendingTo: (c["pending"] as? [String: Any])?["to"] as? String),
+                    SyncBackPlan(
+                        name: e["name"] as? String, snapshot: e["snapshot"] as! Bool,
+                        pendingDone: e["pendingDone"] as! Bool), c["name"] as! String)
+            }
         }
     }
 
@@ -248,22 +255,23 @@ final class AccountsParityTests: XCTestCase {
     // MARK: the store decisions each port's I/O layer only carries out
 
     func testSaveRefusal() throws {
-        let fix = try fixture()
-        let ps = profiles(fix)
-        for c in fix["saveRefusal"] as! [[String: Any]] {
-            let name = c["name"] as! String
-            let got = Accounts.saveRefusal(
-                profiles: ps, name: c["save"] as! String, account: c["account"] as? [String: Any],
-                force: c["force"] as! Bool)
-            guard let e = c["expected"] as? [String: Any] else {
-                XCTAssertNil(got, name)
-                continue
+        for fix in sections(try fixture()) {
+            let ps = profiles(fix)
+            for c in fix["saveRefusal"] as! [[String: Any]] {
+                let name = c["name"] as! String
+                let got = Accounts.saveRefusal(
+                    profiles: ps, name: c["save"] as! String,
+                    account: c["account"] as? [String: Any], force: c["force"] as! Bool)
+                guard let e = c["expected"] as? [String: Any] else {
+                    XCTAssertNil(got, name)
+                    continue
+                }
+                XCTAssertEqual(
+                    got,
+                    SaveRefusal(
+                        kind: SaveRefusal.Kind(rawValue: e["kind"] as! String)!,
+                        profile: e["profile"] as! String, email: e["email"] as? String), name)
             }
-            XCTAssertEqual(
-                got,
-                SaveRefusal(
-                    kind: SaveRefusal.Kind(rawValue: e["kind"] as! String)!,
-                    profile: e["profile"] as! String, email: e["email"] as? String), name)
         }
     }
 

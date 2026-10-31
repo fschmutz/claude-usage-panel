@@ -80,6 +80,17 @@ test('saveRefusal: case variant, then a taken name unless forced, then a twin', 
     for (const c of FIX.saveRefusal)
         assert.deepEqual(accounts.saveRefusal(profiles, c.save, c.account, c.force), c.expected, c.name);
 });
+test('orgs: one person in two orgs is two logins', () => {
+    const ps = FIX.orgs.profiles.map(accounts.parseProfile);
+    for (const c of FIX.orgs.active)
+        assert.equal(accounts.activeAccountName(ps, c.live), c.expected, c.name);
+    for (const c of FIX.orgs.syncBack) {
+        assert.deepEqual(accounts.syncBackPlan(ps, {token: c.token, account: c.account}, c.pending),
+            c.expected, c.name);
+    }
+    for (const c of FIX.orgs.saveRefusal)
+        assert.deepEqual(accounts.saveRefusal(ps, c.save, c.account, c.force), c.expected, c.name);
+});
 test('refreshedOauth: only a finite positive expires_in moves the expiry', () => {
     for (const c of FIX.refresh) {
         const before = JSON.parse(JSON.stringify(FIX.refreshOauth));
