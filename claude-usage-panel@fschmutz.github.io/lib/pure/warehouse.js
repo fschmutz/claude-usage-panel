@@ -15,18 +15,22 @@ export const WAREHOUSE_KEEP_DAYS = 90;
 
 /**
  * The identity a warehouse entry is filed under: the `oauthAccount` block's
- * uuid, else its email, else null. The file is shared by every login on the
- * machine, so a week-over-week peak read without it mixes accounts - the week
- * one login spent at 100% would show on the card of the login that replaced
- * it (seen live 2026-09-18: Fable at 0% under "peak 100% this week").
+ * uuid, else its email, else null, then `/` and its org uuid when it has one
+ * (one person in two orgs is two quota pools). The file is shared by every
+ * login on the machine, so a week-over-week peak read without it mixes
+ * accounts - the week one login spent at 100% would show on the card of the
+ * login that replaced it (seen live 2026-09-18: Fable at 0% under "peak 100%
+ * this week").
  */
 export function warehouseAccount(live) {
     if (!live || typeof live !== 'object')
         return null;
+    const org = typeof live.organizationUuid === 'string' && live.organizationUuid
+        ? `/${live.organizationUuid}` : '';
     if (typeof live.accountUuid === 'string' && live.accountUuid)
-        return live.accountUuid;
+        return live.accountUuid + org;
     if (typeof live.emailAddress === 'string' && live.emailAddress)
-        return live.emailAddress;
+        return live.emailAddress + org;
     return null;
 }
 

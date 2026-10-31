@@ -6,6 +6,16 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **One person in two orgs is two saved accounts.** A personal plan and a team
+  seat share one `accountUuid` and email, so the live login matched whichever
+  profile held that person, and sync-back wrote the other org's login over it.
+  Every port now matches a login within its `organizationUuid` (a side without
+  one still matches), `save` takes the second org as a new account instead of
+  a twin, and pace history and the warehouse file each org separately
+  (`<uuid>/<org>`), so earlier samples no longer count toward a trend.
+
 ## [3.11.0] - 2026-10-24
 
 ### Added

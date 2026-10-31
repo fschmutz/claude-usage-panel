@@ -446,5 +446,31 @@
     {"name": "case: crashed before the file rename", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": "PRO", "atTo": null, "now": 1030000, "expected": {"action": "rollback", "removeFrom": false, "moveBack": false}},
     {"name": "case: the write landed", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": null, "atTo": "Pro", "now": 1030000, "expected": {"action": "finish", "removeFrom": false, "moveBack": false}},
     {"name": "case-insensitive dir: the write landed, the old path is the same file", "pending": {"at": 1000000, "from": "PRO", "to": "Pro"}, "atFrom": "Pro", "atTo": "Pro", "now": 1030000, "expected": {"action": "finish", "removeFrom": false, "moveBack": false}}
-  ]
+  ],
+  "orgs": {
+    "_comment": "One person in two orgs (a personal plan and a team seat): one accountUuid and email, two logins. active, syncBack and saveRefusal as above, against these profiles. An org on one side only matches.",
+    "profiles": [
+      {"version": 1, "name": "ME", "savedAt": "2026-09-13T10:00:00.000Z", "account": {"accountUuid": "u-me", "emailAddress": "me@example.com", "organizationUuid": "o-me"}, "credentials": {"claudeAiOauth": {"accessToken": "at-me", "refreshToken": "rt-me", "subscriptionType": "max"}}},
+      {"version": 1, "name": "TEAM", "savedAt": "2026-09-13T10:05:00.000Z", "account": {"accountUuid": "u-me", "emailAddress": "me@example.com", "organizationUuid": "o-team"}, "credentials": {"claudeAiOauth": {"accessToken": "at-team", "refreshToken": "rt-team", "subscriptionType": "team"}}},
+      {"version": 1, "name": "NOORG", "savedAt": "2026-09-13T10:10:00.000Z", "account": {"accountUuid": "u-noorg", "emailAddress": "noorg@example.com"}, "credentials": {"claudeAiOauth": {"accessToken": "at-noorg", "refreshToken": "rt-noorg"}}}
+    ],
+    "active": [
+      {"name": "the personal org", "live": {"accountUuid": "u-me", "organizationUuid": "o-me"}, "expected": "ME"},
+      {"name": "the team org", "live": {"accountUuid": "u-me", "organizationUuid": "o-team"}, "expected": "TEAM"},
+      {"name": "the team org by email", "live": {"emailAddress": "ME@example.com", "organizationUuid": "o-team"}, "expected": "TEAM"},
+      {"name": "an org no profile holds", "live": {"accountUuid": "u-me", "emailAddress": "me@example.com", "organizationUuid": "o-new"}, "expected": null},
+      {"name": "a live block without an org", "live": {"accountUuid": "u-me"}, "expected": "ME"},
+      {"name": "a profile without an org", "live": {"accountUuid": "u-noorg", "organizationUuid": "o-any"}, "expected": "NOORG"}
+    ],
+    "syncBack": [
+      {"name": "a rotated team login is snapshotted into its own profile", "token": "at-team-rotated", "account": {"accountUuid": "u-me", "organizationUuid": "o-team"}, "pending": null, "expected": {"name": "TEAM", "snapshot": true, "pendingDone": false}},
+      {"name": "a new org of a saved person is unsaved, never written over that person's profile", "token": "at-new", "account": {"accountUuid": "u-me", "emailAddress": "me@example.com", "organizationUuid": "o-new"}, "pending": null, "expected": {"name": null, "snapshot": false, "pendingDone": false}}
+    ],
+    "saveRefusal": [
+      {"name": "a new org of a saved person under a new name", "save": "NEW", "account": {"accountUuid": "u-me", "emailAddress": "me@example.com", "organizationUuid": "o-new"}, "force": false, "expected": null},
+      {"name": "a name holding the same person in another org", "save": "ME", "account": {"accountUuid": "u-me", "organizationUuid": "o-new"}, "force": false, "expected": {"kind": "taken", "profile": "ME", "email": "me@example.com"}},
+      {"name": "forced over the same person in another org", "save": "ME", "account": {"accountUuid": "u-me", "organizationUuid": "o-new"}, "force": true, "expected": null},
+      {"name": "the same org under another name is a twin", "save": "NEW", "account": {"accountUuid": "u-me", "organizationUuid": "o-team"}, "force": false, "expected": {"kind": "twin", "profile": "TEAM", "email": "me@example.com"}}
+    ]
+  }
 }

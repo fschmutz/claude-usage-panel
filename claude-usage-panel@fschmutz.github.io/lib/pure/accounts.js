@@ -91,10 +91,23 @@ export function accountSummary(profile, nowMs = Date.now()) {
     };
 }
 
-/** Which saved profile the live login is - by account id, else by email. */
+const orgUuid = a => (typeof a?.organizationUuid === 'string' && a.organizationUuid
+    ? a.organizationUuid : null);
+
+/** One person in two orgs (a personal plan and a team seat) is two logins
+ *  with one accountUuid and email. An org known on only one side matches. */
+function sameOrg(a, b) {
+    const x = orgUuid(a);
+    const y = orgUuid(b);
+    return !x || !y || x === y;
+}
+
+/** Which saved profile the live login is - by account id, else by email,
+ *  within the live login's org (sameOrg). */
 export function activeAccountName(profiles, live) {
     if (!live || typeof live !== 'object')
         return null;
+    profiles = profiles.filter(p => sameOrg(p.account, live));
     const uuid = typeof live.accountUuid === 'string' ? live.accountUuid : null;
     if (uuid) {
         const hit = profiles.find(p => p.account?.accountUuid === uuid);
@@ -184,7 +197,7 @@ export function sameJSON(a, b) {
  *   variant - a saved name differs from `name` only by case: one file on
  *             APFS, never a new profile. `force` does not overrule it.
  *   taken   - `name` holds a different account (both uuids known, and they
- *             differ). `force` overrules it.
+ *             or the orgs differ). `force` overrules it.
  *   twin    - this account is already saved under another name. Two profiles
  *             with one identity make activeAccountName a coin toss and an
  *             auto-switch between them a no-op, so `force` does not overrule it.
@@ -203,7 +216,7 @@ export function saveRefusal(profiles, name, account, force = false) {
         return refusal('variant', variant);
     const existing = profiles.find(p => p.name === name);
     if (existing && !force && uuid(live) && uuid(existing.account) &&
-        uuid(existing.account) !== uuid(live))
+        (uuid(existing.account) !== uuid(live) || !sameOrg(existing.account, live)))
         return refusal('taken', existing);
     const twin = activeAccountName(profiles.filter(p => p.name !== name), live);
     return twin ? refusal('twin', profiles.find(p => p.name === twin)) : null;

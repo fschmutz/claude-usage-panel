@@ -17,7 +17,7 @@ import {historyPath as defaultHistoryPath} from './paths.js';
 // Best-effort: a concurrent write may win a race - one sample lost, never an
 // error - and a read-only tmp dir just means no forecast.
 //
-// With an `account` (the live login's uuid or email) the key is
+// With an `account` (the live login's warehouseAccount) the key is
 // "<account>|<card key>": two logins are two quota pools, and one series
 // spanning a switch from a 10 % account to a 60 % one regresses as a burn and
 // raises a false "full before reset". Without one the key is the bare card key.
