@@ -1,5 +1,5 @@
 // The reset countdown as the terminal clients print it: "3h06m" / "4d2h",
-// the compact label of the status line, the MCP server, the CLI and
+// the compact label of the MCP server, the CLI and
 // linux/usage-bar.mjs. The split itself (whole seconds floored, then days /
 // hours / minutes) is lib/pure/usage.js resetParts, the same one the GNOME
 // "Resets in 3h 06m" is built on; tests/fixtures/resets.json pins both

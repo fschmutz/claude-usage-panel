@@ -31,7 +31,7 @@ import {vbox, vboxProps, clipLabel} from './widgets.js';
  * auto-switch decision. The active account's usage is what the cards above
  * already show; every other account is fetched with its own stored token
  * (refreshed if stale); an expired login is not fetched at all. The results
- * are also dropped into the usage cache the status line reads.
+ * are also dropped into the accounts' usage cache.
  */
 async function collectAccountRows(session, profiles, active, activeCards) {
     const results = {};

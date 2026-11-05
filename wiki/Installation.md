@@ -12,7 +12,7 @@ curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash
 Pass targets and flags through with `bash -s -- …`:
 
 ```bash
-curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash -s -- statusline mcp
+curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash -s -- footer mcp
 ```
 
 Or from a clone: one `install.sh` at the repo root installs, updates, and
@@ -22,7 +22,7 @@ uninstalls every client.
 | --- | --- |
 | `./install.sh` | auto-detect OS → the sensible set |
 | `./install.sh gnome` | GNOME Shell extension |
-| `./install.sh statusline` | Claude Code status line |
+| `./install.sh footer` | The line under the Claude Code prompt ([[Footer]]; `statusline` still works and migrates the old status line) |
 | `./install.sh mcp` | `get_usage`, `waiting` + `awake` MCP tools → Claude Code + Cursor |
 | `./install.sh macos` | build + install the macOS `.app` |
 | `./install.sh autoupdate` | daily check for a new release + auto-install |
@@ -179,7 +179,7 @@ as installed, and tries again next time. The rolling log is
 
 `update` reinstalls only the targets already present (see `./install.sh --list`),
 so it won't add clients you never installed. `--pull` fast-forwards the checkout
-first. Per target: the **status line** and **MCP server** take effect next
+first. Per target: the **footer** and **MCP server** take effect next
 session; **GNOME** needs a log out / back in (Wayland); **macOS** quits the
 running app, replaces it where it is installed, and relaunches the new build.
 
@@ -213,8 +213,7 @@ CLI and the UI always agree, and you can use whichever is closer to hand.
 
 **Every client also reports when a ping last fired**: the GNOME and macOS
 dropdowns show `Session pings: last 05:30 · next 10:35`, the macOS Settings
-window has a *Last ping* row, the status line renders `ping 05:30` (silent
-until you schedule pings), and the MCP `get_usage` tool returns a `lastPing`
+window has a *Last ping* row, and the MCP `get_usage` tool returns a `lastPing`
 field. The source is the stamp `scripts/session-ping.sh` writes to
 `${XDG_STATE_HOME:-~/.local/state}/claude-usage-panel/last-ping`, read from
 that same path on every platform, macOS included.

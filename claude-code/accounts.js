@@ -21,7 +21,7 @@
 //
 // `openStore(io)` binds all of this to one home dir, platform, clock, fetch
 // and exec (every one overridable, read at call time) so every consumer - the
-// claudectl CLI, the MCP tools, the status line, the tests - gets the
+// claudectl CLI, the MCP tools, the tests - gets the
 // same operations without threading paths through every call. It is also the
 // ONE reader of the live login: the usage fetch for the MCP server and the
 // Linux status bar goes through it too. The token and usage half (refresh,
@@ -462,7 +462,7 @@ export function openStore(io = {}) {
 
   /**
    * What every "list" shows: the saved accounts with the active one marked,
-   * optionally each one's usage (which also refreshes the status line's cache).
+   * optionally each one's usage (which also refreshes the usage cache).
    * Shared by the CLI and the MCP list_accounts tool.
    */
   async function listAccounts({usage: withUsage = false} = {}) {

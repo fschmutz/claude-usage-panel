@@ -227,11 +227,11 @@ const ogSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <text x="122" y="140" font-size="30" fill="${C.text}" ${FONT} font-weight="700">Claude Usage Panel</text>
 <text x="72" y="240" font-size="64" fill="#ffffff" ${FONT} font-weight="800">Your Claude Code usage,</text>
 <text x="72" y="310" font-size="64" fill="#ffffff" ${FONT} font-weight="800">everywhere you look.</text>
-<text x="72" y="375" font-size="28" fill="#c9c4bb" ${FONT}>GNOME top bar · macOS menu bar · status line · MCP tool -</text>
+<text x="72" y="375" font-size="28" fill="#c9c4bb" ${FONT}>GNOME top bar · macOS menu bar · Claude Code footer · MCP tool -</text>
 <text x="72" y="410" font-size="28" fill="#c9c4bb" ${FONT}>with burn-rate forecasts before a limit runs dry.</text>
 ${(() => {
   let x = 72;
-  return ['GNOME', 'macOS', 'status line', 'MCP', 'forecasts', 'Cursor spend'].map((k, i) => {
+  return ['GNOME', 'macOS', 'footer', 'MCP', 'forecasts', 'Cursor spend'].map((k, i) => {
     const w = k.length * 15 + 44;
     const chip = `<rect x="${x}" y="450" width="${w}" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
 <text x="${x + 20}" y="483" font-size="24" fill="${i === 0 ? C.accent : C.text}" ${FONT} font-weight="600">${esc(k)}</text>`;

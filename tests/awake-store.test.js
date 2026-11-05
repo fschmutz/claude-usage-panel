@@ -61,7 +61,7 @@ test('status with nothing held reads clean, and nothing is created', (t) => {
 });
 
 test('status only walks the session registry for a hold that depends on it', (t) => {
-  // The status line renders this on every prompt: a /proc sweep for a count
+  // The panels render this on every poll: a /proc sweep for a count
   // nothing reads is not free.
   let scans = 0;
   const {io, awake} = world(t, {platform: 'linux'});

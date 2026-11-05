@@ -64,7 +64,7 @@ One entry per active limit, as text plus structured content:
 ```
 
 `pace` appears once enough local history exists (the server records a sample on
-every call, sharing a per-user scratch file with the status line): the %/hour burn rate, the
+every call, in a per-user scratch file): the %/hour burn rate, the
 projected 100% instant, and whether that lands before the reset - so you can
 ask *"at this pace, will I make it to the weekly reset?"* and get a grounded
 answer. Absent when idle or on the first calls.

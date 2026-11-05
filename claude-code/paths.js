@@ -137,21 +137,16 @@ export function sessionIndexPath(io) {
  *  - io.tmpdir when given (tests bind a sandbox);
  *  - darwin: os.tmpdir(), which is the per-user $TMPDIR under /var/folders;
  *  - $XDG_RUNTIME_DIR: per-user, 0700, tmpfs, cleared at logout;
- *  - else Claude Code's own dir, which exists whenever the status line or the
- *    MCP server can run (they are launched by Claude Code). */
+ *  - else Claude Code's own dir, which exists whenever the
+ *    MCP server can run (Claude Code launches it). */
 export function scratchDir(io) {
   if (io?.tmpdir) return io.tmpdir;
   if (platform(io) === 'darwin') return os.tmpdir();
   return env(io).XDG_RUNTIME_DIR || claudeDir(io);
 }
 
-/** Rolling 6-hour forecast samples, shared by the status line and the MCP
+/** Rolling 6-hour forecast samples, kept by the MCP
  *  server. Scratch on purpose: it is a hint, not a record. */
 export function historyPath(io) {
   return path.join(scratchDir(io), 'claude-usage-history.json');
-}
-
-/** The status line's per-transcript token totals. Same scratch reasoning. */
-export function tokensCachePath(io) {
-  return path.join(scratchDir(io), 'claude-usage-statusline-tokens.json');
 }

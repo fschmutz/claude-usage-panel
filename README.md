@@ -45,7 +45,7 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | --- | --- | --- |
 | `gnome` | Top-bar panel + dropdown, alerts, sparklines (GNOME Shell 45–51) | [docs/GNOME.md](docs/GNOME.md) |
 | `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+); also installable without a checkout: `brew install --cask fschmutz/tap/claude-usage-panel` (upgrade: `brew upgrade --cask claude-usage-panel`) | [macos/README.md](macos/README.md) |
-| `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
+| `footer` | The line under the Claude Code prompt (a Claude Code plugin): model, project, branch on the left; context, session and week gauges flush right (`statusline` still works and migrates the old status line) | [wiki/Footer](https://github.com/fschmutz/claude-usage-panel/wiki/Footer) |
 | `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
 | `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory; `codex` does what `account` does for OpenAI Codex logins | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs), [Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex) |
 | `autoupdate` | Daily check for a new release, installed automatically (on by default) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#staying-up-to-date) |
@@ -73,7 +73,7 @@ never the last number it happened to have.
 prompt, a question, or idle after Stop - the GNOME top bar and the macOS menu
 bar show a count, the dropdown lists them oldest-first, and a click focuses
 that session's terminal. `claudectl waiting` and the MCP `waiting` tool return
-the same list; the status line can show `wait N` with `--segments=…,waiting`.
+the same list.
 `Stop` marks the session idle (the prompt is waiting); the next prompt or tool
 use clears it. Opt-in: `./install.sh waiting` installs the hooks (they run
 node on every tool call) and turns the section on. Details: [wiki/Waiting](https://github.com/fschmutz/claude-usage-panel/wiki/Waiting).
@@ -105,8 +105,7 @@ Details: [wiki/Awake](https://github.com/fschmutz/claude-usage-panel/wiki/Awake)
 **Pick up where you left off.** The GNOME dropdown and the macOS menu list
 today's sessions ranked by the tokens each one spent; clicking one opens your
 terminal on that project with `claude --resume <that session>`. The MCP tool
-returns the same list (with the resume command) and the status line can show the
-day's biggest spender with `--segments=…,sessions`.
+returns the same list (with the resume command).
 
 **Codex too, if you want it.** `claudectl codex` saves the ChatGPT logins the
 `codex` CLI holds under names and switches between them the same way, and both
@@ -128,14 +127,14 @@ install target needed: `node linux/usage-bar.mjs --format waybar` (see
 pings?** `./install.sh plan --compare 09:00` scores your current schedule and
 prints the better one.
 
-The status line renders like this, right under the prompt input:
+The footer renders like this, right under the prompt input:
 
 ```text
-Context ▌░░░░░ 8%  Session █▌░░░░ 26% 59m  Week █▌░░░░ 24% 4d2h  ∑ 1.2M tok  ping 05:30
+● Opus 5.5  claude-usage-panel ⎇ main   6 agents ←        context ━━━━━━━━━━━━  62%   week ━━━━━┃━━━━━━  41% ↻2d2h   $3.42
 ```
 
-(`ping 05:30` appears only once you schedule session pings; it is silent
-otherwise.)
+(`┃` is where the clock stands in the window; a bar past it burns faster than
+time.)
 
 Everything is reversible and idempotent: `update --pull` upgrades what you
 have, `--uninstall [target…]` reverses it (default: everything installed),
@@ -190,7 +189,7 @@ plus terminal and in-conversation projections.
 | ☕ **Stays awake for the run** | Hold the machine up while Claude Code works or on a timer, with a countdown in the bar, battery and thermal floors that end a session rather than warn about it, and a backstop that undoes anything a crash left behind |
 | 💤 **Polls when it matters** | Idle windows back off to 15 min, a poll always lands just after a reset, and both panels refresh on wake from sleep and when the network returns |
 | 💲 **Optional extras** | Local [`ccusage`](https://github.com/ryoppippi/ccusage) session cost · Cursor team spend via Admin API |
-| 🌍 **Translated GNOME extension** | English + 7 translations (French, German, Spanish, Italian, Portuguese, Japanese, Simplified Chinese), catalogs gated in CI. The macOS app, status line and MCP server are English-only |
+| 🌍 **Translated GNOME extension** | English + 7 translations (French, German, Spanish, Italian, Portuguese, Japanese, Simplified Chinese), catalogs gated in CI. The macOS app, the footer and the MCP server are English-only |
 | 🔒 **Read-only & private** | Uses your existing local token and never writes it - the one exception is a switch you ask for, which installs another login you saved. No telemetry, talks only to official APIs |
 
 ## Screenshots
@@ -218,8 +217,9 @@ it) - it never writes the token itself. The only time a client writes into
 click in a panel) installs the tokens you saved for that account and updates
 `oauthAccount` in `~/.claude.json`, nothing else. An idle saved account's token
 is refreshed with its own refresh token when it is needed, into the panel's
-store only. The status line is even cheaper: it renders purely from what
-Claude Code pipes on stdin, no credentials or network at all. The optional extras stay just as private: cost runs only a `ccusage` you
+store only. The footer is even cheaper: it renders purely from what Claude Code
+hands a plugin (the session's limits, context and cost), no credentials or
+network at all. The optional extras stay just as private: cost runs only a `ccusage` you
 installed yourself (never a downloaded `npx ccusage@latest`), locally
 against `~/.claude/projects/*.jsonl`, and Cursor spend calls `api.cursor.com`
 with your own admin key.
@@ -230,7 +230,7 @@ with your own admin key.
 | --- | --- |
 | [docs/GNOME.md](docs/GNOME.md) | GNOME install, Wayland relog, settings, nested-shell testing |
 | [macos/README.md](macos/README.md) | macOS build, release, notarization, Homebrew cask |
-| [claude-code/README.md](claude-code/README.md) | Status line segments, token modes, manual setup |
+| [wiki/Footer](https://github.com/fschmutz/claude-usage-panel/wiki/Footer) | The footer under the Claude Code prompt: what it shows, install, migrating from the status line |
 | [mcp/README.md](mcp/README.md) | MCP server, `get_usage` + account tools, all four install paths |
 | [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) | Named accounts: what a switch touches, token refresh, auto-switch, CLI |
 | [wiki/Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) | Session tabs: snapshot the running sessions, reopen them as tabs, autosave |
@@ -254,6 +254,6 @@ MIT - see [LICENSE](LICENSE).
 
 <div align="center">
 
-<em>Keywords: Claude Code usage monitor · Claude usage GNOME Shell extension · Claude plan limits top bar · macOS menu bar Claude usage · Claude Code status line usage · Claude usage MCP server · Add to Cursor MCP · Anthropic usage API · ccusage · Fable / Opus per-model weekly limit · Cursor Admin API spend · Ubuntu GNOME extension · SwiftUI MenuBarExtra</em>
+<em>Keywords: Claude Code usage monitor · Claude usage GNOME Shell extension · Claude plan limits top bar · macOS menu bar Claude usage · Claude Code status line / footer usage · Claude usage MCP server · Add to Cursor MCP · Anthropic usage API · ccusage · Fable / Opus per-model weekly limit · Cursor Admin API spend · Ubuntu GNOME extension · SwiftUI MenuBarExtra</em>
 
 </div>

@@ -1,8 +1,9 @@
 # Contributing
 
 Thanks for your interest! This repo hosts four clients over one data model: a
-GNOME Shell extension (GJS), a native macOS SwiftUI app, a Node status line for
-the Claude Code prompt and an MCP server, plus the `claudectl` CLI.
+GNOME Shell extension (GJS), a native macOS SwiftUI app, a Claude Code plugin
+that draws the line under the prompt (`footer/`) and an MCP server, plus the
+`claudectl` CLI.
 
 ## Setup
 
@@ -50,13 +51,14 @@ wiki page.
 │       └── ClaudeUsagePanel/# networking + UI
 ├── claude-code/             # the Node clients: I/O + terminal labels over lib/pure/
 │   ├── accounts.js · pace.js · paths.js · tabs.js   # stores, history, paths, sessions
-│   ├── statusline.js        # render one condensed line from stdin
 │   └── claudectl.js         # the claudectl CLI (account-cli.js · session-cli.js · waiting-cli.js)
 ├── mcp/                     # MCP server: usage, waiting, accounts, sessions (Claude Code, Cursor…)
 │   └── server.js            # zero-dep stdio JSON-RPC, also the npx bin
 ├── linux/                   # usage-bar.mjs: one-line usage for waybar, polybar, tmux…
 ├── Casks/                   # the Homebrew cask, pinned to each release
 ├── plugin/                  # Claude Code plugin wrapping the MCP server
+├── footer/                  # usage-footer plugin: the line under the Claude Code prompt (a mod;
+│                            # hooks/pure/ = generated lib/pure copies, scripts/sync-footer-pure.sh)
 ├── docs/                    # GitHub Pages site + the /install bootstrap
 ├── logo/                    # the logo (svg + png); each client's icon derives from it
 ├── wiki/                    # source of the GitHub wiki (published by wiki.yml)
@@ -64,14 +66,15 @@ wiki page.
 ├── scripts/                 # install/ targets · pack-gnome · auto-update · session-ping · versions
 │   ├── attribution-guard.sh # the attribution gate (copied from the template; do not fork)
 │   └── tests/               # its fixtures and shell suite (everything else tests from tests/)
-└── install.sh               # unified installer (gnome · statusline · mcp · cli · macos · autoupdate · sessionping)
+└── install.sh               # unified installer (gnome · footer · mcp · cli · macos · autoupdate · sessionping)
 ```
 
 See the [Architecture](https://github.com/fschmutz/claude-usage-panel/wiki/Architecture)
 wiki page. The normalization contract has two copies, one per language:
 `lib/pure/usage.js` (the GNOME extension reaches it through the `lib/pure.js`
-barrel; the status line, the MCP server, `claudectl` and `linux/usage-bar.mjs`
-import the module directly - never copy it into `claude-code/`) and macOS
+barrel; the MCP server, `claudectl` and `linux/usage-bar.mjs` import the module
+directly - never copy it into `claude-code/`; the footer plugin carries generated
+copies, `scripts/sync-footer-pure.sh`) and macOS
 `ClaudeUsageCore/Model.swift`. `tests/parity.test.js` + its Swift twin keep
 the two identical against one shared fixture (`tests/fixtures/normalize.json`):
 change `lib/pure/`, the Swift twin and the fixture together.

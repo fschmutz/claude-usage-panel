@@ -1,6 +1,6 @@
 // Named accounts, the token and usage half of the store: exchange a stored
 // login's refresh token, pick the token a saved account's usage is read with,
-// fetch and normalize that usage, and keep the status line's usage cache.
+// fetch and normalize that usage, and keep the accounts' usage cache.
 // accounts.js binds it to the same io as the rest of the store (openStore);
 // nothing here is a second store.
 //
@@ -33,7 +33,7 @@ const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
 const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
-/** The status line trusts a cached usage snapshot this long. */
+/** A cached usage snapshot is trusted this long. */
 const USAGE_CACHE_MAX_AGE_MS = 30 * 60_000;
 const FETCH_TIMEOUT_MS = 10_000;
 const USAGE_CACHE_FILE = '.usage-cache.json';
@@ -290,7 +290,7 @@ export function bindUsage(ctx) {
   }
 
   // The panels and the MCP server drop the latest per-account worst limit here
-  // so the status line (no network, no credentials) can hint at a freer account.
+  // so a reader with no network and no credentials can tell a freer account.
   // `results` is usageForAll()'s shape: {name: {ok, cards}}.
   function writeUsageCache(results) {
     const accounts = {};
@@ -300,7 +300,7 @@ export function bindUsage(ctx) {
     try {
       writePrivate(path.join(dir, USAGE_CACHE_FILE), JSON.stringify({at: now(), accounts}));
     } catch {
-      // read-only state dir just means no hint in the status line
+      // read-only state dir just means no cached snapshot
     }
   }
 

@@ -32,7 +32,7 @@ export {readLiveAccount};
 const OAUTH_TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
 // Claude Code's public OAuth client - the same id the CLI itself refreshes with.
 const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-// The status line reads this snapshot of every account's worst limit; the
+// The usage cache: a snapshot of every account's worst limit; the
 // last-switch stamp is what every auto-switch caller - this panel, the macOS
 // app, the MCP tool - checks its cooldown against, so a switch made anywhere
 // counts everywhere.
@@ -655,7 +655,7 @@ export async function usageFor(session, name) {
 }
 
 // The panels and the MCP server drop the latest per-account worst limit here
-// so the status line (no network, no credentials) can hint at a freer account.
+// so a reader with no network and no credentials can tell a freer account.
 export function writeUsageCache(results, nowMs = Date.now()) {
     const accounts = {};
     for (const [name, r] of Object.entries(results)) {

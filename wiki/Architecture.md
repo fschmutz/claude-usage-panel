@@ -1,15 +1,26 @@
 # Architecture
 
-Four clients (GNOME extension, macOS app, status line, MCP server) over one
+Four clients (GNOME extension, macOS app, Claude Code footer, MCP server) over one
 shared normalization contract (the API's `limits[]`). The business logic
 (kinds, order, percent clamping, severity, resets) lives in **two copies, one
 per language**: JavaScript `lib/pure/` and Swift `ClaudeUsageCore`. The GNOME
-extension and every Node client (the status line, the MCP server, `claudectl`,
+extension and every Node client (the MCP server, `claudectl`,
 `linux/usage-bar.mjs`) import `lib/pure/` directly - `claude-code/` and `mcp/`
 hold only their I/O and terminal labels, never a copy of a pure module. The
 two copies are kept behaviorally identical by a shared test fixture
 (`tests/fixtures/normalize.json`) - `tests/parity.test.js` asserts the JS
 copy, and the Swift `NormalizeParityTests` asserts the same file.
+
+The **Claude Code footer** (`footer/`, the `usage-footer` plugin) is a mod: a
+hooks module Claude Code loads, which draws the line under the prompt
+(`PromptHint`, left: model, project, branch, the engine's own hints) and the
+right-hand slot (`SessionMode`, flush right: context, each plan window, cost).
+It reads only what the mod API hands it (`$.session.usage()` and the
+`session.measure` event) - no credentials, no network. A plugin may only import
+files inside its own folder, so `footer/hooks/pure/` holds generated,
+byte-identical copies of the `lib/pure/` modules it uses
+(`scripts/sync-footer-pure.sh`; `--check` in pre-commit and CI). It replaced the
+Node status line.
 
 The **burn-rate forecast** is part of the same contract: `forecast(samples,
 resetsAt, now)` regresses the last 6 h of timestamped percent samples (pruned
@@ -17,7 +28,7 @@ at window resets, silent unless ≥3 samples span ≥30 min at ≥0.2%/h) into
 `{pctPerHour, projectedFullAt, exhaustsBeforeReset, marginHours}`. The JS
 copy (`lib/pure/pace.js`, imported by `claude-code/pace.js`) and the Swift
 one (`Model.swift`) are pinned by `tests/fixtures/forecast.json`. The
-status line and MCP server share one sample file
+MCP server keeps one sample file
 (`claude-usage-history.json` in a per-user scratch dir: `$XDG_RUNTIME_DIR`,
 else `~/.claude`; the per-user `$TMPDIR` on macOS; never the shared `/tmp`),
 keyed by account so a switch does not blend two logins' samples; GNOME and macOS persist their own
@@ -65,7 +76,7 @@ hundreds of megabytes a day, so every client folds each file **once** and
 thereafter only from the byte offset it stopped at, through one shared
 incremental index at `~/.cache/claude-usage-panel/sessions.json`
 (`~/Library/Caches/…` on macOS): whichever client runs keeps it warm for the
-others, and the status line only ever reads it.
+others.
 
 ```text
 claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
@@ -205,8 +216,6 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         └── Shell.swift               # the one way the app runs a child process
 
 claude-code/            # the Node clients' I/O over lib/pure/ (installed with it under ~/.claude/claude-usage-panel/)
-├── statusline.js       # status line: renders from Claude Code's stdin - no network
-├── transcript-tokens.js# a transcript's token totals + their incremental on-disk cache
 ├── pace.js             # the shared sample history + withPace (the math is pure/pace.js)
 ├── stamps.js           # the compact "3h06m" reset countdown (over pure/usage.js resetParts)
 ├── paths.js            # every state/cache/config path, derived from one `io`
@@ -248,12 +257,17 @@ mcp/                    # MCP server (Claude Code, Cursor…)
 linux/usage-bar.mjs     # one-line usage for any bar (waybar, polybar, i3blocks…)
 Casks/                  # the Homebrew cask, pinned to each release
 plugin/                 # Claude Code plugin wrapping the MCP server
+footer/                 # usage-footer plugin: the line under the Claude Code prompt (a mod)
+├── hooks/register.tsx  # the events: usage, session env, permission mode; the two render hooks
+├── hooks/footer.tsx    # what is drawn: identity + engine hints left, meters flush right
+├── hooks/pure/         # generated copies of the lib/pure modules it imports
+└── tests/              # `claude plugin test footer`
 docs/                   # GitHub Pages site + the /install bootstrap
 install.sh              # installer entrypoint: argument loop + dispatch
 scripts/install/        # one file per target, sourced by install.sh
 ├── ui.sh               # info/ok/skip/act and the --dry-run wrapper
 ├── scheduler.sh        # the systemd-timer / launchd-agent / cron triple, once
-└── gnome.sh macos.sh node.sh cli.sh autoupdate.sh sessionping.sh cost.sh waiting.sh pause.sh awake.sh targets.sh
+└── gnome.sh macos.sh node.sh footer.sh cli.sh autoupdate.sh sessionping.sh cost.sh waiting.sh pause.sh awake.sh targets.sh
 scripts/auto-update.sh  # daily: newest released tag → ff-only → install.sh update
 scripts/session-ping.sh # scheduled: 1-turn haiku ping so the 5h window opens on time
 scripts/awake-backstop.sh # every minute: undo an awake session's machine changes from the journal alone
@@ -262,6 +276,7 @@ scripts/pack-gnome.sh   # assemble the extension dir (install.sh gnome + the rel
 scripts/json-edit.mjs   # the one JSON reader/writer install.sh drives
 scripts/install/hooks-edit.mjs # merge/drop the waiting hooks in settings.json
 scripts/version-sites.sh# every place the version is written, read by bump + check
+scripts/sync-footer-pure.sh # copy (or --check) the lib/pure modules the footer imports
 ```
 
 ## Staying current
@@ -290,8 +305,8 @@ running 2.1.0 - log out and back in" instead of "up to date".
 `GET https://api.anthropic.com/api/oauth/usage` with the local OAuth token and the
 `anthropic-beta: oauth-2025-04-20` header. The response's `limits[]` array (kind / percent /
 severity / resets_at / scope.model) drives one card per limit. Everything is read-only with
-respect to the credentials. The status line is the exception: it renders only from what Claude
-Code pipes on stdin - no credentials, no network.
+respect to the credentials. The footer is the exception: it renders only from what Claude Code
+hands a mod (the session's rate-limit windows, context and cost) - no credentials, no network.
 
 ## Quality
 
@@ -299,7 +314,8 @@ Code pipes on stdin - no credentials, no network.
 [`.pre-commit-config.yaml`](https://github.com/fschmutz/claude-usage-panel/blob/main/.pre-commit-config.yaml);
 beyond the file-hygiene set it runs `gitleaks`, `private-names` + `private-names-message`,
 `eslint`, `shellcheck`, `shfmt`, `markdownlint`, `actionlint`, `zizmor`, `no-em-dash`,
-`swift-format`, `check-versions`, `file-size` (the 700-line ceiling), `i18n-catalogs` and `knip`
+`swift-format`, `footer-pure-sync` (the footer's lib/pure copies), `check-versions`, `file-size`
+(the 700-line ceiling), `i18n-catalogs` and `knip`
 (unused files, exports and dependencies; `knip.jsonc`).
 The attribution guard is not a hook - it needs the pull request - but it belongs to the same
 set: `scripts/attribution-guard.sh` fails a commit author, committer or `Co-authored-by:`

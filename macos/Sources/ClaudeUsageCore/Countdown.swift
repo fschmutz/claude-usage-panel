@@ -5,7 +5,7 @@ import Foundation
 /// "Resets in 3h 05m" / "Resets in 4d 2h" / "Resetting…". Mirrors pure.js
 /// `resetParts()` + `formatResets()`: whole seconds FLOORED (a reset 59 s
 /// away is "0m", 23h59m40s is never "1d"), then the two most significant
-/// units. The status line's compact "3h05m" (claude-code/stamps.js) splits
+/// units. The terminal clients' compact "3h05m" (claude-code/stamps.js) splits
 /// the same way; tests/fixtures/resets.json pins every port.
 public enum ResetCountdown {
     public struct Parts: Equatable, Sendable {

@@ -93,18 +93,6 @@ BUILD_ONLY=false
 PREBUILT=false
 # shellcheck disable=SC2034  # read by macos.sh: where the app goes (default: see mac_target_dir)
 APPDIR="${CUP_APPDIR:-}"
-# shellcheck disable=SC2034  # read by node.sh
-SL_SEGMENTS="context,limits,tokens,ping"
-# shellcheck disable=SC2034  # read by node.sh
-SL_TOKENS="all"
-# Did THIS invocation choose them? If not, a reinstall keeps whatever the
-# installed status line already uses: `update` runs with no flags, and
-# re-baking the defaults silently reset every customised status line on every
-# update.
-# shellcheck disable=SC2034  # read by node.sh
-SL_SEGMENTS_SET=false
-# shellcheck disable=SC2034  # read by node.sh
-SL_TOKENS_SET=false
 # shellcheck disable=SC2034  # read by sessionping.sh
 SP_TIMES=()
 # shellcheck disable=SC2034  # read by sessionping.sh
@@ -135,7 +123,8 @@ _json() {
     node "$ROOT/scripts/json-edit.mjs" "$@"
 }
 
-# The status-line command is OURS when it points at either the installed tree
-# or the pre-1.11 loose copy - the one place this test is spelled out.
-# shellcheck disable=SC2034  # read by node.sh (both the install and the uninstall path)
+# The retired status line (replaced by the usage-footer plugin) is OURS when
+# its command points at the installed tree or the pre-1.11 loose copy - the
+# one place this test is spelled out. Kept so footer.sh can migrate it away.
+# shellcheck disable=SC2034  # read by footer.sh
 SL_OURS_RE='claude-usage-panel/claude-code/statusline\.js|claude-usage-statusline\.mjs'

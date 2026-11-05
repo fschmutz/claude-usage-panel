@@ -55,7 +55,7 @@ function defaultPidAlive(pid) {
 }
 
 /**
- * Everything the CLI, the MCP tool, the status line, the panels and the
+ * Everything the CLI, the MCP tool, the panels and the
  * holder itself go through. `io` is the usual shape plus `exec`, `nowMs`,
  * `pidAlive` and `hostname`, so the tests drive a fake machine.
  */
@@ -110,7 +110,7 @@ export function openAwake(io = {}) {
    *  owed back. Never throws - every surface renders from this.
    *
    *  The registry is walked only for a hold that actually depends on it: the
-   *  status line renders this on every prompt, and a `ps` / `/proc` sweep per
+   *  panels render this on every poll, and a `ps` / `/proc` sweep per
    *  render for a count nothing reads is not free. */
   function status() {
     const session = readSession();

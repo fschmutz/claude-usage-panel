@@ -61,7 +61,7 @@ function readMarkers(io) {
   for (const name of names) {
     if (pidFromWaitingMarkerName(name) === null)
       continue;
-    // unreadable or not JSON: skipped, never thrown - a status line / hook
+    // unreadable or not JSON: skipped, never thrown - a reader / hook
     // must not die on a half-written marker
     const marker = readMarker(path.join(dir, name));
     if (marker)

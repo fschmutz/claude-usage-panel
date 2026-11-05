@@ -93,6 +93,6 @@ test('without node the target is skipped loudly, writes nothing, and fails an up
 
 test('no other target installs the hooks', t => {
     const home = sandbox(t);
-    const r = sh(home, ['--dry-run', 'gnome', 'statusline', 'mcp', 'cli']);
+    const r = sh(home, ['--dry-run', 'gnome', 'footer', 'mcp', 'cli']);
     assert.doesNotMatch(r.stdout, /waiting hooks/);
 });

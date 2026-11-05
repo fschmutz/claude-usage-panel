@@ -6,6 +6,40 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Claude Code footer: the line under the prompt, as a plugin.** A new
+  `usage-footer` plugin (`footer/`, listed in `.claude-plugin/marketplace.json`)
+  is a Claude Code mod that redraws the line under the prompt: model, project,
+  git branch and Claude Code's own hints (agents, `esc to interrupt`) on the
+  left; `context`, `session` (only when the plan has a 5 h window) and `week`
+  gauges flush with the right edge, with the clock tick, a `▲` when the burn
+  rate runs out before the reset, the reset countdown and the session cost;
+  a toast at 90% and 100%. It reads only what Claude Code hands a mod - no
+  credentials, no network - and drops detail as the terminal narrows.
+  `./install.sh footer` installs it from the checkout (it then loads in place,
+  so auto-update moves it too); `/plugin install usage-footer --marketplace
+  fschmutz/claude-usage-panel` works without a clone. Details:
+  [wiki/Footer](https://github.com/fschmutz/claude-usage-panel/wiki/Footer).
+- `scripts/sync-footer-pure.sh` keeps the footer's copies of the `lib/pure/`
+  modules it imports (a plugin may only import its own files) byte-identical
+  to their source; `--check` runs in pre-commit (`footer-pure-sync`) and CI.
+  The `plugin-validate` job validates `footer/` and runs `claude plugin test
+  footer`, on the pinned CLI, now 2.1.318.
+
+### Removed
+
+- **The Node status line** (`claude-code/statusline.js`,
+  `claude-code/transcript-tokens.js`), replaced by the footer. Its opt-in
+  segments go with it: `account` (`[PRO ⇢ PERSO]`), `sessions`, `waiting`,
+  `awake`, `ping` and the `∑ tok` total; the panels, `claudectl` and the MCP
+  tools still show all of that. `./install.sh statusline` is now an alias of
+  `footer`, and a machine that has the old status line is migrated by the next
+  `./install.sh update` (the daily job included): the `statusLine` entry is
+  removed from `~/.claude/settings.json` - a status line of your own that it
+  had replaced is put back - and the plugin is installed. `--segments=` and
+  `--tokens=` are accepted and ignored.
+
 ## [3.11.0] - 2026-10-24
 
 ### Added
