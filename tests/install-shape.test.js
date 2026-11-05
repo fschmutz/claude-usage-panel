@@ -456,6 +456,8 @@ test('the installed MCP server, claudectl and hooks start from the tree, lib/pur
     assert.equal(start('claude-code/pause-hook.js', ['pretool'], JSON.stringify({
         session_id: 'aaaa1111-0000-4000-8000-000000000001', hook_event_name: 'PreToolUse',
     })), '');
-    const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
+    // No settings.json at all is the same answer: nothing wrote hooks into it.
+    const settingsFile = path.join(home, '.claude', 'settings.json');
+    const settings = fs.existsSync(settingsFile) ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')) : {};
     assert.equal(settings.hooks, undefined, 'no Node client installs the waiting or pause hooks: those are opt-in targets');
 });
