@@ -11,7 +11,7 @@ import {
     formatLastPing, nextPing, shiftLocalDay,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import {
-    historyPath, lastPingPath, nowOf, scratchDir, tokensCachePath,
+    historyPath, lastPingPath, nowOf, scratchDir,
 } from '../claude-code/paths.js';
 import {run, stubbedHome} from './helpers.js';
 
@@ -89,12 +89,11 @@ for (const xdg of [false, true]) {
 test('scratch files never sit under a shared tmp dir on Linux', () => {
     const io = {platform: 'linux', homedir: '/home/me', env: {}};
     assert.equal(historyPath(io), '/home/me/.claude/claude-usage-history.json');
-    assert.equal(tokensCachePath(io), '/home/me/.claude/claude-usage-statusline-tokens.json');
     const cfg = {platform: 'linux', homedir: '/home/me', env: {CLAUDE_CONFIG_DIR: '/c'}};
     assert.equal(scratchDir(cfg), '/c');
     const rt = {platform: 'linux', homedir: '/home/me', env: {XDG_RUNTIME_DIR: '/run/user/1000'}};
     assert.equal(historyPath(rt), '/run/user/1000/claude-usage-history.json');
-    for (const p of [historyPath(io), tokensCachePath(io), historyPath(rt)])
+    for (const p of [historyPath(io), historyPath(rt)])
         assert.ok(!p.startsWith(`${os.tmpdir()}${path.sep}`) && !p.startsWith('/tmp/'), p);
 });
 

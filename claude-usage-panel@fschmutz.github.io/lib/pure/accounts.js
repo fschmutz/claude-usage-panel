@@ -6,8 +6,8 @@
 // ~/.claude.json, under a name of the user's choosing. The decisions below -
 // which saved profile the live login is, whether a stored token is still
 // usable, and when to move to another account - are the ONE JavaScript copy:
-// the GNOME extension (I/O in lib/accounts.js) and the Node CLI / MCP server /
-// status line (I/O in claude-code/accounts.js) both import this file. The
+// the GNOME extension (I/O in lib/accounts.js) and the Node CLI / MCP server
+// (I/O in claude-code/accounts.js) both import this file. The
 // Swift twin (ClaudeUsageCore/Accounts.swift) is pinned by the same fixture.
 
 import {isObject} from './json.js';

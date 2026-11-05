@@ -118,7 +118,7 @@ function sessionTitle(entry) {
     return base || (entry.sessionId ?? '').slice(0, 8) || 'session';
 }
 
-/** 847 → "847", 16_700 → "16.7k", 1_240_000 → "1.2M". Mirrors the status line. */
+/** 847 → "847", 16_700 → "16.7k", 1_240_000 → "1.2M". */
 export function compactTokens(n) {
     if (n >= 1e6)
         return `${(n / 1e6).toFixed(1)}M`;

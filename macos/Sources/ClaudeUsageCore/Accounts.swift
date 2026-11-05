@@ -1,7 +1,7 @@
 import Foundation
 
 // Named Claude Code accounts - the pure half. Mirrors claude-code/accounts.js
-// (the Node implementation the CLI, the MCP server and the status line share)
+// (the Node implementation the CLI and the MCP server share)
 // and lib/pure.js on GNOME; tests/fixtures/accounts.json pins the decisions all
 // ports must agree on. Foundation only: no I/O, no networking, so it
 // unit-tests on Linux CI. The I/O half (store, Keychain, switch, refresh) is

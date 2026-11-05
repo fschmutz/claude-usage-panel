@@ -1,5 +1,5 @@
 // Cross-port parity. Every contract has ONE JavaScript copy - lib/pure/ -
-// which the GNOME extension, the status line, the MCP server and the CLI all
+// which the GNOME extension, the MCP server and the CLI all
 // import, and one Swift copy in ClaudeUsageCore (macOS). The JS copy is
 // asserted here against ONE shared fixture per contract; the Swift twins
 // assert the same files in ClaudeUsageCoreTests. If the ports drift on the
@@ -61,7 +61,7 @@ for (const {marginHours, lead} of forecastFix.leads) {
 // Every client prints it next to the same limit, so every client must split it
 // the same way: whole seconds floored, two most significant units. Labels are
 // per port - `panel` for GNOME (and Swift ResetCountdown), `compact` for the
-// status line / MCP - and both are pinned so neither can round on its own.
+// MCP / CLI - and both are pinned so neither can round on its own.
 const resetsFix = fixture('resets.json');
 const resetsNow = Date.parse(resetsFix.now);
 for (const c of resetsFix.cases) {
@@ -255,7 +255,7 @@ for (const c of accountsFix.autoSwitch) {
 }
 
 // ── Top-bar readout ─────────────────────────────────────────────────────────────
-// The bar's character budget. Only pure.js renders it today (the status line
+// The bar's character budget. Only pure.js renders it today (the footer
 // has a terminal's width); the Swift twin is PanelTextParityTests.
 const panelFix = fixture('panel.json');
 test('pure.js panelText - budget is the fixture\'s', () => {

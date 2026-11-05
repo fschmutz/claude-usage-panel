@@ -1,6 +1,6 @@
 // Today's sessions and the last session ping for the MCP server.
 // scripts/session-ping.sh writes its last successful ping under the state
-// dir; the panels and the status line read the same file. The session index
+// dir; the panels read the same file. The session index
 // is likewise shared with the desktop clients - one machine, one set of
 // transcripts, one incremental index - so whichever client runs keeps it warm
 // for the others. The folding, ranking and resume rules are

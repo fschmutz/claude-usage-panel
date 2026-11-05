@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Unified installer for Claude Usage Panel - one entrypoint for every client:
-# the GNOME extension, the macOS menu-bar app, the Claude Code status line, the
-# MCP server, the claudectl CLI, and the scheduled jobs.
+# the GNOME extension, the macOS menu-bar app, the Claude Code footer (the
+# usage-footer plugin), the MCP server, the claudectl CLI, and the scheduled jobs.
 #
 #   ./install.sh                    auto-detect this OS and install the sensible set
 #   ./install.sh gnome              GNOME Shell extension only
-#   ./install.sh statusline         Claude Code status line only
+#   ./install.sh footer             the line under the Claude Code prompt: the usage-footer
+#                                   plugin, installed from this checkout (alias: statusline,
+#                                   which also removes the old status line)
 #   ./install.sh mcp                MCP server (get_usage + account tools in Claude Code + Cursor)
 #   ./install.sh cli                claudectl CLI: `account` saves each login under a
 #                                   name (PRO, PERSO…) and switches between them;
@@ -35,7 +37,7 @@
 #   ./install.sh plan [--day HH:MM-HH:MM] [--pings N] [--compare a,b]
 #                                   recommend sessionping times for your working
 #                                   day, and score the schedule you already have
-#   ./install.sh gnome statusline   any combination
+#   ./install.sh gnome footer       any combination
 #   ./install.sh update [target...]        reinstall what's already installed (upgrade)
 #   ./install.sh update --pull             git pull --ff-only first, then upgrade
 #   ./install.sh --uninstall [target...]   reverse an install (default: all installed)
@@ -45,9 +47,6 @@
 #                                          swift build (automatic without a Swift toolchain)
 #   ./install.sh macos --appdir=DIR        install the app in DIR (default: /Applications
 #                                          when writable, else ~/Applications - no admin)
-#   ./install.sh statusline --segments=context,limits,tokens,ping[,account,sessions,waiting,awake] \
-#                           --tokens=all|fresh
-#                                          choose status-line segments + token mode
 #   ./install.sh --list             show detected + installed targets
 #   ./install.sh -h | --help
 #
@@ -70,6 +69,8 @@ UUID="claude-usage-panel@fschmutz.github.io"
 . "$ROOT/scripts/install/gnome.sh"
 # shellcheck source=scripts/install/node.sh
 . "$ROOT/scripts/install/node.sh"
+# shellcheck source=scripts/install/footer.sh
+. "$ROOT/scripts/install/footer.sh"
 # shellcheck source=scripts/install/macos.sh
 . "$ROOT/scripts/install/macos.sh"
 # shellcheck source=scripts/install/autoupdate.sh
@@ -120,14 +121,9 @@ for arg in "$@"; do
         --build-only) BUILD_ONLY=true ;;
         --prebuilt) PREBUILT=true ;;
         --appdir=*) APPDIR="${arg#*=}" ;;
-        --segments=*)
-            SL_SEGMENTS="${arg#*=}"
-            SL_SEGMENTS_SET=true
-            ;;
-        --tokens=*)
-            SL_TOKENS="${arg#*=}"
-            SL_TOKENS_SET=true
-            ;;
+        # The status line's options: it is the usage-footer plugin now, which
+        # takes none. Accepted so an old command line still runs.
+        --segments=* | --tokens=*) echo "note: $arg ignored - the status line is now the usage-footer plugin" >&2 ;;
         --days=*) SP_DAYS="${arg#*=}" ;;
         --dry-run | -n) DRY=true ;;
         --list) action=list ;;

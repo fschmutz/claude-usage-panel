@@ -123,7 +123,7 @@ public struct AwakeRecoveryNotice: Equatable, Sendable {
     public let endedAgo: String
 }
 
-/// Everything the menu, the status line and `claudectl awake status` show.
+/// Everything the menu and `claudectl awake status` show.
 public struct AwakeState: Equatable, Sendable {
     public let active: Bool
     public let holds: [AwakeHold]

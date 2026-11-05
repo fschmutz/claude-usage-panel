@@ -29,7 +29,7 @@ import {writeAtomic} from './private-fs.js';
 // The file lives in a shared tmp dir, so anything may have written it: only a
 // plain object survives the read, and in it only [finite t, finite p] pairs.
 // A foreign entry must cost its own sample, never the forecast (which
-// destructures every entry) or the whole status line.
+// destructures every entry) or the whole MCP reply.
 
 const HISTORY_MAX_SAMPLES = 200;
 

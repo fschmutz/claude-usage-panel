@@ -9,19 +9,19 @@
 <text x="122" y="140" font-size="30" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="700">Claude Usage Panel</text>
 <text x="72" y="240" font-size="64" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800">Your Claude Code usage,</text>
 <text x="72" y="310" font-size="64" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800">everywhere you look.</text>
-<text x="72" y="375" font-size="28" fill="#c9c4bb" font-family="system-ui, -apple-system, sans-serif">GNOME top bar · macOS menu bar · status line · MCP tool -</text>
+<text x="72" y="375" font-size="28" fill="#c9c4bb" font-family="system-ui, -apple-system, sans-serif">GNOME top bar · macOS menu bar · Claude Code footer · MCP tool -</text>
 <text x="72" y="410" font-size="28" fill="#c9c4bb" font-family="system-ui, -apple-system, sans-serif">with burn-rate forecasts before a limit runs dry.</text>
 <rect x="72" y="450" width="119" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
 <text x="92" y="483" font-size="24" fill="#d97757" font-family="system-ui, -apple-system, sans-serif" font-weight="600">GNOME</text>
 <rect x="209" y="450" width="119" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
 <text x="229" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">macOS</text>
-<rect x="346" y="450" width="209" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
-<text x="366" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">status line</text>
-<rect x="573" y="450" width="89" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
-<text x="593" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">MCP</text>
-<rect x="680" y="450" width="179" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
-<text x="700" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">forecasts</text>
-<rect x="877" y="450" width="224" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
-<text x="897" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">Cursor spend</text>
+<rect x="346" y="450" width="134" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
+<text x="366" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">footer</text>
+<rect x="498" y="450" width="89" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
+<text x="518" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">MCP</text>
+<rect x="605" y="450" width="179" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
+<text x="625" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">forecasts</text>
+<rect x="802" y="450" width="224" height="52" rx="10" fill="#2a2a27" stroke="#3a3a36"/>
+<text x="822" y="483" font-size="24" fill="#e8e6e1" font-family="system-ui, -apple-system, sans-serif" font-weight="600">Cursor spend</text>
 <text x="72" y="580" font-size="24" fill="#8f897e" font-family="system-ui, -apple-system, sans-serif">github.com/fschmutz/claude-usage-panel</text>
 </svg>

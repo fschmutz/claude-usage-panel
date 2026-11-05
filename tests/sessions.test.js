@@ -1,8 +1,8 @@
 // Session pings and today's sessions, across the ports.
 //
 // The one JS copy of the contract - lib/pure/pings.js for the stamps,
-// lib/pure/sessions.js for the folding and ranking; GNOME, the status line and
-// mcp/sessions.js all import those - is asserted here against ONE fixture,
+// lib/pure/sessions.js for the folding and ranking; GNOME and mcp/sessions.js
+// both import those - is asserted here against ONE fixture,
 // tests/fixtures/sessions.json; the Swift copy asserts the same file in
 // macos/Tests/ClaudeUsageCoreTests/SessionsParityTests.swift.
 //
@@ -19,7 +19,6 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
-import * as statusline from '../claude-code/statusline.js';
 import * as mcp from '../mcp/sessions.js';
 import * as paths from '../claude-code/paths.js';
 
@@ -166,7 +165,7 @@ test('no terminal means no launch', () => {
 });
 
 // ── The shared on-disk index ────────────────────────────────────────────────
-// The node builder is what keeps the index warm for the status line, so it is
+// The node builder is what keeps the index warm for the other readers, so it is
 // asserted end to end against a throwaway projects tree.
 test('the index folds a transcript once and then only its appended tail', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-sessions-'));
@@ -333,67 +332,12 @@ test('an index entry stamped at whole seconds is not re-folded or rewritten', (t
     assert.equal(fs.statSync(indexPath).ino, before, 'the index was rewritten');
 });
 
-// ── Status line segments ────────────────────────────────────────────────────
-test('the ping segment is silent when no ping was ever scheduled', () => {
-    assert.equal(statusline.pingSegment({
-        nowMs: NOW,
-        readFile: () => {
-            throw new Error('ENOENT');
-        },
-    }), '');
-});
-
-test('the ping segment shows the last ping when there is one', () => {
-    const out = statusline.pingSegment({nowMs: NOW, readFile: () => fix.stamps[1].raw});
-    assert.ok(out.includes('ping 11:00'), out);
-});
-
-test('the sessions segment names the biggest spender of the day', () => {
-    const index = {
-        version: 1,
-        files: {
-            a: {sessionId: 'A', cwd: '/home/u/small', byDay: {[pure.localDay(NOW)]: 1000}},
-            b: {sessionId: 'B', title: 'BIG', cwd: '/home/u/big', byDay: {[pure.localDay(NOW)]: 900000}},
-        },
-    };
-    const out = statusline.sessionsSegment({nowMs: NOW, readFile: () => JSON.stringify(index)});
-    assert.ok(out.includes('BIG'), out);
-    assert.ok(out.includes('900.0k'), out);
-});
-
-test('the sessions segment ranks like the panels: equal tokens, the latest turn wins', () => {
-    // rankSessions breaks a token tie on lastMs; a private sort kept file order.
-    const day = pure.localDay(NOW);
-    const index = {version: 1, files: {
-        a: {sessionId: 'A', title: 'OLDER', lastMs: NOW - 7_200_000, byDay: {[day]: 5000}},
-        b: {sessionId: 'B', title: 'NEWER', lastMs: NOW - 60_000, byDay: {[day]: 5000}},
-    }};
-    const out = statusline.sessionsSegment({nowMs: NOW, readFile: () => JSON.stringify(index)});
-    assert.ok(out.includes('NEWER'), out);
-});
-
-test('the sessions segment prints no control character from a title or a cwd', () => {
-    // An OSC 52 sequence in a custom title would write the terminal clipboard.
-    const day = pure.localDay(NOW);
-    const osc = `\u001b]52;c;ZXZpbA==\u0007`;
-    for (const entry of [
-        {sessionId: 'A', title: `x${osc}y`, byDay: {[day]: 10}},
-        {sessionId: 'A', cwd: `/home/u/p${osc}q`, byDay: {[day]: 10}},
-    ]) {
-        const out = statusline.sessionsSegment({
-            nowMs: NOW, readFile: () => JSON.stringify({version: 1, files: {a: entry}}),
-        });
-        const visible = out.replace(/\u001b\[[0-9;]*m/g, '');
-        assert.doesNotMatch(visible, /[\u0000-\u001f\u007f-\u009f]/, JSON.stringify(visible));
-        assert.match(visible, /▸ /);
-    }
-});
-
-test('the sessions segment is silent without an index', () => {
-    assert.equal(statusline.sessionsSegment({
-        nowMs: NOW,
-        readFile: () => {
-            throw new Error('ENOENT');
-        },
-    }), '');
+// ── Per-turn token rule ─────────────────────────────────────────────────────
+test('turnTokens is the session index rule: cache reads excluded, junk reads as 0', () => {
+    const cases = [
+        null, undefined, {},
+        {input_tokens: 100, output_tokens: 20, cache_creation_input_tokens: 5, cache_read_input_tokens: 9000},
+        {input_tokens: '7', output_tokens: 'x', cache_creation_input_tokens: null},
+    ];
+    assert.deepEqual(cases.map(pure.turnTokens), [0, 0, 0, 125, 7]);
 });

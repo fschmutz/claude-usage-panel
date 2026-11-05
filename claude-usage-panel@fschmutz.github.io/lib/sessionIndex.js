@@ -9,7 +9,7 @@
 // so even the very first run (cold index, everything to read) warms up over a
 // few refreshes instead of freezing the compositor once.
 //
-// The index file is shared, by design, with the node ports (status line, MCP
+// The index file is shared, by design, with the node port (the MCP
 // server) - same machine, same logs, same shape.
 //
 // Every file call on the way is the async variant (fs.js promisifies them):

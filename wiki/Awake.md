@@ -57,10 +57,6 @@ The MCP `awake` tool reads the state and can start or stop a session in
 conversation ("keep this machine awake while you work on the migration"). It
 deliberately **cannot** switch closed-lid mode on.
 
-The status line can show `awake 1:04:12` with `--segments=…,awake`. It is
-silent when nothing is held, and loud (`awake? sleepDisabled`) when a session
-ended without giving a setting back.
-
 ## What is actually holding the machine
 
 A **child process**, on purpose:
@@ -203,7 +199,7 @@ the full treatment:
    been over for two minutes, runs the two `sudo -n pmset` undos itself. A run
    that cannot take the lock does nothing and exits 75; the next minute retries.
 4. **Nothing is ever left silently.** While a journal is dirty and its session
-   is over, the GNOME dropdown, the macOS popup and the status line all say so,
+   is over, the GNOME dropdown, the macOS popup and `claudectl awake` all say so,
    with a `Recover` button next to it.
 
 The store, `<state dir>/claude-usage-panel/awake/` (`~/.local/state/...` on
