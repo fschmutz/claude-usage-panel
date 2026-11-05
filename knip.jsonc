@@ -8,10 +8,8 @@
         // GNOME Shell loads these two by file name.
         "claude-usage-panel@fschmutz.github.io/extension.js",
         "claude-usage-panel@fschmutz.github.io/prefs.js",
-        // Claude Code runs these: the statusLine command, and the waiting and
-        // pause hook commands (scripts/install/node.sh and pause.sh write them
-        // into settings.json).
-        "claude-code/statusline.js",
+        // Claude Code runs these: the waiting and pause hook commands
+        // (scripts/install/node.sh and pause.sh write them into settings.json).
         "claude-code/waiting-hook.js",
         "claude-code/pause-hook.js",
         // The detached Awake holder: claude-code/awake.js spawns it by path
@@ -28,6 +26,13 @@
         // tests/session-index.test.js loads it by URL as the GLib/Gio stand-in.
         "tests/session-index-gi.js"
     ],
+
+    // The usage-footer plugin: a Claude Code hooks module (TSX) that the
+    // engine loads by the path in footer/hooks/hooks.json and type-checks
+    // against its own `claude-code` declarations; its lib/pure copies are
+    // generated (scripts/sync-footer-pure.sh). Its gates are
+    // `claude plugin validate` + `claude plugin test` (the plugin-validate job).
+    "ignore": ["footer/**"],
 
     // GJS built-ins, resolved by GNOME Shell at runtime and never installable:
     // `gi://Gio`, `resource:///org/gnome/shell/...`, `gettext`, and `cairo`

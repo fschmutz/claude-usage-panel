@@ -21,6 +21,7 @@ VERSION_SITES=(
     "package.json|json|version"
     "claude-usage-panel@fschmutz.github.io/metadata.json|json|version-name"
     "plugin/.claude-plugin/plugin.json|json|version"
+    "footer/.claude-plugin/plugin.json|json|version"
     ".claude-plugin/marketplace.json|json|version"
     "mcp/server.js|jsconst|VERSION"
     "Casks/claude-usage-panel.rb|cask|version"

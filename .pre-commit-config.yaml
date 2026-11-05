@@ -121,6 +121,15 @@ repos:
         entry: scripts/check-versions.sh
         pass_filenames: false
         always_run: true
+      # The usage-footer plugin may only import files inside footer/, so it
+      # carries generated copies of the lib/pure modules it needs. They must
+      # stay byte-identical to lib/pure: one source of truth, as everywhere.
+      - id: footer-pure-sync
+        name: footer lib/pure copies in sync
+        language: system
+        entry: scripts/sync-footer-pure.sh --check
+        pass_filenames: false
+        files: ^(footer/|claude-usage-panel@fschmutz\.github\.io/lib/pure/)
       # File size: 700 lines per file, or an exemption named in the script
       # with its reason. No numeric slack; a stale exemption fails too.
       - id: file-size

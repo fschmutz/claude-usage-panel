@@ -192,13 +192,15 @@ test('file size: the repo itself is within the ceiling', () => {
 
 // ── C49: the plugin manifests, validated by a pinned Claude Code CLI ─────────
 
-test('ci plugin-validate: a pinned CLI validates both manifests strictly, behind ci-gate', () => {
+test('ci plugin-validate: a pinned CLI validates every manifest strictly and tests the footer, behind ci-gate', () => {
     const body = job('.github/workflows/ci.yml', 'plugin-validate');
     // a registry stall must fail fast and retry, never sit until the job timeout
     assert.match(body, /for attempt in 1 2 3; do\n\s+timeout \d+ npm ci /);
     assert.match(body, /npm ci [^\n]*\n\s+working-directory: \.github\/claude-cli/);
     assert.match(body, /plugin validate --strict "\$target"/);
-    assert.match(body, /for target in \. plugin; do/);
+    assert.match(body, /for target in \. plugin footer; do/);
+    assert.match(body, /scripts\/sync-footer-pure\.sh --check/, 'the footer lib/pure copies are checked');
+    assert.match(body, /claude plugin test footer/, 'the footer plugin tests run');
     assert.match(body, /grep -qi 'warning'/, 'a warning in the output fails the job too');
     const cli = JSON.parse(read('.github/claude-cli/package.json'));
     const want = cli.dependencies['@anthropic-ai/claude-code'];
