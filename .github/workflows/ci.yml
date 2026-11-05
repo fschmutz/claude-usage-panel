@@ -252,7 +252,7 @@ jobs:
             echo "::warning::npm ci attempt $attempt failed or stalled after 180 s"
           done
           exit 1
-      - name: claude plugin validate --strict (marketplace, then plugin)
+      - name: claude plugin validate --strict (marketplace, then each plugin)
         env:
           # A throwaway config dir: the validator must not depend on, or
           # write to, any login or settings.
@@ -262,7 +262,7 @@ jobs:
         run: |
           cli=.github/claude-cli/node_modules/.bin/claude
           "$cli" --version
-          for target in . plugin; do
+          for target in . plugin footer; do
             rc=0
             out="$("$cli" plugin validate --strict "$target" 2>&1)" || rc=$?
             printf '%s\n' "$out"
@@ -275,6 +275,16 @@ jobs:
               exit 1
             fi
           done
+      # The footer's lib/pure copies are generated: any drift from the one
+      # source of truth fails here, as it does in pre-commit.
+      - name: footer lib/pure copies match their source
+        run: scripts/sync-footer-pure.sh --check
+      - name: claude plugin test footer
+        env:
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
+          DISABLE_AUTOUPDATER: "1"
+          DISABLE_TELEMETRY: "1"
+        run: .github/claude-cli/node_modules/.bin/claude plugin test footer
 
   # The author of record is the human who owns the change: no commit here is
   # authored or committed by an address .github/attribution-allow.txt does not

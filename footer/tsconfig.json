@@ -1,0 +1,4 @@
+{
+  "extends": "./.claude-plugin/types/tsconfig.json",
+  "compilerOptions": { "allowJs": true, "checkJs": false }
+}
