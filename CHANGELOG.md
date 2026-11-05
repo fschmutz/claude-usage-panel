@@ -25,7 +25,8 @@ semantic versioning.
   modules it imports (a plugin may only import its own files) byte-identical
   to their source; `--check` runs in pre-commit (`footer-pure-sync`) and CI.
   The `plugin-validate` job validates `footer/` and runs `claude plugin test
-  footer`, on the pinned CLI, now 2.1.318.
+  footer`, on the pinned CLI, now 2.1.318 - whose validator wants an icon,
+  so both plugins ship the project's app icon.
 
 ### Removed
 
