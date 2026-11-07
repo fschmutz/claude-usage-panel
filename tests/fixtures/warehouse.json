@@ -71,6 +71,13 @@
       "limits": {
         "weekly_all": 10
       }
+    },
+    {
+      "t": 1799913600000,
+      "a": "u-fsc/o-2",
+      "limits": {
+        "weekly_all": 99
+      }
     }
   ],
   "cases": [
@@ -142,6 +149,26 @@
       "key": "weekly_all",
       "account": "u-nobody",
       "expected": null
+    },
+    {
+      "name": "an account filed with its org still reads its rows from before the org split the key",
+      "key": "weekly_all",
+      "account": "u-fsc/o-1",
+      "expected": {
+        "thisWeekPeak": 10,
+        "lastWeekPeak": 57,
+        "deltaPoints": -47
+      }
+    },
+    {
+      "name": "the same person in another org sees its own rows plus the shared pre-split ones",
+      "key": "weekly_all",
+      "account": "u-fsc/o-2",
+      "expected": {
+        "thisWeekPeak": 99,
+        "lastWeekPeak": 57,
+        "deltaPoints": 42
+      }
     }
   ],
   "formats": [
@@ -152,7 +179,7 @@
         "lastWeekPeak": 84,
         "deltaPoints": -13
       },
-      "expected": "peak 71% this week \u00b7 84% last"
+      "expected": "peak 71% this week · 84% last"
     },
     {
       "name": "first week only",

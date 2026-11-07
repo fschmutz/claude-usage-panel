@@ -39,7 +39,8 @@ semantic versioning.
   Every port now matches a login within its `organizationUuid` (a side without
   one still matches), `save` takes the second org as a new account instead of
   a twin, and pace history and the warehouse file each org separately
-  (`<uuid>/<org>`), so earlier samples no longer count toward a trend.
+  (`<uuid>/<org>`). The weekly peak still reads the rows filed under the bare
+  `<uuid>` before the split, so an upgrade keeps the last two weeks.
 
 ## [3.11.0] - 2026-10-24
 

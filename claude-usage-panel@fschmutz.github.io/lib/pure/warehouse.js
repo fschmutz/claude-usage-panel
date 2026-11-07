@@ -88,6 +88,9 @@ export function pruneWarehouse(entries, nowMs = Date.now()) {
  * account: only entries filed under `account` count, and with no account
  * known only the entries that carry none (a pre-1.13 file, or a machine with
  * no `oauthAccount` block). Rows from another login are never a peak here.
+ * An account filed with its org (`<uuid>/<org>`) also reads the rows filed
+ * under the bare `<uuid>` before orgs split the key, so an upgrade keeps the
+ * last two weeks; they age out on their own.
  * @returns {?{thisWeekPeak: number, lastWeekPeak: ?number, deltaPoints: ?number}}
  *   null when this week has no samples at all. lastWeekPeak is null on a fresh
  *   install - one week of data is still worth showing, without inventing a
@@ -96,10 +99,13 @@ export function pruneWarehouse(entries, nowMs = Date.now()) {
 export function weekOverWeek(entries, key, nowMs = Date.now(), account = null) {
     const week = 7 * 86_400_000;
     const owner = account ? String(account) : null;
+    const slash = owner ? owner.indexOf('/') : -1;
+    const legacy = slash > 0 ? owner.slice(0, slash) : null;
     let thisWeek = null;
     let lastWeek = null;
     for (const e of entries ?? []) {
-        if ((e?.a ?? null) !== owner)
+        const a = e?.a ?? null;
+        if (a !== owner && (legacy === null || a !== legacy))
             continue;
         const p = e?.limits?.[key];
         if (!Number.isFinite(p))

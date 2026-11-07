@@ -165,10 +165,17 @@ public enum Warehouse {
         _ entries: [WarehouseEntry], key: String, nowMs: Double, account: String? = nil
     ) -> WeekOverWeek? {
         let week = 7.0 * 86_400_000
+        // `<uuid>/<org>` also reads the rows filed under the bare `<uuid>`
+        // before orgs split the key (an upgrade keeps the last two weeks).
+        let legacy = account.flatMap { a in
+            a.firstIndex(of: "/").flatMap { $0 > a.startIndex ? String(a[..<$0]) : nil }
+        }
         var thisWeek: Int?
         var lastWeek: Int?
         for e in entries {
-            guard e.account == account, let p = e.limits[key] else { continue }
+            guard e.account == account || (legacy != nil && e.account == legacy),
+                let p = e.limits[key]
+            else { continue }
             let age = nowMs - e.t
             guard age >= 0, age < 2 * week else { continue }
             if age < week {
