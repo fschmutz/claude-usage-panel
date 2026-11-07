@@ -136,6 +136,9 @@ test('openLeftovers on macOS: two ps runs, the id from the environment, never an
         ? `   40    11 grep CLAUDE_CODE_SESSION_ID=${B} log CLAUDE_CODE_SESSION_ID=${A}\n`
         : `   40    11 grep CLAUDE_CODE_SESSION_ID=${B} log\n`);
     assert.equal(openLeftovers({platform: 'darwin', exec: inArgs}).processes()[0].sessionId, A);
+    // an id that appears only in the arguments is no session id at all
+    const argsOnly = (_c, args) => `   40    11 grep CLAUDE_CODE_SESSION_ID=${B} log${args[0].includes('E') ? ' HOME=/h' : ''}\n`;
+    assert.equal(openLeftovers({platform: 'darwin', exec: argsOnly}).processes()[0].sessionId, null);
     assert.deepEqual([...parsePs('junk\n 1 2 a b\n')], [[1, {ppid: 2, rest: 'a b'}]]);
 });
 
@@ -240,7 +243,21 @@ test('redactCommand hides secret-looking values; leftovers never print them', ()
         [`gh secret set X --token ${v}`, 'gh secret set X --token ***'],
         [`tool --api-key=${v}`, 'tool --api-key=***'],
         [`GITHUB_TOKEN=${v} AWS_SECRET_ACCESS_KEY="a b" make`, 'GITHUB_TOKEN=*** AWS_SECRET_ACCESS_KEY=*** make'],
-        [`git clone https://me:${v}@host/r.git`, 'git clone https://me:***@host/r.git'],
+        [`git clone https://me:${v}@host/r.git`, 'git clone https://***@host/r.git'],
+        // the security audit's misses (2026-11-07)
+        [`mysql -p${v} db`, 'mysql -p*** db'],
+        [`sshpass -p ${v} ssh h`, 'sshpass -p *** ssh h'],
+        [`redis-cli -a ${v} ping`, 'redis-cli -a *** ping'],
+        [`curl -u admin:${v} https://h`, 'curl -u admin:*** https://h'],
+        [`curl -H "x-api-key: ${v}" https://h`, 'curl -H "x-api-key: ***" https://h'],
+        [`echo sk-ant-oat01-${v}`, 'echo ***'],
+        [`git clone https://ghp_${v}@github.com/r`, 'git clone https://***@github.com/r'],
+        [`GH_PAT=${v} gh`, 'GH_PAT=*** gh'],
+        [`db_password=${v} run`, 'db_password=*** run'],
+        [`aws configure set aws_secret_access_key ${v}`, 'aws configure set aws_secret_access_key ***'],
+        [`psql postgres://u:p@ss${v}@host/db`, 'psql postgres://***@host/db'],
+        ['AKIA' + 'ABCDEFGHIJKLMNOP', '***'],
+        ['git log --format=%an', 'git log --format=%an'],
         ['sleep 600', 'sleep 600'],
     ];
     for (const [raw, want] of cases) assert.equal(pure.redactCommand(raw), want, raw);

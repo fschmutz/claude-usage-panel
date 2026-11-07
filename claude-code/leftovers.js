@@ -11,8 +11,8 @@ import {execFileSync} from 'node:child_process';
 
 import {pauseLeftovers} from '../claude-usage-panel@fschmutz.github.io/lib/pure/leftovers.js';
 
-// `ps -E` appends the environment after the arguments: the LAST match is the
-// environment's, an earlier one is text inside the command's own arguments.
+// `ps -E` appends the environment after the arguments; only that tail is
+// searched, and its LAST match wins.
 const SID_RE = /(?:^|\s)CLAUDE_CODE_SESSION_ID=([A-Za-z0-9-]+)(?=\s|$)/g;
 const lastSid = (text) => [...String(text ?? '').matchAll(SID_RE)].pop()?.[1] ?? null;
 const ENV_KEY = 'CLAUDE_CODE_SESSION_ID=';
@@ -67,9 +67,13 @@ export function openLeftovers(io = {}) {
         const bare = parsePs(exec('ps', ['-axww', '-o', 'pid=,ppid=,command=']));
         const withEnv = parsePs(exec('ps', ['-axwwE', '-o', 'pid=,ppid=,command=']));
         if (!bare.size) throw new Error('ps listed no process');
-        return [...bare].map(([pid, b]) => ({
-            pid, ppid: b.ppid, cmd: b.rest, sessionId: lastSid(withEnv.get(pid)?.rest),
-        }));
+        return [...bare].map(([pid, b]) => {
+            // `ps -E` prints the arguments, then the environment: only what
+            // follows the bare command line is environment
+            const full = withEnv.get(pid)?.rest ?? '';
+            const env = full.startsWith(b.rest) ? full.slice(b.rest.length) : '';
+            return {pid, ppid: b.ppid, cmd: b.rest, sessionId: lastSid(env)};
+        });
     }
 
     /** This process and every ancestor: never reported as a leftover. */

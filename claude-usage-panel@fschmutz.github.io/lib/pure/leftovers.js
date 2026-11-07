@@ -23,11 +23,27 @@ const LEFTOVER_CMD_MAX = 160;
 // Values that must never reach a terminal or a session's prompt: flag values
 // named like a secret, secret-named environment assignments, bearer and
 // basic credentials, and passwords inside URLs.
+const VAL = String.raw`("[^"]*"|'[^']*'|\S+)`;
 const SECRET_RES = [
-    [/((?:^|\s)--?[A-Za-z0-9-]*(?:token|secret|passw(?:or)?d|api[-_]?key|access[-_]?key|auth)[A-Za-z0-9-]*(?:=|\s+))("[^"]*"|'[^']*'|\S+)/gi, '$1***'],
-    [/(\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|APIKEY|ACCESS_KEY|PRIVATE_KEY)[A-Za-z0-9_]*=)("[^"]*"|'[^']*'|\S+)/g, '$1***'],
+    // well-known token shapes, wherever they stand
+    [/\b(?:sk-ant-[A-Za-z0-9_-]+|gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|glpat-[A-Za-z0-9_-]{8,}|xox[abpr]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{16})/g, '***'],
+    // URL userinfo: everything up to the LAST @ before the host (a password may hold @)
+    [/(:\/\/)[^\s/]*@(?=[^\s/@]*(?:[/\s?#]|$))/g, '$1***@'],
+    // --token X, --api-key=X, -password X ... (flag named like a secret)
+    [new RegExp(String.raw`((?:^|\s)--?[A-Za-z0-9-]*(?:token|secret|passw(?:or)?d|pat|api[-_]?key|access[-_]?key|auth)[A-Za-z0-9-]*(?:=|\s+))` + VAL, 'gi'), '$1***'],
+    // NAME=value with a secret-looking name, any case (GH_PAT, db_password, aws_secret_access_key)
+    [new RegExp(String.raw`(\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|PAT|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIALS?)[A-Za-z0-9_]*=)` + VAL, 'gi'), '$1***'],
+    // ?api_key=x / &token=x in a URL
+    [/([?&][A-Za-z0-9_-]*(?:token|key|secret|password|sig|signature)[A-Za-z0-9_-]*=)[^&\s#'"]+/gi, '$1***'],
+    // header values: Authorization: Bearer x, x-api-key: x, Cookie: x
+    [/(\b(?:authorization|proxy-authorization|cookie|x-[a-z0-9-]*(?:key|token|secret|auth)[a-z0-9-]*)\s*:\s*(?:(?:bearer|basic|token)\s+)?)[^\s"']+/gi, '$1***'],
     [/(\b(?:Bearer|Basic|token)\s+)[A-Za-z0-9._~+/=-]{8,}/gi, '$1***'],
-    [/(:\/\/[^/\s:@]+:)[^@\s/]+@/g, '$1***@'],
+    // curl -u user:pass, sshpass -p x, redis-cli -a x, mysql -pX
+    [/((?:^|\s)(?:-u|--user)\s+[^\s:]+:)\S+/g, '$1***'],
+    [/(\b(?:sshpass|redis-cli)\b[^|;&]*?\s-[pa]\s*)\S+/g, '$1***'],
+    [/(\b(?:mysql|mysqldump|mariadb)\b[^|;&]*?\s-p)(?!\s)\S+/g, '$1***'],
+    // aws configure set aws_secret_access_key X
+    [/(\bconfigure\s+set\s+\S*(?:secret|token|password|key)\S*\s+)\S+/gi, '$1***'],
 ];
 
 /** A command line with secret-looking values replaced by ***. */

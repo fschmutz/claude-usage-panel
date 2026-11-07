@@ -19,6 +19,10 @@ semantic versioning.
 - **Auto-update: a tag counts as released only when the GitHub API has its
   Release.** The check fetched the html release page, which answers 200 for
   a bare tag too, so a tag release.yml refused could still auto-install.
+- **Leftovers: wider secret redaction** (`mysql -p`, `sshpass -p`,
+  `redis-cli -a`, `curl -u`, API-key headers, `sk-ant-`/`ghp_`/`AKIA`
+  tokens, URL userinfo, lowercase and `PAT` variable names, query keys), and
+  on macOS the session id is read from the environment tail of `ps -E` only.
 
 ### Added
 
