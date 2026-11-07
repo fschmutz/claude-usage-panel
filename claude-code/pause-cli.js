@@ -8,7 +8,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 
-import {cleanPauseText, leftoverLines, leftoverRoots, pauseExitCode, PAUSE_REASON_MAX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {leftoverLines, leftoverRoots} from '../claude-usage-panel@fschmutz.github.io/lib/pure/leftovers.js';
+import {cleanPauseText, pauseExitCode, PAUSE_REASON_MAX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {openPause} from './pause.js';
 import {describeLaunch, resumePrompt} from './tabs.js';
@@ -28,7 +29,7 @@ export const PAUSE_HELP = `
   claudectl session pause-status [--json]    the last request, one row per session
   claudectl session leftovers [NAME...|--session ID] [--json]
                                              jobs each session (open or closed) left
-                                             running; exit 0 none, 3 some
+                                             running; exit 0 none, 3 some or unread
   claudectl session report --request ID --verdict SAFE|NOT_SAFE
                          [--checkpoint P] [--reason TEXT|--reason-file F|-]
                          [--session ID]
@@ -52,8 +53,10 @@ picks the terminal, --dry-run prints and runs nothing).`,
   'pause-status': `The last pause or resume request, from disk: one row per session with
 where its delivery and verdict stand.`,
   leftovers: `Every process still carrying a session's CLAUDE_CODE_SESSION_ID that is not
-the harness's own (hooks, MCP servers): Bash tool commands and what they
-started, and anything orphaned, for open and closed sessions alike. One line
+the harness's own: Bash tool commands and what they started, and anything
+orphaned. The hooks and MCP servers of an OPEN session are its harness; a
+closed session has none, so all it left running is listed. Exit 3 also when
+the process table cannot be read: that is never "nothing left". One line
 per job no other job started, with how many run under it. A paused session
 runs it as its last check; \`pause --wait\` runs it once every verdict is in.
 Nothing is killed here: the pids are printed for you to stop.`,
@@ -226,7 +229,12 @@ async function recheck(pause, rows, st, opts, io, out, who) {
   const known = pause.readKnown();
   const json = Boolean(opts.json);
   const safeIds = new Set(st.rows.filter((r) => r.state === 'safe').map((r) => r.sessionId));
-  let found = pause.leftovers();
+  let scan = pause.leftovers();
+  if (!scan.ok) {
+    if (!json) out(`double check: could not read the process table (${scan.error}): not proven clean\n`);
+    return {again: null, found: [], error: scan.error, ok: false};
+  }
+  let found = scan.found;
   const dirty = rows.filter((r) => safeIds.has(r.session_id) && found.some((s) => s.sessionId === r.session_id && s.running));
   let again = null;
   if (dirty.length) {
@@ -236,7 +244,12 @@ async function recheck(pause, rows, st, opts, io, out, who) {
       out('asking those sessions again\n');
     }
     again = await sendAndFollow(pause, 'pause', dirty, opts, io, out, who, {printJson: false});
-    found = pause.leftovers();
+    scan = pause.leftovers();
+    if (!scan.ok) {
+      if (!json) out(`double check: could not read the process table (${scan.error}): not proven clean\n`);
+      return {again, found: [], error: scan.error, ok: false};
+    }
+    found = scan.found;
   }
   const pausedIds = new Set(rows.map((r) => r.session_id));
   const left = found.filter((s) => pausedIds.has(s.sessionId) || !s.running);
@@ -249,7 +262,7 @@ async function recheck(pause, rows, st, opts, io, out, who) {
       out('double check: no session left a job running\n');
     }
   }
-  return {again, found: left, ok: !left.some((s) => pausedIds.has(s.sessionId))};
+  return {again, found: left, error: null, ok: !left.some((s) => pausedIds.has(s.sessionId))};
 }
 
 async function pauseCmd(pause, args, opts, io, out) {
@@ -266,7 +279,9 @@ async function pauseCmd(pause, args, opts, io, out) {
     return EXIT_SUPERSEDED;
   }
   const check = await recheck(pause, rows, st, opts, io, out, who);
-  if (opts.json) out(`${JSON.stringify({...st, recheck: check.again, leftovers: check.found}, null, 2)}\n`);
+  if (opts.json) {
+    out(`${JSON.stringify({...st, recheck: check.again, leftovers: check.found, leftoversError: check.error}, null, 2)}\n`);
+  }
   if (check.again?.superseded) return EXIT_SUPERSEDED;
   const answered = check.again ? pauseExitCode(check.again.summary) : 0;
   return pauseExitCode(st.summary) || answered || (check.ok ? 0 : 3);
@@ -275,7 +290,13 @@ async function pauseCmd(pause, args, opts, io, out) {
 function leftoversCmd(pause, args, opts, out) {
   const live = pause.tabs.liveSessions();
   const known = pause.readKnown();
-  let found = pause.leftovers();
+  const scan = pause.leftovers();
+  if (!scan.ok) {
+    if (opts.json) out(`${JSON.stringify({error: scan.error}, null, 2)}\n`);
+    else out(`could not read the process table (${scan.error}): not proven clean\n`);
+    return 3;
+  }
+  let found = scan.found;
   const keys = typeof opts.session === 'string' ? [opts.session, ...args] : args;
   if (keys.length) {
     found = found.filter((s) => keys.some((k) => s.sessionId === k ||

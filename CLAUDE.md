@@ -304,7 +304,7 @@ and the Swift twin together, and keep the fixture matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
- sessions,accounts,notices,codex,snapshots,layout,waiting,pause,board,awake}.js` (`layout.js`, the dropdown
+ sessions,accounts,notices,codex,snapshots,layout,waiting,pause,leftovers,board,awake}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
   imports anywhere under `pure/`, so it all runs under plain `node` for tests
   and in the Node clients. This is the reference implementation: the GNOME
@@ -347,7 +347,7 @@ and the Swift twin together, and keep the fixture matching.
   `leftovers.js` (`claudectl session leftovers` and the pause double check:
   the process table with each process's `CLAUDE_CODE_SESSION_ID`, `/proc` on
   Linux, two `ps` runs on macOS; which process is a job is pure
-  `pauseLeftovers`; it never kills), `transcript-tokens.js` (a transcript's token totals and their incremental
+  `lib/pure/leftovers.js` `pauseLeftovers`, Node-only; it never kills), `transcript-tokens.js` (a transcript's token totals and their incremental
   on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
   registry, checked against `/proc` start time; the snapshot store;

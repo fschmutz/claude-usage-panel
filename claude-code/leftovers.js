@@ -1,6 +1,6 @@
 // What each Claude Code session left running, read from the OS: the process
 // table with the CLAUDE_CODE_SESSION_ID every harness child carries. The
-// classification (job, harness, orphan) is lib/pure/pause.js
+// classification (job, harness, orphan) is lib/pure/leftovers.js
 // pauseLeftovers; this file only reads processes. Linux reads /proc; macOS
 // runs `ps` twice (the environment for the id, the bare command for the
 // text, so no environment value is ever printed).
@@ -9,9 +9,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
-import {pauseLeftovers} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {pauseLeftovers} from '../claude-usage-panel@fschmutz.github.io/lib/pure/leftovers.js';
 
-const SID_RE = /(?:^|\s)CLAUDE_CODE_SESSION_ID=([A-Za-z0-9-]+)(?=\s|$)/;
+// `ps -E` appends the environment after the arguments: the LAST match is the
+// environment's, an earlier one is text inside the command's own arguments.
+const SID_RE = /(?:^|\s)CLAUDE_CODE_SESSION_ID=([A-Za-z0-9-]+)(?=\s|$)/g;
+const lastSid = (text) => [...String(text ?? '').matchAll(SID_RE)].pop()?.[1] ?? null;
 const ENV_KEY = 'CLAUDE_CODE_SESSION_ID=';
 
 /** `pid ppid rest` lines of `ps -o pid=,ppid=,command=`. */
@@ -54,28 +57,18 @@ export function openLeftovers(io = {}) {
         }
     }
 
-    /** Every process: {pid, ppid, cmd, sessionId}. */
+    /** Every process: {pid, ppid, cmd, sessionId}. Throws when the table
+     *  cannot be read: an unread table is never "nothing left running". */
     function processes() {
         if (platform() === 'linux') {
-            let names = [];
-            try {
-                names = fs.readdirSync(procDir());
-            } catch {
-                return [];
-            }
+            const names = fs.readdirSync(procDir());
             return names.filter((n) => /^\d+$/.test(n)).map((n) => readProc(Number(n))).filter(Boolean);
         }
-        let bare;
-        let withEnv;
-        try {
-            bare = parsePs(exec('ps', ['-axww', '-o', 'pid=,ppid=,command=']));
-            withEnv = parsePs(exec('ps', ['-axwwE', '-o', 'pid=,ppid=,command=']));
-        } catch {
-            return [];
-        }
+        const bare = parsePs(exec('ps', ['-axww', '-o', 'pid=,ppid=,command=']));
+        const withEnv = parsePs(exec('ps', ['-axwwE', '-o', 'pid=,ppid=,command=']));
+        if (!bare.size) throw new Error('ps listed no process');
         return [...bare].map(([pid, b]) => ({
-            pid, ppid: b.ppid, cmd: b.rest,
-            sessionId: SID_RE.exec(withEnv.get(pid)?.rest ?? '')?.[1] ?? null,
+            pid, ppid: b.ppid, cmd: b.rest, sessionId: lastSid(withEnv.get(pid)?.rest),
         }));
     }
 
@@ -87,7 +80,8 @@ export function openLeftovers(io = {}) {
         return chain;
     }
 
-    /** pauseLeftovers over the live table. `live`: rows {session_id, pid}. */
+    /** pauseLeftovers over the live table. `live`: rows {session_id, pid}.
+     *  Throws when the process table cannot be read. */
     function scan(live = []) {
         const procs = processes();
         const map = {};

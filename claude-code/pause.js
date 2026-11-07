@@ -27,6 +27,7 @@ import {
   pauseDeliveryText, pauseFileNames, pauseOwed, pauseRowLabel, pauseRows, PAUSE_OWED_MAX_AGE_MS,
   PAUSE_VERSION, shouldDeliver,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {leftoversNote} from '../claude-usage-panel@fschmutz.github.io/lib/pure/leftovers.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {shellQuote} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {pauseDir, projectsDir} from './paths.js';
@@ -312,12 +313,13 @@ export function openPause(io = {}) {
   }
 
   /** What every session left running (pure pauseLeftovers over the live
-   *  process table). A scan that fails is empty: it never blocks a pause. */
+   *  process table): {ok, found, error}. A scan that fails is ok: false,
+   *  never an empty list - the double check fails closed. */
   function leftovers() {
     try {
-      return leftoverScan.scan(tabs.liveSessions());
-    } catch {
-      return [];
+      return {ok: true, found: leftoverScan.scan(tabs.liveSessions()), error: null};
+    } catch (e) {
+      return {ok: false, found: [], error: e?.message ?? String(e)};
     }
   }
 
@@ -325,10 +327,11 @@ export function openPause(io = {}) {
    *  the jobs claudectl already sees running for it. */
   function deliveryText(sid, request, via) {
     const checkpoint = checkpointPath(sid);
-    const found = request.kind === 'pause' ? leftovers().find((s) => s.sessionId === sid)?.jobs ?? [] : [];
+    // a failed scan names nothing here; step 4b runs it again and fails closed
+    const found = request.kind === 'pause' ? leftovers().found.find((s) => s.sessionId === sid)?.jobs ?? [] : [];
     return pauseDeliveryText({
       request, via, sentAt: formatClock(request.at), checkpoint,
-      checkpointExists: fs.existsSync(checkpoint), leftovers: leftoversCommand(sid), found,
+      checkpointExists: fs.existsSync(checkpoint), leftovers: leftoversCommand(sid), leftoversNote: leftoversNote(found),
       report: reportCommand(sid, request.id), verdictFile: file(sid, 'verdict'), reasonFile: file(sid, 'reason'),
     });
   }

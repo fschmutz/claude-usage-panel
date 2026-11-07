@@ -17,7 +17,9 @@ semantic versioning.
   nothing; `pause --wait` asks a session that answered SAFE with jobs still
   running once more, then fails (exit 3) on what survives and prints a
   `kill` line for closed sessions' orphans. The resume protocol runs it
-  after reading the checkpoint. Nothing is killed by claudectl.
+  after reading the checkpoint. Nothing is killed by claudectl. A process
+  table that cannot be read fails the check instead of reading as clean, and
+  secret-looking values in command lines print as `***`.
 
 ### Fixed
 

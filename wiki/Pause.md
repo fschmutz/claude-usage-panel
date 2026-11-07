@@ -82,8 +82,12 @@ is invisible to it. Every process Claude Code starts for a session carries
 `CLAUDE_CODE_SESSION_ID`, and each Bash tool command runs under a
 `shell-snapshots/snapshot-*.sh` wrapper, so the process table answers it.
 `claudectl session leftovers` lists, per session, every process with that id
-that is not the harness's own (hook waiters and MCP servers are), one line
-per job no other job started:
+that is not the harness's own (an open session's hook waiters and MCP servers
+are; a closed session has no harness, so all it left is listed), one line
+per job no other job started. Secret-looking values (`--token X`,
+`API_KEY=...`, `Bearer ...`, a password in a URL) print as `***`. A process
+table that cannot be read fails the check (exit 3, "not proven clean"),
+never reads as empty:
 
 ```text
   API aaaa1111 (open): 1 job, 2 processes

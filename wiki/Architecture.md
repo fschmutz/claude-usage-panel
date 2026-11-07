@@ -98,7 +98,8 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   ├── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     │   ├── waiting.js  # waiting-on-you list: hook events, markers, age, focus plan
-    │   ├── pause.js    # pause / resume: request, delivery and verdict shapes, row state, leftovers, the protocol texts
+    │   ├── pause.js    # pause / resume: request, delivery and verdict shapes, row state, the protocol texts
+    │   ├── leftovers.js# what a session left running: job vs harness, redaction, grouping (Node-only)
     │   ├── board.js    # the session board: waiting + pause + today's sessions joined per session id
     │   └── awake.js    # keep-awake: session math, the battery/thermal floors, the recovery journal, every platform argv
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
