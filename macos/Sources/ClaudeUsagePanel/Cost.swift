@@ -1,3 +1,4 @@
+import ClaudeUsageCore
 import Foundation
 
 // Optional cost layer: the official usage API does not expose dollar cost on
