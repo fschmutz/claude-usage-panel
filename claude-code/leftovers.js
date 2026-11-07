@@ -10,6 +10,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 import {pauseLeftovers} from '../claude-usage-panel@fschmutz.github.io/lib/pure/leftovers.js';
+import {procStat} from './procs.js';
 
 // `ps -E` appends the environment after the arguments; only that tail is
 // searched, and its LAST match wins.
@@ -38,10 +39,10 @@ export function openLeftovers(io = {}) {
 
     function readProc(pid) {
         const base = path.join(procDir(), String(pid));
+        const stat = procStat(pid, procDir());
+        if (!stat)
+            return null; // exited while we read
         try {
-            const stat = fs.readFileSync(path.join(base, 'stat'), 'utf8');
-            // the command name in (...) may hold spaces and parens: cut after the last ')'
-            const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1]);
             const cmd = fs.readFileSync(path.join(base, 'cmdline'), 'utf8').split('\0').filter(Boolean).join(' ');
             let sessionId = null;
             try {
@@ -51,7 +52,7 @@ export function openLeftovers(io = {}) {
             } catch {
                 // another user's process, or gone: no session id
             }
-            return {pid, ppid: Number.isInteger(ppid) ? ppid : 0, cmd, sessionId};
+            return {pid, ppid: stat.ppid, cmd, sessionId};
         } catch {
             return null; // exited while we read
         }

@@ -9,8 +9,7 @@ import path from 'node:path';
 
 import {main} from '../claude-code/session-cli.js';
 import {openPause} from '../claude-code/pause.js';
-import {pauseDir, tabsDir} from '../claude-code/paths.js';
-import {transcriptPath} from '../claude-code/tabs.js';
+import {pauseDir, tabsDir, transcriptPath} from '../claude-code/paths.js';
 import {A, B, pauseWorld} from './pause-world.js';
 
 const SESSIONS = [{pid: 11, name: 'API', id: A}, {pid: 12, name: 'WEB', id: B}];
@@ -90,7 +89,7 @@ test('pause --wait stops with exit 4 when a newer request replaces it', async (t
         io.tick(1000);
         if (step++) return;
         // a panel click for WEB lands, is delivered and answered SAFE
-        const newer = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions().filter((r) => r.pid === 12), from: 'gnome'});
+        const newer = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions().filter((r) => r.pid === 12), from: 'gnome'});
         pause.claim(B, newer, 'rewake');
         pause.report({sessionId: B, requestId: newer.id, verdict: 'SAFE'});
     };

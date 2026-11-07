@@ -16,8 +16,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {readPauseStatus} from './pause.js';
-import {lastOutputLine, run} from './proc.js';
-import {claudectlPath} from './snapshots.js';
+import {runClaudectl} from './claudectl.js';
 import {formatClock} from './pure.js';
 import {vbox, clipLabel} from './widgets.js';
 
@@ -206,23 +205,13 @@ export class PauseController {
     async act(action, row = null) {
         if (this._busy)
             return;
-        const cli = claudectlPath();
-        if (!cli) {
-            this._notify(_('Claude usage'),
-                _('Install claudectl and the pause hooks (./install.sh pause) to pause sessions.'));
-            this._requestRefresh();
-            return;
-        }
-        this._setBusy(true);
-        const {ok, stdout, stderr} = await run(pauseCommand(cli, action, row?.pid));
-        if (this._isDestroyed())
-            return;
-        this._setBusy(false);
-        if (!ok) {
-            this._notify(_('Claude usage'), lastOutputLine(stdout, stderr) ||
-                (action === 'resume-all' ? _('Could not resume the sessions') : _('Could not pause the sessions')));
-        }
-        await this._requestRefresh();
+        const {status} = await runClaudectl(cli => pauseCommand(cli, action, row?.pid), {
+            notify: this._notify, isDestroyed: this._isDestroyed, onBusy: busy => this._setBusy(busy),
+            installHint: _('Install claudectl and the pause hooks (./install.sh pause) to pause sessions.'),
+            failText: action === 'resume-all' ? _('Could not resume the sessions') : _('Could not pause the sessions'),
+        });
+        if (status !== 'gone')
+            await this._requestRefresh();
     }
 
     _scheduleFollow() {

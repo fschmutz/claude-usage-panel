@@ -19,3 +19,27 @@ test('no cost port runs a package fetched by npx', () => {
         assert.match(code, /ccusage/, p);
     }
 });
+
+// `./install.sh cost` writes the locked launcher to ~/.local/bin, which a
+// session's PATH may lack: the GNOME port finds it there too.
+test('GNOME runs the ccusage on PATH, else the launcher in ~/.local/bin', async (t) => {
+    const {stub} = await import('./gjs-stub.js');
+    t.after(() => { stub.overrides = {}; });
+    let onPath = null;
+    let executable = false;
+    stub.overrides['gi://GLib'] = {
+        find_program_in_path: () => onPath,
+        get_home_dir: () => '/home/u',
+        build_filenamev: (parts) => parts.join('/'),
+        file_test: () => executable,
+        FileTest: {IS_EXECUTABLE: 8},
+    };
+    const {ccusageBin} = await import('../claude-usage-panel@fschmutz.github.io/lib/cost.js');
+    executable = true;
+    assert.equal(ccusageBin(), '/home/u/.local/bin/ccusage');
+    onPath = '/opt/bin/ccusage';
+    assert.equal(ccusageBin(), '/opt/bin/ccusage', 'PATH first');
+    onPath = null;
+    executable = false;
+    assert.equal(ccusageBin(), 'ccusage', 'nothing found: the bare name, run reports the failure');
+});

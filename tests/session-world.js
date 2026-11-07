@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {transcriptPath} from '../claude-code/tabs.js';
+import {transcriptPath} from '../claude-code/paths.js';
 import {sandboxHome} from './helpers.js';
 
 // A HOME holding Claude Code's session registry, the matching transcripts and
@@ -35,13 +35,14 @@ export function world(t, sessions = [], {selfParent} = {}) {
             // field 3 (state) onward - starttime is field 22
             const fields = Array.from({length: 50}, (_, i) => (i === 19 ? String(s.start) : '0'));
             fields[0] = 'S';
+            fields[1] = '1'; // ppid
             fs.writeFileSync(path.join(proc, String(s.pid), 'stat'), `${s.pid} (cl (x) y) ${fields.join(' ')}`);
-            fs.writeFileSync(path.join(proc, String(s.pid), 'status'), 'Name:\tclaude\nPPid:\t1\n');
         }
     }
     if (selfParent) {
+        // the parent chain is read from stat (procs.js procStat), like the rest
         fs.mkdirSync(path.join(proc, '9999'), {recursive: true});
-        fs.writeFileSync(path.join(proc, '9999', 'status'), `Name:\tnode\nPPid:\t${selfParent}\n`);
+        fs.writeFileSync(path.join(proc, '9999', 'stat'), `9999 (node) S ${selfParent} 0 0 0`);
     }
     // toolDirs: []: only the test's PATH counts, never the host's own tmux
     Object.assign(io, {procDir: proc, pid: 9999, nowMs: () => (clock += 60_000), toolDirs: []});

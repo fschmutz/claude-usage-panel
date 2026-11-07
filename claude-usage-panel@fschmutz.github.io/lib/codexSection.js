@@ -12,7 +12,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {codexIdentity, formatResets} from './pure.js';
-import {listCodexAccounts, recordedCodexUsage, switchCodexTo, syncBackCodex} from './codex.js';
+import {readCodexAccounts, recordedCodexUsage, switchCodexTo} from './codex.js';
 import {OutcomeLabel} from './noticeRow.js';
 import {vbox, clipLabel, wrapLabel} from './widgets.js';
 
@@ -69,25 +69,28 @@ export class CodexController {
 
     /** Rebuild the section. Off (the default) means off: with the setting
      *  unset, nothing under the Codex home is opened at all. The accounts are
-     *  a few small files and draw at once; the transcript scan is async, so a
-     *  sessions tree of thousands of rollouts never stalls the shell. */
-    refresh() {
+     *  a few small files, read without blocking and drawn as soon as they
+     *  land; the transcript scan runs after them and is not waited for, so a
+     *  sessions tree of thousands of rollouts never holds up the poll. */
+    async refresh() {
         if (!this._settings.get_boolean('codex-enabled')) {
             this._generation++;
             this._item.visible = false;
             return;
         }
+        const generation = this._generation;
         let state;
         try {
-            // The codex CLI rotates its tokens as it runs; keep the saved copy
-            // of the live login current before listing.
-            syncBackCodex();
-            state = listCodexAccounts();
+            // The codex CLI rotates its tokens as it runs; the saved copy of
+            // the live login is kept current as part of the read.
+            state = await readCodexAccounts();
         } catch (e) {
             logError(e, 'claude-usage-panel: could not read the Codex store');
             this._item.visible = false;
             return;
         }
+        if (generation !== this._generation || this._isDestroyed())
+            return;
         this._item.visible = true;
         this._rows.destroy_all_children();
         for (const account of state.accounts)
@@ -175,9 +178,9 @@ export class CodexController {
         return button;
     }
 
-    _switchTo(name) {
+    async _switchTo(name) {
         try {
-            const r = switchCodexTo(name);
+            const r = await switchCodexTo(name);
             this._outcome = {
                 ok: true,
                 text: r.changed
@@ -188,6 +191,6 @@ export class CodexController {
             this._outcome = {ok: false, text: e.message};
         }
         if (!this._isDestroyed())
-            this.refresh();
+            await this.refresh();
     }
 }

@@ -120,6 +120,18 @@ _sl_installed_flag() { # NAME DEFAULT
     printf '%s' "${found:-$2}"
 }
 
+# --segments= is lowercase names and commas, --tokens= all or fresh: anything
+# else is refused before it reaches the shell command in settings.json.
+_sl_flags_valid() { # SEGMENTS TOKENS
+    case "$1" in
+        '' | *[!a-z,]*) return 1 ;;
+    esac
+    case "$2" in
+        all | fresh) return 0 ;;
+    esac
+    return 1
+}
+
 # ── Claude Code status line ─────────────────────────────────────────────────────
 install_statusline() {
     info "Claude Code status line"
@@ -138,7 +150,14 @@ install_statusline() {
     # reinstall - which is what every update is - keeps the user's choice.
     $SL_SEGMENTS_SET || SL_SEGMENTS="$(_sl_installed_flag segments "$SL_SEGMENTS")"
     $SL_TOKENS_SET || SL_TOKENS="$(_sl_installed_flag tokens "$SL_TOKENS")"
-    local command="node \"$dest\" --segments=$SL_SEGMENTS --tokens=$SL_TOKENS"
+    # Both values are pasted into a command Claude Code hands to a shell on
+    # every prompt: only the shapes the status line reads get through.
+    if ! _sl_flags_valid "$SL_SEGMENTS" "$SL_TOKENS"; then
+        skip_fatal "statusline: --segments= takes lowercase names separated by commas, --tokens= all or fresh - nothing was changed"
+        return 0
+    fi
+    local command
+    command="node $(_sh_word "$dest") --segments=$SL_SEGMENTS --tokens=$SL_TOKENS"
 
     if $DRY; then
         echo "  would: merge statusLine → $command into $CLAUDE_SETTINGS"

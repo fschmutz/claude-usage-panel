@@ -12,11 +12,6 @@ const sources = readdirSync(dir)
     .filter(f => f.endsWith('.swift'))
     .map(f => ({file: f, text: readFileSync(path.join(dir, f), 'utf8')}));
 
-// A guard about what the CODE does must not be tripped by a comment saying
-// what it deliberately does not do. Line comments only: this repo has no block
-// comments in Swift, and stripping those properly would need a real lexer.
-const code = ({text}) => text.split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
-
 test('the app sources are found', () => {
     assert.ok(sources.length > 5);
 });
@@ -38,11 +33,7 @@ test('no AppleScript notification is built by string interpolation', () => {
         assert.doesNotMatch(text, /display notification \\"\\\(/, file);
 });
 
-// The Claude vault refreshes what it holds; it may not write the credentials
-// Claude Code is running on. AccountStore has exactly one credentials write
-// (installLogin, via writeLiveCredentials) - a second one anywhere is the bug
-// this guards.
-test('the account store writes a live login in one place', () => {
-    const text = code(sources.find(s => s.file === 'AccountStore.swift'));
-    assert.equal((text.match(/try writeLiveCredentials\(/g) ?? []).length, 1);
-});
+// When the app writes the live login is decided by ClaudeUsageCore's
+// switchPlan (install / repair, never on a refresh), pinned for both ports by
+// tests/fixtures/accounts.json `switchPlan` + `refresh` (AccountsParityTests):
+// the behavior, not a count of call sites in AccountStore.swift.

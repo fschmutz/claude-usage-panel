@@ -10,6 +10,7 @@
 // status line (I/O in claude-code/accounts.js) both import this file. The
 // Swift twin (ClaudeUsageCore/Accounts.swift) is pinned by the same fixture.
 
+import {isObject} from './json.js';
 import {compactResets, isTransientStatus, usageReading} from './usage.js';
 
 /** Refresh an access token this close to its expiry rather than use it. */
@@ -246,7 +247,7 @@ export function renameRefusal(profiles, from, to, pending = null) {
 /** A name-keyed store map ({NAME: value}) with `from`'s entry moved to `to`.
  *  Anything that is not a plain object is an empty map. */
 export function renameKey(map, from, to) {
-    const out = map && typeof map === 'object' && !Array.isArray(map) ? {...map} : {};
+    const out = isObject(map) ? {...map} : {};
     if (from !== to && Object.hasOwn(out, from)) {
         out[to] = out[from];
         delete out[from];
@@ -261,7 +262,7 @@ export const RENAME_STALE_MS = 30_000;
 
 /** `.rename-pending.json` as {at, from, to}, or null when it is unusable. */
 export function parseRenamePending(raw) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    if (!isObject(raw))
         return null;
     const {at, from, to} = raw;
     return Number.isFinite(at) && isValidName(from) && isValidName(to) && from !== to
@@ -616,4 +617,37 @@ export function rowError(name, message) {
     const text = String(message ?? '').trim();
     const prefix = `${name}: `;
     return text.startsWith(prefix) ? text.slice(prefix.length) : text;
+}
+
+/**
+ * The credentials blob as every store keeps it: `{claudeAiOauth: {accessToken,
+ * …}}`, from the parsed JSON Claude Code wrote (the file, or the Keychain
+ * item). The one place that knows its shapes: the current nested form, and
+ * the older flat `access_token` / `token` forms, lifted into the nested one so
+ * every consumer sees one shape. Null when there is no access token.
+ */
+export function parseCredentials(json) {
+    if (!json || typeof json !== 'object' || Array.isArray(json))
+        return null;
+    const nested = json.claudeAiOauth !== null && typeof json.claudeAiOauth === 'object' &&
+        !Array.isArray(json.claudeAiOauth);
+    const oauth = nested ? json.claudeAiOauth : json;
+    const token = oauth.accessToken ?? oauth.access_token ?? oauth.token;
+    if (typeof token !== 'string' || !token)
+        return null;
+    if (nested && oauth.accessToken === token)
+        return json;
+    const {access_token: _a, token: _t, ...rest} = oauth;
+    return {claudeAiOauth: {...rest, accessToken: token}};
+}
+
+// A Claude Code process in `ps -eo args=`: the native binary or a wrapper
+// named `claude`, or node running the npm package's entry point (an npm
+// install's argv is `node …/@anthropic-ai/claude-code/cli.js`).
+const CLAUDE_ARGV_RE = /(^|\/)claude(\s|$)|(^|[\s/])@anthropic-ai\/claude-code\/cli\.m?js(\s|$)/;
+
+/** How many Claude Code processes a `ps -eo args=` listing holds - they keep
+ *  the old token after a switch. */
+export function countClaudeProcesses(psText) {
+    return String(psText ?? '').split('\n').filter(l => CLAUDE_ARGV_RE.test(l.trim())).length;
 }

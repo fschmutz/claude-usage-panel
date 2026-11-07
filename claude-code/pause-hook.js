@@ -32,12 +32,12 @@
 
 import fs from 'node:fs';
 import {clearInterval, setInterval} from 'node:timers';
-import {fileURLToPath} from 'node:url';
 
 import {
-  pauseDenyOutput, pretoolEligible, isPauseSessionId, PAUSE_HOOK_TIMEOUT_S,
+  pauseDenyOutput, pretoolEligible, isPauseSessionId, PAUSE_HOOK_TIMEOUT_S, waiterOwnership,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
 import {openPause} from './pause.js';
+import {isMain} from './is-main.js';
 
 /** How often the waiter re-checks without an fs event (and its session). */
 const POLL_MS = 15_000;
@@ -82,6 +82,85 @@ export function handlePretool(payload, io = {}) {
   }
 }
 
+/** One waiter's lifecycle: `finish` runs every cleanup registered with
+ *  `onFinish`, newest first, exactly once, then resolves `done`. */
+function lifecycle() {
+  let resolve = () => {};
+  const done = new Promise((r) => {
+    resolve = r;
+  });
+  const cleanups = [];
+  let finished = false;
+  return {
+    done,
+    isFinished: () => finished,
+    onFinish(fn) {
+      cleanups.push(fn);
+    },
+    finish(code, text = '') {
+      if (finished) return;
+      finished = true;
+      for (const fn of cleanups.reverse()) {
+        try {
+          fn();
+        } catch {
+          // best effort: a lock left behind is stale once this pid is gone
+        }
+      }
+      resolve({code, text});
+    },
+  };
+}
+
+/**
+ * "Is our session still ours" for this waiter, as a function to call on every
+ * check: the decision is lib/pure/pause.js waiterOwnership, this only gathers
+ * what it reads. On macOS the registry read spawns `ps`, so one answer is
+ * reused for OURS_TTL_MS whatever the event rate; on Linux it is two reads.
+ */
+function ownership(pause, sessionId, owner, io) {
+  if (!owner) return () => true;
+  const armedStart = pause.registry.procStart(owner);
+  const ttl = io.oursTtlMs ?? ((io.platform ?? process.platform) === 'linux' ? 0 : OURS_TTL_MS);
+  let sawRegistry = false;
+  let at = -Infinity;
+  let last = true;
+  return () => {
+    if (Date.now() - at < ttl) return last;
+    at = Date.now();
+    const registry = pause.registry.sessionOfPid(owner);
+    const alive = !registry && !sawRegistry && pause.pidAlive(owner);
+    const verdict = waiterOwnership({
+      sessionId, owner, registry, sawRegistry, alive, armedStart,
+      start: alive && armedStart !== null ? pause.registry.procStart(owner) : null,
+    });
+    sawRegistry = verdict.sawRegistry;
+    last = verdict.ours;
+    return last;
+  };
+}
+
+/** Watch the pause dir for request.json, collapsing a burst of events into
+ *  one check. Every claim, delivery and verdict write lands there too: only
+ *  request.json can owe us a delivery. */
+function watchRequests(pause, waiter, check, debounceMs) {
+  let debounce = null;
+  waiter.onFinish(() => clearTimeout(debounce));
+  try {
+    const watcher = fs.watch(pause.dir(), {persistent: true}, (_event, name) => {
+      if ((name && name !== 'request.json') || debounce) return;
+      debounce = setTimeout(() => {
+        debounce = null;
+        check();
+      }, debounceMs);
+    });
+    watcher.on('error', () => {});
+    waiter.onFinish(() => watcher.close());
+  } catch {
+    // no watcher: the poll still runs
+  }
+}
+
 /**
  * The asyncRewake waiter. Returns {done, stop}: `done` resolves {code,
  * text} - 2 with the protocol text when it delivered, 0 otherwise - and
@@ -89,108 +168,52 @@ export function handlePretool(payload, io = {}) {
  * maxMs, pid, pidAlive, plus everything openPause(io) takes.
  */
 export function startWaiter(payload, io = {}) {
-  let finish = () => {};
-  const done = new Promise((resolve) => {
-    let release = null;
-    let watcher = null;
-    let timer = null;
-    let deadline = null;
-    let finished = false;
-    let stopDebounce = () => {};
-    finish = (code, text = '') => {
-      if (finished) return;
-      finished = true;
-      clearInterval(timer);
-      stopDebounce();
-      clearTimeout(deadline);
-      try {
-        watcher?.close();
-      } catch {
-        // already closed
-      }
-      try {
-        release?.();
-      } catch {
-        // a lock left behind is stale once this pid is gone
-      }
-      resolve({code, text});
-    };
-    try {
-      const sid = sessionOf(payload);
-      const env = io.env ?? process.env;
-      if (!sid || payload?.agent_id !== undefined || unattended(env)) return finish(0);
-      const owner = claudePid(env);
+  const waiter = lifecycle();
+  try {
+    const sid = sessionOf(payload);
+    const env = io.env ?? process.env;
+    if (!sid || payload?.agent_id !== undefined || unattended(env)) {
+      waiter.finish(0);
+    } else {
       const pause = openPause(io);
-      release = pause.acquireWaiter(sid);
-      if (!release) return finish(0); // another live waiter serves this session
-
-      // Our session still runs, under our id: a crashed claude orphans us,
-      // and /clear moves the live session to a new id with a waiter of its
-      // own. No registry file yet (early SessionStart): the pid, checked
-      // against the start time it had when we armed (a recycled pid has
-      // another); once the registry named it, its entry going away means
-      // the session ended. On macOS the registry check spawns `ps`, so it
-      // runs at most once per OURS_TTL_MS whatever the event rate.
-      const ownerStart = owner ? pause.tabs.procStart(owner) : null;
-      let sawRegistry = false;
-      let oursAt = -Infinity;
-      let oursLast = true;
-      const oursTtl = io.oursTtlMs ?? ((io.platform ?? process.platform) === 'linux' ? 0 : OURS_TTL_MS);
-      const ours = () => {
-        if (!owner) return true;
-        if (Date.now() - oursAt < oursTtl) return oursLast;
-        oursAt = Date.now();
-        const reg = pause.tabs.sessionOfPid(owner);
-        if (reg) {
-          sawRegistry = true;
-          oursLast = reg.session_id === sid;
-        } else {
-          oursLast = !sawRegistry && pause.pidAlive(owner) &&
-            (ownerStart === null || pause.tabs.procStart(owner) === ownerStart);
-        }
-        return oursLast;
-      };
-      const check = () => {
-        if (finished) return;
-        try {
-          if (!ours()) return finish(0);
-          const request = pause.readRequest();
-          if (request && pause.claim(sid, request, 'rewake', {pid: owner})) {
-            finish(2, pause.deliveryText(sid, request, 'rewake'));
-          }
-        } catch {
-          // a half-written file: the next event or poll reads it whole
-        }
-        return undefined;
-      };
-      // Every claim, delivery and verdict write lands in this directory:
-      // only request.json can owe us a delivery, and a burst of events
-      // collapses into one check.
-      let debounce = null;
-      const onEvent = (_event, name) => {
-        if (name && name !== 'request.json') return;
-        if (debounce) return;
-        debounce = setTimeout(() => {
-          debounce = null;
-          check();
-        }, io.debounceMs ?? DEBOUNCE_MS);
-      };
-      stopDebounce = () => clearTimeout(debounce);
-      try {
-        watcher = fs.watch(pause.dir(), {persistent: true}, onEvent);
-        watcher.on('error', () => {});
-      } catch {
-        watcher = null; // the poll still runs
+      const release = pause.acquireWaiter(sid);
+      if (!release) {
+        waiter.finish(0); // another live waiter serves this session
+      } else {
+        waiter.onFinish(release);
+        arm(waiter, pause, sid, claudePid(env), io);
       }
-      timer = setInterval(check, io.pollMs ?? POLL_MS);
-      deadline = setTimeout(() => finish(0), io.maxMs ?? WAIT_MAX_MS);
-      check();
-    } catch {
-      finish(0);
     }
-    return undefined;
-  });
-  return {done, stop: () => finish(0)};
+  } catch {
+    waiter.finish(0);
+  }
+  return {done: waiter.done, stop: () => waiter.finish(0)};
+}
+
+/** Check now, on every request.json event, every pollMs, and leave at maxMs. */
+function arm(waiter, pause, sid, owner, io) {
+  const ours = ownership(pause, sid, owner, io);
+  const check = () => {
+    if (waiter.isFinished()) return;
+    try {
+      if (!ours()) {
+        waiter.finish(0);
+        return;
+      }
+      const request = pause.readRequest();
+      if (request && pause.claim(sid, request, 'rewake', {pid: owner})) {
+        waiter.finish(2, pause.deliveryText(sid, request, 'rewake'));
+      }
+    } catch {
+      // a half-written file: the next event or poll reads it whole
+    }
+  };
+  watchRequests(pause, waiter, check, io.debounceMs ?? DEBOUNCE_MS);
+  const timer = setInterval(check, io.pollMs ?? POLL_MS);
+  waiter.onFinish(() => clearInterval(timer));
+  const deadline = setTimeout(() => waiter.finish(0), io.maxMs ?? WAIT_MAX_MS);
+  waiter.onFinish(() => clearTimeout(deadline));
+  check();
 }
 
 function readStdin() {
@@ -224,6 +247,6 @@ async function main(mode) {
   return code;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   main(process.argv[2]).then((code) => process.exit(code), () => process.exit(0));
 }

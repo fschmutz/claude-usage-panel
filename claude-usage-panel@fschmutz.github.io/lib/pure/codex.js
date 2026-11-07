@@ -19,6 +19,7 @@
 // captured, or not at all.
 
 import {sameJSON} from './accounts.js';
+import {isObject, num} from './json.js';
 import {clampPercent} from './usage.js';
 
 export const CODEX_PROFILE_VERSION = 1;
@@ -77,7 +78,7 @@ export function jwtClaims(token) {
         return null;
     try {
         const claims = JSON.parse(new TextDecoder().decode(bytes));
-        return claims && typeof claims === 'object' && !Array.isArray(claims) ? claims : null;
+        return isObject(claims) ? claims : null;
     } catch {
         return null;
     }
@@ -124,7 +125,7 @@ function str(v) {
 
 function authClaims(claims) {
     const scoped = claims[CODEX_AUTH_CLAIM];
-    return scoped && typeof scoped === 'object' && !Array.isArray(scoped) ? scoped : {};
+    return isObject(scoped) ? scoped : {};
 }
 
 /**
@@ -236,10 +237,6 @@ function rfc3339Ms(v) {
     return Number.isFinite(ms) ? ms : null;
 }
 
-function num(v) {
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-}
-
 /** Label for a limit window of `minutes`: "5h limit", "Weekly limit". */
 export function codexWindowLabel(minutes) {
     const m = num(minutes);
@@ -339,11 +336,11 @@ export function lastRateLimits(text) {
         } catch {
             continue;
         }
-        if (!event || typeof event !== 'object' || Array.isArray(event))
+        if (!isObject(event))
             continue;
         const payload = event.payload && typeof event.payload === 'object' ? event.payload : {};
         const limits = payload.rate_limits ?? event.rate_limits;
-        if (!limits || typeof limits !== 'object' || Array.isArray(limits))
+        if (!isObject(limits))
             continue;
         let stamp = '';
         if (typeof event.timestamp === 'string')
@@ -397,6 +394,26 @@ export function pickRecordedCodexUsage(files, nowMs) {
  *  gives up rather than overwrite a token it has not kept. */
 export const CODEX_SWITCH_SYNC_TRIES = 3;
 
+// The switch sequence as a generator over the three store steps it asks for
+// ('syncBack', 'readLive', 'write'), so the shell drives it asynchronously
+// (codexSwitchAsync) and the CLI synchronously (codexSwitch), on one rule.
+function* codexSwitchSteps(target, tries) {
+    let from = null;
+    for (let i = 0; i < tries; i++) {
+        const synced = yield 'syncBack';
+        from = synced.name;
+        if (synced.auth && !from)
+            return {outcome: 'unsaved', live: synced.auth};
+        if (from === target)
+            return {outcome: 'already', from};
+        if (!sameJSON((yield 'readLive') ?? null, synced.auth ?? null))
+            continue;
+        yield 'write';
+        return {outcome: 'switched', from};
+    }
+    return {outcome: 'busy', from};
+}
+
 /**
  * The switch sequence, over the store's own I/O.
  * @param {string} target the profile name to make live
@@ -408,21 +425,21 @@ export const CODEX_SWITCH_SYNC_TRIES = 3;
  *   | {outcome: 'switched', from: ?string} | {outcome: 'busy', from: ?string}}
  *   `busy`: the live file changed on every try, nothing was written.
  */
-export function codexSwitch(target, {syncBack, readLive, write}, tries = CODEX_SWITCH_SYNC_TRIES) {
-    let from = null;
-    for (let i = 0; i < tries; i++) {
-        const synced = syncBack();
-        from = synced.name;
-        if (synced.auth && !from)
-            return {outcome: 'unsaved', live: synced.auth};
-        if (from === target)
-            return {outcome: 'already', from};
-        if (!sameJSON(readLive() ?? null, synced.auth ?? null))
-            continue;
-        write();
-        return {outcome: 'switched', from};
-    }
-    return {outcome: 'busy', from};
+export function codexSwitch(target, ops, tries = CODEX_SWITCH_SYNC_TRIES) {
+    const steps = codexSwitchSteps(target, tries);
+    let r = steps.next();
+    while (!r.done)
+        r = steps.next(ops[r.value]());
+    return r.value;
+}
+
+/** codexSwitch over ops that answer promises (the GNOME store). */
+export async function codexSwitchAsync(target, ops, tries = CODEX_SWITCH_SYNC_TRIES) {
+    const steps = codexSwitchSteps(target, tries);
+    let r = steps.next();
+    while (!r.done)
+        r = steps.next(await ops[r.value]());
+    return r.value;
 }
 
 // ── Which transcripts to read ───────────────────────────────────────────────────

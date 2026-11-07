@@ -36,7 +36,7 @@ function remote(t) {
     git(seed, 'config', 'user.name', 'test');
     git(seed, 'remote', 'add', 'origin', origin);
     fs.writeFileSync(path.join(seed, 'install.sh'),
-        '#!/usr/bin/env bash\ngit -C "$(dirname "$0")" rev-parse HEAD >"$HOME/installed-from"\n');
+        '#!/usr/bin/env bash\ngit -C "$(dirname "$0")" rev-parse HEAD >"$HOME/installed-from"\nprintf "%s\\n" "$@" >"$HOME/installed-args"\n');
     fs.chmodSync(path.join(seed, 'install.sh'), 0o755);
 
     /** A commit on main, tagged when `tag` is given, pushed to the remote. */
@@ -50,19 +50,32 @@ function remote(t) {
         return git(seed, 'rev-parse', 'HEAD');
     };
     const checkout = path.join(dir, 'home', 'checkout');
-    const bootstrap = () => {
+    const bootstrap = (extra = {}, script = BOOTSTRAP, args = []) => {
         fs.mkdirSync(path.join(dir, 'home'), {recursive: true});
-        return run('bash', [BOOTSTRAP], {
+        // stderr folded into stdout: run() keeps stderr only on a failure.
+        return run('bash', ['-c', 'exec bash "$0" "$@" 2>&1', script, ...args], {
             env: {
                 ...GIT_ENV,
                 HOME: path.join(dir, 'home'),
                 CLAUDE_USAGE_PANEL_REPO: origin,
                 CLAUDE_USAGE_PANEL_HOME: checkout,
+                ...extra,
             },
         });
     };
+    /** A stand-in for the GitHub Release lookup: `published` answer 0,
+     *  `unknown` 2, any other version 1 (tagged, no Release). */
+    const probe = ({published = [], unknown = []}) => {
+        const file = path.join(dir, 'probe.sh');
+        fs.writeFileSync(file, `#!/bin/sh
+case " ${published.join(' ')} " in *" $1 "*) exit 0 ;; esac
+case " ${unknown.join(' ')} " in *" $1 "*) exit 2 ;; esac
+exit 1
+`, {mode: 0o755});
+        return {CUP_RELEASE_PROBE: file};
+    };
     const installedFrom = () => fs.readFileSync(path.join(dir, 'home', 'installed-from'), 'utf8').trim();
-    return {release, bootstrap, installedFrom, checkout, git};
+    return {dir, release, bootstrap, probe, installedFrom, checkout, git};
 }
 
 test('a fresh install lands on the newest release tag, not on main', (t) => {
@@ -111,4 +124,71 @@ test('a repository with no release yet installs its default branch', (t) => {
     assert.equal(out.status, 0, out.stdout + out.stderr);
     assert.match(out.stdout, /No release tag found/);
     assert.equal(r.installedFrom(), tip);
+});
+
+// ── A tag is a release only once its GitHub Release exists ─────────────────────
+test('a tag without a published Release is skipped for the newest released one', (t) => {
+    const r = remote(t);
+    const v19 = r.release('1.9.0', 'v1.9.0');
+    r.release('1.10.0', 'v1.10.0'); // tagged, release.yml refused it
+    const out = r.bootstrap(r.probe({published: ['1.9.0']}));
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    assert.match(out.stdout, /v1\.10\.0 is tagged but has no published release - skipped/);
+    assert.match(out.stdout, /Installing release v1\.9\.0/);
+    assert.equal(r.installedFrom(), v19);
+});
+
+test('GitHub unreachable: the highest tag is installed, and it says so', (t) => {
+    const r = remote(t);
+    r.release('1.9.0', 'v1.9.0');
+    const v110 = r.release('1.10.0', 'v1.10.0');
+    const out = r.bootstrap(r.probe({unknown: ['1.10.0', '1.9.0']}));
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    assert.match(out.stdout, /Could not confirm a published release .* v1\.10\.0, unconfirmed/);
+    assert.equal(r.installedFrom(), v110);
+});
+
+test('tags but no published Release yet: nothing is installed, main neither', (t) => {
+    const r = remote(t);
+    r.release('1.9.0', 'v1.9.0');
+    r.release('1.9.0'); // unreleased main
+    const out = r.bootstrap(r.probe({}));
+    assert.equal(out.status, 1, out.stdout + out.stderr);
+    assert.match(out.stdout, /no tagged version has a published release yet/);
+    assert.equal(fs.existsSync(path.join(r.dir, 'home', 'installed-from')), false);
+});
+
+test('docs/install and scripts/lib.sh carry the same release probe, byte for byte', () => {
+    const block = (file) => {
+        const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+        const m = /^# >>> release_published[\s\S]*^# <<< release_published$/m.exec(src);
+        assert.ok(m, `${file} has no release_published block`);
+        return m[0];
+    };
+    assert.equal(block('docs/install'), block('scripts/lib.sh'));
+});
+
+// curl | bash runs what arrived so far: a download cut anywhere must run
+// nothing. Everything lives in main(), called on the last line, which ends in
+// a marker main() requires: `main` alone would install, minus the arguments.
+test('a truncated download runs nothing, wherever it was cut', (t) => {
+    const r = remote(t);
+    r.release('1.0.0', 'v1.0.0');
+    const src = fs.readFileSync(BOOTSTRAP, 'utf8');
+    const cut = path.join(r.dir, 'cut');
+    const cuts = [];
+    for (let i = src.indexOf('\n'); i !== -1 && i < src.length - 1; i = src.indexOf('\n', i + 1)) cuts.push(i + 1);
+    // every byte of the last line (dropping only its newline leaves the whole
+    // program)
+    const last = src.lastIndexOf('\n', src.length - 2) + 1;
+    for (let at = last + 1; at < src.length - 1; at++) cuts.push(at);
+    for (const at of cuts) {
+        fs.writeFileSync(cut, src.slice(0, at));
+        r.bootstrap({}, cut);
+        assert.equal(fs.existsSync(r.checkout), false, `cut at byte ${at} cloned`);
+    }
+    const whole = r.bootstrap({}, BOOTSTRAP, ['statusline', 'mcp']);
+    assert.equal(whole.status, 0, whole.stdout);
+    assert.equal(fs.readFileSync(path.join(r.dir, 'home', 'installed-args'), 'utf8'), 'statusline\nmcp\n',
+        'the user\'s arguments reach install.sh, the marker does not');
 });

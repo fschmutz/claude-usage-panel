@@ -21,14 +21,19 @@ import {execFileSync, spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {
-  AWAKE_MAX_SECONDS, AWAKE_VERSION, awakeBackstopDue, awakeJournalEntry, awakeLidArgv,
-  awakeLowPowerArgv, awakeRecoverySteps, awakeState, extendAwakeSession, newAwakeSession,
-  normalizeAwakeConfig, parseAwakeJournal, parseAwakeSession, parsePmsetBattery,
-  parseSleepDisabled, parseSysfsBattery, thermalFromMillidegrees, thermalFromSpeedLimit,
+  AWAKE_MAX_SECONDS, AWAKE_VERSION, awakeBackstopDue, awakeJournalEntry, awakeRecoverySteps,
+  awakeState, extendAwakeSession, newAwakeSession, normalizeAwakeConfig, parseAwakeJournal,
+  parseAwakeSession,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js';
-import {awakeDir} from './paths.js';
+import {
+  awakeLidArgv, awakeLowPowerArgv, parsePmsetBattery, parseSleepDisabled, parseSysfsBattery,
+  thermalFromMillidegrees, thermalFromSpeedLimit,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake-power.js';
+import {awakeDir, nowOf} from './paths.js';
+import {releaseLock, waitLockSync} from './excl-lock.js';
 import {readJSON, writePrivate} from './private-fs.js';
-import {openTabs} from './tabs.js';
+import {pidAlive as defaultPidAlive} from './procs.js';
+import {openRegistry} from './registry.js';
 import {listWaiting} from './waiting.js';
 
 /** A lock whose holder has not touched it for this long is taken over: a
@@ -45,22 +50,21 @@ const SETTLE_MS = 5_000;
 
 const COMMAND_TIMEOUT_MS = 20_000;
 
-function defaultPidAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return e.code === 'EPERM';
-  }
-}
+/** What a step that needed the lock answers when another holder has it. */
+const BUSY = Object.freeze({ok: false, reason: 'busy'});
 
 /**
  * Everything the CLI, the MCP tool, the status line, the panels and the
  * holder itself go through. `io` is the usual shape plus `exec`, `nowMs`,
- * `pidAlive` and `hostname`, so the tests drive a fake machine.
+ * `pidAlive`, `hostname` and `wait` (an awaited timer: start and stop poll
+ * with it, so the long-lived MCP server is never blocked), so the tests drive
+ * a fake machine.
  */
 export function openAwake(io = {}) {
-  const now = () => Math.floor(io.nowMs ? io.nowMs() : Date.now());
+  const wait = io.wait ?? ((ms) => new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  }));
+  const now = () => Math.floor(nowOf(io));
   const platform = () => io.platform ?? process.platform;
   const exec = io.exec ?? execFileSync;
   const pidAlive = (pid) => (io.pidAlive ?? defaultPidAlive)(pid);
@@ -99,7 +103,7 @@ export function openAwake(io = {}) {
   function liveSessions() {
     if (io.liveSessions) return io.liveSessions();
     try {
-      const live = openTabs(io).liveSessions().length;
+      const live = openRegistry(io).liveSessions().length;
       return live > 0 ? live : listWaiting(io).length;
     } catch {
       return 0;
@@ -121,45 +125,67 @@ export function openAwake(io = {}) {
   // ── the lock ────────────────────────────────────────────────────────────
   // One transaction: read, decide, change the machine, write, release. The
   // backstop script takes the same file, so no undo can run beside a change.
+  // excl-lock.js: the body is the holder's pid on the first line (what the
+  // backstop reads) and a token on the second, so a holder only ever removes
+  // its own lock; a stale one is moved aside, never removed in place.
 
-  function statOrNull(p) {
-    try {
-      return fs.statSync(p);
-    } catch {
-      return null;
-    }
+  /** A lock whose holder pid is gone, or that has sat untouched past the
+   *  stale window, is taken over. */
+  function lockStale(snap) {
+    const heldPid = Number(snap.text.split('\n')[0].trim());
+    const dead = Number.isInteger(heldPid) && heldPid > 0 && !pidAlive(heldPid);
+    return dead || Date.now() - snap.mtimeMs > LOCK_STALE_MS;
   }
 
   /** Hold the lock for `fn`, or return `{ok: false}` without doing anything.
    *  A caller that cannot get the lock must NEVER proceed unlocked. */
   function withLock(fn) {
     fs.mkdirSync(dir(), {recursive: true, mode: 0o700});
-    const file = lockFile();
-    const deadline = Date.now() + LOCK_WAIT_MS;
-    for (;;) {
-      try {
-        fs.writeFileSync(file, `${process.pid}\n`, {mode: 0o600, flag: 'wx'});
-        break;
-      } catch (e) {
-        if (e.code !== 'EEXIST') throw e;
-        const seen = statOrNull(file);
-        // A lock whose holder is gone, or that has sat untouched past the
-        // stale window, is removed and the create retried.
-        const heldPid = Number(String(readText(file) ?? '').trim());
-        const dead = Number.isInteger(heldPid) && heldPid > 0 && !pidAlive(heldPid);
-        if (seen && (dead || Date.now() - seen.mtimeMs > LOCK_STALE_MS)) {
-          fs.rmSync(file, {force: true});
-          continue;
-        }
-        if (Date.now() >= deadline) return {ok: false, reason: 'busy'};
-        sleepMs(50);
-      }
-    }
+    const lock = waitLockSync(lockFile(), {stale: lockStale}, {waitMs: LOCK_WAIT_MS, pollMs: 50});
+    if (!lock) return {ok: false, reason: 'busy'};
     try {
       return {ok: true, value: fn()};
     } finally {
-      fs.rmSync(file, {force: true});
+      releaseLock(lock);
     }
+  }
+
+  /** withLock for a step that answers `{ok, ...}` itself: a lock someone
+   *  else holds is one more refusal, `busy` (plus `extra` fields the caller's
+   *  shape needs), never a run without it. */
+  function underLock(fn, extra = {}) {
+    const locked = withLock(fn);
+    return locked.ok ? locked.value : {...BUSY, ...extra};
+  }
+
+  /**
+   * One journaled machine change, under the lock: the journal claims `key`
+   * BEFORE `change()` runs when turning it on, and lets go of it only once
+   * the change is known to be undone - so whatever happens in between, the
+   * backstop finds the truth on disk.
+   *
+   *  - on, and it took: the claim stays.
+   *  - on, and it failed: `undo()` (when given) in case it half-took, then the
+   *    claim is dropped - nothing is owed.
+   *  - off, and it took: the claim is dropped.
+   *  - off, and it failed: the claim STAYS; the setting is still on and the
+   *    backstop has to retry it.
+   *
+   * @returns the change's own `{ok, ...}`, or `{ok: false, reason: 'busy'}`
+   */
+  function journaledChange(key, on, change, {undo = null} = {}) {
+    return underLock(() => {
+      const journal = readJournal();
+      if (on) writeJournal({...journal, [key]: true});
+      const result = change();
+      if (on && !result.ok) {
+        undo?.();
+        writeJournal({...journal, [key]: false});
+      } else if (!on && result.ok) {
+        writeJournal({...journal, [key]: false});
+      }
+      return result;
+    });
   }
 
   // ── readings the floors run on ──────────────────────────────────────────
@@ -284,7 +310,7 @@ export function openAwake(io = {}) {
    * @returns {{ok: boolean, undone: string[], failed: string[], reason?: string}}
    */
   function recover({force = false} = {}) {
-    const locked = withLock(() => {
+    return underLock(() => {
       const journal = readJournal();
       const steps = awakeRecoverySteps(journal);
       if (!steps.length) {
@@ -309,8 +335,7 @@ export function openAwake(io = {}) {
       }
       if (!failed.length) fs.rmSync(sessionFile(), {force: true});
       return {ok: failed.length === 0, undone, failed};
-    });
-    return locked.ok ? locked.value : {ok: false, undone: [], failed: [], reason: 'busy'};
+    }, {undone: [], failed: []});
   }
 
   // ── starting and stopping a hold ────────────────────────────────────────
@@ -330,7 +355,7 @@ export function openAwake(io = {}) {
    * child for the whole session. The worker, not this call, is the holder:
    * `claudectl awake on` has to be able to return to the prompt.
    */
-  function start({seconds = null, whileSessions = false, lid = false, waitMs = 4_000} = {}) {
+  async function start({seconds = null, whileSessions = false, lid = false, waitMs = 4_000} = {}) {
     const existing = liveOwner();
     if (existing) return {ok: false, reason: 'already-held', owner: existing};
     const journal = readJournal();
@@ -352,7 +377,7 @@ export function openAwake(io = {}) {
       const session = readSession();
       if (session?.owner?.pid) return {ok: true, session, status: status()};
       if (Date.now() >= deadline) break;
-      sleepMs(100);
+      await wait(100);
     }
     return {ok: false, reason: 'no-holder', log: tail(logFile(), 10)};
   }
@@ -362,7 +387,7 @@ export function openAwake(io = {}) {
    * release), and whatever it could not give back is recovered here. With no
    * live holder this IS the recovery.
    */
-  function stop({waitMs = 6_000} = {}) {
+  async function stop({waitMs = 6_000} = {}) {
     const owner = liveOwner();
     // Only OUR detached holder is signalled. A panel that holds the session
     // itself (kind 'macos') is the user's menu-bar app: SIGTERM would quit it.
@@ -377,7 +402,7 @@ export function openAwake(io = {}) {
       const deadline = Date.now() + waitMs;
       while (Date.now() < deadline) {
         if (!pidAlive(owner.pid)) break;
-        sleepMs(100);
+        await wait(100);
       }
     }
     const recovered = recover({force: true});
@@ -387,7 +412,7 @@ export function openAwake(io = {}) {
   /** Push the deadline out. Only the holder may rewrite its own session, so
    *  this writes the file and lets the holder pick it up on its next poll. */
   function extend(extraSeconds) {
-    const locked = withLock(() => {
+    return underLock(() => {
       const session = readSession();
       if (!session) return {ok: false, reason: 'not-held'};
       const next = extendAwakeSession(session, extraSeconds, now(), config().maxSeconds);
@@ -396,7 +421,6 @@ export function openAwake(io = {}) {
       if (journal) writeJournal({...journal, endsAt: next.endsAt});
       return {ok: true, session: next};
     });
-    return locked.ok ? locked.value : {ok: false, reason: 'busy'};
   }
 
   function logFile() {
@@ -418,7 +442,7 @@ export function openAwake(io = {}) {
     config, writeConfig, dir, sessionFile, journalFile, configFile, lockFile, logFile,
     readSession, readJournal, writeSession, writeJournal,
     liveSessions, status, liveOwner,
-    withLock, readBattery, readThermal,
+    withLock, underLock, journaledChange, readBattery, readThermal,
     setLidDisabled, setLowPower, recover,
     start, stop, extend, log,
     now, platform, host,
@@ -449,9 +473,10 @@ function tail(file, count) {
   }
 }
 
-/** A blocking sleep. The holder and the CLI are short-lived single-purpose
- *  processes waiting on a file or a pid; an event loop buys them nothing and
- *  a busy loop would spin a core. */
+/** A blocking sleep, for the two waits that sit INSIDE a synchronous locked
+ *  step: the lock poll and the lid read-back settle, both run by the holder.
+ *  Nothing a long-lived process calls waits this way: start and stop await
+ *  `wait` instead, so the MCP server keeps answering while they poll. */
 function sleepMs(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }

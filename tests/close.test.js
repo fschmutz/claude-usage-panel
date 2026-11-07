@@ -80,45 +80,85 @@ function fakeKill(dies = {}) {
         if ((dies[pid] ?? ['SIGTERM', 'SIGKILL', 'SIGHUP']).includes(sig)) dead.add(pid);
         return true;
     };
-    return {kill, sent};
+    // what identifies a pid (procs.js processIdentity): gone once it died,
+    // another value once `recycle(pid)` handed the number to a new process
+    const recycled = new Set();
+    const identity = (pid) => (dead.has(pid) ? null : `${pid}@${recycled.has(pid) ? 'new' : 'old'}`);
+    return {kill, sent, identity, recycle: (pid) => recycled.add(pid)};
 }
 const noSleep = async () => {};
 
+async function closeWith(opts, pid, flags) {
+    const closer = openClose({sleep: noSleep, ...opts});
+    return closer.closeOne({pid}, closer.pin({pid}, closePlan(TABLE, pid)), flags);
+}
+
 test('closeOne: SIGTERM claude, then SIGHUP the tab shell', async () => {
-    const {kill, sent} = fakeKill();
-    const r = await openClose({kill, sleep: noSleep}).closeOne({pid: 101}, closePlan(TABLE, 101));
+    const {kill, sent, identity} = fakeKill();
+    const r = await closeWith({kill, identity}, 101);
     assert.deepEqual(r, {closed: true, tab: true, how: 'SIGTERM'});
     assert.deepEqual(sent, [[101, 'SIGTERM'], [100, 'SIGHUP']]);
 });
 
 test('closeOne: a claude that ignores SIGTERM is left, tab untouched, without --force', async () => {
-    const {kill, sent} = fakeKill({101: ['SIGKILL']});
-    const r = await openClose({kill, sleep: noSleep, graceMs: 1000}).closeOne({pid: 101}, closePlan(TABLE, 101));
+    const {kill, sent, identity} = fakeKill({101: ['SIGKILL']});
+    const r = await closeWith({kill, identity, graceMs: 1000}, 101);
     assert.equal(r.closed, false);
     assert.deepEqual(sent, [[101, 'SIGTERM']]);
 });
 
 test('closeOne: --force sends SIGKILL after the grace, then closes the tab', async () => {
-    const {kill, sent} = fakeKill({101: ['SIGKILL']});
-    const r = await openClose({kill, sleep: noSleep, graceMs: 1000}).closeOne({pid: 101}, closePlan(TABLE, 101), {force: true});
+    const {kill, sent, identity} = fakeKill({101: ['SIGKILL']});
+    const r = await closeWith({kill, identity, graceMs: 1000}, 101, {force: true});
     assert.deepEqual(r, {closed: true, tab: true, how: 'SIGKILL'});
     assert.deepEqual(sent, [[101, 'SIGTERM'], [101, 'SIGKILL'], [100, 'SIGHUP']]);
+});
+
+// The pid was checked when the plan was made; the user then took their time
+// over the confirm. A number handed to another process meanwhile is never
+// signalled - not claude's, not a shell's.
+test('closeOne: a pid recycled since the plan is never signalled', async () => {
+    const f = fakeKill();
+    const closer = openClose({kill: f.kill, identity: f.identity, sleep: noSleep});
+    const plan = closer.pin({pid: 101}, closePlan(TABLE, 101));
+    f.recycle(101);
+    const r = await closer.closeOne({pid: 101}, plan);
+    assert.equal(r.closed, false);
+    assert.match(r.how, /no longer the process/);
+    assert.deepEqual(f.sent, []);
+
+    const g = fakeKill();
+    const closer2 = openClose({kill: g.kill, identity: g.identity, sleep: noSleep});
+    const plan2 = closer2.pin({pid: 101}, closePlan(TABLE, 101));
+    g.recycle(100); // the tab shell's number went to another process
+    assert.deepEqual(await closer2.closeOne({pid: 101}, plan2), {closed: true, tab: false, how: 'SIGTERM'});
+    assert.deepEqual(g.sent, [[101, 'SIGTERM']], 'the recycled shell pid is left alone');
+});
+
+test('closeOne: a claude that ignores SIGTERM and whose pid is then recycled is not SIGKILLed', async () => {
+    const f = fakeKill({101: []});
+    const closer = openClose({kill: f.kill, identity: f.identity, graceMs: 1000,
+        sleep: async () => f.recycle(101)});
+    const plan = closer.pin({pid: 101}, closePlan(TABLE, 101));
+    const r = await closer.closeOne({pid: 101}, plan, {force: true});
+    assert.equal(r.how, 'SIGTERM', 'it left: the pid is someone else now');
+    assert.deepEqual(f.sent.filter(([, sig]) => sig === 'SIGKILL'), []);
 });
 
 // The CLI over a fake registry: A in a bash -lc tab, B with a dev server in
 // its tab; the test process (9999) runs under neither.
 function cli(t) {
     const io = world(t, [A, B]);
-    const {kill, sent} = fakeKill();
+    const {kill, sent, identity, recycle} = fakeKill();
     let text = '';
     Object.assign(io, {
-        kill, sleep: noSleep, stdout: (x) => { text += x; },
+        kill, identity, sleep: noSleep, stdout: (x) => { text += x; },
         exec: (cmd) => {
             if (cmd === 'ps') return PS;
             throw new Error(`unexpected ${cmd}`);
         },
     });
-    return {io, sent, text: () => text};
+    return {io, sent, recycle, text: () => text};
 }
 
 test('session close --dry-run prints the plan and signals nothing', async (t) => {
@@ -154,6 +194,17 @@ test('session close: asks unless --yes; no answer closes nothing', async (t) => 
     assert.equal(await main(['close', 'API'], {...io, confirm: async (q) => { asked.push(q); return false; }}), 1);
     assert.deepEqual(asked, ['close 1 session(s)? [y/N] ']);
     assert.deepEqual(sent, []);
+});
+
+test('session close: a pid recycled while the confirm waited is not signalled', async (t) => {
+    const {io, sent, recycle, text} = cli(t);
+    const confirm = async () => {
+        recycle(101); // API exited and its number was reused before the "y"
+        return true;
+    };
+    assert.equal(await main(['close', 'API'], {...io, confirm}), 1);
+    assert.deepEqual(sent, []);
+    assert.match(text(), /FAILED API: pid no longer the process/);
 });
 
 test('session close: the session you are in is refused, even with --force', async (t) => {

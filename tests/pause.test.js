@@ -11,9 +11,9 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import {spawn} from 'node:child_process';
 
-import {openPause, takeOverStale} from '../claude-code/pause.js';
-import {pauseDir, projectsDir} from '../claude-code/paths.js';
-import {transcriptPath} from '../claude-code/tabs.js';
+import {openPause} from '../claude-code/pause.js';
+import {takeOverStale} from '../claude-code/excl-lock.js';
+import {pauseDir, projectsDir, transcriptPath} from '../claude-code/paths.js';
 import {A, B, pauseWorld} from './pause-world.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +65,9 @@ for (const [i, c] of fix.rowName.entries()) {
 }
 for (const c of fix.rows) {
     test(`pauseRows - ${c.name}`, () => assert.deepEqual(pure.pauseRows({...c.input, nowMs: NOW}), c.expected));
+}
+for (const c of fix.waiterOwnership) {
+    test(`waiterOwnership - ${c.name}`, () => assert.deepEqual(pure.waiterOwnership(c.input), c.expected));
 }
 
 test('status fixture: the pause-status --json rows are pauseRows targets plus their label', () => {
@@ -171,7 +174,7 @@ const mode = (f) => fs.statSync(f).mode & 0o777;
 test('sendRequest writes one 0600 request in a 0700 dir; a newer one supersedes it', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     const pause = openPause(io);
-    const live = pause.tabs.liveSessions();
+    const live = pause.registry.liveSessions();
     const r1 = pause.sendRequest({kind: 'pause', rows: live, from: 'gnome'});
     assert.match(r1.id, /^[a-z0-9]+-[0-9a-f]{6}$/);
     assert.deepEqual(r1.targets, [A]);
@@ -200,7 +203,7 @@ test('a session id never reaches a path unvalidated', (t) => {
 test('claim delivers exactly once per (session, request), whichever hook asks first', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     const pause = openPause(io);
-    const req = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     assert.equal(pause.claim(A, req, 'rewake'), true);
     assert.equal(pause.claim(A, req, 'pretooluse'), false, 'the backstop never blocks a second time');
     assert.equal(pause.claim(B, req, 'rewake'), false, 'not targeted');
@@ -208,7 +211,7 @@ test('claim delivers exactly once per (session, request), whichever hook asks fi
     assert.deepEqual(rec, {requestId: req.id, at: NOW, via: 'rewake'});
     assert.equal(mode(path.join(pauseDir(io), `${A}.delivered.json`)), 0o600);
     io.tick(1000);
-    const next = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const next = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     assert.equal(pause.claim(A, next, 'pretooluse'), true, 'a newer request is owed again');
 });
 
@@ -216,7 +219,7 @@ test('a claim held by a live hook blocks; a stale one (by its real mtime) is tak
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     io.nowMs = () => Date.now();
     const pause = openPause(io);
-    const req = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     const lock = path.join(pauseDir(io), `${A}.claim`);
     fs.writeFileSync(lock, 'other:1\n');
     assert.equal(pause.claim(A, req, 'rewake'), false);
@@ -227,7 +230,7 @@ test('a claim held by a live hook blocks; a stale one (by its real mtime) is tak
     assert.deepEqual(fs.readdirSync(pauseDir(io)).filter((f) => f.endsWith('.stale')), [], 'no tombstone left');
 });
 
-test('takeOverStale: only the caller that moves the stale lock wins; a fresh lock moved by mistake goes back', (t) => {
+test('takeOverStale: only the caller that removes the stale lock wins; a lock created since is left alone', (t) => {
     const io = pauseWorld(t);
     fs.mkdirSync(pauseDir(io), {recursive: true});
     const lock = path.join(pauseDir(io), `${A}.claim`);
@@ -235,12 +238,12 @@ test('takeOverStale: only the caller that moves the stale lock wins; a fresh loc
     const old = new Date(Date.now() - 60_000);
     fs.utimesSync(lock, old, old);
     const seen = fs.statSync(lock); // both callers judged THIS file stale
-    assert.equal(takeOverStale(lock, seen), true, 'the first one moves it');
+    assert.equal(takeOverStale(lock, seen), true, 'the first one removes it');
     fs.writeFileSync(lock, 'winner:2\n', {flag: 'wx'}); // and creates its own
-    assert.equal(takeOverStale(lock, seen), false, 'the second one moved a fresh lock');
-    assert.equal(fs.readFileSync(lock, 'utf8'), 'winner:2\n', 'it is back, untouched');
+    assert.equal(takeOverStale(lock, seen), false, 'the second one finds a different lock');
+    assert.equal(fs.readFileSync(lock, 'utf8'), 'winner:2\n', 'untouched');
     fs.rmSync(lock);
-    assert.equal(takeOverStale(lock, seen), false, 'nothing to move');
+    assert.equal(takeOverStale(lock, seen), false, 'nothing to remove');
     assert.deepEqual(fs.readdirSync(pauseDir(io)).filter((f) => f.endsWith('.stale')), []);
 });
 
@@ -248,7 +251,7 @@ test('claims racing in separate processes over a stale lock deliver exactly once
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     io.nowMs = () => Date.now();
     const pause = openPause(io);
-    const req = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     const lock = path.join(pauseDir(io), `${A}.claim`);
     fs.writeFileSync(lock, 'crashed:1\n');
     const old = new Date(Date.now() - 60_000);
@@ -275,7 +278,7 @@ test('claims racing in separate processes over a stale lock deliver exactly once
 test('a request is taken only by the process it was sent to: a reopened session is not paused by it', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     const pause = openPause(io);
-    const req = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     // closed before delivery, reopened with `claude --resume A` as pid 21
     fs.rmSync(path.join(io.procDir, '11'), {recursive: true});
     fs.rmSync(path.join(io.home, '.claude', 'sessions', '11.json'));
@@ -286,7 +289,7 @@ test('a request is taken only by the process it was sent to: a reopened session 
     assert.equal(pause.claim(A, req, 'pretooluse'), false, 'the backstop, looked up by session id');
     assert.equal(fs.existsSync(path.join(pauseDir(io), `${A}.delivered.json`)), false);
     io.tick(1000);
-    const next = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const next = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     assert.equal(pause.claim(A, next, 'rewake', {pid: 21}), true, 'a request sent to it is delivered');
 });
 
@@ -313,7 +316,7 @@ test('one live waiter per session; a dead holder is stale', (t) => {
 test('report writes a 0600 verdict; status joins requests, deliveries, verdicts and liveness', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}, {pid: 12, name: 'WEB', id: B}]);
     const pause = openPause(io);
-    const req = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     let st = pause.status();
     assert.deepEqual(st.rows.map((r) => [r.name, r.state]), [['API', 'unarmed'], ['WEB', 'unarmed']]);
     assert.equal(st.summary.label, '0/2 safe');
@@ -343,7 +346,7 @@ test('report writes a 0600 verdict; status joins requests, deliveries, verdicts 
 test('status: the real pause-status --json shape is the one the fixture pins for the Swift reader', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     const pause = openPause(io);
-    const req = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     pause.claim(A, req, 'rewake');
     pause.report({sessionId: A, requestId: req.id, verdict: 'NOT_SAFE', reason: 'deploy\u001b[2J 7'});
     const st = JSON.parse(JSON.stringify(pause.status()));
@@ -357,11 +360,11 @@ test('status: the real pause-status --json shape is the one the fixture pins for
 test('status of a request a newer one replaced: unanswered rows are superseded', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}, {pid: 12, name: 'WEB', id: B}]);
     const pause = openPause(io);
-    const old = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const old = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     pause.claim(A, old, 'rewake');
     pause.report({sessionId: A, requestId: old.id, verdict: 'SAFE'});
     io.tick(1000);
-    pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions().filter((r) => r.session_id === B)});
+    pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions().filter((r) => r.session_id === B)});
     const st = pause.status(old);
     assert.deepEqual(st.rows.map((r) => r.state), ['safe', 'superseded']);
     assert.equal(st.summary.done, true);
@@ -370,7 +373,7 @@ test('status of a request a newer one replaced: unanswered rows are superseded',
 test('a session that ended keeps its recorded name in the rows', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     const pause = openPause(io);
-    pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     fs.rmSync(path.join(io.procDir, '11'), {recursive: true});
     const [row] = pause.status().rows;
     assert.deepEqual([row.name, row.state, row.label], ['API', 'gone', 'not running']);
@@ -426,7 +429,7 @@ test('a delivered resume marks the checkpoint resumed', (t) => {
     fs.mkdirSync(path.dirname(cp), {recursive: true});
     fs.writeFileSync(cp, 'x');
     io.nowMs = () => fs.statSync(cp).mtimeMs + 1;
-    const req = pause.sendRequest({kind: 'resume', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'resume', rows: pause.registry.liveSessions()});
     assert.equal(pause.claim(A, req, 'rewake'), true);
     assert.equal(pause.pendingCheckpoint(A), null);
     assert.match(pause.deliveryText(A, req, 'rewake'), /Your checkpoint: .*checkpoints\/aaaa1111/);
@@ -435,7 +438,7 @@ test('a delivered resume marks the checkpoint resumed', (t) => {
 test('deliveryText points the report at this checkout\'s claudectl with node, by absolute path', (t) => {
     const io = pauseWorld(t, [{pid: 11, name: 'API', id: A}]);
     const pause = openPause(io);
-    const req = pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    const req = pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     const text = pause.deliveryText(A, req, 'pretooluse');
     const cli = path.join(here, '..', 'claude-code', 'claudectl.js');
     assert.ok(text.includes(`'${process.execPath}' '${path.resolve(cli)}' session report --session ${A} --request ${req.id} --verdict SAFE`));

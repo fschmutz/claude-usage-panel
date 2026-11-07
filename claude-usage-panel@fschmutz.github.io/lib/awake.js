@@ -2,16 +2,15 @@
 // the claudectl argv for the dropdown's buttons. Every decision is
 // lib/pure/awake.js's.
 //
-// The two files under <state dir>/awake are read ASYNCHRONOUSLY: this runs on
-// every poll, on the Shell's main loop, and must never stall a frame. The
+// Every file under <state dir>/awake is read and written ASYNCHRONOUSLY: this
+// runs on every poll, on the Shell's main loop, and must never stall a frame. The
 // extension never holds the machine awake itself - starting and stopping goes
 // through the installed `claudectl awake`, which spawns the detached holder
 // that owns the inhibitor child. One holder, one journal, one lock.
 
 import GLib from 'gi://GLib';
 
-// eslint-disable-next-line no-restricted-imports -- backlog: awake session + journal, GNOME review row 12
-import {readJSON, readJSONAsync, writeText} from './fs.js';
+import {readJSONAsync, writeTextAsync} from './fs.js';
 import {stateDir} from './paths.js';
 import {awakeState, normalizeAwakeConfig} from './pure.js';
 import {listLiveSessions, listWaiting} from './waiting.js';
@@ -27,21 +26,22 @@ function awakeDir() {
  * actually differ: this is called from the poll loop.
  *
  * @param {Gio.Settings} settings
- * @returns {boolean} whether anything was written
+ * @returns {Promise<boolean>} whether anything was written
  */
-export function syncAwakeConfig(settings) {
+export async function syncAwakeConfig(settings) {
     const file = GLib.build_filenamev([awakeDir(), 'config.json']);
     const want = normalizeAwakeConfig({
         lowPowerFloor: settings.get_int('awake-battery-floor'),
         endFloor: settings.get_int('awake-end-floor'),
         maxSeconds: settings.get_int('awake-max-hours') * 3600,
     });
-    const have = normalizeAwakeConfig(readJSON(file) ?? {});
+    const raw = await readJSONAsync(file);
+    const have = normalizeAwakeConfig(raw ?? {});
     const same = Object.keys(want).every(key => want[key] === have[key]);
-    if (same && readJSON(file))
+    if (same && raw)
         return false;
     try {
-        writeText(file, `${JSON.stringify(want, null, 2)}\n`, {mode: 0o600});
+        await writeTextAsync(file, `${JSON.stringify(want, null, 2)}\n`, {mode: 0o600});
         return true;
     } catch {
         // a read-only state dir is not a reason to fail a poll

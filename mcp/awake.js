@@ -8,7 +8,7 @@
 // warning, so it stays a `claudectl awake on --lid` / panel-toggle decision.
 
 import {
-  awakeBadge, formatAwakeDuration, parseAwakeDuration,
+  AWAKE_DEFAULT_SECONDS, awakeBadge, awakeStartError, formatAwakeDuration, parseAwakeDuration,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js';
 import {openAwake} from '../claude-code/awake.js';
 
@@ -103,7 +103,7 @@ function render(state) {
   return lines.join('\n');
 }
 
-export function callAwakeTool(args = {}, io = {}) {
+export async function callAwakeTool(args = {}, io = {}) {
   const awake = openAwake(io);
   const action = args?.action ?? 'status';
   if (action === 'on') {
@@ -112,20 +112,12 @@ export function callAwakeTool(args = {}, io = {}) {
     if (raw !== undefined && raw !== null && raw !== '' && seconds === null)
       throw new Error(`duration ${JSON.stringify(raw)}: want "2h", "90m", "1h30m" or minutes`);
     const whileSessions = args?.whileSessions === true;
-    const result = awake.start({seconds: seconds ?? (whileSessions ? null : 3600), whileSessions});
-    if (!result.ok) {
-      if (result.reason === 'already-held') {
-        throw new Error(`already awake, held by pid ${result.owner.pid}.`
-          + ' Use action "off" to end it.');
-      }
-      if (result.reason === 'recovery-pending') {
-        throw new Error(`a previous session left ${result.steps.join(', ')} to give back.`
-          + ' Run `claudectl awake recover --force` first.');
-      }
-      throw new Error('the holder did not start; see <state dir>/claude-usage-panel/awake/awake.log');
-    }
+    const result = await awake.start({
+      seconds: seconds ?? (whileSessions ? null : AWAKE_DEFAULT_SECONDS), whileSessions,
+    });
+    if (!result.ok) throw new Error(awakeStartError(result, {endHint: 'use action "off" to end it'}));
   } else if (action === 'off') {
-    const result = awake.stop();
+    const result = await awake.stop();
     if (result.failed.length)
       throw new Error(`could not give back ${result.failed.join(', ')}; the backstop will retry`);
   } else if (action !== 'status') {

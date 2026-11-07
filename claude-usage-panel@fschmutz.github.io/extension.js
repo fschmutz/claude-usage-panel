@@ -22,8 +22,6 @@ import {fetchUsage} from './lib/claudeUsage.js';
 import {PanelGauge} from './lib/panelGauge.js';
 import {readLiveAccount, readLiveCredentials} from './lib/claudeFiles.js';
 import {loadWarehouse, appendWarehouse} from './lib/warehouse.js';
-import {fetchActiveCost} from './lib/cost.js';
-import {readLastPing, readSchedule} from './lib/sessionPing.js';
 import {AccountsController} from './lib/accountsSection.js';
 import {AwakeController} from './lib/awakeSection.js';
 import {SampleHistory} from './lib/samples.js';
@@ -36,15 +34,15 @@ import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
 import {watchWakeAndNetwork} from './lib/wakeWatch.js';
 import {exportFocusService} from './lib/focusService.js';
 import {vbox} from './lib/widgets.js';
-// eslint-disable-next-line no-restricted-imports -- backlog: event-hook script write, on a settings change
-import {writeText} from './lib/fs.js';
+import {writeTextAsync} from './lib/fs.js';
 import {stateDir} from './lib/paths.js';
 import {SavedSessionsController} from './lib/savedSessions.js';
+import {ExtraUsageSection, StatusSection} from './lib/statusSection.js';
 import {
-    severityClass, panelGauge, refreshSections, isRetryableFailure,
+    panelGauge, refreshSections, isRetryableFailure,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, eventEnv, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
-    formatLastPing, nextPing, compactTokens, formatClock, panelCard, panelText, popupWidth, usageReading,
+    formatClock, panelCard, panelText, popupWidth, usageReading,
     shownCards,
 } from './lib/pure.js';
 
@@ -66,11 +64,20 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // Consecutive polls in which no limit moved - drives the backoff.
         this._idleStreak = 0;
         this._latest = [];
-        // 90 days of poll samples, for the week-over-week line. Loaded once;
-        // every later poll that moved appends to both the file and this list.
-        this._warehouse = loadWarehouse();
+        // 90 days of poll samples, for the week-over-week line, loaded without
+        // blocking the enable: the line stays empty until it lands. Every
+        // poll that moved appends to this list at once and to the file once
+        // the load has read it (so an early poll is never counted twice).
+        this._warehouse = [];
+        this._warehouseLoaded = loadWarehouse().then(kept => {
+            this._warehouse = [...kept, ...this._warehouse];
+            if (!this._destroyed)
+                this._rerender();
+        });
         /** Identity of the login the last poll ran as - what its entries are filed under. */
         this._warehouseAccount = null;
+        /** The live login this poll read: {creds, account}. */
+        this._live = {creds: null, account: null};
         /** The last poll failed retryably - retry soon, not next interval. */
         this._retry = false;
         /** Retryable failures in a row (backs the retry off), and the last one's Retry-After. */
@@ -137,27 +144,23 @@ class ClaudeUsageButton extends PanelMenu.Button {
             'notify::scale-factor', () => this._applyWidth(), this);
         this._applyWidth();
 
-        this._settings.connectObject(
-            'changed::refresh-interval', () => this._restartTimer(),
-            'changed::show-cost', () => this.refresh(),
-            'changed::panel-mode', () => this._renderPanel(),
-            'changed::show-model-limits', () => this._rerender(),
-            'changed::compact-cards', () => this._rerender(),
-            'changed::cursor-enabled', () => this.refresh(),
-            'changed::cursor-api-key', () => this.refresh(),
-            'changed::cursor-key-stamp', () => this.refresh(),
-            'changed::show-sessions', () => this.refresh(),
-            'changed::accounts-enabled', () => this.refresh(),
-            'changed::waiting-enabled', () => this.refresh(),
-            'changed::sessions-layout', () => this._sessionGroup.render(),
-            'changed::pause-enabled', () => this.refresh(),
-            'changed::awake-enabled', () => this.refresh(),
-            'changed::accounts-auto-switch', () => this._accounts.syncToggle(),
-            'changed::accounts-switch-threshold', () => this._accounts.syncToggle(),
-            'changed::accounts-menu-toggle', () => this._accounts.syncToggle(),
-            'changed::panel-show-account', () => this._renderPanel(),
-            this
-        );
+        // Which part of the button each setting redraws.
+        const poll = () => this.refresh();
+        const panel = () => this._renderPanel();
+        const cards = () => this._rerender();
+        const toggle = () => this._accounts.syncToggle();
+        const onChange = {
+            'refresh-interval': () => this._restartTimer(),
+            'show-cost': poll, 'cursor-enabled': poll, 'cursor-api-key': poll, 'cursor-key-stamp': poll,
+            'show-sessions': poll, 'accounts-enabled': poll, 'waiting-enabled': poll, 'pause-enabled': poll,
+            'awake-enabled': poll,
+            'panel-mode': panel, 'panel-show-account': panel,
+            'show-model-limits': cards, 'compact-cards': cards,
+            'sessions-layout': () => this._sessionGroup.render(),
+            'accounts-auto-switch': toggle, 'accounts-switch-threshold': toggle, 'accounts-menu-toggle': toggle,
+        };
+        for (const [key, handler] of Object.entries(onChange))
+            this._settings.connectObject(`changed::${key}`, handler, this);
 
         this._unwatchWake = watchWakeAndNetwork(() => this._refreshSoon());
         this.refresh();
@@ -199,31 +202,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
         cardsItem.add_child(this._cardsBox);
         this.menu.addMenuItem(cardsItem);
 
-        // Prepaid credits, when the account has extra usage switched on. Money
-        // rather than a window: no reset, no clock caret, so it gets its own
-        // compact row instead of a card.
-        this._extraItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const extraBox = vbox({x_expand: true, style_class: 'cu-extra'});
-        extraBox.add_child(new St.Label({text: _('Extra usage'), style_class: 'cu-section-title'}));
-        this._extraLine = new St.Label({text: '', style_class: 'cu-cost'});
-        extraBox.add_child(this._extraLine);
-        this._extraItem.add_child(extraBox);
-        this.menu.addMenuItem(this._extraItem);
-        this._extraItem.visible = false;
-
-        // Status: cost line, "Updated", and the session-ping line (hidden
-        // unless pings are scheduled or have ever run).
-        const statusItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const statusBox = vbox({x_expand: true, style_class: 'cu-status'});
-        this._costLabel = new St.Label({text: '', style_class: 'cu-cost'});
-        this._updatedLabel = new St.Label({text: '', style_class: 'cu-updated'});
-        this._pingLabel = new St.Label({text: '', style_class: 'cu-updated'});
-        this._pingLabel.visible = false;
-        statusBox.add_child(this._costLabel);
-        statusBox.add_child(this._updatedLabel);
-        statusBox.add_child(this._pingLabel);
-        statusItem.add_child(statusBox);
-        this.menu.addMenuItem(statusItem);
+        // Prepaid credits, then the status block (cost, "Updated", pings).
+        this._extra = new ExtraUsageSection(this.menu);
+        this._status = new StatusSection(deps);
 
         // Waiting on you, Pause / resume, Today's sessions and the board that
         // shows them merged or tabbed, first: a permission prompt outranks
@@ -307,7 +288,12 @@ class ClaudeUsageButton extends PanelMenu.Button {
             return;
         this._refreshing = true;
         try {
-            const result = await fetchUsage(this._httpSession);
+            // The live login, read once per poll and without blocking: the
+            // usage fetch, the plan label, the warehouse key and the accounts
+            // section all answer from it.
+            const [creds, account] = await Promise.all([readLiveCredentials(), readLiveAccount()]);
+            this._live = {creds, account};
+            const result = await fetchUsage(this._httpSession, creds?.claudeAiOauth.accessToken ?? null);
             if (this._destroyed)
                 return;
             this._retry = isRetryableFailure(result);
@@ -323,7 +309,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 // the next success.
                 this._renderCards(this._latest, Date.now());
                 this._renderPanel();
-                this._updatedLabel.text = _('%s - retrying, showing the last reading').format(result.message);
+                this._status.updatedText = _('%s - retrying, showing the last reading').format(result.message);
             } else {
                 this._renderError(result.message);
             }
@@ -348,22 +334,22 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // one identical line every poll for 90 days.
         // Filed under the live login: the file is shared by every account
         // on the machine and a peak must never come from another one.
-        this._warehouseAccount = warehouseAccount(readLiveAccount());
+        this._warehouseAccount = warehouseAccount(this._live.account);
         if (moved) {
             const entry = warehouseEntry(result.cards, now, this._warehouseAccount);
             this._warehouse.push(entry);
-            appendWarehouse(entry);
+            this._warehouseWrite = this._warehouseLoaded.then(() => appendWarehouse(entry));
         }
         this._runEventCommand(detectEvents(this._latest, result.cards));
         this._latest = result.cards;
         this._samples.record(result.cards, now);
         this._renderCards(result.cards, now);
-        this._renderExtraUsage(result.extraUsage);
+        this._extra.update(result.extraUsage);
         this._renderPanel();
-        this._updatedLabel.text = _('Updated %s').format(formatClock(now));
-        this._renderPing();
+        this._status.updatedText = _('Updated %s').format(formatClock(now));
+        this._status.renderPing().catch(e => logError(e, 'claude-usage-panel: could not read the ping schedule'));
         // The usage endpoint names no plan; the live login's credentials do.
-        this._header.setPlan(planLabel(readLiveCredentials()?.claudeAiOauth));
+        this._header.setPlan(planLabel(this._live.creds?.claudeAiOauth));
     }
 
     // Each section is bounded by refreshSections' deadline, so a hung child
@@ -371,13 +357,13 @@ class ClaudeUsageButton extends PanelMenu.Button {
     // stopping every poll after it.
     async _refreshSections(result) {
         const outcomes = await refreshSections({
-            cost: () => this._refreshCost(),
+            cost: () => this._status.refreshCost(),
             waiting: () => this._sessionGroup.read('waiting'),
             pause: () => this._sessionGroup.read('pause'),
             sessions: () => this._sessionGroup.read('today'),
             awake: () => this._awake.refresh(),
             cursor: () => this._cursor.refresh(),
-            accounts: cards => this._accounts.refresh(cards),
+            accounts: cards => this._accounts.refresh(cards, this._live),
             codex: () => this._codex.refresh(),
         }, {result, latest: this._latest});
         // the session sections draw once, after all three reads
@@ -388,24 +374,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
             else if (outcome === 'timeout')
                 console.warn(`claude-usage-panel: the ${section} section is still refreshing, polling on`);
         }
-    }
-
-    // 'est.': cost is reconstructed from local logs and a price table, while
-    // the limit percentages come from the usage endpoint.
-    async _refreshCost() {
-        if (!this._settings.get_boolean('show-cost')) {
-            this._costLabel.visible = false;
-            return;
-        }
-        this._costLabel.visible = true;
-        this._costLabel.text = _('Session cost: computing…');
-        const cost = await fetchActiveCost();
-        if (this._destroyed)
-            return;
-        this._costLabel.text = cost
-            ? _('Session cost: $%s · %s tokens (est.)')
-                .format(cost.costUSD.toFixed(2), compactTokens(cost.tokens))
-            : _('Session cost: unavailable (install ccusage)');
     }
 
     // The user's own command for the two moments worth acting on: a limit
@@ -430,50 +398,6 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 logError(e, `claude-usage-panel: event command failed (${event.event})`);
             }
         }
-    }
-
-    // Prepaid credit already charged this cycle. Hidden entirely when the
-    // account has extra usage off - a disabled cap is not headroom.
-    _renderExtraUsage(extra) {
-        this._extraItem.visible = Boolean(extra);
-        if (!extra)
-            return;
-        this._extraLine.text = extra.limitAmount !== null
-            ? _('%s (%d%% of the cap)').format(extra.detail, extra.percent)
-            : extra.detail;
-        this._extraLine.style_class = `cu-cost ${severityClass(extra.severity)}`;
-    }
-
-    // ── Scheduled session pings ─────────────────────────────────────────────
-    // The 5 h window is anchored to its first message, so a ping at 05:30 is
-    // what makes the day's windows line up with the hours worked. The schedule
-    // lives in the systemd units (shared with ./install.sh sessionping); this
-    // only reports what it did and what it will do next.
-    _renderPing() {
-        const schedule = readSchedule();
-        const last = formatLastPing(readLastPing(), Date.now());
-        if (!schedule.enabled && !last) {
-            this._pingLabel.visible = false;
-            return;
-        }
-        const parts = [_('last %s').format(last || _('never'))];
-        if (schedule.enabled) {
-            const next = nextPing(schedule.times, schedule.days, Date.now());
-            if (next)
-                parts.push(_('next %s').format(next));
-        }
-        this._pingLabel.text = _('Session pings: %s').format(parts.join(' · '));
-        this._pingLabel.visible = true;
-    }
-
-    // Thin shims over lib/samples.js, which owns the history, the forecasts
-    // and the latches.
-    get _forecasts() {
-        return this._samples.forecasts;
-    }
-
-    _checkAlerts(cards) {
-        this._samples.checkAlerts(cards);
     }
 
     // The dropdown takes a share of the monitor rather than a fixed width, so
@@ -526,7 +450,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
                 this._cardsBox.add_child(widget);
             }
             widget.setCompact(compact);
-            widget.update(card, this._samples.history(card.key), this._forecasts.get(card.key),
+            widget.update(card, this._samples.history(card.key), this._samples.forecasts.get(card.key),
                 weekOverWeek(this._warehouse, card.key, now, this._warehouseAccount));
         }
         // Drop cards that disappeared.
@@ -565,7 +489,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         // warning by a forecast that runs dry before the reset) also tints
         // the label - trouble at 50%, not at 90%.
         const gauge = panelGauge(reading, card.severity,
-            this._forecasts.get(card.key)?.exhaustsBeforeReset === true);
+            this._samples.forecasts.get(card.key)?.exhaustsBeforeReset === true);
         this._panelGauge.update(gauge);
         this._panelLabel.style_class = `cu-panel-label cu-${gauge.tone}`;
     }
@@ -580,7 +504,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
         for (const [, widget] of this._cards)
             widget.destroy();
         this._cards.clear();
-        this._updatedLabel.text = message;
+        this._status.updatedText = message;
     }
 
     destroy() {
@@ -628,12 +552,10 @@ export default class ClaudeUsagePanelExtension extends Extension {
     // only place that knows the difference; auto-update.sh --status compares
     // it with the installed version and reports reloadNeeded.
     _stampLoadedVersion() {
-        try {
-            writeText(GLib.build_filenamev([stateDir(), 'loaded-version']),
-                `${this.metadata['version-name'] ?? ''}\n`);
-        } catch {
+        writeTextAsync(GLib.build_filenamev([stateDir(), 'loaded-version']),
+            `${this.metadata['version-name'] ?? ''}\n`).catch(() => {
             // a read-only state dir is not a reason to fail the enable
-        }
+        });
     }
 
     // Quit from the dropdown. Never `gnome-extensions disable`: that persists

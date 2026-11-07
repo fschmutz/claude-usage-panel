@@ -81,6 +81,7 @@ test('foldSessionLine', () => {
     assert.equal(acc.title, fix.fold.expected.title);
     assert.equal(acc.lastMs, fix.fold.expected.lastMs);
     assert.deepEqual(acc.byDay, fix.fold.expected.byDay);
+    assert.equal(acc.cacheRead, fix.fold.expected.cacheRead);
 });
 
 test('rankSessions', () => {
@@ -120,9 +121,6 @@ for (const c of fix.resume) {
 for (const c of fix.compactTokens) {
     test(`pure.js compactTokens - ${c.n}`, () => {
         assert.equal(pure.compactTokens(c.n), c.expected);
-    });
-    test(`statusline.js formatTokens - ${c.n}`, () => {
-        assert.equal(statusline.formatTokens(c.n), c.expected);
     });
 }
 
@@ -361,6 +359,34 @@ test('the sessions segment names the biggest spender of the day', () => {
     const out = statusline.sessionsSegment({nowMs: NOW, readFile: () => JSON.stringify(index)});
     assert.ok(out.includes('BIG'), out);
     assert.ok(out.includes('900.0k'), out);
+});
+
+test('the sessions segment ranks like the panels: equal tokens, the latest turn wins', () => {
+    // rankSessions breaks a token tie on lastMs; a private sort kept file order.
+    const day = pure.localDay(NOW);
+    const index = {version: 1, files: {
+        a: {sessionId: 'A', title: 'OLDER', lastMs: NOW - 7_200_000, byDay: {[day]: 5000}},
+        b: {sessionId: 'B', title: 'NEWER', lastMs: NOW - 60_000, byDay: {[day]: 5000}},
+    }};
+    const out = statusline.sessionsSegment({nowMs: NOW, readFile: () => JSON.stringify(index)});
+    assert.ok(out.includes('NEWER'), out);
+});
+
+test('the sessions segment prints no control character from a title or a cwd', () => {
+    // An OSC 52 sequence in a custom title would write the terminal clipboard.
+    const day = pure.localDay(NOW);
+    const osc = `\u001b]52;c;ZXZpbA==\u0007`;
+    for (const entry of [
+        {sessionId: 'A', title: `x${osc}y`, byDay: {[day]: 10}},
+        {sessionId: 'A', cwd: `/home/u/p${osc}q`, byDay: {[day]: 10}},
+    ]) {
+        const out = statusline.sessionsSegment({
+            nowMs: NOW, readFile: () => JSON.stringify({version: 1, files: {a: entry}}),
+        });
+        const visible = out.replace(/\u001b\[[0-9;]*m/g, '');
+        assert.doesNotMatch(visible, /[\u0000-\u001f\u007f-\u009f]/, JSON.stringify(visible));
+        assert.match(visible, /▸ /);
+    }
 });
 
 test('the sessions segment is silent without an index', () => {

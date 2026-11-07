@@ -5,14 +5,9 @@
 // terminal closed by mistake: nine sessions across nine repos come back with
 // one command instead of nine `cd … && claude --resume …`.
 //
-// The truth source is Claude Code's own live-session registry,
-// <claude dir>/sessions/<pid>.json, which carries the CURRENT session id (it
-// moves on /clear, so the `--resume` id a process was started with can be
-// stale), the cwd and the name. A registry file outlives a crash, so every
-// entry is checked against the process table: on Linux the kernel start time
-// in /proc/<pid>/stat must equal the entry's `procStart`, which also rejects a
-// pid recycled by an unrelated process; elsewhere the pid must be alive and
-// running a `claude` command line.
+// Which sessions are running is registry.js (Claude Code's live-session
+// registry checked against the process table); openTabs exposes it as is, and
+// adds what only snapshotting and reopening need.
 //
 // Snapshots live one JSON file per label under <state dir>/tabs/. `autosave`
 // is what the scheduled job runs: it writes an `auto-…` snapshot only when the
@@ -32,13 +27,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
-import {projectsDir, sessionRegistryDir, tabsDir} from './paths.js';
+import {nowOf, projectsDir, tabsDir, transcriptPath} from './paths.js';
+import {readJSON, writePrivate} from './private-fs.js';
+import {openRegistry} from './registry.js';
 import {launchSteps, resolveTerminal, sessionFreeEnv} from './terminals.js';
 import {onPath, query, toolEnv} from './tools.js';
 import {captureLayout} from './layout.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
-import {PAUSE_RESUME_GUARD, resumeProtocolText} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {
+  PAUSE_RESUME_GUARD, resumeProtocolText,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause-protocol.js';
+import {cleanPauseText} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
 import {resetHint} from './stamps.js';
 
 /** Autosaves kept by default: 48 half-hourly runs = one day of history. */
@@ -46,49 +46,6 @@ export const AUTO_KEEP = 48;
 const LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 export const isValidLabel = (label) => typeof label === 'string' && LABEL_RE.test(label);
-
-/** Claude Code's transcript for a session: projects/<cwd, every non
- *  alphanumeric turned into '-'>/<id>.jsonl. */
-export function transcriptPath(projects, cwd, sessionId) {
-  return path.join(projects, cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sessionId}.jsonl`);
-}
-
-const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CLI_JS_RE = /(^|\/)@anthropic-ai\/claude-code\/cli\.m?js$/;
-
-/** A /proc cmdline's arguments to claude, or null when it is not claude:
- *  the native binary (`claude ...`) or an npm install run by its interpreter
- *  (`node .../@anthropic-ai/claude-code/cli.js ...`). */
-function claudeArgs(argv) {
-  const bin = path.basename(argv[0] ?? '');
-  if (bin === 'claude') return argv.slice(1);
-  if (/^(node|nodejs|bun)$/.test(bin) && (path.basename(argv[1] ?? '') === 'claude' || CLI_JS_RE.test(argv[1] ?? ''))) {
-    return argv.slice(2);
-  }
-  return null;
-}
-
-/** The value of a flag in `--flag V`, `--flag=V` or `-f V` form, or null.
- *  A value is optional for some flags (`-r` alone opens the picker), so a
- *  following argument that is itself a flag is not the value. */
-export function flagValue(args, long, short) {
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a.startsWith(`${long}=`)) return a.slice(long.length + 1) || null;
-    if (a === long || a === short) {
-      const v = args[i + 1];
-      return v && !v.startsWith('-') ? v : null;
-    }
-  }
-  return null;
-}
-
-/** The session id a claude process resumed, or null: `--resume` also takes
- *  a search term for the picker, which names no session. */
-function resumeIdOf(args) {
-  const v = flagValue(args, '--resume', '-r');
-  return v && SESSION_ID_RE.test(v) ? v : null;
-}
 
 /** One line saying what launch() opened (or would): `n` sessions. */
 export function describeLaunch({how, terminal, windows, tmuxSessions}, n) {
@@ -148,7 +105,7 @@ export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = '', c
   const hint = resetHint(new Date(nowMs).toISOString(), savedAt);
   const ago = hint && hint !== '0m' ? hint : 'moments';
   // A session paused with `claudectl session pause` wrote a checkpoint: the
-  // RESUME PROTOCOL (lib/pure/pause.js) replaces the generic three steps.
+  // RESUME PROTOCOL (lib/pure/pause-protocol.js) replaces the generic three steps.
   const steps = checkpoint ? `${resumeProtocolText(checkpoint, leftovers)}\n\n`
     : '1. Re-read the end of this conversation: my last request, what you finished, what was ' +
       'still running or waiting.\n' +
@@ -171,18 +128,25 @@ export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = '', c
  * running, reachable by name through peer messaging. Sessions sharing one
  * working tree are named, since a commit, stash, branch switch or rebase by
  * one lands in the others' tree. '' when the session is alone.
+ *
+ * The names and directories are OTHER sessions' (a registry file, a
+ * snapshot), and on macOS this text is TYPED into the new tab: a control
+ * character in one (a newline, ^C, an escape) would act on the terminal
+ * before claude reads it. Each is cleaned with the pure cleanPauseText
+ * (C0, DEL and C1 become spaces) before it is written in.
  * @param {{name: string, cwd: string}[]} peers every session, this one included
  */
 export function peersNote(peers, homedir = '') {
   if (peers.length < 2) return '';
-  const short = (cwd) => (homedir && (cwd === homedir || cwd.startsWith(`${homedir}/`))
+  const clean = (v) => cleanPauseText(String(v ?? '')) ?? '';
+  const short = (cwd) => clean(homedir && (cwd === homedir || cwd.startsWith(`${homedir}/`))
     ? `~${cwd.slice(homedir.length)}` : cwd);
   const byCwd = new Map();
-  for (const p of peers) byCwd.set(p.cwd, [...(byCwd.get(p.cwd) ?? []), p.name]);
+  for (const p of peers) byCwd.set(p.cwd, [...(byCwd.get(p.cwd) ?? []), clean(p.name)]);
   const shared = [...byCwd].filter(([, names]) => names.length > 1)
     .map(([cwd, names]) => `${names.join(', ')} share the working tree ${short(cwd)}: tell the ` +
       'others before you commit, stash, switch branch or rebase there.\n');
-  return `You are not alone: ${peers.map((p) => `${p.name} (${short(p.cwd)})`).join(', ')} are up ` +
+  return `You are not alone: ${peers.map((p) => `${clean(p.name)} (${short(p.cwd)})`).join(', ')} are up ` +
     'too, each in its own session and reachable by name (ListAgents, SendMessage). When your ' +
     'work touches theirs, coordinate with them directly - ask, hand over, split the work; you do ' +
     'not need me in the middle for that.\n' + shared.join('') + '\n';
@@ -196,181 +160,20 @@ export function stampLabel(ms) {
     `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-function readJSON(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Bind the tab operations to one environment. io (all optional):
  * homedir, env, platform, nowMs, pid, procDir, exec (execFileSync), spawn.
+ * The registry's operations (liveSessions, sessionOfPid, selfPid, ...) come
+ * with it, so `claudectl session` needs one handle.
  */
 export function openTabs(io = {}) {
   const platform = () => io.platform ?? process.platform;
-  const procDir = () => io.procDir ?? '/proc';
   const exec = (...a) => (io.exec ?? execFileSync)(...a);
-  const now = () => (io.nowMs ? io.nowMs() : Date.now());
+  const now = () => nowOf(io);
   const store = () => tabsDir(io);
 
-  // Kernel start time (field 22) of a pid; comm (field 2) may hold spaces
-  // and parens, so split after the LAST ')'.
-  function procStart(pid) {
-    try {
-      const stat = fs.readFileSync(path.join(procDir(), String(pid), 'stat'), 'utf8');
-      return stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19] ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  function isAlive(entry) {
-    if (platform() === 'linux') return procStart(entry.pid) === String(entry.procStart);
-    try {
-      const cmd = exec('ps', ['-o', 'command=', '-p', String(entry.pid)],
-        {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']});
-      return /(^|\/)claude(\s|$)|(^|\/)@anthropic-ai\/claude-code\/cli\.m?js(\s|$)/.test(cmd.trim());
-    } catch {
-      return false;
-    }
-  }
-
-  /** The live registry row of one claude pid ({session_id, cwd, name,
-   *  status, pid}), or null when the pid has no registry file or is dead:
-   *  one file and one liveness check, cheap enough for a poll. */
-  function sessionOfPid(pid) {
-    if (!Number.isInteger(pid) || pid <= 0) return null;
-    const d = readJSON(path.join(sessionRegistryDir(io), `${pid}.json`));
-    if (!d || d.pid !== pid || !d.sessionId || !isAlive(d)) return null;
-    return {
-      name: d.name || path.basename(d.cwd ?? ''), cwd: d.cwd ?? '', session_id: d.sessionId, pid,
-      status: d.status ?? '', startedAt: d.startedAt ?? null,
-    };
-  }
-
-  /** Running interactive sessions, oldest first: the registry, plus the
-   *  terminal-attached `claude --resume <id>` processes it does not know
-   *  (status "unregistered", after the registered ones). */
-  function liveSessions() {
-    const rows = registeredSessions();
-    const known = new Set(rows.map((r) => r.session_id));
-    const pids = new Set(rows.map((r) => r.pid));
-    for (const p of claudeProcesses()) {
-      if (!p.tty || !p.resumeId || !p.cwd || known.has(p.resumeId) || pids.has(p.pid)) continue;
-      known.add(p.resumeId);
-      rows.push({
-        name: p.name || path.basename(p.cwd), cwd: p.cwd, session_id: p.resumeId, pid: p.pid,
-        status: 'unregistered', startedAt: Number.MAX_SAFE_INTEGER,
-      });
-    }
-    return rows;
-  }
-
-  function registeredSessions() {
-    let files;
-    try {
-      files = fs.readdirSync(sessionRegistryDir(io)).filter((f) => f.endsWith('.json'));
-    } catch {
-      return [];
-    }
-    const rows = [];
-    for (const f of files) {
-      const d = readJSON(path.join(sessionRegistryDir(io), f));
-      if (!d || d.kind !== 'interactive' || !d.pid || !d.sessionId || !d.cwd) continue;
-      if (!isAlive(d)) continue;
-      rows.push({
-        name: d.name || path.basename(d.cwd),
-        cwd: d.cwd,
-        session_id: d.sessionId,
-        pid: d.pid,
-        status: d.status ?? '',
-        startedAt: d.startedAt ?? 0,
-      });
-    }
-    return rows.sort((a, b) => a.startedAt - b.startedAt);
-  }
-
-  /** Every live `claude` process (Linux: /proc), native or npm-installed
-   *  (claudeArgs): its resumed session id (--resume/-r), --name, cwd, and whether it has a terminal. The registry
-   *  is not the whole truth: a session launched as another session's child,
-   *  or still at a startup prompt, never writes its registry file, and
-   *  autosave went on reporting "unchanged" with eight of them open. */
-  function claudeProcesses() {
-    if (platform() !== 'linux') return [];
-    let pids;
-    try {
-      pids = fs.readdirSync(procDir()).filter((d) => /^\d+$/.test(d));
-    } catch {
-      return [];
-    }
-    const out = [];
-    for (const pid of pids) {
-      const dir = path.join(procDir(), pid);
-      let argv;
-      try {
-        argv = fs.readFileSync(path.join(dir, 'cmdline'), 'utf8').split('\0');
-      } catch {
-        continue;
-      }
-      const args = claudeArgs(argv);
-      if (!args) continue;
-      let cwd = null;
-      try {
-        cwd = fs.readlinkSync(path.join(dir, 'cwd'));
-      } catch {
-        cwd = null;
-      }
-      let tty = false;
-      try {
-        const stat = fs.readFileSync(path.join(dir, 'stat'), 'utf8');
-        tty = Number(stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[4]) !== 0;
-      } catch {
-        tty = false;
-      }
-      out.push({pid: Number(pid), resumeId: resumeIdOf(args), name: flagValue(args, '--name', '-n'), cwd, tty});
-    }
-    return out;
-  }
-
-  /** Terminal-attached claude processes that are neither registered nor
-   *  resumed from a known id: running, but impossible to snapshot. */
-  function unaccounted() {
-    const registered = new Set(registeredSessions().map((r) => r.pid));
-    return claudeProcesses().filter((p) => p.tty && !p.resumeId && !registered.has(p.pid));
-  }
-
-  // The parent of a pid: /proc on Linux, `ps` elsewhere (macOS has no
-  // /proc). 0 when it cannot be read.
-  function parentPid(pid) {
-    try {
-      if (platform() === 'linux') {
-        const status = fs.readFileSync(path.join(procDir(), String(pid), 'status'), 'utf8');
-        return Number(/^PPid:\s*(\d+)/m.exec(status)?.[1] ?? 0);
-      }
-      return Number(String(exec('ps', ['-o', 'ppid=', '-p', String(pid)],
-        {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']})).trim()) || 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  /** The live session this process runs under, or null - lets `list` mark
-   *  it and `save --exclude-self` drop it. Claude Code names it in
-   *  CLAUDE_PID for every command it runs, on every platform; without that
-   *  (a terminal of its own), walk the parent chain. */
-  function selfPid(live) {
-    const pids = new Set(live.map((r) => r.pid));
-    const named = Number((io.env ?? process.env).CLAUDE_PID);
-    if (pids.has(named)) return named;
-    let pid = io.pid ?? process.pid;
-    for (let hops = 0; pid > 1 && hops < 64; hops++) {
-      if (pids.has(pid)) return pid;
-      pid = parentPid(pid);
-    }
-    return null;
-  }
+  const registry = openRegistry(io);
+  const {liveSessions, claudeProcesses, selfPid, unaccounted} = registry;
 
   /** Why a stored row cannot be resumed here, or null when it can. */
   function blocker(row) {
@@ -426,10 +229,7 @@ export function openTabs(io = {}) {
         window === undefined ? {name, cwd, session_id} : {name, cwd, session_id, window, tab})),
     };
     const file = path.join(store(), `${label}.json`);
-    fs.mkdirSync(store(), {recursive: true, mode: 0o700});
-    const tmp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, `${JSON.stringify(snap, null, 2)}\n`, {mode: 0o600});
-    fs.renameSync(tmp, file);
+    writePrivate(file, `${JSON.stringify(snap, null, 2)}\n`);
     return {label, file, ...snap};
   }
 
@@ -526,7 +326,6 @@ export function openTabs(io = {}) {
   }
 
   return {
-    liveSessions, sessionOfPid, procStart, unaccounted, selfPid, blocker, snapshots, resolve, save, autosave, purge,
-    plan, launch,
+    ...registry, blocker, snapshots, resolve, save, autosave, purge, plan, launch,
   };
 }

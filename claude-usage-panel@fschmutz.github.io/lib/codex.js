@@ -18,24 +18,23 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
-// eslint-disable-next-line no-restricted-imports -- backlog: Codex profiles, GNOME review row 10
-import {listChildrenAsync, readJSON, writeText} from './fs.js';
+import {listChildrenAsync, readJSONAsync, writeTextAsync} from './fs.js';
 import {stateDir} from './paths.js';
 import {
-    CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexSwitch,
+    CODEX_PROFILE_VERSION, activeCodexName, codexIdentity, codexSummary, codexSwitchAsync,
     codexTokenState, isValidName, parseCodexProfile, pickRecordedCodexUsage, sameJSON,
     scanCodexSessionsAsync,
 } from './pure.js';
 
-// The transcript scan runs on the shell's main loop: every call on the way is
-// the async variant (promisified once, in fs.js), so a tree of thousands of
-// rollouts never stalls a frame (the directory walk is fs.js listChildrenAsync).
+// Everything here runs on the shell's main loop: every call on the way is the
+// async variant (promisified once, in fs.js), so neither the store nor a tree
+// of thousands of rollouts ever stalls a frame.
 
 /** Tail of a session transcript read when looking for the last rate-limit
  *  snapshot: the newest events are at the end of a rollout file. */
 const SESSION_TAIL_BYTES = 256 * 1024;
 
-const writePrivate = (path, text) => writeText(path, text, {mode: 0o600});
+const writePrivate = (path, text) => writeTextAsync(path, text, {mode: 0o600});
 
 /** The codex CLI's config dir - follows CODEX_HOME, as every port does. */
 function codexHome() {
@@ -60,83 +59,63 @@ function profilePath(name) {
 }
 
 /** Every valid saved Codex login, by name in code-point order. */
-function listCodexProfiles() {
-    const dir = Gio.File.new_for_path(codexAccountsDir());
-    let children;
-    try {
-        children = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null); // eslint-disable-line no-restricted-properties -- backlog: the Codex profile list moves to async (GNOME review row 10)
-    } catch {
-        return [];
-    }
+async function listCodexProfiles() {
+    const dir = codexAccountsDir();
+    const names = (await listChildrenAsync(dir, 'standard::name', info => info.get_name()))
+        .filter(file => file.endsWith('.json') && !file.startsWith('.'));
     const out = [];
-    let info;
-    while ((info = children.next_file(null)) !== null) { // eslint-disable-line no-restricted-properties -- backlog: the Codex profile list moves to async (GNOME review row 10)
-        const file = info.get_name();
-        if (!file.endsWith('.json') || file.startsWith('.'))
-            continue;
-        const profile = parseCodexProfile(
-            readJSON(GLib.build_filenamev([codexAccountsDir(), file])), isValidName);
+    for (const file of names) {
+        const profile = parseCodexProfile(await readJSONAsync(GLib.build_filenamev([dir, file])), isValidName);
         if (profile && `${profile.name}.json` === file)
             out.push(profile);
     }
     return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
-function readCodexProfile(name) {
+async function readCodexProfile(name) {
     if (!isValidName(name))
         return null;
-    const profile = parseCodexProfile(readJSON(profilePath(name)), isValidName);
+    const profile = parseCodexProfile(await readJSONAsync(profilePath(name)), isValidName);
     return profile?.name === name ? profile : null;
 }
 
-function writeCodexProfile(profile) {
+async function writeCodexProfile(profile) {
     const clean = parseCodexProfile(profile, isValidName);
     if (!clean)
         throw new Error('not a valid Codex profile');
-    writePrivate(profilePath(clean.name), `${JSON.stringify(clean, null, 2)}\n`);
+    await writePrivate(profilePath(clean.name), `${JSON.stringify(clean, null, 2)}\n`);
     return clean;
 }
 
 /** The auth.json the codex CLI holds right now, or null. */
-function readLiveCodexAuth() {
-    const auth = readJSON(codexAuthPath());
+async function readLiveCodexAuth() {
+    const auth = await readJSONAsync(codexAuthPath());
     return auth && typeof auth === 'object' && !Array.isArray(auth) ? auth : null;
 }
 
-/** Which saved profile the live Codex login is, or null. */
-function liveCodexName() {
-    return activeCodexName(listCodexProfiles(), readLiveCodexAuth());
-}
-
-/** Save `auth` (the live login, as read once) under `name`. */
-function snapshotLiveCodex(name, auth = readLiveCodexAuth()) {
+/**
+ * Write the live login back into its own profile, so the tokens the codex CLI
+ * rotated since the last switch are the ones we keep. `known` ({profiles,
+ * auth}) is a listing and a live read the caller already made: nothing is
+ * read twice. Returns the live profile's name, the auth.json it read, and the
+ * profiles with the one it wrote replaced.
+ */
+async function syncBackLiveCodex(known = null) {
+    const auth = known ? known.auth : await readLiveCodexAuth();
     if (!auth)
-        throw new Error('no Codex login to save - run `codex login` first');
-    return writeCodexProfile({
-        version: CODEX_PROFILE_VERSION, name, savedAt: new Date().toISOString(), auth,
-    });
-}
-
-/** syncBackCodex, also returning the auth.json it read (and saved). */
-function syncBackLiveCodex() {
-    const auth = readLiveCodexAuth();
-    if (!auth)
-        return {name: null, auth: null};
-    const profiles = listCodexProfiles();
+        return {name: null, auth: null, profiles: known?.profiles ?? []};
+    const profiles = known ? known.profiles : await listCodexProfiles();
     const name = activeCodexName(profiles, auth);
     if (!name)
-        return {name: null, auth};
+        return {name: null, auth, profiles};
     const stored = profiles.find(p => p.name === name);
     // The blob read above, never a second read: the CLI may rotate in between.
-    if (!stored || !sameJSON(stored.auth, auth))
-        snapshotLiveCodex(name, auth);
-    return {name, auth};
-}
-
-/** Write the live login back into its own profile, so the tokens the codex CLI
- *  rotated since the last switch are the ones we keep. */
-export function syncBackCodex() {
-    return syncBackLiveCodex().name;
+    if (stored && sameJSON(stored.auth, auth))
+        return {name, auth, profiles};
+    const written = await writeCodexProfile({
+        version: CODEX_PROFILE_VERSION, name, savedAt: new Date().toISOString(), auth,
+    });
+    return {name, auth, profiles: profiles.map(p => (p.name === name ? written : p))};
 }
 
 /**
@@ -144,12 +123,12 @@ export function syncBackCodex() {
  * profile first; an unsaved live login is refused rather than overwritten, and
  * a token the codex CLI rotates mid-switch is synced, not lost (codexSwitch).
  */
-export function switchCodexTo(name) {
-    const target = readCodexProfile(name);
+export async function switchCodexTo(name) {
+    const target = await readCodexProfile(name);
     if (!target)
         throw new Error(`no saved Codex account named ${name}`);
-    const r = codexSwitch(name, {
-        syncBack: syncBackLiveCodex,
+    const r = await codexSwitchAsync(name, {
+        syncBack: () => syncBackLiveCodex(),
         readLive: readLiveCodexAuth,
         write: () => writePrivate(codexAuthPath(), `${JSON.stringify(target.auth, null, 2)}\n`),
     });
@@ -233,15 +212,17 @@ export async function recordedCodexUsage(nowMs) {
     return pickRecordedCodexUsage(files, nowMs ?? Date.now());
 }
 
-/** Every saved Codex login with the active one marked, plus the summaries.
- *  Read-only; the section runs syncBackCodex() before it, as every port's
- *  panel refresh does. */
-export function listCodexAccounts(nowMs = Date.now()) {
-    const profiles = listCodexProfiles();
-    const active = liveCodexName();
+/**
+ * Every saved Codex login with the active one marked, plus the summaries,
+ * after writing the live login back into its profile (the codex CLI rotates
+ * its tokens as it runs). The store is listed once and auth.json read once.
+ */
+export async function readCodexAccounts(nowMs = Date.now()) {
+    const [profiles, live] = await Promise.all([listCodexProfiles(), readLiveCodexAuth()]);
+    const synced = await syncBackLiveCodex({profiles, auth: live});
     return {
-        active,
-        accounts: profiles.map(p => ({...codexSummary(p, nowMs), active: p.name === active})),
-        live: readLiveCodexAuth(),
+        active: synced.name,
+        accounts: synced.profiles.map(p => ({...codexSummary(p, nowMs), active: p.name === synced.name})),
+        live,
     };
 }

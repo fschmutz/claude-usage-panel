@@ -127,6 +127,7 @@ export const Gio = {
     _promisify: () => {},
     FileEnumerator: {prototype: {}},
     InputStream: {prototype: {}},
+    OutputStream: {prototype: {}},
     File: {new_for_path: fileFor, prototype: {}},
     FileQueryInfoFlags: {NONE: 0},
     FileCreateFlags: {NONE: 0},

@@ -94,18 +94,22 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── pings.js    # session-window planner
     │   ├── sessions.js # ping stamps, transcript fold, ranking, resume command, terminals
     │   ├── accounts.js # named-account rules, Keychain item names, the auto-switch
+    │   ├── accountStore.js # the store's step ORDER (sync back, refresh lock, pending mark, rename journal), run by both JS ports
     │   ├── notices.js  # account health, inline notices, button outcomes, switch rotation
     │   ├── codex.js    # named OpenAI Codex logins
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   ├── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     │   ├── waiting.js  # waiting-on-you list: hook events, markers, age, focus plan
-    │   ├── pause.js    # pause / resume: request, delivery and verdict shapes, row state, the protocol texts
+    │   ├── pause.js    # pause / resume: request, delivery and verdict shapes, row state, waiter ownership
+    │   ├── pause-protocol.js # the PAUSE / RESUME protocol texts a session receives (Node-only prose)
     │   ├── leftovers.js# what a session left running: job vs harness, redaction, grouping (Node-only)
     │   ├── board.js    # the session board: waiting + pause + today's sessions joined per session id
-    │   └── awake.js    # keep-awake: session math, the battery/thermal floors, the recovery journal, every platform argv
+    │   ├── awake.js    # keep-awake: session math, the battery/thermal floors, the recovery journal
+    │   ├── awake-power.js # keep-awake platform half: the four sudo commands, every argv, pmset/sysfs/thermal parsing
+    │   └── json.js     # strict JSON-type reads (num, isObject) every pure module shares
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
     ├── claudeUsage.js  # /oauth/usage fetch (live or saved token)
-    ├── accounts.js     # the account store's GJS I/O
+    ├── accounts.js     # the account store's GJS port (Gio async) for pure/accountStore.js
     ├── accountsSection.js # the dropdown's Accounts rows
     ├── noticeRow.js    # one inline notice row: severity dot, sentence, one repair button
     ├── panelGauge.js   # the top bar's live gauge (Cairo over pure panelGauge)
@@ -128,7 +132,9 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── samples.js      # the per-limit sample history, the forecasts and the alert latches
     ├── sessionPing.js  # reads/writes the systemd units + the last-ping stamp
     ├── sessionPingUnit.js # the unit text itself (pure, shared with install.sh)
-    ├── snapshots.js    # reads the claudectl snapshot store for the preferences
+    ├── snapshots.js    # reads the claudectl snapshot store (async), for Reopen and the preferences
+    ├── claudectl.js    # runClaudectl: find the CLI, run it, notify a refusal in its own words
+    ├── statusSection.js # the extra-usage row and the status block (cost, Updated, session pings)
     ├── savedSessions.js # the header's Reopen + Save buttons over claudectl session
     ├── warehouse.js    # the 90-day history file I/O
     ├── usageCard.js    # one limit row of the dropdown
@@ -150,6 +156,7 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── CursorModel.swift         # Cursor spend math
     │   ├── Accounts.swift            # named-account rules
     │   ├── AccountRename.swift       # rename rules (renameRefusal, renameKey)
+    │   ├── LiveLogin.swift           # parseCredentials + countClaudeProcesses
     │   ├── Notices.swift             # account health, inline notices, button outcomes, rotation
     │   ├── Codex.swift               # named OpenAI Codex logins (twin of pure/codex.js)
     │   ├── Warehouse.swift           # the 90-day history rules
@@ -170,7 +177,12 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
     │   ├── Countdown.swift           # the "Resets in 3h 05m" countdown + sparkline
     │   ├── PlanLabel.swift           # header plan label from the credentials (twin of pure/usage.js planLabel, pinned by tests/fixtures/plan-label.json)
     │   ├── Awake.swift               # keep-awake session math, state and recovery journal (twin of pure/awake.js)
-    │   └── AwakePower.swift          # the floors' platform half and every awake command (same twin, split for the 700-line ceiling)
+    │   ├── AwakePower.swift          # the floors' platform half and every awake command (twin of pure/awake-power.js)
+    │   ├── PollSections.swift        # the sections after each poll: sectionCards + the deadline (twin of pure/poll.js)
+    │   ├── ExclusiveLock.swift       # the shared lock-file protocol's decisions (twin of claude-code/excl-lock.js)
+    │   ├── Setting.swift             # @Setting: one preference straight through UserDefaults
+    │   ├── Shell.swift               # the one way the app runs a child process, with a deadline
+    │   └── PrivateFile.swift         # the one 0600 atomic write both credential stores use
     └── ClaudeUsagePanel/
         ├── ClaudeUsagePanelApp.swift # the App + MenuBarExtra scene, palette
         ├── UsageModel.swift          # the view model
@@ -203,22 +215,26 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── LaunchAgent.swift         # what the two launchd agents share
         ├── LoginItem.swift           # start at login (SMAppService)
         ├── Updates.swift             # update status for Settings
-        ├── UpdateState.swift         # when to re-check it
-        └── Shell.swift               # the one way the app runs a child process
+        └── UpdateState.swift         # when to re-check it
 
 claude-code/            # the Node clients' I/O over lib/pure/ (installed with it under ~/.claude/claude-usage-panel/)
 ├── statusline.js       # status line: renders from Claude Code's stdin - no network
-├── transcript-tokens.js# a transcript's token totals + their incremental on-disk cache
+├── transcript-tokens.js# a transcript's token totals (the pure session fold) + their incremental on-disk cache
+├── jsonl-tail.js       # the one incremental JSONL reader: transcript totals and the MCP session index
 ├── pace.js             # the shared sample history + withPace (the math is pure/pace.js)
 ├── stamps.js           # the compact "3h06m" reset countdown (over pure/usage.js resetParts)
 ├── paths.js            # every state/cache/config path, derived from one `io`
 ├── accounts.js         # openStore(io): the account store - list, save, switch
 ├── accounts-usage.js   # a saved login's usage: token, locked refresh, fetch, usage cache
-├── private-fs.js       # 0600 JSON read/write shared by the account and Codex stores
+├── private-fs.js       # readJSON + writeAtomic: the one atomic write (stores, scratch files, settings edits)
+├── excl-lock.js        # the one lock-file mutex: owner token, stale takeover by rename (awake, refresh, pause)
+├── procs.js            # /proc/<pid>/stat, pid liveness, the one "is this claude" test, pid identity
+├── registry.js         # openRegistry(io): live sessions from Claude Code's registry, checked against procs
+├── is-main.js          # isMain(import.meta.url): the run-when-executed guard of every entry point
 ├── codex.js            # openCodexStore(io): saved Codex logins + what the CLI recorded
 ├── login-usage.js      # which login's usage, and how its auth failure is labelled
-├── tabs.js             # openTabs(io): running sessions, snapshots, autosave, the launch
-├── close.js            # claudectl session close: SIGTERM claude, SIGHUP its tab's shells
+├── tabs.js             # openTabs(io): the registry plus snapshots, autosave, the launch
+├── close.js            # claudectl session close: SIGTERM claude, SIGHUP its tab's shells, pids re-checked before each signal
 ├── terminals.js        # the panels' terminal setting + how each terminal gets a tab per session
 ├── layout.js           # which window and tab each session sits in (tmux, kitty, WezTerm, iTerm, Terminal.app)
 ├── gnome-terminal.js   # the windows and tab order `session open` created there; focus selects the tab
@@ -264,6 +280,7 @@ scripts/lib.sh          # log/say/die/lock, shared by the two standalone workers
 scripts/pack-gnome.sh   # assemble the extension dir (install.sh gnome + the release zip)
 scripts/json-edit.mjs   # the one JSON reader/writer install.sh drives
 scripts/install/hooks-edit.mjs # merge/drop the waiting hooks in settings.json
+scripts/lib/json-file.mjs # load / follow symlinks / atomic mode-keeping save, shared by both editors
 scripts/version-sites.sh# every place the version is written, read by bump + check
 ```
 

@@ -1,13 +1,33 @@
 // lib/pure/poll.js: the section refresh that runs after every poll, failed
-// or not, each section bounded by its deadline. GNOME only, no fixture.
+// or not, each section bounded by its deadline. sectionCards and the deadline
+// are pinned by tests/fixtures/poll.json, shared with the Swift
+// PollSectionsTests.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 import {
     refreshSections, sectionCards, SECTION_DEADLINE_MS,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 // ── The sections a poll refreshes ───────────────────────────────────────────
+
+const pollFix = JSON.parse(
+    fs.readFileSync(
+        path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'poll.json'),
+        'utf8'));
+
+test('the section deadline is part of the pinned contract', () => {
+    assert.equal(SECTION_DEADLINE_MS, pollFix.sectionDeadlineMs);
+});
+
+for (const c of pollFix.sections) {
+    test(`sectionCards - ${c.name}`, () => {
+        assert.deepEqual(sectionCards(c.result, c.latest), c.expected);
+    });
+}
 
 const CARDS = [{key: 'session', percent: 40}];
 const LATEST = [{key: 'session', percent: 38}];

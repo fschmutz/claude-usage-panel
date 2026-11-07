@@ -52,16 +52,9 @@ test('the header tells the truth about the checksum', () => {
 });
 
 // The cask's version line has one parser, scripts/version-sites.sh, shared by
-// bump-version and check-versions. A private sed in the release scripts drifts
-// from it the day the cask layout changes.
-test('make-cask and publish-cask read the cask version through version-sites.sh', () => {
-    for (const script of ['scripts/make-cask.sh', 'scripts/publish-cask.sh']) {
-        const src = read(script);
-        assert.match(src, /version-sites\.sh"/, `${script} sources version-sites.sh`);
-        assert.match(src, /version_site_read "\$(cask|CASK)" cask version/, `${script} reads via the helper`);
-        assert.doesNotMatch(src, /\^ {2}version/, `${script} has no private cask version regex`);
-    }
-});
+// bump-version and check-versions. That make-cask goes through it is asserted
+// by running it below (a layout the parser does not know is refused); the
+// same for publish-cask in tests/ci-release.test.js (a version mismatch).
 
 /** A throwaway checkout holding just what make-cask.sh touches. */
 function caskRoot(t, versionLine) {

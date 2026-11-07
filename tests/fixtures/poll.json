@@ -146,5 +146,57 @@
     "http_error": false,
     "no_token": false,
     "parse_error": false
-  }
+  },
+  "sectionDeadlineMs": 90000,
+  "sectionsComment": "The cards the sections that refresh after every poll (the accounts' auto-switch and usage cache above all) treat as the live login's usage. Pinned for lib/pure/poll.js sectionCards and Swift PollSections.sectionCards.",
+  "sections": [
+    {
+      "name": "a good poll hands over the fresh cards",
+      "result": {"ok": true, "cards": [{"key": "session", "percent": 40}]},
+      "latest": [{"key": "session", "percent": 38}],
+      "expected": [{"key": "session", "percent": 40}]
+    },
+    {
+      "name": "a transient failure keeps the last reading",
+      "result": {"ok": false, "code": "transient"},
+      "latest": [{"key": "session", "percent": 38}],
+      "expected": [{"key": "session", "percent": 38}]
+    },
+    {
+      "name": "a dropped connection keeps the last reading, like a not-now status",
+      "result": {"ok": false, "code": "network_error"},
+      "latest": [{"key": "session", "percent": 38}],
+      "expected": [{"key": "session", "percent": 38}]
+    },
+    {
+      "name": "a transient failure with no reading yet has none to keep",
+      "result": {"ok": false, "code": "transient"},
+      "latest": [],
+      "expected": []
+    },
+    {
+      "name": "an expired login drops the last reading",
+      "result": {"ok": false, "code": "auth_expired"},
+      "latest": [{"key": "session", "percent": 38}],
+      "expected": []
+    },
+    {
+      "name": "no token drops the last reading",
+      "result": {"ok": false, "code": "no_token"},
+      "latest": [{"key": "session", "percent": 38}],
+      "expected": []
+    },
+    {
+      "name": "a refusal drops the last reading",
+      "result": {"ok": false, "code": "forbidden"},
+      "latest": [{"key": "session", "percent": 38}],
+      "expected": []
+    },
+    {
+      "name": "an unreadable answer drops the last reading",
+      "result": {"ok": false, "code": "parse_error"},
+      "latest": [{"key": "session", "percent": 38}],
+      "expected": []
+    }
+  ]
 }

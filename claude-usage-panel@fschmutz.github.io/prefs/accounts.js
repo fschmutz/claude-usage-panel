@@ -108,22 +108,28 @@ export function buildAccountsGroups(prefs, settings, page) {
                 errorRow.title = e.message;
                 errorRow.visible = true;
             }
-            renderAccounts();
+            await renderAccounts();
         };
         apply.connect('clicked', () => rename().catch(logError));
         entry.connect('activate', () => rename().catch(logError));
         return button;
     };
-    const renderAccounts = () => {
+    // The store reads are async; a later render supersedes an earlier one
+    // still in flight, and a closed window is never drawn into.
+    let generation = 0;
+    const renderAccounts = async () => {
+        const mine = ++generation;
+        const [live, active, profiles] =
+            await Promise.all([readLiveAccount(), liveAccountName(), listProfiles()]);
+        if (mine !== generation || prefs._closed())
+            return;
         accountRows.splice(0).forEach(row => listGroup.remove(row));
-        const live = readLiveAccount();
-        const active = liveAccountName();
         loginRow.subtitle = live?.emailAddress
             ? (active
                 ? _('%s, saved as %s').format(live.emailAddress, active)
                 : _('%s (not saved yet)').format(live.emailAddress))
             : _('No Claude Code login found');
-        for (const profile of listProfiles()) {
+        for (const profile of profiles) {
             const a = accountSummary(profile);
             const row = new Adw.ActionRow({
                 title: `${profile.name === active ? '● ' : ''}${a.name}`,
@@ -137,14 +143,14 @@ export function buildAccountsGroups(prefs, settings, page) {
                 has_frame: false,
                 tooltip_text: _('Forget this saved login'),
             });
-            remove.connect('clicked', () => {
+            remove.connect('clicked', async () => {
                 try {
-                    removeProfile(profile.name);
+                    await removeProfile(profile.name);
                 } catch (e) {
                     errorRow.title = e.message;
                     errorRow.visible = true;
                 }
-                renderAccounts();
+                await renderAccounts();
             });
             row.add_suffix(renameButton(profile.name));
             row.add_suffix(remove);
@@ -152,7 +158,7 @@ export function buildAccountsGroups(prefs, settings, page) {
             accountRows.push(row);
         }
     };
-    saveBtn.connect('clicked', () => {
+    saveBtn.connect('clicked', async () => {
         const name = saveRow.text.trim();
         errorRow.visible = false;
         if (!isValidName(name)) {
@@ -161,14 +167,14 @@ export function buildAccountsGroups(prefs, settings, page) {
             return;
         }
         try {
-            saveCurrent(name);
+            await saveCurrent(name);
             saveRow.text = '';
         } catch (e) {
             errorRow.title = e.message;
             errorRow.visible = true;
         }
-        renderAccounts();
+        await renderAccounts();
     });
     saveRow.connect('entry-activated', () => saveBtn.emit('clicked'));
-    renderAccounts();
+    renderAccounts().catch(logError);
 }

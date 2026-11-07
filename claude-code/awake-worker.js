@@ -13,15 +13,23 @@
 // `claudectl awake off`.
 //
 // Every machine change outside the child processes is journaled BEFORE it is
-// made and cleared only after its undo succeeded, so scripts/awake-backstop.sh
-// can put the machine back from the journal alone if this process never does.
+// made and cleared only after its undo succeeded (claude-code/awake.js
+// `journaledChange`), so scripts/awake-backstop.sh can put the machine back
+// from the journal alone if this process never does.
+//
+// One function per phase: take the hold, closed-lid mode, one poll cycle,
+// release.
 
 import {spawn} from 'node:child_process';
 
 import {
-  AWAKE_POLL_SECONDS, awakeEndReason, awakeFloorActions, awakeInhibitArgv, awakeLidArgv,
+  AWAKE_POLL_SECONDS, awakeEndReason, awakeFloorActions,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js';
+import {
+  awakeInhibitArgv, awakeLidArgv,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake-power.js';
 import {openAwake} from './awake.js';
+import {isMain} from './is-main.js';
 
 /** Flags the holder is started with (claude-code/awake.js `start`). */
 export function parseWorkerArgs(argv) {
@@ -46,6 +54,119 @@ function secondsLeft(session, nowMs) {
   return Math.ceil(Math.max(1000, session.endsAt - nowMs) / 1000);
 }
 
+/** The child processes this holder owns. Letting go of them is what releases
+ *  the assertion. */
+function childPool(awake, spawnChild) {
+  const children = [];
+  return {
+    start(argv, what) {
+      if (!argv) return null;
+      try {
+        const child = spawnChild(argv[0], argv.slice(1), {stdio: 'ignore'});
+        child.on?.('error', (e) => awake.log(`${what} failed: ${e.message}`));
+        children.push(child);
+        return child;
+      } catch (e) {
+        awake.log(`${what} could not start (${argv[0]}): ${e.message}`);
+        return null;
+      }
+    },
+    stopAll() {
+      for (const child of children) {
+        try {
+          child?.kill?.('SIGTERM');
+        } catch {
+          // already gone
+        }
+      }
+    },
+  };
+}
+
+/** Take the hold under the lock: refused while someone else holds it. The
+ *  journal goes first, with nothing owned yet - a crash between here and the
+ *  first change leaves a clean journal, which is the truth. */
+function take(awake, opts, kind) {
+  return awake.underLock(() => {
+    const live = awake.liveOwner();
+    if (live) return {ok: false, reason: 'already-held', owner: live};
+    const session = awake.newSession({
+      seconds: opts.seconds,
+      whileSessions: opts.whileSessions,
+      lid: opts.lid,
+      owner: {pid: process.pid, host: awake.host(), kind},
+    });
+    awake.writeJournal(awake.newJournal({endsAt: session.endsAt, owner: session.owner}));
+    awake.writeSession(session);
+    return {ok: true, session};
+  });
+}
+
+/** Closed-lid mode. Linux: a logind inhibitor, a child like the idle one, so
+ *  there is nothing persistent to journal. macOS: `pmset -a disablesleep 1`,
+ *  journaled first, read back, and taken back if it did not stick. */
+function lid(awake, session, children) {
+  const platform = awake.platform();
+  if (platform !== 'darwin') {
+    const argv = awakeLidArgv(platform, true, {seconds: secondsLeft(session, awake.now())});
+    if (!argv) return {ok: false, reason: 'unsupported'};
+    return children.start(argv, 'lid inhibitor') ? {ok: true} : {ok: false, reason: 'command-failed'};
+  }
+  return awake.journaledChange('sleepDisabled', true, () => awake.setLidDisabled(true),
+    {undo: () => awake.setLidDisabled(false)});
+}
+
+/** Low Power Mode on or off, as a floor action asked. */
+function lowPower(awake, state, {action, cause}) {
+  const on = action === 'low-power-on';
+  const r = awake.journaledChange('lowPower', on, () => awake.setLowPower(on));
+  if (r.ok || r.reason === 'unsupported') {
+    // 'unsupported' is Linux, which has no single Low Power Mode: record the
+    // cause as handled so it is not retried every cycle.
+    state.lowPowerSetByUs = on;
+    if (r.ok) awake.log(`low power ${on ? 'on' : 'off'}${cause ? ` (${cause})` : ''}`);
+  } else {
+    awake.log(`low power ${on ? 'on' : 'off'} failed: ${r.reason}`);
+  }
+}
+
+/**
+ * One poll: re-read the session, the live sessions, the battery and the
+ * thermal state, and act on what the floors say. Returns what it read, or
+ * 'handed-over' when another holder took the files over (a second panel, a
+ * reinstall): this process is then no longer the owner and must let go
+ * WITHOUT undoing anything the new owner now owns.
+ */
+function cycle(awake, state) {
+  state.session = awake.readSession() ?? state.session;
+  const {session} = state;
+  if (session.owner?.pid && session.owner.pid !== process.pid) return 'handed-over';
+  const sessions = awake.liveSessions();
+  state.ask(awakeEndReason(session, {nowMs: awake.now(), sessions}));
+
+  const battery = awake.readBattery();
+  state.unreadableMisses = battery.percent === null && battery.hasBattery ? state.unreadableMisses + 1 : 0;
+  const thermal = awake.readThermal();
+  for (const action of awakeFloorActions({
+    ...battery, unreadableMisses: state.unreadableMisses, thermal, lidClosed: state.lidHeld,
+    lowPowerSetByUs: state.lowPowerSetByUs, config: awake.config(),
+  })) {
+    if (action.action === 'end') state.ask(action.reason);
+    else lowPower(awake, state, action);
+  }
+  return {sessions, battery, thermal};
+}
+
+/** Let go of every child, then give back whatever the journal still owns.
+ *  Exit 0 when everything is back, 1 when the backstop has to retry. */
+function release(awake, children, stopping) {
+  children.stopAll();
+  const released = awake.recover({force: true});
+  awake.log(`ended (${stopping})${released.failed.length
+    ? ` - COULD NOT UNDO ${released.failed.join(', ')}` : ''}`);
+  return released.failed.length ? 1 : 0;
+}
+
 /**
  * Hold the machine awake until something says to stop. Returns the exit code:
  * 0 released cleanly, 1 something could not be undone (the backstop will
@@ -58,175 +179,64 @@ function secondsLeft(session, nowMs) {
 export async function hold(opts, io = {}) {
   const awake = openAwake(io);
   const sleep = io.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  const spawnChild = io.spawn ?? spawn;
+  const children = childPool(awake, io.spawn ?? spawn);
   const platform = awake.platform();
-  const children = [];
 
-  /** Let go of every child: this is what releases the assertion. */
-  const stopChildren = () => {
-    for (const child of children) {
-      try {
-        child?.kill?.('SIGTERM');
-      } catch {
-        // already gone
-      }
-    }
-  };
-
-  const startChild = (argv, what) => {
-    if (!argv) return null;
-    try {
-      const child = spawnChild(argv[0], argv.slice(1), {stdio: 'ignore'});
-      child.on?.('error', (e) => awake.log(`${what} failed: ${e.message}`));
-      children.push(child);
-      return child;
-    } catch (e) {
-      awake.log(`${what} could not start (${argv[0]}): ${e.message}`);
-      return null;
-    }
-  };
-
-  // ── take the hold under the lock ────────────────────────────────────────
-  const taken = awake.withLock(() => {
-    const live = awake.liveOwner();
-    if (live) return {ok: false, reason: 'already-held', owner: live};
-    const session = awake.newSession({
-      seconds: opts.seconds,
-      whileSessions: opts.whileSessions,
-      lid: opts.lid,
-      owner: {pid: process.pid, host: awake.host(), kind: io.kind ?? 'cli'},
-    });
-    // The journal first, with nothing owned yet: a crash between here and the
-    // first change leaves a clean journal, which is the truth.
-    awake.writeJournal(awake.newJournal({endsAt: session.endsAt, owner: session.owner}));
-    awake.writeSession(session);
-    return {ok: true, session};
-  });
-  const start = taken.ok ? taken.value : {ok: false, reason: 'busy'};
+  const start = take(awake, opts, io.kind ?? 'cli');
   if (!start.ok) {
     awake.log(`refused to start: ${start.reason}${start.owner ? ` (pid ${start.owner.pid})` : ''}`);
     return 3;
   }
-  let session = start.session;
-  awake.log(`holding until ${new Date(session.endsAt).toISOString()}`
-    + `${session.whileSessions ? ' / while sessions run' : ''}${session.lid ? ' / lid' : ''}`);
+  const state = {
+    session: start.session, stopping: null, lowPowerSetByUs: false, unreadableMisses: 0, lidHeld: false,
+    ask(reason) {
+      if (reason && !this.stopping) this.stopping = reason;
+    },
+  };
+  awake.log(`holding until ${new Date(state.session.endsAt).toISOString()}`
+    + `${state.session.whileSessions ? ' / while sessions run' : ''}${state.session.lid ? ' / lid' : ''}`);
 
-  // ── the inhibitor child ─────────────────────────────────────────────────
-  const inhibitArgv = awakeInhibitArgv(platform, {
-    seconds: secondsLeft(session, awake.now()), pid: process.pid,
+  const inhibitArgv = () => awakeInhibitArgv(platform, {
+    seconds: secondsLeft(state.session, awake.now()), pid: process.pid,
   });
-  let inhibitor = startChild(inhibitArgv, 'inhibitor');
-  if (!inhibitArgv)
+  let inhibitor = children.start(inhibitArgv(), 'inhibitor');
+  if (!inhibitArgv())
     awake.log(`no inhibitor for platform ${platform}: the session is bookkeeping only`);
 
-  // ── closed-lid mode: journal first, then change, then read it back ──────
-  let lidHeld = false;
-  if (session.lid) {
-    const locked = awake.withLock(() => {
-      if (platform !== 'darwin') {
-        // Linux: a logind inhibitor, a child like the one above, so there is
-        // nothing persistent to journal and nothing for a backstop to undo.
-        const argv = awakeLidArgv(platform, true, {seconds: secondsLeft(session, awake.now())});
-        if (!argv) return {ok: false, reason: 'unsupported'};
-        return {ok: Boolean(startChild(argv, 'lid inhibitor')), reason: 'command-failed'};
-      }
-      const journal = awake.readJournal();
-      awake.writeJournal({...journal, sleepDisabled: true});
-      const r = awake.setLidDisabled(true);
-      if (!r.ok) {
-        // It did not stick, so nothing is owed. Try the undo anyway in case
-        // it half-took, then drop the claim.
-        awake.setLidDisabled(false);
-        awake.writeJournal({...journal, sleepDisabled: false});
-      }
-      return r;
-    });
-    const outcome = locked.ok ? locked.value : {ok: false, reason: 'busy'};
-    lidHeld = outcome.ok;
+  if (state.session.lid) {
+    const outcome = lid(awake, state.session, children);
+    state.lidHeld = outcome.ok;
     awake.log(outcome.ok
       ? 'lid mode on'
       : `lid mode NOT on (${outcome.reason}): ${outcome.message ?? ''}`.trim());
   }
 
-  // ── the loop ────────────────────────────────────────────────────────────
-  let stopping = null;
-  const askStop = (reason) => {
-    if (reason && !stopping) stopping = reason;
-  };
-  process.on('SIGTERM', () => askStop('user'));
-  process.on('SIGINT', () => askStop('user'));
-
-  let lowPowerSetByUs = false;
-  let unreadableMisses = 0;
+  process.on('SIGTERM', () => state.ask('user'));
+  process.on('SIGINT', () => state.ask('user'));
 
   for (;;) {
-    session = awake.readSession() ?? session;
-    // Another holder took the files over (a second panel, a reinstall): this
-    // process is no longer the owner, so it lets go WITHOUT undoing anything
-    // the new owner now owns.
-    if (session.owner?.pid && session.owner.pid !== process.pid) {
-      awake.log(`handed over to pid ${session.owner.pid}`);
-      stopChildren();
+    const seen = cycle(awake, state);
+    if (seen === 'handed-over') {
+      awake.log(`handed over to pid ${state.session.owner.pid}`);
+      children.stopAll();
       return 0;
     }
-    const sessions = awake.liveSessions();
-    askStop(awakeEndReason(session, {nowMs: awake.now(), sessions}));
-
-    const battery = awake.readBattery();
-    unreadableMisses = battery.percent === null && battery.hasBattery ? unreadableMisses + 1 : 0;
-    const thermal = awake.readThermal();
-    for (const action of awakeFloorActions({
-      ...battery, unreadableMisses, thermal, lidClosed: lidHeld, lowPowerSetByUs,
-      config: awake.config(),
-    })) {
-      if (action.action === 'end') {
-        askStop(action.reason);
-        continue;
-      }
-      const on = action.action === 'low-power-on';
-      const locked = awake.withLock(() => {
-        const journal = awake.readJournal();
-        // Claim before the change, drop the claim once it is undone - or if
-        // it never took.
-        if (on) awake.writeJournal({...journal, lowPower: true});
-        const r = awake.setLowPower(on);
-        if (!r.ok || !on) awake.writeJournal({...journal, lowPower: Boolean(r.ok && on)});
-        return r;
-      });
-      const r = locked.ok ? locked.value : {ok: false, reason: 'busy'};
-      if (r.ok || r.reason === 'unsupported') {
-        // 'unsupported' is Linux, which has no single Low Power Mode: record
-        // the cause as handled so it is not retried every cycle.
-        lowPowerSetByUs = on;
-        if (r.ok)
-          awake.log(`low power ${on ? 'on' : 'off'}${action.cause ? ` (${action.cause})` : ''}`);
-      } else {
-        awake.log(`low power ${on ? 'on' : 'off'} failed: ${r.reason}`);
-      }
-    }
-
-    io.onCycle?.({session, sessions, battery, thermal, stopping, lowPowerSetByUs});
-    if (stopping) break;
+    io.onCycle?.({
+      session: state.session, ...seen, stopping: state.stopping, lowPowerSetByUs: state.lowPowerSetByUs,
+    });
+    if (state.stopping) break;
     // An inhibitor that died - killed, or its own sleep expired because the
     // session was extended past it - is restarted: the hold must outlast it.
-    if (inhibitArgv && inhibitor && inhibitor.exitCode !== null && inhibitor.exitCode !== undefined) {
+    if (inhibitor && inhibitor.exitCode !== null && inhibitor.exitCode !== undefined) {
       awake.log('inhibitor exited early; restarting it');
-      inhibitor = startChild(
-        awakeInhibitArgv(platform, {seconds: secondsLeft(session, awake.now()), pid: process.pid}),
-        'inhibitor');
+      inhibitor = children.start(inhibitArgv(), 'inhibitor');
     }
     await sleep((io.pollSeconds ?? AWAKE_POLL_SECONDS) * 1000);
   }
-
-  // ── release ─────────────────────────────────────────────────────────────
-  stopChildren();
-  const released = awake.recover({force: true});
-  awake.log(`ended (${stopping})${released.failed.length
-    ? ` - COULD NOT UNDO ${released.failed.join(', ')}` : ''}`);
-  return released.failed.length ? 1 : 0;
+  return release(awake, children, state.stopping);
 }
 
-if (process.argv[1] && process.argv[1].endsWith('awake-worker.js')) {
+if (isMain(import.meta.url)) {
   hold(parseWorkerArgs(process.argv.slice(2))).then(
     (code) => process.exit(code),
     () => process.exit(1));

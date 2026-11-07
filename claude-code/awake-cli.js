@@ -3,7 +3,7 @@
 // lib/pure/awake.js's and every file and command claude-code/awake.js's.
 
 import {
-  awakeBadge, formatAwakeDuration, parseAwakeDuration,
+  AWAKE_DEFAULT_SECONDS, awakeBadge, awakeStartError, formatAwakeDuration, parseAwakeDuration,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js';
 import {openAwake} from './awake.js';
 
@@ -108,20 +108,12 @@ export async function main(argv, io = {}) {
     const seconds = durationFlag(argv);
     const whileSessions = argv.includes('--while-sessions');
     const lid = argv.includes('--lid');
-    // A bare `awake on` is an hour: a session with no end is the one thing
-    // this feature must never create.
-    const want = seconds ?? (whileSessions ? null : 3600);
-    const result = awake.start({seconds: want, whileSessions, lid});
+    const want = seconds ?? (whileSessions ? null : AWAKE_DEFAULT_SECONDS);
+    const result = await awake.start({seconds: want, whileSessions, lid});
     if (!result.ok) {
-      if (result.reason === 'already-held') {
-        throw new Error(`already awake, held by pid ${result.owner.pid}`
-          + ' - `claudectl awake off` ends it, `claudectl awake extend --for 30m` lengthens it');
-      }
-      if (result.reason === 'recovery-pending') {
-        throw new Error('a previous session left '
-          + `${result.steps.join(', ')} to give back - run \`claudectl awake recover --force\``);
-      }
-      throw new Error(`the holder did not start${result.log ? `:\n${result.log}` : ''}`);
+      throw new Error(awakeStartError(result, {
+        endHint: '`claudectl awake off` ends it, `claudectl awake extend --for 30m` lengthens it',
+      }));
     }
     out(`${statusLines(result.status).join('\n')}\n`);
     if (lid && !result.status.lid)
@@ -130,7 +122,7 @@ export async function main(argv, io = {}) {
   }
 
   if (cmd === 'off') {
-    const result = awake.stop();
+    const result = await awake.stop();
     if (result.failed.length) {
       throw new Error(`could not give back ${result.failed.join(', ')}`
         + ' - the backstop will retry; `claudectl awake recover --force` retries now');

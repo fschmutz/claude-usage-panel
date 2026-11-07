@@ -6,31 +6,6 @@ semantic versioning.
 
 ## [Unreleased]
 
-### Security
-
-- **Event command: API text can no longer run as shell code.** Each value
-  was shell-quoted, but the documented template `notify-send "Claude %l"`
-  puts `%l` inside double quotes, where a label like `$(cmd)` from the usage
-  endpoint ran in your session (GNOME and macOS). Placeholders now expand to
-  references to `CUP_*` environment variables, quoted for their position;
-  no value is pasted into the command. A test runs a hostile label through
-  bash in every quoting position.
-- **Awake closed-lid install: the sudoers rule cannot be swapped before it
-  lands.** The rule was rendered into a user-owned temp file, checked with
-  `visudo`, then installed: any process of yours could rewrite it while sudo
-  waited for the password, which is passwordless root. It is now written
-  only into a root-owned temp beside the target, validated, compared byte
-  for byte with what was rendered, and renamed into place; the checkout path
-  reaches node as argv. A test rewrites the temp mid-install and asserts
-  nothing is installed.
-- **Auto-update: a tag counts as released only when the GitHub API has its
-  Release.** The check fetched the html release page, which answers 200 for
-  a bare tag too, so a tag release.yml refused could still auto-install.
-- **Leftovers: wider secret redaction** (`mysql -p`, `sshpass -p`,
-  `redis-cli -a`, `curl -u`, API-key headers, `sk-ant-`/`ghp_`/`AKIA`
-  tokens, URL userinfo, lowercase and `PAT` variable names, query keys), and
-  on macOS the session id is read from the environment tail of `ps -E` only.
-
 ### Added
 
 - **Pause: a double check from the process table.** `claudectl session
@@ -45,9 +20,154 @@ semantic versioning.
   after reading the checkpoint. Nothing is killed by claudectl. A process
   table that cannot be read fails the check instead of reading as clean, and
   secret-looking values in command lines print as `***`.
+- **macOS: Settings ▸ General ▸ Menu bar shows** picks the worst limit or
+  the current session, like the GNOME **Top bar shows** (UserDefaults
+  `panelMode`, default worst).
+
+### Changed
+
+- **Node clients: one module per process-table concern.** The live-session
+  registry moved out of `tabs.js` into `claude-code/registry.js`, which pause,
+  Awake and waiting read without building the snapshot store;
+  `claude-code/procs.js` holds the one `/proc/<pid>/stat` parser, pid liveness
+  check and "is this claude" test; `claude-code/is-main.js` is the one
+  run-when-executed guard of every entry point; and the two install-time
+  settings editors share `scripts/lib/json-file.mjs`.
+
+- **One search for node and claude under a scheduler's PATH.** The session
+  ping, the update's reinstall and `claudectl session` each searched their
+  own list (fnm's versions vs its default alias, asdf's installs vs its
+  shims, nvm's sorted versions vs `current`, a `sort -V` fallback that put
+  v9 above v10). `scripts/lib.sh` now holds one list, numeric version order
+  everywhere, and `claude-code/tools.js` mirrors it, pinned by
+  `tests/fixtures/scheduler-path.json`.
+- **`scripts/auto-update.sh`: status, check and update are functions** called
+  from one `main`, instead of a 250-line top-level body at the file-size cap.
+- **Install: paths and flags written into shell text stay data.** The
+  `claudectl` shim, the autosave systemd unit and its cron line now quote the
+  node and checkout paths for their shell (a HOME holding `"`, `$(...)` or a
+  backtick ran it on every call), and the status-line command quotes its
+  path. `--segments=` takes lowercase names and commas only, `--tokens=`
+  `all` or `fresh`; anything else is refused before it reaches
+  `settings.json`, whose command Claude Code runs through a shell on every
+  prompt. Tests run a hostile HOME through the shim and the cron line.
+
+- **Awake backstop: told where the store is, never guessing.** `./install.sh
+  awake` asks `claude-code/paths.js` for the awake store and passes it as
+  `--awake-dir`; the shell no longer keeps a second copy of the state-dir
+  rule. Without it the backstop refuses (exit 2): run `./install.sh update`
+  after pulling by hand (the daily update does it). A test installs the
+  schedule and runs the cron line against a journal where the Node clients
+  write it.
+- **Awake internals:** the platform half (the four sudo pmset commands,
+  every argv, pmset / sysfs / thermal parsing) is `lib/pure/awake-power.js`,
+  twin of `AwakePower.swift`; every darwin argv is now taken from the sudoers
+  command list, so the rule and the runner cannot drift, and the backstop
+  and the installer's rule check are tested against that list. One reader
+  for a session's and a journal's owner. The 1-hour default and the
+  refused-start sentences are shared by the CLI and the MCP tool. The holder
+  is split into take / lid / cycle / release around one journaled change.
+- **Pause internals:** the protocol prose moved to
+  `lib/pure/pause-protocol.js`; whether a waiter's session is still its own
+  is pure `waiterOwnership`, pinned by `tests/fixtures/pause.json`.
+- **Panel toggles:** the four installer copies are one `_panel_setting`,
+  which skips GNOME when the installed schema does not have the key yet
+  (`waiting` and `cost` used to fail the target against an older
+  extension).
+
+- **MCP server: one tool registry.** `tools/list` and `tools/call` read the
+  same list, so a tool cannot be listed without being callable; anything a
+  tool throws is a tool error with its own message.
 
 ### Fixed
 
+- **Awake: the MCP server no longer freezes while a session starts or
+  stops.** `awake on` / `off` polled with a blocking sleep inside the
+  long-lived server (up to 4 s / 6 s plus the release), stalling every other
+  request; they await a timer now.
+- **Awake: Low Power Mode that would not turn off again stays owed.** A
+  failed `pmset -b lowpowermode 0` dropped the journal's claim anyway, so the
+  backstop had nothing left to undo while the Mac stayed in Low Power Mode.
+  The claim is now dropped only once the undo took.
+- **Resume prompt: other sessions' names and directories are cleaned before
+  they are typed.** The "you are not alone" note embeds every peer's name and
+  cwd, and macOS types the prompt into the new tab, where a newline, `^C` or
+  an escape in one acted on the terminal. Control characters (C0, DEL, C1)
+  now become spaces, as in every pause text.
+- **`claudectl session close` re-checks every pid right before signalling
+  it.** The pid was checked, then you were asked to confirm, then it was
+  signalled: long enough for it to exit and the number to go to another
+  process. Each pid's identity (the kernel start time; on macOS `ps`'s start
+  time and command line) is pinned with the plan and compared before every
+  SIGTERM, SIGKILL and SIGHUP; a pid that changed is never signalled.
+
+- **Pace history: one client's write can no longer erase every account's
+  series.** The shared `claude-usage-history.json` was rewritten in place, so
+  a reader catching it mid-write parsed `{}` and its own write then dropped
+  every other login's samples. It is now written to a temp file and renamed.
+- **Locks: never two holders, and a holder never removes a successor's lock.**
+  The Awake hold removed a stale lock in place (two waiters could both remove,
+  then both create) and released without checking it still held it; the
+  backstop script did the same. One module (`claude-code/excl-lock.js`) now
+  backs the Awake hold, the refresh lock and the pause claim and waiter lock:
+  the body carries an owner token, a lock is removed only while it is still
+  ours, and a stale one is moved aside by rename and checked before the retry.
+  `scripts/awake-backstop.sh` follows the same rules.
+- **MCP: the waiting and Awake tools work whatever clock the caller passes.**
+  `io.nowMs` was read as a number in some modules and called as a function in
+  others, and the server hands one `io` to every tool; every module now reads
+  it through `nowOf(io)`, and a test drives every tool with a numeric one.
+- **Snapshots, the token cache and the session index: a failed write leaves no
+  temp file.** Six hand-written atomic writes with different guarantees are now
+  one (`writeAtomic` in `claude-code/private-fs.js`), which the install-time
+  settings editors use too.
+- **macOS: a registry pid is a live session only when `claude` itself runs
+  under it.** The check matched any command line merely ending in `/claude`.
+  Linux, macOS and the process scan now share one test (`claude-code/procs.js`).
+
+- **One copy of the account store's step order.** Sync back before
+  overwrite, refresh under the lock, the pending-switch mark and the rename
+  journal were written out in both JavaScript ports; they are now
+  `lib/pure/accountStore.js`, run by the Node and the GNOME port, with a test
+  that records both ports' steps and pins their order.
+- **One `runClaudectl` for every dropdown button that acts through
+  claudectl**, and the extra-usage and status rows are their own section
+  controllers.
+
+- **GNOME: the account store no longer blocks the Shell.** Each poll parsed
+  ~/.claude.json six or more times and every saved profile once per other
+  profile, synchronously on the main thread. A poll now reads one snapshot
+  (the profiles, the live login, both journals) asynchronously and answers
+  every question from it; switch, save, rename and refresh are async too.
+- **GNOME: nothing on the Shell's main loop reads or writes a file
+  synchronously any more.** The 90-day history loads after enable and appends
+  asynchronously, the Codex store is listed once per refresh, the snapshot
+  list behind Reopen is cached and re-read without blocking, the session-ping
+  units and stamp are read asynchronously, and the awake config and the
+  loaded-version stamp are written asynchronously. The synchronous file
+  helpers are gone from lib/fs.js; every GNOME test stub throws on a
+  synchronous file call.
+- **Legacy credentials read alike everywhere.** The older flat
+  `access_token` / `token` credential shapes were lifted by the Node clients
+  and rejected by GNOME and macOS; `parseCredentials` is now one pure rule
+  (JS + Swift) pinned by the accounts fixture.
+- **The running-session count after a switch includes npm installs**, whose
+  process is `node …/@anthropic-ai/claude-code/cli.js`
+  (`countClaudeProcesses`, JS + Swift, pinned by the fixture).
+
+- **macOS: one hung `ccusage` no longer stops polling for good.** Every
+  child process now has a 60 s deadline (SIGTERM, then SIGKILL), and the
+  sections after the usage fetch (cost, sessions, Cursor, accounts, Codex)
+  run side by side with a 90 s deadline each, like GNOME (`PollSections`,
+  pinned by `poll.json`).
+- **macOS: a 401 clears the cards, as on GNOME.** The menu bar reads `?`, and
+  the accounts section no longer takes the old figures for the live login's
+  usage in the auto-switch or the status line's usage cache. A transient
+  failure still keeps the last reading up.
+- **macOS: the menu bar no longer blocks on the Keychain or the Codex
+  sessions tree.** The live login is read once per poll, off the main actor
+  (it was four or more `security` runs on the UI thread), and the account
+  sync-back, the Codex vault and its transcript tails are read detached.
 - **GNOME: today's sessions no longer stall the desktop.** The session index
   walked `~/.claude/projects` (hundreds of directories), read the index and
   every transcript with synchronous file calls on the Shell's main loop at
@@ -73,6 +193,127 @@ semantic versioning.
   a twin, and pace history and the warehouse file each org separately
   (`<uuid>/<org>`). The weekly peak still reads the rows filed under the bare
   `<uuid>` before the split, so an upgrade keeps the last two weeks.
+- **Status line: one token count, one session ranking.** The `∑ tok`
+  segment and the session index each folded transcripts their own way (a
+  different dedupe window, a different partial-line rule), and the
+  `sessions` segment ranked and named sessions with a private copy. Both now
+  read through one incremental JSONL reader into the shared pure fold (which
+  also counts cache reads, for the `all` figure, in every port), and the
+  segment uses the panels' ranking and token format. stdin is parsed once
+  per render instead of once per segment.
+
+### Security
+
+- **Account switch: ~/.claude.json keeps what Claude Code wrote meanwhile,
+  and a linked one stays a link.** The switch read the config, prepared the
+  credentials write (a `security` spawn on macOS), then wrote its first copy
+  back over the file, losing any key Claude Code had saved in between; the
+  write also replaced a symlinked dotfile with a plain file. The config is now
+  read again right before it is written, and the write lands on the link's
+  target (Node, GNOME). Tests change the file mid-switch and link it.
+- **macOS: credential files are written like the Node port writes them.**
+  The account store created its tmp file with the mode applied after the
+  bytes, under a predictable name, and `replaceItemAt` kept the mode of the
+  file it replaced. Both stores now share one write (O_EXCL 0600 tmp under a
+  random name, then rename(2)). A switch writes `~/.claude.json` through a
+  symlink instead of over it, and re-reads it right before writing so it
+  does not put back what Claude Code changed meanwhile.
+- **macOS: a resume click types nothing unsafe.** A session whose directory
+  holds a control character (U+0000-U+001F, U+007F-U+009F), or whose id is
+  not a UUID, is refused instead of typed into iTerm / Terminal.
+- **macOS: the Awake `.hold.lock` follows the shared lock protocol.** The
+  lock carries a pid + owner-token body, a stale one is removed only under
+  the `.takeover` guard and only if it is still the lock judged stale, and
+  a holder releases only its own lock: two holders could hold it before.
+
+- **Event command: API text can no longer run as shell code.** Each value
+  was shell-quoted, but the documented template `notify-send "Claude %l"`
+  puts `%l` inside double quotes, where a label like `$(cmd)` from the usage
+  endpoint ran in your session (GNOME and macOS). Placeholders now expand to
+  references to `CUP_*` environment variables, quoted for their position;
+  no value is pasted into the command. A test runs a hostile label through
+  bash in every quoting position.
+- **Awake closed-lid install: the sudoers rule cannot be swapped before it
+  lands.** The rule was rendered into a user-owned temp file, checked with
+  `visudo`, then installed: any process of yours could rewrite it while sudo
+  waited for the password, which is passwordless root. It is now written
+  only into a root-owned temp beside the target, validated, compared byte
+  for byte with what was rendered, and renamed into place; the checkout path
+  reaches node as argv. A test rewrites the temp mid-install and asserts
+  nothing is installed.
+- **Auto-update: a tag counts as released only when the GitHub API has its
+  Release.** The check fetched the html release page, which answers 200 for
+  a bare tag too, so a tag release.yml refused could still auto-install.
+- **Leftovers: wider secret redaction** (`mysql -p`, `sshpass -p`,
+  `redis-cli -a`, `curl -u`, API-key headers, `sk-ant-`/`ghp_`/`AKIA`
+  tokens, URL userinfo, lowercase and `PAT` variable names, query keys), and
+  on macOS the session id is read from the environment tail of `ps -E` only.
+
+- **Event command: API text can no longer run as shell code.** Each value
+  was shell-quoted, but the documented template `notify-send "Claude %l"`
+  puts `%l` inside double quotes, where a label like `$(cmd)` from the usage
+  endpoint ran in your session (GNOME and macOS). Placeholders now expand to
+  references to `CUP_*` environment variables, quoted for their position;
+  no value is pasted into the command. A test runs a hostile label through
+  bash in every quoting position.
+- **Awake closed-lid install: the sudoers rule cannot be swapped before it
+  lands.** The rule was rendered into a user-owned temp file, checked with
+  `visudo`, then installed: any process of yours could rewrite it while sudo
+  waited for the password, which is passwordless root. It is now written
+  only into a root-owned temp beside the target, validated, compared byte
+  for byte with what was rendered, and renamed into place; the checkout path
+  reaches node as argv. A test rewrites the temp mid-install and asserts
+  nothing is installed.
+- **Auto-update: a tag counts as released only when the GitHub API has its
+  Release.** The check fetched the html release page, which answers 200 for
+  a bare tag too, so a tag release.yml refused could still auto-install.
+- **Auto-update: a release tag is immutable, and the branch tip is never a
+  fallback.** The run fetched every tag with `--force` (following any tag
+  re-pointed upstream) and, when the release tag was missing, moved the
+  checkout to the unreleased tip of main. It now fetches only the release
+  tag, records its object id in the state dir, and refuses (exit 1, logged
+  and notified) a tag that points elsewhere than the checkout's copy or the
+  record; a tag it cannot fetch is a skip. The one `reset --hard` (a
+  rewritten upstream) goes to that verified tag only. Optional signed tags:
+  an OpenSSH allowed-signers file at
+  `~/.local/state/claude-usage-panel/allowed-signers` makes every release
+  tag need an SSH signature by one of its keys (see the wiki).
+- **One-line installer: published releases only, and a cut download runs
+  nothing.** `curl ... | bash` took the highest tag with no Release check;
+  it now uses the daily update's probe (skips a tag without a published
+  Release; an unreachable API installs the highest tag and says so), and
+  its body runs from one `main` call on the last line, which a truncated
+  download cannot complete.
+- **macOS update notification: text as argv.** The fallback interpolated the
+  message into AppleScript source; it now passes it as run-handler
+  arguments, as the app does.
+- **Hash-locked tool installs.** CI's pre-commit is installed from a
+  pip-compile'd `requirements.txt` with every transitive package pinned and
+  hashed (the deps gate fails an unhashed pin), and `./install.sh cost`
+  installs ccusage with `npm ci` from a committed lockfile into
+  `~/.local/share/claude-usage-panel/ccusage`, with a launcher in
+  `~/.local/bin` (`~/.npm-global/bin` on macOS), instead of a `volta
+  install` / `npm i -g` that resolved transitive packages afresh. A global
+  ccusage an older install left is removed so it cannot shadow the lock.
+- **Leftovers: wider secret redaction** (`mysql -p`, `sshpass -p`,
+  `redis-cli -a`, `curl -u`, API-key headers, `sk-ant-`/`ghp_`/`AKIA`
+  tokens, URL userinfo, lowercase and `PAT` variable names, query keys), and
+  on macOS the session id is read from the environment tail of `ps -E` only.
+- **MCP: tool annotations say what each tool can do.** `switch_account`,
+  `rename_account` and `switch_codex_account` overwrite the live login,
+  `~/.claude.json` or `auth.json` and now carry `destructiveHint: true`, so
+  a client asks first; `get_usage` and `list_accounts` write profiles (and
+  the latter spends stored refresh tokens), so they are no longer marked
+  read-only. A test pins every tool's hints.
+- **Terminal output: no control character from a session name, title or
+  cwd.** The status line's `sessions` segment and every `claudectl session`
+  line printed them raw, where an escape sequence in a custom title could
+  retitle the terminal or write its clipboard (OSC 52). They pass through
+  the same cleaner the pause rows use.
+- **Documented `npx` installs are pinned to the release tag**
+  (`github:fschmutz/claude-usage-panel#vX.Y.Z`) in the README, the MCP
+  README, the site and the wiki, like the plugin already was; the release
+  bump re-pins them and `check-versions.sh` fails on an unpinned one.
 
 ## [3.11.0] - 2026-10-24
 

@@ -28,7 +28,7 @@ import {
   codexSwitch, codexTokenState, parseCodexProfile, pickRecordedCodexUsage, sameCodexLogin,
   scanCodexSessions,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/codex.js';
-import {codexAccountsDir, codexAuthPath, codexSessionsDir} from './paths.js';
+import {codexAccountsDir, codexAuthPath, codexSessionsDir, nowOf} from './paths.js';
 import {readJSON, writePrivate} from './private-fs.js';
 
 /** Tail of a session transcript read when looking for the last rate-limit
@@ -71,7 +71,7 @@ function readTail(file, bytes = SESSION_TAIL_BYTES) {
  * which the codex CLI may rotate the tokens in place.
  */
 export function openCodexStore(io = {}) {
-  const now = () => io.nowMs ?? Date.now();
+  const now = () => nowOf(io);
   const dir = io.dir ?? codexAccountsDir(io);
   const authFile = io.authPath ?? codexAuthPath(io);
   const sessionsDir = io.sessionsDir ?? codexSessionsDir(io);

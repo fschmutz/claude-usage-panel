@@ -28,3 +28,10 @@ export function claudeConfigPath() {
         ? GLib.build_filenamev([configDir(), '.claude.json'])
         : GLib.build_filenamev([GLib.get_home_dir(), '.claude.json']);
 }
+
+/** The claudectl shim ./install.sh cli writes, or the one on PATH; null when
+ *  neither is there. */
+export function claudectlPath() {
+    const shim = GLib.build_filenamev([GLib.get_home_dir(), '.local', 'bin', 'claudectl']);
+    return GLib.file_test(shim, GLib.FileTest.IS_EXECUTABLE) ? shim : GLib.find_program_in_path('claudectl');
+}

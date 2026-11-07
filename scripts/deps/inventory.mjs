@@ -92,18 +92,27 @@ export function parseEngines(file, text) {
         : {pins: [], errors: [`${file}: engines.node is not ">=<major>"`]};
 }
 
+/**
+ * A pip-compile'd requirements.txt: every requirement `name==version`, each
+ * with at least one `--hash=sha256:` (continuation lines joined), so pip
+ * installs in hash-checking mode. A pin without a hash is an error: one
+ * unhashed line turns the whole file's hash checking off.
+ */
 export function parseRequirements(file, text) {
     const pins = [];
     const errors = [];
-    for (const raw of text.split('\n')) {
-        const line = raw.replace(/#.*/, '').trim();
+    const logical = text.split('\n').map(l => l.replace(/(^|\s)#.*/, '')).join('\n').replace(/\\\n/g, ' ');
+    for (const raw of logical.split('\n')) {
+        const line = raw.trim();
         if (!line)
             continue;
-        const m = line.match(/^([A-Za-z0-9._-]+)==([\w.]+)$/);
-        if (m)
-            pins.push({kind: 'pip', name: m[1], current: m[2], file});
+        const m = line.match(/^([A-Za-z0-9._-]+)==([\w.]+)((?:\s+--hash=sha256:[0-9a-f]{64})*)$/);
+        if (!m)
+            errors.push(`${file}: \`${line.slice(0, 80)}\` is not name==version --hash=sha256:...`);
+        else if (!m[3])
+            errors.push(`${file}: ${m[1]}==${m[2]} has no --hash (pip-compile --generate-hashes)`);
         else
-            errors.push(`${file}: \`${line}\` is not name==version`);
+            pins.push({kind: 'pip', name: m[1], current: m[2], file});
     }
     return {pins, errors};
 }

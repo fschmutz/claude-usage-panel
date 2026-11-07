@@ -105,6 +105,19 @@ test('update keeps the status-line segments the user chose', (t) => {
     assert.match(fs.readFileSync(settings, 'utf8'), /--segments=context --tokens=fresh/);
 });
 
+test('status-line flags of any other shape never reach the command in settings.json', (t) => {
+    // Claude Code runs that command through a shell on every prompt.
+    const home = installedHome(t);
+    const settings = path.join(home, '.claude', 'settings.json');
+    const before = fs.readFileSync(settings, 'utf8');
+    for (const flag of ['--segments=limits;touch${IFS}owned', '--segments=Limits', '--segments=',
+        '--tokens=all$(id)', '--tokens=some']) {
+        const r = run('bash', [INSTALL, 'statusline', flag], {env: withNode(home)});
+        assert.match(r.stdout + r.stderr, /lowercase names separated by commas, --tokens= all or fresh/, flag);
+        assert.equal(fs.readFileSync(settings, 'utf8'), before, `${flag} left settings.json as it was`);
+    }
+});
+
 // The blocker this file exists for: on macOS the daily job runs `install.sh
 // update`, which reinstalls the autoupdate target, which used to `launchctl
 // bootout` the very job it was running in. launchd then SIGTERMs the process

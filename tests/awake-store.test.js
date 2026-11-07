@@ -110,6 +110,25 @@ test('the lock is exclusive, and a dead holder is taken over', (t) => {
   fs.mkdirSync(path.dirname(awake.lockFile()), {recursive: true});
   fs.writeFileSync(awake.lockFile(), '999999\n');
   assert.deepEqual(awake.withLock(() => 'mine'), {ok: true, value: 'mine'});
+  assert.deepEqual(fs.readdirSync(path.dirname(awake.lockFile())).filter((f) => f.includes('.hold.lock')), [],
+    'the stale lock was moved aside and nothing is left of it');
+});
+
+test('a holder releases only its own lock, never the one that took over from it', (t) => {
+  const {awake} = world(t);
+  const other = `${process.pid}\nsomeone-else\n`;
+  const r = awake.withLock(() => {
+    // the body names the holder's pid first (the backstop reads it) and a token
+    const [pid, token] = fs.readFileSync(awake.lockFile(), 'utf8').split('\n');
+    assert.equal(pid, String(process.pid));
+    assert.match(token, /^[0-9a-f]{16}$/);
+    // this holder overran the stale window and the backstop took over
+    fs.writeFileSync(`${awake.lockFile()}.x`, other);
+    fs.renameSync(`${awake.lockFile()}.x`, awake.lockFile());
+    return 'done';
+  });
+  assert.deepEqual(r, {ok: true, value: 'done'});
+  assert.equal(fs.readFileSync(awake.lockFile(), 'utf8'), other, 'the newer holder keeps its lock');
 });
 
 test('lid mode is read back: a bit that does not stick is a failure, not a hold', (t) => {
@@ -320,4 +339,67 @@ test('lid mode that cannot be proven on leaves nothing claimed', async (t) => {
   });
   assert.equal(code, 0);
   assert.equal(awake.readJournal().sleepDisabled, false, 'the claim was dropped again');
+});
+
+test('Low Power Mode that will not turn off again stays owed, for the backstop', async (t) => {
+  // A floor turned it on; the battery recovered, so the holder turns it off -
+  // and pmset refuses. The setting is still on: the journal must keep saying
+  // so, or the backstop has nothing left to undo.
+  const denied = Object.assign(new Error('denied'), {stderr: 'sudo: a password is required\n'});
+  const answers = {
+    '/usr/bin/pmset -g batt':
+      "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t30%; discharging; present: true\n",
+  };
+  const {io, awake, state} = world(t, {answers});
+  const seen = [];
+  const code = await hold({seconds: 3600}, {
+    ...io,
+    spawn: fakeSpawn([]),
+    sleep: async () => {
+      answers['/usr/bin/pmset -g batt'] =
+        "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t90%; charging; present: true\n";
+      answers['/usr/bin/sudo -n /usr/bin/pmset -b lowpowermode 0'] = denied;
+      if (seen.length === 2) state.now += 3_600_000;
+    },
+    pollSeconds: 0,
+    onCycle: (c) => seen.push(c.lowPowerSetByUs),
+  });
+  assert.deepEqual(seen.slice(0, 2), [true, true], 'the failed off is not recorded as done');
+  assert.equal(state.lowPower, true, 'the machine is still in Low Power Mode');
+  assert.equal(awake.readJournal().lowPower, true, 'so the journal still owes it');
+  assert.equal(code, 1, 'and the holder says the backstop has work left');
+});
+
+test('start and stop wait on an awaited timer, never by blocking the process', async (t) => {
+  // The MCP server calls both. A blocking wait froze every other request,
+  // and froze this one too: the holder's write below is a timer, and it could
+  // not run until start had already given up.
+  const {io, awake} = world(t, {platform: 'linux'});
+  let alive = true;
+  const live = openAwake({
+    ...io,
+    pidAlive: (pid) => pid === process.pid && alive,
+    spawn: () => {
+      setTimeout(() => awake.writeSession({
+        ...awake.newSession({seconds: 3600}), owner: {pid: process.pid, host: 'box', kind: 'cli'},
+      }), 30);
+      return {unref: () => {}};
+    },
+  });
+  const started = await live.start({seconds: 3600, waitMs: 2_000});
+  assert.equal(started.ok, true, started.reason);
+
+  const signals = [];
+  t.mock.method(process, 'kill', (pid, sig) => {
+    signals.push(sig);
+    setTimeout(() => {
+      alive = false;
+    }, 30);
+    return true;
+  });
+  const t0 = Date.now();
+  const stopped = await live.stop({waitMs: 3_000});
+  assert.deepEqual(signals, ['SIGTERM']);
+  assert.equal(stopped.hadHolder, true);
+  assert.ok(Date.now() - t0 < 2_000, 'the holder going away is seen as it happens');
 });

@@ -3,6 +3,7 @@
 // their usage), switch, forget, refresh. claudectl.js dispatches here.
 
 import {openStore} from './accounts.js';
+import {nowOf} from './paths.js';
 import {tokenState} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 
@@ -82,7 +83,7 @@ export async function main(argv, io = {}) {
         return 0;
       }
       for (const a of accounts) {
-        const tail = a.cards ? `  ${fmtUsage(a.cards, io.nowMs ?? Date.now())}` : (a.error ? `  ${a.error}` : '');
+        const tail = a.cards ? `  ${fmtUsage(a.cards, nowOf(io))}` : (a.error ? `  ${a.error}` : '');
         out(`${a.active ? '*' : ' '} ${a.name.padEnd(12)} ${(a.email ?? '').padEnd(32)} ` +
           `${(a.plan ?? '?').padEnd(5)} ${a.tokenState}${tail}\n`);
       }

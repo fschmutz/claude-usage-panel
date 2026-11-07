@@ -13,10 +13,9 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {run} from './helpers.js';
+import {GIT_ENV, LIB, SCRIPT, env, makeCheckout, runScript} from './update-world.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SCRIPT = path.join(ROOT, 'scripts', 'auto-update.sh');
-const LIB = path.join(ROOT, 'scripts', 'lib.sh');
 
 const compare = (a, b) =>
     run('bash', [SCRIPT, '--version-compare', a, b]).stdout.trim();
@@ -34,89 +33,6 @@ test('version_compare orders released versions', () => {
     assert.equal(compare('1.5', '1.5.0'), '0');
     assert.equal(compare('1.06.0', '1.6.0'), '0');
 });
-
-// Every git in here runs with the developer's own global and system config
-// switched off. A machine-wide `core.hooksPath` (a pre-push confirm guard, for
-// one) otherwise reaches into these throwaway repos and fails the seed push,
-// so the suite would pass in CI and on a fresh clone while going red on the
-// one machine that has the guard installed.
-const GIT_ENV = {
-    ...process.env,
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_SYSTEM: '/dev/null',
-};
-
-// ── A throwaway checkout wired to a local bare "origin" ─────────────────────────
-// Layout mirrors the real repo closely enough for the script: package.json at
-// the root, scripts/auto-update.sh, and an install.sh it can invoke.
-function makeCheckout(t, {localVersion, tags}) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-au-'));
-    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
-    const origin = path.join(dir, 'origin.git');
-    const work = path.join(dir, 'work');
-    const seed = path.join(dir, 'seed');
-    const git = (cwd, ...args) =>
-        execFileSync('git', ['-C', cwd, ...args], {stdio: 'pipe', encoding: 'utf8', env: GIT_ENV});
-
-    execFileSync('git', ['init', '--bare', '-b', 'main', origin], {stdio: 'pipe', env: GIT_ENV});
-    execFileSync('git', ['init', '-b', 'main', seed], {stdio: 'pipe', env: GIT_ENV});
-    git(seed, 'config', 'user.email', 'test@example.com');
-    git(seed, 'config', 'user.name', 'test');
-
-    const writeRepo = (root, version) => {
-        fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
-        fs.writeFileSync(
-            path.join(root, 'package.json'),
-            JSON.stringify({name: 'claude-usage-panel', version}, null, 2) + '\n',
-        );
-        // The worker sources lib.sh from its own directory, so the copy
-        // travels with it - exactly as install.sh gnome / pack-gnome.sh ship it.
-        fs.copyFileSync(SCRIPT, path.join(root, 'scripts', 'auto-update.sh'));
-        fs.copyFileSync(LIB, path.join(root, 'scripts', 'lib.sh'));
-        fs.chmodSync(path.join(root, 'scripts', 'auto-update.sh'), 0o755);
-        // Stand-in for the real installer: records that it ran, and fails when
-        // $HOME/install-exit says so (a partial install - no node on the
-        // scheduler's PATH, /Applications not writable). Both the log and the
-        // switch live outside the checkout, so neither can dirty the worktree,
-        // which the worker would then refuse to touch.
-        fs.writeFileSync(
-            path.join(root, 'install.sh'),
-            '#!/usr/bin/env bash\necho "install.sh $*" >>"$HOME/install-calls.log"\n'
-                + 'exit "$(cat "$HOME/install-exit" 2>/dev/null || echo 0)"\n',
-        );
-        fs.chmodSync(path.join(root, 'install.sh'), 0o755);
-    };
-
-    writeRepo(seed, localVersion);
-    git(seed, 'add', '-A');
-    git(seed, 'commit', '-qm', 'seed');
-    git(seed, 'remote', 'add', 'origin', origin);
-    git(seed, 'push', '-q', 'origin', 'main');
-    for (const tag of tags ?? []) {
-        git(seed, 'tag', tag);
-    }
-    if (tags?.length) git(seed, 'push', '-q', 'origin', '--tags');
-
-    execFileSync('git', ['clone', '-q', origin, work], {stdio: 'pipe', env: GIT_ENV});
-    return {dir, origin, work, seed, git};
-}
-
-// The script keeps its state under XDG_STATE_HOME - point it at the sandbox so
-// tests never touch the real ~/.local/state.
-const env = (dir) => ({
-    ...GIT_ENV,
-    XDG_STATE_HOME: path.join(dir, 'state'),
-    // Sandboxed too: the script reads the installed systemd unit from here to
-    // find the checkout, and must not see the developer's real one.
-    XDG_CONFIG_HOME: path.join(dir, 'config'),
-    HOME: dir,
-});
-
-const runScript = (c, args) =>
-    run('bash', [path.join(c.work, 'scripts', 'auto-update.sh'), ...args], {
-        env: env(c.dir),
-        cwd: c.work,
-    });
 
 test('--check reports an available update with exit code 10', (t) => {
     const c = makeCheckout(t, {localVersion: '1.5.0', tags: ['v1.5.0', 'v1.6.0']});
@@ -321,8 +237,9 @@ test('a rewritten upstream is followed when the checkout holds nothing of its ow
     assert.match(r.stdout, /upstream history was rewritten - following it/);
     assert.match(r.stdout, /updated to v1\.6\.0/);
     assert.equal(c.git(c.work, 'rev-parse', 'HEAD'), c.git(c.seed, 'rev-parse', 'HEAD'));
-    // the re-pointed tag was taken, not refused
-    assert.equal(c.git(c.work, 'rev-parse', 'v1.5.0^{}'), c.git(c.seed, 'rev-parse', 'v1.5.0^{}'));
+    // Only the release being installed is fetched: the re-pointed v1.5.0 is
+    // not followed (it stays what this checkout always knew).
+    assert.notEqual(c.git(c.work, 'rev-parse', 'v1.5.0^{}'), c.git(c.seed, 'rev-parse', 'v1.5.0^{}'));
 });
 
 test('a rewritten upstream never takes a local commit with it', (t) => {

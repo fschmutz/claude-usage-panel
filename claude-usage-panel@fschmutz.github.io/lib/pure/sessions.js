@@ -28,9 +28,11 @@ const SEEN_IDS_MAX = 32;
 
 /** Fresh accumulator for one transcript file. `byDay` is capped to the days the
  *  UI can ask for; `ids` is a bounded tail of message ids so a replayed line at
- *  an incremental read boundary is not counted twice. */
+ *  an incremental read boundary is not counted twice. `cacheRead` is the cache
+ *  reads turnTokens leaves out, over the whole file: the status line's `all`
+ *  figure is the booked tokens plus these. */
 export function newSessionAcc() {
-    return {sessionId: null, cwd: null, title: null, lastMs: 0, byDay: {}, ids: []};
+    return {sessionId: null, cwd: null, title: null, lastMs: 0, byDay: {}, ids: [], cacheRead: 0};
 }
 
 /**
@@ -80,6 +82,8 @@ export function foldSessionLine(line, acc, defaultDay) {
         acc.lastMs = at;
     const day = at !== null ? localDay(at) : defaultDay;
     acc.byDay[day] = (acc.byDay[day] ?? 0) + turnTokens(usage);
+    // A rehydrated index entry written before this counter existed reads as 0.
+    acc.cacheRead = (Number(acc.cacheRead) || 0) + (Number(usage.cache_read_input_tokens) || 0);
     return acc;
 }
 

@@ -73,11 +73,36 @@ test('version-sites npxref: write pins an unpinned spec, read gets it back', (t)
     assert.equal(fs.readFileSync(file, 'utf8'), '{"args": ["-y", "github:fschmutz/claude-usage-panel#v3.4.6"]}\n');
 });
 
+test('version-sites npxpin: every documented npx install is pinned, and the bump re-pins all of them', (t) => {
+    const sitesSrc = read('scripts/version-sites.sh');
+    for (const doc of ['README.md', 'mcp/README.md', 'docs/index.html', 'wiki/Installation.md', 'wiki/MCP-Tool.md']) {
+        assert.ok(sitesSrc.includes(`"${doc}|npxpin|github:fschmutz/claude-usage-panel"`), doc);
+        const bare = read(doc).match(/github:fschmutz\/claude-usage-panel(?!#v\d+\.\d+\.\d+)(?![\w-])/g);
+        assert.equal(bare, null, `${doc} documents an unpinned npx spec`);
+    }
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-npxpin-'));
+    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+    const file = path.join(dir, 'README.md');
+    const key = 'github:fschmutz/claude-usage-panel';
+    fs.writeFileSync(file, `npx -y ${key}\n"args": ["-y", "${key}#v1.0.0"]\nnot ${key}-fork.\n`);
+    const sites = path.join(ROOT, 'scripts/version-sites.sh');
+    const readSite = () => run('bash', ['-c', '. "$1"; version_site_read "$2" npxpin "$3"', '_', sites, file, key]).stdout.trim();
+    const writeSite = (v) => run('bash', ['-c', '. "$1"; version_site_write "$2" npxpin "$3" "$4"', '_', sites, file, key, v]);
+    assert.equal(readSite(), '1.0.0,bare', 'a bare spec next to a pinned one is a mismatch');
+    writeSite('3.4.6');
+    assert.equal(readSite(), '3.4.6');
+    writeSite('3.4.7');
+    assert.equal(fs.readFileSync(file, 'utf8'),
+        `npx -y ${key}#v3.4.7\n"args": ["-y", "${key}#v3.4.7"]\nnot ${key}-fork.\n`);
+});
+
 test('ci lint: no composite that resolves actions by tag or installs an unpinned pre-commit', () => {
     const ci = read('.github/workflows/ci.yml');
     assert.doesNotMatch(ci, /pre-commit\/action@/);
     assert.match(job('.github/workflows/ci.yml', 'lint'), /pip install [^\n]*-r \.github\/pre-commit\/requirements\.txt/);
-    assert.match(read('.github/pre-commit/requirements.txt'), /^pre-commit==\d+\.\d+\.\d+$/m);
+    // pinned and hashed (pip-compile --generate-hashes): pip runs in
+    // hash-checking mode; tests/deps.test.js fails any unhashed pin
+    assert.match(read('.github/pre-commit/requirements.txt'), /^pre-commit==\d+\.\d+\.\d+ \\\n\s+--hash=sha256:[0-9a-f]{64}/m);
     for (const wf of fs.readdirSync(path.join(ROOT, '.github/workflows'))) {
         for (const m of read(`.github/workflows/${wf}`).matchAll(/uses: (\S+)/g)) {
             assert.match(m[1], /@[0-9a-f]{40}$/, `${wf}: ${m[1]} is not SHA-pinned`);

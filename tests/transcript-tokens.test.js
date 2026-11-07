@@ -11,8 +11,9 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {turnTokens} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
-import {sumTranscriptTokens, transcriptTokens, transcriptTotals} from '../claude-code/transcript-tokens.js';
+import {transcriptTokens, transcriptTotals} from '../claude-code/transcript-tokens.js';
 import {fakeFiles, noCache} from './transcript-fakes.js';
+import {refreshSessions} from '../mcp/sessions.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fix = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'sessions.json'), 'utf8'));
@@ -35,7 +36,7 @@ test('transcriptTokens agrees with the shared session fold fixture', () => {
     assert.equal(t.all, booked + 9000);
 });
 
-test('sumTranscriptTokens sums usage, cache reads optional, dedups by id only', () => {
+test('transcriptTokens sums usage, cache reads in `all` only, dedups by id only', () => {
     const jsonl = [
         '{"message":{"id":"a","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":5,"cache_read_input_tokens":1000}}}',
         '{"message":{"id":"a","usage":{"input_tokens":999,"output_tokens":999}}}', // dup id → skipped
@@ -43,11 +44,11 @@ test('sumTranscriptTokens sums usage, cache reads optional, dedups by id only', 
         '{"message":{"usage":{"input_tokens":7,"output_tokens":3}}}', // no id → also counted
         'partial-while-writing', // unparseable line → skipped
     ].join('\n');
-    assert.equal(sumTranscriptTokens(jsonl), 100 + 10 + 5 + 1000 + 200 + 20 + 7 + 3); // all
-    assert.equal(sumTranscriptTokens(jsonl, false), 100 + 10 + 5 + 200 + 20 + 7 + 3); // no cache read
-    assert.equal(sumTranscriptTokens(''), 0);
-    // one pass yields both figures
-    assert.deepEqual(transcriptTokens(jsonl), {all: 1345, fresh: 345});
+    // one pass yields both figures: `all` with the cache read, `fresh` without
+    assert.deepEqual(transcriptTokens(jsonl), {
+        all: 100 + 10 + 5 + 1000 + 200 + 20 + 7 + 3, fresh: 100 + 10 + 5 + 200 + 20 + 7 + 3,
+    });
+    assert.deepEqual(transcriptTokens(''), {all: 0, fresh: 0});
 });
 
 test('transcriptTotals caches by path+mtime+size, skipping re-read when unchanged', () => {
@@ -148,4 +149,30 @@ test('transcriptTotals reads a real file incrementally through the default reade
     fs.appendFileSync(f, turn('m2', 100));
     assert.equal(transcriptTotals(f, {cachePath}).all, 111);
     fs.rmSync(dir, {recursive: true, force: true});
+});
+
+test('the status line totals and the session index are one fold: same file, same booked tokens', (t) => {
+    // Both read the transcript through jsonl-tail.js into foldSessionLine. A
+    // private fold with its own dedupe (an unbounded id set here, a 32-id tail
+    // there) booked a replay 40 turns later differently from the index.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cus-one-fold-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const nowMs = Date.now();
+    const stamp = new Date(nowMs).toISOString();
+    const line = (id, n) => `${JSON.stringify({
+        type: 'assistant', sessionId: 'S1', cwd: '/home/u/p', timestamp: stamp,
+        message: {id, usage: {input_tokens: n, cache_read_input_tokens: 2}},
+    })}\n`;
+    const ids = Array.from({length: 40}, (_, i) => `m${i}`);
+    const text = ids.map((id) => line(id, 10)).join('') + line('m0', 10);
+    const projects = path.join(root, 'projects');
+    fs.mkdirSync(path.join(projects, '-home-u-p'), {recursive: true});
+    const file = path.join(projects, '-home-u-p', 'S1.jsonl');
+    fs.writeFileSync(file, text);
+
+    const [indexed] = refreshSessions({nowMs, projects, indexPath: path.join(root, 'i.json')});
+    const totals = transcriptTotals(file, {cachePath: path.join(root, 'c.json')});
+    assert.equal(totals.fresh, indexed.tokens);
+    assert.deepEqual(transcriptTokens(text), totals);
+    assert.equal(totals.all - totals.fresh, 2 * 41, 'cache reads come from the same fold');
 });

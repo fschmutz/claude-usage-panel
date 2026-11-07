@@ -71,9 +71,15 @@ export function run(argv, {cancellable = null, timeoutSeconds = RUN_TIMEOUT_SECO
     });
 }
 
+const outputLines = (stdout, stderr) => `${stdout}\n${stderr}`.split('\n').map(l => l.trim()).filter(Boolean);
+
 /** The last non-empty line of a child's output: what a CLI says it did or
  *  why it refused, for a notification. */
 export function lastOutputLine(stdout, stderr) {
-    const text = `${stdout}\n${stderr}`.trim();
-    return text.split('\n').filter(Boolean).at(-1) ?? '';
+    return outputLines(stdout, stderr).at(-1) ?? '';
+}
+
+/** The first non-empty line of a child's output: a CLI's headline. */
+export function firstOutputLine(stdout, stderr) {
+    return outputLines(stdout, stderr)[0] ?? '';
 }

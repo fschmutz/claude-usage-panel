@@ -12,7 +12,8 @@ import {leftoverLines, leftoverRoots} from '../claude-usage-panel@fschmutz.githu
 import {cleanPauseText, pauseExitCode, PAUSE_REASON_MAX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {openPause} from './pause.js';
-import {describeLaunch, resumePrompt} from './tabs.js';
+import {nowOf} from './paths.js';
+import {describeLaunch, openTabs, resumePrompt} from './tabs.js';
 
 export const PAUSE_COMMANDS = new Set(['pause', 'resume', 'report', 'pause-status', 'leftovers']);
 
@@ -128,12 +129,12 @@ function sender(pause, opts, io, live) {
     throw new Error(`--from takes ${[...FLAG_SOURCES].join(', ')}, not ${JSON.stringify(flag)}`);
   }
   const env = io.env ?? process.env;
-  const self = pause.tabs.selfPid(live);
+  const self = pause.registry.selfPid(live);
   const inSession = env.CLAUDECODE === '1' || Number(env.CLAUDE_PID) > 0 || self !== null;
   if (!inSession) return {from: flag, origin: null};
   if (flag !== 'cli') throw new Error(`--from=${flag} is for the panels; this runs inside a Claude Code session`);
   const origin = live.find((r) => r.pid === self)?.session_id ??
-    env.CLAUDE_CODE_SESSION_ID ?? pause.tabs.sessionOfPid(Number(env.CLAUDE_PID))?.session_id ?? null;
+    env.CLAUDE_CODE_SESSION_ID ?? pause.registry.sessionOfPid(Number(env.CLAUDE_PID))?.session_id ?? null;
   return {from: 'session', origin};
 }
 
@@ -151,7 +152,7 @@ function printTable(out, {request, rows, summary}) {
 /** Poll the request until every row is terminal or `seconds` pass,
  *  printing each row whose state moved (text mode). */
 async function follow(pause, request, seconds, io, {json, out}) {
-  const now = () => (io.nowMs ? io.nowMs() : Date.now());
+  const now = () => nowOf(io);
   const sleep = io.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const deadline = now() + seconds * 1000;
   const seen = new Map();
@@ -225,7 +226,7 @@ function closedKillHint(out, found) {
  * fail the run. Jobs of closed sessions are printed with a kill command.
  */
 async function recheck(pause, rows, st, opts, io, out, who) {
-  const live = pause.tabs.liveSessions();
+  const live = pause.registry.liveSessions();
   const known = pause.readKnown();
   const json = Boolean(opts.json);
   const safeIds = new Set(st.rows.filter((r) => r.state === 'safe').map((r) => r.sessionId));
@@ -266,8 +267,8 @@ async function recheck(pause, rows, st, opts, io, out, who) {
 }
 
 async function pauseCmd(pause, args, opts, io, out) {
-  const live = pause.tabs.liveSessions();
-  const self = opts['include-self'] ? null : pause.tabs.selfPid(live);
+  const live = pause.registry.liveSessions();
+  const self = opts['include-self'] ? null : pause.registry.selfPid(live);
   const who = sender(pause, opts, io, live);
   const rows = pick(live, args, {all: Boolean(opts.all), self});
   if (!rows.length) throw new Error('no running Claude Code session to pause');
@@ -288,7 +289,7 @@ async function pauseCmd(pause, args, opts, io, out) {
 }
 
 function leftoversCmd(pause, args, opts, out) {
-  const live = pause.tabs.liveSessions();
+  const live = pause.registry.liveSessions();
   const known = pause.readKnown();
   const scan = pause.leftovers();
   if (!scan.ok) {
@@ -313,10 +314,10 @@ function leftoversCmd(pause, args, opts, out) {
 
 /** A closed session to reopen: the name and cwd known.json kept from the
  *  request that paused it, else the newest snapshot holding the id. */
-function closedRow(pause, sessionId, known) {
+function closedRow(tabs, sessionId, known) {
   const k = known.get(sessionId);
   if (k?.cwd) return {name: k.name || sessionId.slice(0, 8), cwd: k.cwd, session_id: sessionId};
-  for (const snap of pause.tabs.snapshots()) {
+  for (const snap of tabs.snapshots()) {
     const row = snap.sessions.find((r) => r.session_id === sessionId);
     if (row) return {name: row.name, cwd: row.cwd, session_id: sessionId};
   }
@@ -324,7 +325,8 @@ function closedRow(pause, sessionId, known) {
 }
 
 async function resumeCmd(pause, args, opts, io, out) {
-  const live = pause.tabs.liveSessions();
+  const tabs = openTabs(io);
+  const live = pause.registry.liveSessions();
   const who = sender(pause, opts, io, live);
   const liveIds = new Map(live.map((r) => [r.session_id, r]));
   const known = pause.readKnown();
@@ -343,7 +345,7 @@ async function resumeCmd(pause, args, opts, io, out) {
   const running = ids.filter((id) => liveIds.has(id)).map((id) => liveIds.get(id));
   const closed = [];
   for (const id of ids.filter((x) => !liveIds.has(x))) {
-    const row = pause.pendingCheckpoint(id, known.get(id)?.cwd ?? null) ? closedRow(pause, id, known) : null;
+    const row = pause.pendingCheckpoint(id, known.get(id)?.cwd ?? null) ? closedRow(tabs, id, known) : null;
     if (row) closed.push(row);
     else out(`skip ${id.slice(0, 8)}: not running and no pending checkpoint (\`claudectl session open\` reopens it)\n`);
   }
@@ -351,10 +353,10 @@ async function resumeCmd(pause, args, opts, io, out) {
   const dryRun = Boolean(opts['dry-run']);
   let code = 0;
   if (closed.length) {
-    const {open, skipped} = pause.tabs.plan({sessions: closed});
+    const {open, skipped} = tabs.plan({sessions: closed});
     for (const {row, why} of skipped) out(`skip ${row.name}: ${why}\n`);
     if (open.length) {
-      const nowMs = io.nowMs ? io.nowMs() : Date.now();
+      const nowMs = nowOf(io);
       const peers = [...open, ...live];
       // "paused at" is this session's own pause, not the last request's time
       const prompt = (row) => resumePrompt({
@@ -362,7 +364,7 @@ async function resumeCmd(pause, args, opts, io, out) {
         homedir: io.homedir ?? os.homedir(), checkpoint: pause.pendingCheckpoint(row.session_id, row.cwd),
         leftovers: pause.leftoversCommand(row.session_id),
       });
-      const r = pause.tabs.launch(open, {terminal: typeof opts.terminal === 'string' ? opts.terminal : undefined, prompt, dryRun});
+      const r = tabs.launch(open, {terminal: typeof opts.terminal === 'string' ? opts.terminal : undefined, prompt, dryRun});
       if (!dryRun) for (const row of open) pause.markResumed(row.session_id);
       for (const row of open) out(`reopen ${row.name} ${row.session_id.slice(0, 8)} with its checkpoint\n`);
       if (dryRun) for (const st of r.steps) out(`${st.cmd} ${st.args.map((x) => JSON.stringify(x)).join(' ')}\n`);
@@ -383,7 +385,7 @@ async function resumeCmd(pause, args, opts, io, out) {
 function sessionFromEnv(pause, io) {
   const env = io.env ?? process.env;
   if (env.CLAUDE_CODE_SESSION_ID) return env.CLAUDE_CODE_SESSION_ID;
-  return pause.tabs.sessionOfPid(Number(env.CLAUDE_PID))?.session_id ?? null;
+  return pause.registry.sessionOfPid(Number(env.CLAUDE_PID))?.session_id ?? null;
 }
 
 /** --reason TEXT, or --reason-file PATH / - (stdin): a reason holding

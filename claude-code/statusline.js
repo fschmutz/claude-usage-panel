@@ -17,18 +17,21 @@
 // cache live in transcript-tokens.js; this file is only the rendering.
 
 import fs from 'node:fs';
-import {fileURLToPath} from 'node:url';
 
 import {
   activeAccountName, autoSwitchTarget, usageSeverity, worstFromCache, worstPercent,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 import {clockPace} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pace.js';
-import {formatLastPing, localDay} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
+import {formatLastPing} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {awakeBadge} from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js';
+import {isObject} from '../claude-usage-panel@fschmutz.github.io/lib/pure/json.js';
+import {cleanPauseText} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {compactTokens, rankSessions} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {clampPercent, usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 import {warehouseAccount} from '../claude-usage-panel@fschmutz.github.io/lib/pure/warehouse.js';
 import {openStore} from './accounts.js';
 import {openAwake} from './awake.js';
+import {isMain} from './is-main.js';
 import {forecastMap} from './pace.js';
 import {lastPingPath, sessionIndexPath} from './paths.js';
 import {resetHint} from './stamps.js';
@@ -70,16 +73,24 @@ export function gauge(percent, color) {
   return `${color}${bar}${DIM}${empty}${RESET}`;
 }
 
+// What Claude Code pipes on stdin, parsed ONCE per render (renderLine) and
+// handed to every segment. Anything that is not a JSON object - empty stdin,
+// a torn write, an array - reads as {}, so each segment just finds its field
+// missing and stays blank.
+export function parseInput(stdinText) {
+  try {
+    const o = JSON.parse(stdinText);
+    return isObject(o) ? o : {};
+  } catch {
+    return {};
+  }
+}
+
 // A "Context" card for the context-window usage Claude Code passes on stdin,
 // rendered in the same gauge format as the plan limits. Returns '' when the
 // field is absent (older Claude Code) or stdin isn't valid JSON.
-export function contextSegment(stdinText) {
-  let pct;
-  try {
-    pct = JSON.parse(stdinText)?.context_window?.used_percentage;
-  } catch {
-    return '';
-  }
+export function contextSegment(input) {
+  const pct = input?.context_window?.used_percentage;
   // Strictly a JSON number: Number(null) / Number('') / Number(false) are 0,
   // which would print a "0%" nobody measured.
   if (typeof pct !== 'number' || !Number.isFinite(pct)) return '';
@@ -92,13 +103,8 @@ export function contextSegment(stdinText) {
 // stdin, as cards keyed like every other port's (`key` = kind: no per-model
 // card exists here). No API severity, so colors use the local thresholds;
 // resets_at is epoch seconds and converted to ISO.
-export function cardsFromStdin(stdinText) {
-  let rl;
-  try {
-    rl = JSON.parse(stdinText)?.rate_limits;
-  } catch {
-    return [];
-  }
+export function cardsFromStdin(input) {
+  const rl = input?.rate_limits;
   const cards = [];
   const add = (win, kind, label) => {
     // Read by JSON type, like every normalizer: Number(null), Number('') and
@@ -174,38 +180,22 @@ export function render(cards, {forecasts = new Map(), nowMs = Date.now()} = {}) 
     .join('  ');
 }
 
-// Compact token count: 847 → "847", 16_700 → "16.7k", 1_240_000 → "1.2M". Guards
-// the unit boundary so 999_999 promotes to "1.0M" rather than "1000.0k".
-export function formatTokens(n) {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) {
-    const k = (n / 1e3).toFixed(1);
-    return k === '1000.0' ? '1.0M' : `${k}k`;
-  }
-  return String(n);
-}
-
 // The "∑ N tok" card: cumulative tokens this window has consumed, from the
 // transcript Claude Code points to on stdin (transcript_path). Returns '' when
 // the path is absent (before the first turn) or unreadable.
-export function tokensSegment(stdinText, {
+export function tokensSegment(input, {
   includeCacheRead = true,
   statFile,
   readFrom,
   cachePath,
 } = {}) {
-  let p;
-  try {
-    p = JSON.parse(stdinText)?.transcript_path;
-  } catch {
-    return '';
-  }
-  if (!p) return '';
+  const p = input?.transcript_path;
+  if (typeof p !== 'string' || !p) return '';
   const totals = transcriptTotals(p, {statFile, readFrom, cachePath});
   if (!totals) return '';
   const total = includeCacheRead ? totals.all : totals.fresh;
   if (!total) return '';
-  return `${DIM}∑ ${formatTokens(total)} tok${RESET}`;
+  return `${DIM}∑ ${compactTokens(total)} tok${RESET}`;
 }
 
 // "ping 05:30": the last time a scheduled ping opened a session window. Silent
@@ -230,6 +220,9 @@ export function pingSegment({
 // read from the shared index (the MCP server / panels build it; the status
 // line must stay a sub-100ms command, so it never folds a transcript itself).
 // Opt-in (--segments=…,sessions) because the line has little horizontal room.
+// Ranking and naming are lib/pure/sessions.js, the panels' own; the name is
+// cleaned of control characters (a custom title or a cwd comes out of a log
+// file, and an ESC there would retitle the terminal or write its clipboard).
 export function sessionsSegment({
   nowMs = Date.now(),
   readFile = (f) => fs.readFileSync(f, 'utf8'),
@@ -241,29 +234,11 @@ export function sessionsSegment({
   } catch {
     return '';
   }
-  const today = localDay(nowMs);
-  const top = Object.values(index?.files ?? {})
-    .map((e) => ({...e, tokens: (e.byDay ?? {})[today] ?? 0}))
-    .filter((e) => e.sessionId && e.tokens > 0)
-    .sort((a, b) => b.tokens - a.tokens)[0];
-  if (!top) return '';
-  const name = top.title || (top.cwd ?? '').replace(/\/+$/, '').split('/').pop() ||
-    top.sessionId.slice(0, 8);
-  return `${DIM}▸ ${name} ${formatTokens(top.tokens)}${RESET}`;
+  const [top] = rankSessions(Object.values(index?.files ?? {}), {nowMs, limit: 1});
+  if (!top?.tokens) return '';
+  return `${DIM}▸ ${cleanPauseText(top.label)} ${compactTokens(top.tokens)}${RESET}`;
 }
 
-// "[PRO]": which saved account this session runs on - and, when the panels'
-// last snapshot says another saved account has room while this one is at the
-// auto-switch threshold, "[PRO ⇢ PERSO]" in yellow. No network and no token
-// here: the name comes from ~/.claude.json against the saved profiles, the
-// other accounts' usage from the cache the panels / MCP server keep, and this
-// session's own usage from the stdin rate limits. Deliberately NOT
-// store.liveAccountName(): that reads the live access token first, which on
-// macOS forks `security` against the Keychain on every refresh and pulls the
-// bearer token into this process. The account block alone names the login; it
-// can only lag during a switch torn between its two writes, which the next
-// switch or sync repairs. Never throws: a status line must render whatever the
-// store looks like.
 // "wait 2": live sessions blocked on the user. Silent at zero - the line
 // stays short - and opt-in (--segments=…,waiting) like sessions / account.
 export function waitingSegment({io = {}} = {}) {
@@ -283,14 +258,26 @@ export function awakeSegment({io = {}} = {}) {
   return badge ? `${DIM}awake ${badge}${RESET}` : '';
 }
 
-export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
+// "[PRO]": which saved account this session runs on - and, when the panels'
+// last snapshot says another saved account has room while this one is at the
+// auto-switch threshold, "[PRO ⇢ PERSO]" in yellow. No network and no token
+// here: the name comes from ~/.claude.json against the saved profiles, the
+// other accounts' usage from the cache the panels / MCP server keep, and this
+// session's own usage from the stdin rate limits. Deliberately NOT
+// store.liveAccountName(): that reads the live access token first, which on
+// macOS forks `security` against the Keychain on every refresh and pulls the
+// bearer token into this process. The account block alone names the login; it
+// can only lag during a switch torn between its two writes, which the next
+// switch or sync repairs. Never throws: a status line must render whatever the
+// store looks like.
+export function accountSegment(input, {nowMs = Date.now(), io = {}} = {}) {
   try {
     const store = openStore({...io, nowMs});
     const active = activeAccountName(store.listProfiles(), store.readLiveAccount());
     if (!active) return '';
     const worst = worstFromCache(store.readUsageCache());
     // This session's own numbers are fresher than any cache entry.
-    const own = worstPercent(cardsFromStdin(stdinText), nowMs);
+    const own = worstPercent(cardsFromStdin(input), nowMs);
     if (own !== null) worst[active] = own;
     const target = autoSwitchTarget({active, worst, nowMs, lastSwitchMs: store.readLastSwitchMs()});
     if (target) return `${SEV_COLOR.warning}[${active} ⇢ ${target.to}]${RESET}`;
@@ -309,8 +296,8 @@ export function accountSegment(stdinText, {nowMs = Date.now(), io = {}} = {}) {
 // are two quota pools, and one series across a switch reads a 10 % -> 60 %
 // jump as a burn.
 // Like accountSegment this reads only the account block, never a token.
-export function limitsSegment(stdinText, {nowMs = Date.now(), historyPath, io = {}} = {}) {
-  const cards = cardsFromStdin(stdinText);
+export function limitsSegment(input, {nowMs = Date.now(), historyPath, io = {}} = {}) {
+  const cards = cardsFromStdin(input);
   const forecasts = forecastMap(cards, {
     nowMs, account: liveAccountKey(io), ...(historyPath ? {historyPath} : {}),
   });
@@ -327,12 +314,13 @@ export function liveAccountKey(io = {}) {
 }
 
 // The segments the line can show, keyed by the name used in --segments. Each
-// takes the stdin text and the parsed config and returns its rendered string.
+// takes the parsed stdin (parseInput) and the parsed config and returns its
+// rendered string.
 const SEGMENTS = {
-  account: (stdin) => accountSegment(stdin),
-  context: (stdin) => contextSegment(stdin),
-  limits: (stdin) => limitsSegment(stdin),
-  tokens: (stdin, cfg) => tokensSegment(stdin, {includeCacheRead: cfg.includeCacheRead}),
+  account: (input) => accountSegment(input),
+  context: (input) => contextSegment(input),
+  limits: (input) => limitsSegment(input),
+  tokens: (input, cfg) => tokensSegment(input, {includeCacheRead: cfg.includeCacheRead}),
   ping: () => pingSegment(),
   sessions: () => sessionsSegment(),
   waiting: () => waitingSegment(),
@@ -374,13 +362,15 @@ function readStdin() {
 
 // The whole line: the chosen segments in order, left-aligned (Claude Code
 // left-anchors the status line; indent via the settings `padding` field).
-// Each segment is rendered on its own: one that throws - a corrupt file, an
+// stdin is parsed once here and the same object goes to every segment. Each
+// segment is rendered on its own: one that throws - a corrupt file, an
 // unexpected stdin shape - drops only itself, never the rest of the line.
 export function renderLine(stdin, cfg, segments = SEGMENTS) {
+  const input = parseInput(stdin);
   const parts = [];
   for (const key of cfg.segments) {
     try {
-      const text = segments[key]?.(stdin, cfg);
+      const text = segments[key]?.(input, cfg);
       if (text) parts.push(text);
     } catch {
       // this segment stays blank; the others still render
@@ -395,7 +385,7 @@ function main() {
 }
 
 // Only render when run directly; importing (e.g. from tests) is side-effect free.
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   // A status line must never crash if the reader closes the pipe early.
   process.stdout.on('error', (e) => {
     if (e.code === 'EPIPE') process.exit(0);

@@ -11,62 +11,140 @@
 # through the one-liner too. Override the checkout location with
 # CLAUDE_USAGE_PANEL_HOME.
 #
-# A release reaches users through its tag, never through main: this used to
-# install the default-branch tip, so every new user ran unreleased commits
-# stamped with the previous release's version, and the daily update then
-# called that "up to date". The branch is put ON the tag rather than the tag
-# checked out: scripts/auto-update.sh refuses a detached HEAD, and it keeps
-# fast-forwarding this branch to each later tag.
+# A release reaches users through its tag, never through main, and a tag is a
+# release only once its GitHub Release exists (the same probe as the daily
+# update, release_published below): release.yml publishes one only for a
+# commit whose CI is green. When GitHub cannot be asked, the highest tag is
+# installed and the installer says it could not confirm it. The branch is put
+# ON the tag rather than the tag checked out: scripts/auto-update.sh refuses a
+# detached HEAD, and it keeps fast-forwarding this branch to each later tag.
+#
+# Everything runs from main(), called on the last line: a download cut short
+# defines nothing it could half-run, and a cut inside that line is refused.
 set -euo pipefail
 
 REPO="${CLAUDE_USAGE_PANEL_REPO:-https://github.com/fschmutz/claude-usage-panel.git}"
 DIR="${CLAUDE_USAGE_PANEL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/claude-usage-panel}"
 
-if ! command -v git >/dev/null; then
-    echo "git is required - install it first (e.g. sudo apt install git)" >&2
-    exit 1
-fi
+# >>> release_published - byte-identical in docs/install, which cannot source
+# this file before it has a checkout; tests/install-bootstrap.test.js pins it.
+# A tag counts once its GitHub Release exists: release.yml publishes one only
+# for a commit whose ci-gate is green. $1 the origin URL, $2 the version
+# without "v". 0 published, 1 not (yet), 2 cannot tell. CUP_RELEASE_PROBE
+# replaces the lookup (the tests). An origin not on GitHub has no Releases:
+# there the tag is the release. The REST API, not the html page, which
+# renders a bare tag with 200 too; a rate limit (403/429) is "cannot tell".
+release_published() {
+    local url="$1" tag="$2" slug code
+    if [ -n "${CUP_RELEASE_PROBE:-}" ]; then
+        "$CUP_RELEASE_PROBE" "$tag" && return 0 || return $?
+    fi
+    case "$url" in
+        *github.com[:/]*)
+            slug="${url#*github.com[:/]}"
+            slug="${slug%.git}"
+            ;;
+        *) return 0 ;;
+    esac
+    command -v curl >/dev/null 2>&1 || return 2
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+        -H 'Accept: application/vnd.github+json' \
+        "https://api.github.com/repos/$slug/releases/tags/v$tag" 2>/dev/null)" || return 2
+    case "$code" in
+        200) return 0 ;;
+        404) return 1 ;;
+        *) return 2 ;;
+    esac
+}
+# <<< release_published
 
-# The highest vX.Y.Z tag the checkout knows, numerically (v1.10.0 > v1.9.0);
-# prereleases never qualify. Empty when the repo has cut no release.
-latest_release_tag() {
-    # `|| true`: no match is an answer (no release), not a failure to die on
-    # under pipefail.
+# The vX.Y.Z tags the checkout knows, highest first, numerically (v1.10.0 >
+# v1.9.0); prereleases never qualify. `|| true`: no match is an answer (no
+# release), not a failure to die on under pipefail.
+release_tags() {
     git -C "$DIR" tag -l 'v*' |
         { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } |
-        sort -t. -k1.2,1n -k2,2n -k3,3n | tail -1
+        sort -t. -k1.2,1nr -k2,2nr -k3,3nr
 }
 
-fresh=false
-if [ -d "$DIR/.git" ]; then
-    echo "==> Updating existing checkout: $DIR"
-    git -C "$DIR" fetch --tags --quiet origin
-else
-    echo "==> Cloning into $DIR"
-    mkdir -p "$(dirname "$DIR")"
-    git clone --quiet "$REPO" "$DIR"
-    fresh=true
-fi
+# The newest tag with a published Release. A tag without one is skipped; when
+# GitHub cannot be asked, the highest tag wins and that is said out loud.
+# Empty when the repo has cut no release.
+latest_release_tag() {
+    local url tags tag rc
+    url="$(git -C "$DIR" remote get-url origin 2>/dev/null || printf '%s' "$REPO")"
+    tags="$(release_tags)"
+    for tag in $tags; do
+        rc=0
+        release_published "$url" "${tag#v}" || rc=$?
+        case "$rc" in
+            0)
+                printf '%s\n' "$tag"
+                return 0
+                ;;
+            1) echo "==> $tag is tagged but has no published release - skipped" >&2 ;;
+            *)
+                tag="$(printf '%s\n' "$tags" | head -1)"
+                echo "==> Could not confirm a published release with the GitHub API - installing the highest tag, $tag, unconfirmed" >&2
+                printf '%s\n' "$tag"
+                return 0
+                ;;
+        esac
+    done
+}
 
-tag="$(latest_release_tag)"
-if [ -z "$tag" ]; then
-    echo "==> No release tag found - installing the default branch as it is"
-    $fresh || git -C "$DIR" merge --ff-only --quiet '@{u}'
-elif $fresh; then
-    # A fresh clone holds nothing of its own: move its branch onto the tag,
-    # keeping the branch's upstream so the daily update can follow it.
-    git -C "$DIR" checkout --quiet -B "$(git -C "$DIR" symbolic-ref --short HEAD)" "$tag"
-    echo "==> Installing release $tag"
-elif git -C "$DIR" merge-base --is-ancestor HEAD "$tag"; then
-    git -C "$DIR" merge --ff-only --quiet "$tag"
-    echo "==> Installing release $tag"
-elif git -C "$DIR" merge-base --is-ancestor "$tag" HEAD; then
-    # Already at or past it (a checkout that once tracked main). Never moved
-    # backwards: that would throw commits away.
-    echo "==> The checkout is already at or past release $tag - leaving it where it is"
-else
-    echo "the checkout at $DIR has diverged from release $tag - update it by hand" >&2
-    exit 1
-fi
+main() {
+    local fresh=false tag
+    # The last line passes this marker after the user's arguments: a download
+    # cut inside that line (`main`, `main "$@" --compl`) gets no marker and
+    # stops here instead of installing with the arguments it lost.
+    if [ $# -eq 0 ] || [ "${!#}" != --complete-download ]; then
+        echo "the installer download was cut short - run the curl command again" >&2
+        exit 1
+    fi
+    set -- "${@:1:$(($# - 1))}"
+    if ! command -v git >/dev/null; then
+        echo "git is required - install it first (e.g. sudo apt install git)" >&2
+        exit 1
+    fi
 
-exec "$DIR/install.sh" "$@"
+    if [ -d "$DIR/.git" ]; then
+        echo "==> Updating existing checkout: $DIR"
+        git -C "$DIR" fetch --tags --quiet origin
+    else
+        echo "==> Cloning into $DIR"
+        mkdir -p "$(dirname "$DIR")"
+        git clone --quiet "$REPO" "$DIR"
+        fresh=true
+    fi
+
+    tag="$(latest_release_tag)"
+    if [ -z "$tag" ] && [ -n "$(release_tags)" ]; then
+        # Tagged, but no Release yet (CI still publishing, or it refused the
+        # tag): main is not the answer either.
+        echo "no tagged version has a published release yet - try again later" >&2
+        exit 1
+    elif [ -z "$tag" ]; then
+        echo "==> No release tag found - installing the default branch as it is"
+        $fresh || git -C "$DIR" merge --ff-only --quiet '@{u}'
+    elif $fresh; then
+        # A fresh clone holds nothing of its own: move its branch onto the tag,
+        # keeping the branch's upstream so the daily update can follow it.
+        git -C "$DIR" checkout --quiet -B "$(git -C "$DIR" symbolic-ref --short HEAD)" "$tag"
+        echo "==> Installing release $tag"
+    elif git -C "$DIR" merge-base --is-ancestor HEAD "$tag"; then
+        git -C "$DIR" merge --ff-only --quiet "$tag"
+        echo "==> Installing release $tag"
+    elif git -C "$DIR" merge-base --is-ancestor "$tag" HEAD; then
+        # Already at or past it (a checkout that once tracked main). Never moved
+        # backwards: that would throw commits away.
+        echo "==> The checkout is already at or past release $tag - leaving it where it is"
+    else
+        echo "the checkout at $DIR has diverged from release $tag - update it by hand" >&2
+        exit 1
+    fi
+
+    exec "$DIR/install.sh" "$@"
+}
+
+main "$@" --complete-download

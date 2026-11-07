@@ -206,7 +206,10 @@ the full treatment:
    is over, the GNOME dropdown, the macOS popup and the status line all say so,
    with a `Recover` button next to it.
 
-The store, all mode 0600 in a 0700 directory:
+The store, `<state dir>/claude-usage-panel/awake/` (`~/.local/state/...` on
+Linux, `~/Library/Application Support/...` on macOS), all mode 0600 in a 0700
+directory. The installer asks `claude-code/paths.js` for it and passes it to
+the backstop as `--awake-dir`, so the shell never derives it a second time:
 
 | File | What it holds |
 | --- | --- |
@@ -216,11 +219,12 @@ The store, all mode 0600 in a 0700 directory:
 | `.hold.lock` | the mutex the holder and the backstop share around "read, decide, change, write" |
 | `awake.log` | what the holder did, one line per event |
 
-Check it any time:
+Check it any time (`./install.sh awake` prints the backstop line with this
+machine's store filled in):
 
 ```bash
-scripts/awake-backstop.sh --status     # what the journal says; changes nothing
-claudectl awake status                 # the same, plus what is holding it
+scripts/awake-backstop.sh --awake-dir "<the awake store>" --status   # what the journal says; changes nothing
+claudectl awake status                                              # the same, plus what is holding it
 ```
 
 ## Troubleshooting

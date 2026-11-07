@@ -20,7 +20,7 @@ test('the cost row names the installed ccusage, not Node/npx', () => {
     assert.doesNotMatch(prefs, /Node\/npx/);
     // lib/cost.js runs only an installed ccusage - the text is true of it.
     const cost = read('lib/cost.js');
-    assert.match(cost, /CCUSAGE_ARGV = \['ccusage',/);
+    assert.match(cost, /find_program_in_path\('ccusage'\)/);
     assert.doesNotMatch(cost, /['"]npx['"]/);
 });
 

@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import {
     gauge, render, contextSegment, cardsFromStdin, limitsSegment,
-    formatTokens, tokensSegment,
+    tokensSegment, parseInput,
     parseConfig, accountSegment, renderLine,
 } from '../claude-code/statusline.js';
 import {resetHint} from '../claude-code/stamps.js';
@@ -42,51 +42,51 @@ test('resetHint formats the two most significant units, blank when past', () => 
 });
 
 test('contextSegment renders a gauge card, clamps, blank when absent', () => {
-    assert.match(strip(contextSegment('{"context_window":{"used_percentage":8}}')),
+    assert.match(strip(contextSegment(parseInput('{"context_window":{"used_percentage":8}}'))),
         /^Context [█▏▎▍▌▋▊▉░]{6} 8%$/);
-    assert.match(strip(contextSegment('{"context_window":{"used_percentage":73.6}}')),
+    assert.match(strip(contextSegment(parseInput('{"context_window":{"used_percentage":73.6}}'))),
         /^Context [█▏▎▍▌▋▊▉░]{6} 74%$/);
     // Over 100 / negative are clamped to the displayed value, never crash.
-    assert.match(strip(contextSegment('{"context_window":{"used_percentage":130}}')),
+    assert.match(strip(contextSegment(parseInput('{"context_window":{"used_percentage":130}}'))),
         /^Context █{6} 100%$/);
-    assert.match(strip(contextSegment('{"context_window":{"used_percentage":-5}}')),
+    assert.match(strip(contextSegment(parseInput('{"context_window":{"used_percentage":-5}}'))),
         /^Context ░{6} 0%$/);
-    assert.equal(contextSegment('{}'), '');
-    assert.equal(contextSegment('not json'), '');
+    assert.equal(contextSegment(parseInput('{}')), '');
+    assert.equal(contextSegment(parseInput('not json')), '');
 });
 
 test('cardsFromStdin builds Session/Week cards from rate_limits', () => {
     const in3h = Math.floor((Date.now() + 3 * 60 * 60 * 1000) / 1000); // epoch seconds
     const in2d = Math.floor((Date.now() + 2 * 24 * 60 * 60 * 1000) / 1000);
-    const cards = cardsFromStdin(JSON.stringify({
+    const cards = cardsFromStdin(parseInput(JSON.stringify({
         rate_limits: {
             five_hour: {used_percentage: 14, resets_at: in3h},
             seven_day: {used_percentage: 92, resets_at: in2d},
         },
-    }));
+    })));
     assert.deepEqual(cards.map((c) => c.label), ['Session', 'Week']);
     assert.equal(cards[0].percent, 14);
     assert.equal(cards[0].severity, 'normal'); // local threshold
     assert.equal(cards[1].severity, 'critical'); // 92% ≥ 90
     assert.match(strip(render(cards)), /Session [█▏▎▍▌▋▊▉░]{6} 14% \dh\d{2}m/);
-    assert.deepEqual(cardsFromStdin('{}'), []);
-    assert.deepEqual(cardsFromStdin('not json'), []);
+    assert.deepEqual(cardsFromStdin(parseInput('{}')), []);
+    assert.deepEqual(cardsFromStdin(parseInput('not json')), []);
 });
 
 test('cardsFromStdin: a used_percentage that is not a JSON number is no card, never 0%', () => {
     // Number(null) / Number('') / Number(false) are 0 and Number(true) is 1:
     // a loose read printed a measured-looking "0%" (a full tank) for them.
     for (const bad of [null, '', '42', false, true, {}, []]) {
-        const cards = cardsFromStdin(JSON.stringify({
+        const cards = cardsFromStdin(parseInput(JSON.stringify({
             rate_limits: {five_hour: {used_percentage: bad, resets_at: 1}},
-        }));
+        })));
         assert.deepEqual(cards, [], JSON.stringify(bad));
-        assert.equal(contextSegment(JSON.stringify({context_window: {used_percentage: bad}})), '',
+        assert.equal(contextSegment(parseInput(JSON.stringify({context_window: {used_percentage: bad}}))), '',
             JSON.stringify(bad));
     }
-    const [card] = cardsFromStdin(JSON.stringify({
+    const [card] = cardsFromStdin(parseInput(JSON.stringify({
         rate_limits: {seven_day: {used_percentage: 0, resets_at: null}},
-    }));
+    })));
     assert.equal(card.percent, 0, 'a real 0 is still a reading');
     assert.equal(card.resetsAt, null, 'a null reset is no reset, not 1970');
 });
@@ -104,31 +104,24 @@ test('render draws one gauge per shown limit and a shared reset only once', () =
     assert.equal((out.match(/1d1h/g) || []).length, 1); // exactly once
 });
 
-test('formatTokens is compact and promotes at the unit boundary', () => {
-    assert.equal(formatTokens(847), '847');
-    assert.equal(formatTokens(16_700), '16.7k');
-    assert.equal(formatTokens(1_240_000), '1.2M');
-    assert.equal(formatTokens(999_999), '1.0M'); // must not be "1000.0k"
-});
-
 test('tokensSegment reads transcript_path and renders ∑ N tok, blank when empty', () => {
     const jsonl = '{"message":{"id":"x","usage":{"input_tokens":16000,"output_tokens":700}}}';
     const stdin = '{"transcript_path":"/x.jsonl"}';
     const inj = (text) => ({...fakeFiles({'/x.jsonl': {text}}), cachePath: noCache()});
-    assert.match(strip(tokensSegment(stdin, inj(jsonl))), /^∑ 16\.7k tok$/);
-    assert.equal(tokensSegment('{}', inj(jsonl)), ''); // no transcript_path
-    assert.equal(tokensSegment('not json', inj(jsonl)), '');
-    assert.equal(tokensSegment(stdin, inj('')), ''); // empty transcript → 0 → blank
+    assert.match(strip(tokensSegment(parseInput(stdin), inj(jsonl))), /^∑ 16\.7k tok$/);
+    assert.equal(tokensSegment(parseInput('{}'), inj(jsonl)), ''); // no transcript_path
+    assert.equal(tokensSegment(parseInput('not json'), inj(jsonl)), '');
+    assert.equal(tokensSegment(parseInput(stdin), inj('')), ''); // empty transcript → 0 → blank
     // Transcript not on disk yet (stat throws) → blank, never crash.
-    assert.equal(tokensSegment(stdin, {statFile: () => { throw new Error('ENOENT'); }, cachePath: noCache()}), '');
+    assert.equal(tokensSegment(parseInput(stdin), {statFile: () => { throw new Error('ENOENT'); }, cachePath: noCache()}), '');
 });
 
 test('tokensSegment honors --tokens=fresh (excludes cache reads)', () => {
     const jsonl = '{"message":{"id":"y","usage":{"input_tokens":1200,"cache_read_input_tokens":500000}}}';
     const stdin = '{"transcript_path":"/y.jsonl"}';
     const base = () => fakeFiles({'/y.jsonl': {text: jsonl}});
-    assert.match(strip(tokensSegment(stdin, {...base(), cachePath: noCache()})), /^∑ 501\.2k tok$/);
-    assert.match(strip(tokensSegment(stdin, {...base(), includeCacheRead: false, cachePath: noCache()})),
+    assert.match(strip(tokensSegment(parseInput(stdin), {...base(), cachePath: noCache()})), /^∑ 501\.2k tok$/);
+    assert.match(strip(tokensSegment(parseInput(stdin), {...base(), includeCacheRead: false, cachePath: noCache()})),
         /^∑ 1\.2k tok$/);
 });
 
@@ -194,7 +187,7 @@ test('the limits segment keys its history like the MCP server (by card key)', ()
     }});
     // No live login at all: the bare card key.
     const io = {homedir: '/nonexistent', platform: 'linux', env: {}};
-    assert.match(strip(limitsSegment(stdin, {nowMs, historyPath: p, io})), /^Session .*12% 1h00m  Week .*30% 1d0h$/);
+    assert.match(strip(limitsSegment(parseInput(stdin), {nowMs, historyPath: p, io})), /^Session .*12% 1h00m  Week .*30% 1d0h$/);
     assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(p, 'utf8'))), ['session', 'weekly_all']);
     fs.rmSync(p, {force: true});
 });
@@ -249,7 +242,7 @@ test('accountSegment never reads a token: no Keychain fork on macOS', () => {
     fs.rmSync(path.join(io.homedir, '.claude', '.credentials.json')); // macOS keeps it in the Keychain
     const calls = [];
     const mac = {...io, dir: store.dir, platform: 'darwin', exec: (...a) => { calls.push(a); throw new Error('no item'); }};
-    assert.equal(strip(accountSegment(rateLimits(10, 10), {io: mac, nowMs: NOW})), '[PRO]');
+    assert.equal(strip(accountSegment(parseInput(rateLimits(10, 10)), {io: mac, nowMs: NOW})), '[PRO]');
     assert.deepEqual(calls, []);
 });
 
@@ -257,14 +250,14 @@ test('the limits segment files its history under the live login, like the MCP se
     const io = accountWorld();
     const p = path.join(io.homedir, 'hist.json');
     const keys = () => Object.keys(JSON.parse(fs.readFileSync(p, 'utf8'))).sort();
-    limitsSegment(rateLimits(10, 20), {nowMs: NOW, historyPath: p, io});
+    limitsSegment(parseInput(rateLimits(10, 20)), {nowMs: NOW, historyPath: p, io});
     assert.deepEqual(keys(), ['u-pro|session', 'u-pro|weekly_all']);
     // No uuid: the email. And the account block alone - no token is read.
     fs.writeFileSync(path.join(io.homedir, '.claude.json'),
         JSON.stringify({oauthAccount: {emailAddress: 'perso@example.com'}}));
     const calls = [];
     const mac = {...io, platform: 'darwin', exec: (...a) => { calls.push(a); throw new Error('no item'); }};
-    limitsSegment(rateLimits(10, 20), {nowMs: NOW, historyPath: p, io: mac});
+    limitsSegment(parseInput(rateLimits(10, 20)), {nowMs: NOW, historyPath: p, io: mac});
     assert.deepEqual(keys(), ['perso@example.com|session', 'perso@example.com|weekly_all',
         'u-pro|session', 'u-pro|weekly_all']);
     assert.deepEqual(calls, []);
@@ -280,28 +273,46 @@ test('one throwing segment blanks only itself, never the whole line', () => {
     assert.equal(renderLine('{}', {segments: ['a', 'boom', 'empty', 'b']}, segments), 'A  B');
 });
 
+test('stdin is parsed once per render and the same object reaches every segment', () => {
+    const seen = [];
+    const spy = (input) => {
+        seen.push(input);
+        return '';
+    };
+    renderLine('{"context_window":{"used_percentage":5}}', {segments: ['a', 'b', 'c']}, {a: spy, b: spy, c: spy});
+    assert.equal(seen.length, 3);
+    assert.deepEqual(seen[0], {context_window: {used_percentage: 5}});
+    assert.ok(seen.every((o) => o === seen[0]), 'one parse, one object');
+});
+
+test('parseInput reads anything that is not a JSON object as {}', () => {
+    for (const bad of ['', 'not json', '[]', 'null', '42', '"x"'])
+        assert.deepEqual(parseInput(bad), {}, bad);
+    assert.deepEqual(parseInput('{"a":1}'), {a: 1});
+});
+
 test('accountSegment is blank for an unsaved login, and never throws', () => {
     const io = accountWorld();
-    assert.equal(accountSegment(rateLimits(10, 10), {io, nowMs: NOW}), '');
-    assert.equal(accountSegment('{}', {io: {homedir: '/nonexistent', platform: 'linux', env: {}}}), '');
+    assert.equal(accountSegment(parseInput(rateLimits(10, 10)), {io, nowMs: NOW}), '');
+    assert.equal(accountSegment(parseInput('{}'), {io: {homedir: '/nonexistent', platform: 'linux', env: {}}}), '');
 });
 
 test('accountSegment names the active account, and points at a freer one from the cache', () => {
     const io = accountWorld();
     const store = openStore({...io, nowMs: NOW});
     store.saveCurrent('PRO');
-    assert.equal(strip(accountSegment(rateLimits(10, 10), {io, nowMs: NOW})), '[PRO]');
+    assert.equal(strip(accountSegment(parseInput(rateLimits(10, 10)), {io, nowMs: NOW})), '[PRO]');
     store.writeProfile({version: 1, name: 'PERSO', account: {accountUuid: 'u-perso'},
         credentials: {claudeAiOauth: {accessToken: 'x', refreshToken: 'y'}}});
     store.writeUsageCache({PERSO: {ok: true, cards: [{key: 'session', percent: 20}, {key: 'weekly_all', percent: 30}]}});
     // own usage from stdin (fresh) beats the cache: at 95% here, PERSO has room
-    assert.equal(strip(accountSegment(rateLimits(95, 40), {io, nowMs: NOW})), '[PRO ⇢ PERSO]');
-    assert.equal(strip(accountSegment(rateLimits(50, 40), {io, nowMs: NOW})), '[PRO]');
+    assert.equal(strip(accountSegment(parseInput(rateLimits(95, 40)), {io, nowMs: NOW})), '[PRO ⇢ PERSO]');
+    assert.equal(strip(accountSegment(parseInput(rateLimits(50, 40)), {io, nowMs: NOW})), '[PRO]');
     // a stale cache says nothing about the others
-    assert.equal(strip(accountSegment(rateLimits(95, 40), {io, nowMs: NOW + 3_600_000})), '[PRO]');
+    assert.equal(strip(accountSegment(parseInput(rateLimits(95, 40)), {io, nowMs: NOW + 3_600_000})), '[PRO]');
     // a switch just made (by anyone) holds the hint back for the cooldown
     store.writeLastSwitch({from: 'PERSO', to: 'PRO'});
-    assert.equal(strip(accountSegment(rateLimits(95, 40), {io, nowMs: NOW + 60_000})), '[PRO]');
+    assert.equal(strip(accountSegment(parseInput(rateLimits(95, 40)), {io, nowMs: NOW + 60_000})), '[PRO]');
 });
 
 // ── The awake segment ───────────────────────────────────────────────────────

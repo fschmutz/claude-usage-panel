@@ -51,20 +51,24 @@ install_cli() {
     else
         # rm first: a symlink left at this path would be written through.
         rm -f "$CLI_BIN"
+        # Both paths are single-quoted shell words (_sh_word): a HOME or a
+        # node dir holding a quote, a $ or a backtick is data, never code run
+        # each time the shim is.
         # shellcheck disable=SC2016 # the $(...) and "$@" are the generated shim's, expanded when it runs
-        printf '#!/bin/sh\n%s claudectl\nNODE="$(command -v node 2>/dev/null)" || NODE="%s"\nexec "$NODE" "%s" "$@"\n' \
-            "$CLI_SHIM_MARK" "$node_bin" "$CLI_JS" >"$CLI_BIN"
+        printf '#!/bin/sh\n%s claudectl\nNODE="$(command -v node 2>/dev/null)" || NODE=%s\nexec "$NODE" %s "$@"\n' \
+            "$CLI_SHIM_MARK" "$(_sh_word "$node_bin")" "$(_sh_word "$CLI_JS")" >"$CLI_BIN"
         chmod +x "$CLI_BIN"
         ok "installed $CLI_BIN"
     fi
 
-    local sched_service="[Unit]
+    local sched_service
+    sched_service="[Unit]
 Description=Claude Usage Panel - snapshot running Claude Code sessions
 Documentation=https://github.com/fschmutz/claude-usage-panel/wiki/Tabs
 
 [Service]
 Type=oneshot
-ExecStart=\"$node_bin\" \"$CLI_JS\" session autosave"
+ExecStart=$(_sched_systemd_word "$node_bin") $(_sched_systemd_word "$CLI_JS") session autosave"
     local sched_timer="[Unit]
 Description=Claude Usage Panel - snapshot running Claude Code sessions every 30 min
 
@@ -93,7 +97,8 @@ WantedBy=timers.target"
   <key>LowPriorityIO</key><true/>
 </dict>
 </plist>"
-    local sched_cron="*/30 * * * * \"$node_bin\" \"$CLI_JS\" session autosave >/dev/null 2>&1  $CLI_CRON_TAG"
+    local sched_cron
+    sched_cron="*/30 * * * * $(_sched_cron_word "$node_bin") $(_sched_cron_word "$CLI_JS") session autosave >/dev/null 2>&1  $CLI_CRON_TAG"
 
     if ! _sched_install "$CLI_UNIT" "$CLI_LABEL" "$CLI_CRON_TAG" "every 30 min" \
         "$sched_service" "$sched_timer" "$sched_plist" "$sched_cron"; then

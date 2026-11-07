@@ -14,8 +14,7 @@
 // uses, and never injects into a group the user wrote; remove drops ours
 // from every event.
 
-import fs from 'node:fs';
-import path from 'node:path';
+import {JsonFileError, loadObject, saveObject} from '../lib/json-file.mjs';
 
 // The one list of events each set uses (lib/pure, pinned by the fixtures):
 // a second copy here drifted the day it grew.
@@ -35,53 +34,23 @@ if ((op !== 'add' && op !== 'remove') || !file || !command || !['waiting', 'paus
 const ENTRIES = set === 'pause' ? pauseHookEntries(command)
   : WAITING_HOOK_EVENTS.map((event) => ({event, hook: {type: 'command', command}}));
 
+// load / save over scripts/lib/json-file.mjs, shared with json-edit.mjs.
 function load() {
-  let text;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    return loadObject(file);
   } catch (e) {
-    if (e.code === 'ENOENT') return {};
+    if (e instanceof JsonFileError) fail(e.message);
     throw e;
   }
-  let obj;
-  try {
-    obj = JSON.parse(text);
-  } catch {
-    fail(`${file} is not valid JSON`);
-  }
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj))
-    fail(`${file} is not a JSON object`);
-  return obj;
-}
-
-function realTarget(p) {
-  for (let hops = 0; hops < 40; hops++) {
-    let st;
-    try {
-      st = fs.lstatSync(p);
-    } catch (e) {
-      if (e.code === 'ENOENT') return p;
-      throw e;
-    }
-    if (!st.isSymbolicLink()) return p;
-    p = path.resolve(path.dirname(p), fs.readlinkSync(p));
-  }
-  fail(`${file}: too many levels of symbolic links`);
 }
 
 function save(obj) {
-  const target = realTarget(file);
-  fs.mkdirSync(path.dirname(target), {recursive: true});
-  let mode = 0o600;
   try {
-    mode = fs.statSync(target).mode & 0o777;
+    saveObject(file, obj);
   } catch (e) {
-    if (e.code !== 'ENOENT') throw e;
+    if (e instanceof JsonFileError) fail(e.message);
+    throw e;
   }
-  const tmp = `${target}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`, {mode});
-  fs.chmodSync(tmp, mode);
-  fs.renameSync(tmp, target);
 }
 
 function ours(entry) {

@@ -185,21 +185,46 @@ test('tools/list - exposes get_usage, waiting, awake, the account tools and the 
     const tool = r.tools[0];
     assert.equal(tool.inputSchema.type, 'object');
     assert.deepEqual(tool.outputSchema.required, ['limits']);
-    assert.equal(tool.annotations.readOnlyHint, true);
-    assert.equal(r.tools.find(t => t.name === 'waiting').annotations.readOnlyHint, true);
-    const switched = r.tools.find(t => t.name === 'switch_account');
-    assert.equal(switched.annotations.readOnlyHint, false);
-    assert.equal(switched.annotations.destructiveHint, false);
-    // save with `force` can overwrite another account's saved login.
-    for (const name of ['save_account', 'save_codex_account'])
-        assert.equal(r.tools.find(t => t.name === name).annotations.destructiveHint, true, name);
+    // What each tool may do, as a client reads it before asking the user.
+    // readOnly only when it writes nothing at all; destructive when it can
+    // overwrite a live login (switch), move a saved one (rename) or replace a
+    // saved profile (save with `force`). get_usage writes the live login back
+    // and list_accounts spends a stored refresh token: neither is read-only.
+    const hints = Object.fromEntries(r.tools.map(t => [t.name, [
+        t.annotations.readOnlyHint, t.annotations.readOnlyHint ? undefined : t.annotations.destructiveHint,
+    ]]));
+    assert.deepEqual(hints, {
+        get_usage: [false, false],
+        waiting: [true, undefined],
+        awake: [false, false],
+        list_accounts: [false, false],
+        save_account: [false, true],
+        switch_account: [false, true],
+        rename_account: [false, true],
+        list_codex_accounts: [true, undefined],
+        save_codex_account: [false, true],
+        switch_codex_account: [false, true],
+        get_codex_usage: [true, undefined],
+    });
     // A model must never be able to read a Codex figure as a live one: the
     // schema pins the provenance to a constant and requires the capture time.
     const codexUsage = r.tools.find(t => t.name === 'get_codex_usage');
     const item = codexUsage.outputSchema.properties.limits.items;
     assert.equal(item.properties.provenance.const, 'estimated');
     assert.ok(item.required.includes('capturedAt'));
-    assert.equal(codexUsage.annotations.readOnlyHint, true);
+});
+
+test('tools/call - every listed tool dispatches; an unlisted name is -32602', async (t) => {
+    const io = world(t);
+    const {tools} = await handleRequest({method: 'tools/list'});
+    for (const {name} of tools) {
+        // Arguments a tool refuses are a tool error; what matters is that the
+        // name reached its handler instead of falling through as unknown.
+        const r = await handleRequest({method: 'tools/call', params: {name, arguments: {name: 'NOPE!'}}}, io);
+        assert.ok(Array.isArray(r.content), name);
+    }
+    await assert.rejects(
+        handleRequest({method: 'tools/call', params: {name: 'nope'}}, io), (e) => e.code === -32602);
 });
 
 test('the Codex tools answer without a Codex login, and never reach a Claude one', async (t) => {
@@ -219,6 +244,36 @@ test('the Codex tools answer without a Codex login, and never reach a Claude one
         {method: 'tools/call', params: {name: 'save_codex_account', arguments: {name: 'PLUS'}}}, io);
     assert.equal(save.isError, true);
     assert.match(save.content[0].text, /run `codex login` first/);
+});
+
+// handleRequest hands ONE io to every tool, and io.nowMs is a number for
+// some modules (the stores) and was a function for others (waiting, awake):
+// a numeric nowMs broke the waiting tool with "io.nowMs is not a function".
+// Every tool reads the clock through paths.js nowOf now; drive them all.
+test('every MCP tool answers with one io carrying a numeric nowMs', async (t) => {
+    const io = world(t);
+    io.procDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-mcp-proc-')); // no real process is ever read
+    t.after(() => fs.rmSync(io.procDir, {recursive: true, force: true}));
+    io.platform = 'linux';
+    const ARGS = {
+        awake: {action: 'status'}, save_account: {name: 'PRO'}, switch_account: {name: 'PRO'},
+        rename_account: {from: 'PRO', to: 'MAIN'}, save_codex_account: {name: 'PLUS'}, switch_codex_account: {name: 'PLUS'},
+    };
+    const {tools} = await handleRequest({method: 'tools/list'}, io);
+    assert.ok(tools.length >= 10, tools.map((x) => x.name).join(','));
+    for (const {name} of tools) {
+        const r = await handleRequest({method: 'tools/call', params: {name, arguments: ARGS[name] ?? {}}}, io);
+        const text = r.content.map((c) => c.text).join('\n');
+        assert.doesNotMatch(text, /is not a function|NaN|Invalid (time|Date)|undefined/, `${name}: ${text}`);
+    }
+    const waiting = await handleRequest({method: 'tools/call', params: {name: 'waiting'}}, io);
+    assert.equal(waiting.isError, undefined, waiting.content[0].text);
+    // and the moving clock still reaches the tools that take one
+    const moving = {...io, nowMs: () => NOW};
+    for (const name of ['waiting', 'awake', 'list_codex_accounts', 'get_codex_usage']) {
+        const r = await handleRequest({method: 'tools/call', params: {name, arguments: ARGS[name] ?? {}}}, moving);
+        assert.equal(r.isError, undefined, `${name}: ${r.content[0].text}`);
+    }
 });
 
 test('tools/call get_usage - text + structuredContent, from the live login', async (t) => {
@@ -298,7 +353,7 @@ test('get_usage - anything it throws is a tool error, never a -32603', async (t)
     }});
     const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
     assert.equal(r.isError, true);
-    assert.equal(r.content[0].text, 'internal_error: clock unavailable');
+    assert.equal(r.content[0].text, 'clock unavailable');
 });
 
 test('get_usage follows CLAUDE_CONFIG_DIR like the account store', async (t) => {

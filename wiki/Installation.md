@@ -27,7 +27,7 @@ uninstalls every client.
 | `./install.sh macos` | build + install the macOS `.app` |
 | `./install.sh autoupdate` | daily check for a new release + auto-install |
 | `./install.sh sessionping [HH:MM …] [--days=…]` | scheduled `claude` pings that open the 5h session window (opt-in) |
-| `./install.sh cost` | pinned `ccusage` + the session-cost line on (opt-in) |
+| `./install.sh cost` | `ccusage` from its lockfile (`npm ci`, private prefix, launcher in `~/.local/bin`, `~/.npm-global/bin` on macOS) + the session-cost line on (opt-in) |
 | `./install.sh waiting` | Claude Code hooks for **Waiting on you** + the panel section on (opt-in: they run node per tool call) |
 | `./install.sh pause` | Claude Code hooks so `claudectl session pause` / `resume` reach every live session, idle ones included (opt-in; installs `cli` when missing) |
 | `./install.sh awake` | Keep the machine awake while Claude Code works: `claudectl awake`, the panel section, and the recovery backstop that releases it if the holder dies (opt-in; installs `cli` when missing) |
@@ -105,7 +105,7 @@ The `get_usage` and `waiting` tools also install without touching the repo:
 /plugin install usage-panel@claude-usage-panel
 
 # or one CLI line (the unpinned spec tracks main; append #vX.Y.Z for one release)
-claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel
+claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel#v3.11.0
 
 # Cursor: click "Add to Cursor" on the landing page
 ```
@@ -159,7 +159,7 @@ scripts/auto-update.sh              # look now, and install it if there is one
 ```
 
 It is deliberately timid about your checkout: it **only ever fast-forwards**
-(no merge, rebase, reset or stash), to the release tag rather than to the branch
+(no merge, rebase or stash; the one reset is below), to the release tag rather than to the branch
 tip, and it skips - logging the reason, changing nothing - when the worktree is
 dirty, the branch is diverged or detached, there is no `origin`, or the network
 is down. A lookup that failed for some other reason (auth, DNS, a dead remote
@@ -169,7 +169,40 @@ the targets already installed, so it never adds a client you didn't want.
 If the reinstall itself fails - no `node` on the scheduler's `PATH`, or
 the app's folder not writable on macOS - the run exits non-zero, records nothing
 as installed, and tries again next time. The rolling log is
-`~/.local/state/claude-usage-panel/auto-update.log`.
+`~/.local/state/claude-usage-panel/auto-update.log`. `node` is looked for where
+version managers keep it (`~/.local/bin`, volta, fnm's `default` alias, asdf's
+shims, nvm's `current`, Homebrew and `/usr/local/bin`, then each manager's
+newest installed version) - the same list the session ping uses for `claude`.
+
+#### Release tag trust
+
+Only a tag whose **GitHub Release** exists counts (release.yml publishes one
+only for a commit whose CI is green). The run fetches that one tag - never
+every tag with `--force` - and treats it as immutable: the tag's object id is
+recorded in `~/.local/state/claude-usage-panel/release-tags` when the checkout
+moves to it, and a tag that later points elsewhere (on `origin` against your
+checkout's own copy, or against that record) is **refused**: nothing is
+installed, the run exits 1, logs `REFUSED: ...` and shows a notification. A
+tag that cannot be fetched is a skip, retried next run; the run never falls
+back to the branch tip. The one `reset` (following an upstream whose history
+was rewritten, under a checkout with nothing of its own) only ever goes to that
+verified tag.
+
+Signed tags are **optional**. Put an OpenSSH allowed-signers file at
+`~/.local/state/claude-usage-panel/allowed-signers` and every release tag must
+carry an SSH signature by one of its keys (`git verify-tag`; GPG and X.509
+signatures do not count, the file is the only trust anchor); without the file,
+no signature is required.
+
+```text
+release@example.com namespaces="git" ssh-ed25519 AAAA...
+```
+
+The one-line installer (`curl ... | bash`) applies the same Release check: a
+tag without a published Release is skipped, and when the GitHub API cannot be
+reached it installs the highest tag and says it could not confirm it. Its whole
+body runs from one `main` call on its last line, so a download cut short runs
+nothing.
 
 ### By hand
 

@@ -31,8 +31,9 @@ globalThis.sessionPingStub = {
         file_test: (p, _flag) => (p === '/run/systemd/system'
             ? world.systemd
             : p.endsWith('/scripts/session-ping.sh') && world.bundledRunner),
+        // nothing reads or writes a file synchronously (lib/fs.js is async)
         file_get_contents: () => {
-            throw new Error('no such file');
+            throw new Error('gi stub: synchronous file_get_contents');
         },
         mkdir_with_parents: () => {
             if (world.writeFails)
@@ -40,16 +41,33 @@ globalThis.sessionPingStub = {
         },
         path_get_dirname: p => p.slice(0, p.lastIndexOf('/')),
         get_real_time: () => 1,
-        file_set_contents: () => true,
+        Bytes: class {
+            constructor(data) {
+                this.data = data;
+            }
+        },
+        file_set_contents: () => {
+            throw new Error('gi stub: synchronous file_set_contents');
+        },
         unlink: () => 0,
     },
     Gio: {
         _promisify: () => {}, // lib/fs.js promisifies at import; unused here
         FileEnumerator: {},
         InputStream: {},
+        OutputStream: {},
         FileQueryInfoFlags: {NONE: 0},
         FileCopyFlags: {OVERWRITE: 1},
-        File: {new_for_path: () => ({set_attribute_uint32: () => true, move: () => true})},
+        FileCreateFlags: {NONE: 0, PRIVATE: 1},
+        File: {
+            new_for_path: () => ({
+                set_attribute_uint32: () => true,
+                load_contents_async: async () => {
+                    throw new Error('no such file');
+                },
+                replace_contents_bytes_async: async () => [true, null],
+            }),
+        },
     },
 };
 

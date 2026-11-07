@@ -22,18 +22,6 @@ _pause_hook_command() {
     printf 'node "%s"' "$PAUSE_HOOK_DEST"
 }
 
-# Show the buttons in every panel this machine has; a missing panel is fine.
-_pause_toggle() { # true|false
-    local schemas="$HOME/.local/share/gnome-shell/extensions/$UUID/schemas"
-    if [ -d "$schemas" ] && command -v gsettings >/dev/null &&
-        grep -qs 'pause-enabled' "$schemas"/*.xml; then
-        act gsettings --schemadir "$schemas" set org.gnome.shell.extensions.claude-usage-panel pause-enabled "$1"
-    fi
-    if [ "$(uname -s)" = Darwin ]; then
-        act defaults write io.github.fschmutz.claude-usage-panel pauseEnabled -bool "$1"
-    fi
-}
-
 install_pause() {
     info "Pause / resume every session (Claude Code hooks)"
     if ! command -v node >/dev/null; then
@@ -51,13 +39,13 @@ install_pause() {
         echo "  pause hooks (SessionStart / Stop / PreToolUse) → $CLAUDE_SETTINGS"
     fi
     # A reinstall keeps the user's own choice: only a first install turns it on.
-    [ "${action:-install}" = update ] || _pause_toggle true
+    [ "${action:-install}" = update ] || _panel_setting pause-enabled pauseEnabled true
     $DRY || ok "sessions started from now on get a waiter; running ones get the request on their next tool call"
 }
 
 uninstall_pause() {
     info "Pause / resume every session (Claude Code hooks)"
-    _pause_toggle false
+    _panel_setting pause-enabled pauseEnabled false
     if _pause_installed; then
         if ! command -v node >/dev/null; then
             skip_fatal "pause: Node.js not found on PATH - the hooks stay in $CLAUDE_SETTINGS"

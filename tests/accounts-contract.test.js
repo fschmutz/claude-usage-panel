@@ -146,3 +146,9 @@ test('renameRecovery: wait while fresh, then finish what was written or undo wha
 test('a rename journal goes stale exactly when the refresh lock it runs under does', () => {
     assert.equal(accounts.RENAME_STALE_MS, accounts.REFRESH_LOCK.staleMs);
 });
+test('parseCredentials: the nested form as is, the flat legacy forms lifted, no token is null', () => {
+    for (const c of FIX.credentials.cases) assert.deepEqual(accounts.parseCredentials(c.raw), c.expected, c.name);
+});
+test('countClaudeProcesses: claude binaries and the npm cli.js, never a lookalike', () => {
+    for (const c of FIX.claudeProcesses.cases) assert.equal(accounts.countClaudeProcesses(c.ps), c.expected, c.name);
+});

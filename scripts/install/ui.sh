@@ -128,6 +128,29 @@ _lines_into() { # ARRAY_NAME COMMAND [ARGS...]
     done < <("$@")
 }
 
+# Turn a panel setting on or off in every panel this machine has; a missing
+# panel is fine. GNOME only when the INSTALLED schema has the key: an older
+# extension that does not know it would make gsettings fail the target (the
+# panel picks the key up once the new schema is installed). macOS through
+# `defaults`, which needs no schema.
+_panel_setting() { # GSETTINGS_KEY DEFAULTS_KEY true|false
+    local schemas="$HOME/.local/share/gnome-shell/extensions/$UUID/schemas"
+    if [ -d "$schemas" ] && command -v gsettings >/dev/null &&
+        grep -qsF "name=\"$1\"" "$schemas"/*.gschema.xml; then
+        act gsettings --schemadir "$schemas" set org.gnome.shell.extensions.claude-usage-panel "$1" "$3"
+    fi
+    if [ "$(uname -s)" = Darwin ]; then
+        act defaults write io.github.fschmutz.claude-usage-panel "$2" -bool "$3"
+    fi
+}
+
+# One word for /bin/sh: single quotes, an embedded ' as '\''. For generated
+# shell text (the claudectl shim, the status-line command), where a path is
+# data and must never be read as code.
+_sh_word() {
+    printf "'%s'" "$(printf '%s' "$1" | sed -e "s/'/'\\\\''/g")"
+}
+
 # One JSON editor for every settings/config merge (get | set | set-string |
 # delete | encode - see scripts/json-edit.mjs). Node is a prerequisite of every
 # target that needs it, checked by that target before its first call.

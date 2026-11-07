@@ -2,10 +2,15 @@
 # Awake backstop: give this machine its sleep back from the recovery journal
 # ALONE - no panel, no claudectl, no node, no Swift.
 #
-#   scripts/awake-backstop.sh            undo what is owed, if it is owed yet
-#   scripts/awake-backstop.sh --force    undo it now, whatever the deadline says
-#   scripts/awake-backstop.sh --status    what the journal says; changes nothing
-#   scripts/awake-backstop.sh --quiet    log only (this is what the timer runs)
+#   scripts/awake-backstop.sh --awake-dir DIR            undo what is owed, if it is owed yet
+#   scripts/awake-backstop.sh --awake-dir DIR --force    undo it now, whatever the deadline says
+#   scripts/awake-backstop.sh --awake-dir DIR --status   what the journal says; changes nothing
+#   scripts/awake-backstop.sh --awake-dir DIR --quiet    log only (this is what the timer runs)
+#
+# DIR is the awake store, `<state dir>/claude-usage-panel/awake`. It is not
+# derived here: `./install.sh awake` asks claude-code/paths.js for it (the one
+# definition every Node client uses) and bakes it into the schedule, so the
+# store this script repairs is the store the holder writes, by construction.
 #
 # Scheduled by `./install.sh awake` - a launchd agent on macOS, a systemd user
 # timer on Linux, cron lines as fallback - and run once by `claudectl awake`
@@ -38,22 +43,9 @@ set -euo pipefail
 
 SCRIPT_NAME=awake-backstop
 
-# The same state dir claude-code/paths.js derives, per platform.
-if [ "$(uname -s)" = "Darwin" ]; then
-    STATE_DIR="$HOME/Library/Application Support/claude-usage-panel"
-else
-    STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"
-fi
-AWAKE_DIR="$STATE_DIR/awake"
-JOURNAL="$AWAKE_DIR/journal.json"
-SESSION="$AWAKE_DIR/session.json"
-HOLD_LOCK="$AWAKE_DIR/.hold.lock"
-LOG="$STATE_DIR/awake-backstop.log"
-# take_lock() in lib.sh wants a directory lock of its own; this script uses the
-# holder's file lock instead, so LOCK is only there to satisfy the contract.
-LOCK="$AWAKE_DIR/.backstop.lock"
-
-# Must equal AWAKE_BACKSTOP_GRACE_MS in lib/pure/awake.js (2 minutes).
+# AWAKE_BACKSTOP_GRACE_MS in lib/pure/awake.js (2 minutes); tests/awake-install.test.js
+# runs this script just inside and just past that window. undo_one's two
+# commands are held to lib/pure/awake-power.js AWAKE_SUDO_COMMANDS the same way.
 GRACE_SECONDS=120
 # A lock whose holder is gone, or that has sat untouched this long, is taken
 # over: LOCK_STALE_MS in claude-code/awake.js.
@@ -73,6 +65,9 @@ fi
 QUIET=false
 FORCE=false
 MODE=run # run | status
+AWAKE_DIR=""
+# Set for real once --awake-dir is known; lib.sh's EXIT trap reads it before.
+LOG=""
 
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh" 2>/dev/null || {
@@ -80,22 +75,52 @@ MODE=run # run | status
     exit 1
 }
 
-for arg in "$@"; do
-    case "$arg" in
+while [ $# -gt 0 ]; do
+    case "$1" in
         --force) FORCE=true ;;
         --status) MODE=status ;;
         --quiet) QUIET=true ;;
+        --awake-dir=*) AWAKE_DIR="${1#--awake-dir=}" ;;
+        --awake-dir)
+            [ $# -ge 2 ] || {
+                printf '%s: --awake-dir needs a directory\n' "$SCRIPT_NAME" >&2
+                exit 2
+            }
+            AWAKE_DIR="$2"
+            shift
+            ;;
         -h | --help)
             usage
             exit 0
             ;;
         *)
-            printf '%s: unknown option %s\n' "$SCRIPT_NAME" "$arg" >&2
+            printf '%s: unknown option %s\n' "$SCRIPT_NAME" "$1" >&2
             usage >&2
             exit 2
             ;;
     esac
+    shift
 done
+
+# An absolute path or nothing: a relative one would follow the scheduler's cwd.
+case "$AWAKE_DIR" in
+    /*) ;;
+    *)
+        printf '%s: --awake-dir must name the absolute awake store; the installed schedule passes it - reinstall with ./install.sh update\n' \
+            "$SCRIPT_NAME" >&2
+        exit 2
+        ;;
+esac
+AWAKE_DIR="${AWAKE_DIR%/}"
+STATE_DIR="$(dirname "$AWAKE_DIR")"
+JOURNAL="$AWAKE_DIR/journal.json"
+SESSION="$AWAKE_DIR/session.json"
+HOLD_LOCK="$AWAKE_DIR/.hold.lock"
+LOG="$STATE_DIR/awake-backstop.log"
+# take_lock() in lib.sh wants a directory lock of its own; this script uses the
+# holder's file lock instead, so LOCK is only there to satisfy the contract.
+# shellcheck disable=SC2034  # read by lib.sh
+LOCK="$AWAKE_DIR/.backstop.lock"
 
 # ── reading the journal ─────────────────────────────────────────────────────
 # The journal is written by JSON.stringify(x, null, 2) / JSONSerialization, so
@@ -134,28 +159,66 @@ pid_alive() { # PID
 
 # ── the lock the holder takes ───────────────────────────────────────────────
 # O_EXCL create on the same path claude-code/awake.js uses (`set -C` makes
-# `>` fail when the file exists). A lock whose pid is gone, or that is older
-# than the stale window, is removed and the create retried once.
+# `>` fail when the file exists), with the same rules as claude-code/excl-lock.js:
+#   - the body is our pid, then a token nobody else writes, and the lock is
+#     removed on exit only while that exact body is still there: a run that
+#     overran the stale window never removes the lock of whoever took over;
+#   - a lock whose pid is gone, or that is older than the stale window, is
+#     removed only under the takeover guard (<lock>.takeover, O_EXCL): holding
+#     it, the run re-reads the lock and removes it only if it still holds the
+#     exact body it judged. Takeovers go one at a time, and a lock created
+#     since the judgement is never touched; a guard older than 2 minutes was
+#     left by a crash and is cleared for the next round.
+HOLD_TOKEN="$$-$(date +%s)-$RANDOM$RANDOM"
+
+hold_body() { printf '%s\n%s\n' "$$" "$HOLD_TOKEN"; }
+
+# shellcheck disable=SC2329  # run by the EXIT trap take_hold_lock sets
+release_hold_lock() {
+    if [ "$(cat "$HOLD_LOCK" 2>/dev/null)" = "$(hold_body)" ]; then
+        rm -f "$HOLD_LOCK"
+    fi
+}
+
+take_over_stale() { # JUDGED: the lock's content when it was judged stale
+    local guard="$HOLD_LOCK.takeover"
+    if ! (
+        set -C
+        : >"$guard"
+    ) 2>/dev/null; then
+        # another takeover runs; a guard left by a crash is cleared after 2 min
+        if [ -n "$(find "$guard" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
+            rm -f "$guard"
+        fi
+        return 0
+    fi
+    if [ "$(cat "$HOLD_LOCK" 2>/dev/null)" = "$1" ]; then
+        rm -f "$HOLD_LOCK"
+    fi
+    rm -f "$guard"
+}
+
 take_hold_lock() {
     mkdir -p "$AWAKE_DIR" 2>/dev/null || return 1
-    local held age
-    # Two passes: the first may find a stale lock and remove it, the second
-    # takes it. A third would mean another live holder, and then doing nothing
-    # is the right answer.
-    for _ in 1 2; do
+    local judged held age
+    # A few passes: a stale lock is taken over, then the create retried. A lock
+    # still there after that has a live holder, and then doing nothing is the
+    # right answer.
+    for _ in 1 2 3; do
         if (
             set -C
-            printf '%s\n' "$$" >"$HOLD_LOCK"
+            hold_body >"$HOLD_LOCK"
         ) 2>/dev/null; then
-            # shellcheck disable=SC2064  # $HOLD_LOCK is fixed by now, expand it here
-            trap "rm -f '$HOLD_LOCK'; trim_log" EXIT
+            trap 'release_hold_lock; trim_log' EXIT
             return 0
         fi
-        held="$(head -1 "$HOLD_LOCK" 2>/dev/null || echo 0)"
+        judged="$(cat "$HOLD_LOCK" 2>/dev/null)" || continue # released meanwhile
+        held="$(printf '%s\n' "$judged" | head -1)"
         age=""
         [ -n "$(find "$HOLD_LOCK" -maxdepth 0 -mmin "+$((LOCK_STALE_SECONDS / 60))" 2>/dev/null)" ] && age=stale
-        if ! pid_alive "$held" || [ -n "$age" ]; then
-            rm -f "$HOLD_LOCK"
+        # an empty body is a lock being written right now: only age judges it
+        if { [ -n "$held" ] && ! pid_alive "$held"; } || [ -n "$age" ]; then
+            take_over_stale "$judged"
             continue
         fi
         return 1

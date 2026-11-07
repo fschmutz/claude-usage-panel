@@ -223,7 +223,10 @@ export const GET_USAGE_TOOL = {
     },
     required: ['limits'],
   },
-  annotations: {readOnlyHint: true, openWorldHint: true},
+  // Not read-only: it writes the live login back into its saved profile, and
+  // records the pace history and the session index. Nothing it writes loses
+  // anything, so not destructive either.
+  annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: true},
 };
 
 const ACCOUNT_LIMIT_ITEM = GET_USAGE_TOOL.outputSchema.properties.limits.items;
@@ -265,7 +268,9 @@ export const ACCOUNT_TOOLS = [
       },
       required: ['active', 'accounts'],
     },
-    annotations: {readOnlyHint: true, openWorldHint: true},
+    // Not read-only: a stale saved login is refreshed (a single-use refresh
+    // token spent, the profile rewritten) and the usage cache is written.
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: true},
   },
   {
     name: 'save_account',
@@ -315,7 +320,9 @@ export const ACCOUNT_TOOLS = [
       },
       required: ['to', 'changed', 'running'],
     },
-    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true},
+    // Overwrites the live credentials and the oauthAccount key of
+    // ~/.claude.json: a client asks before running it.
+    annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true},
   },
   {
     name: 'rename_account',
@@ -338,7 +345,8 @@ export const ACCOUNT_TOOLS = [
       properties: {from: {type: 'string'}, to: {type: 'string'}},
       required: ['from', 'to'],
     },
-    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false},
+    // Moves a saved profile's files: destructive, so a client asks first.
+    annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false},
   },
 ];
 
@@ -417,5 +425,3 @@ export async function callAccountTool(name, args, store) {
       throw new Error(`Unknown account tool: ${name}`);
   }
 }
-
-export const ACCOUNT_TOOL_NAMES = new Set(ACCOUNT_TOOLS.map((t) => t.name));

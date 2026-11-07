@@ -199,29 +199,29 @@ test('an unknown command and --help both answer without touching anything', asyn
 test('the MCP tool reads the same state, and refuses what it must not do', async (t) => {
   const {io, awake} = world(t);
   const {callAwakeTool} = await import('../mcp/awake.js');
-  const idle = callAwakeTool({}, io);
+  const idle = await callAwakeTool({}, io);
   assert.equal(idle.structuredContent.active, false);
   assert.match(idle.content[0].text, /\*\*Not awake\.\*\*/);
 
   awake.writeSession({
     ...awake.newSession({seconds: 3600}), owner: {pid: process.pid, host: 'box', kind: 'cli'},
   });
-  const held = callAwakeTool({action: 'status'}, io);
+  const held = await callAwakeTool({action: 'status'}, io);
   assert.equal(held.structuredContent.badge, '1:00:00');
   assert.match(held.content[0].text, /\*\*Awake\*\* - held by a timer \(1:00:00 left\)/);
-  assert.throws(() => callAwakeTool({action: 'on'}, io), /already awake/);
-  assert.throws(() => callAwakeTool({action: 'sleep'}, io), /unknown action/);
-  assert.throws(() => callAwakeTool({action: 'on', duration: 'soon'}, io), /want "2h"/);
+  await assert.rejects(() => callAwakeTool({action: 'on'}, io), /already awake, held by pid \d+ - use action "off"/);
+  await assert.rejects(() => callAwakeTool({action: 'sleep'}, io), /unknown action/);
+  await assert.rejects(() => callAwakeTool({action: 'on', duration: 'soon'}, io), /want "2h"/);
 });
 
 test('the MCP tool surfaces an owed recovery rather than starting over it', async (t) => {
   const {io, awake} = world(t, {platform: 'darwin'});
   const {callAwakeTool} = await import('../mcp/awake.js');
   awake.writeJournal(awake.newJournal({endsAt: NOW - 720_000, sleepDisabled: true}));
-  const state = callAwakeTool({}, io);
+  const state = await callAwakeTool({}, io);
   assert.deepEqual(state.structuredContent.recoveryOwed, ['sleepDisabled']);
   assert.match(state.content[0].text, /sleepDisabled was not given back/);
-  assert.throws(() => callAwakeTool({action: 'on'}, io), /awake recover --force/);
+  await assert.rejects(() => callAwakeTool({action: 'on'}, io), /awake recover --force/);
 });
 
 test('claudectl dispatches the group and documents each command', async (t) => {

@@ -2,20 +2,22 @@
 // writes, the per-session delivery records, verdicts, waiter locks and
 // checkpoints under <state dir>/pause/ (paths.js pauseDir), all 0600 files
 // in a 0700 dir written temp + rename (private-fs.js). The shapes, which
-// request a session still owes, the row states, the row join and the
-// protocol texts are lib/pure/pause.js; the live sessions come from tabs.js
-// (Claude Code's registry, checked against the process table), what each
+// request a session still owes, the row states and the row join are
+// lib/pure/pause.js, the protocol texts lib/pure/pause-protocol.js; the live
+// sessions come from registry.js (Claude Code's registry, checked against the
+// process table), what each
 // session left running from leftovers.js.
 //
 // Exactly-once delivery: the waiter (asyncRewake) and the PreToolUse
 // backstop can race for the same session. Each claims under a short
-// O_EXCL mutex (`<session>.claim`), re-reads the delivery record inside it,
-// and only the one that writes the record delivers. A lock left by a
-// crashed holder is taken over by an atomic rename (takeOverStale), so two
-// callers that both find it stale cannot both get in.
+// mutex (`<session>.claim`, excl-lock.js), re-reads the delivery record
+// inside it, and only the one that writes the record delivers. A lock left
+// by a crashed holder is taken over by an atomic rename, so two callers
+// that both find it stale cannot both get in, and a holder only ever
+// removes its own lock (owner token).
 //
 // `openPause(io)` binds it to one HOME / state dir / clock / pid probe
-// (every one overridable), the shape openTabs(io) takes.
+// (every one overridable), the shape openRegistry(io) takes.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,16 +26,19 @@ import {fileURLToPath} from 'node:url';
 
 import {
   isPauseSessionId, parsePauseDelivered, parsePauseRequest, parsePauseVerdict, pauseBindingOk,
-  pauseDeliveryText, pauseFileNames, pauseOwed, pauseRowLabel, pauseRows, PAUSE_OWED_MAX_AGE_MS,
-  PAUSE_VERSION, shouldDeliver,
+  pauseFileNames, pauseOwed, pauseRowLabel, pauseRows, PAUSE_OWED_MAX_AGE_MS, PAUSE_VERSION,
+  shouldDeliver,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {pauseDeliveryText} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause-protocol.js';
 import {leftoversNote} from '../claude-usage-panel@fschmutz.github.io/lib/pure/leftovers.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {shellQuote} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
-import {pauseDir, projectsDir} from './paths.js';
+import {olderThan, releaseLock, tryLock} from './excl-lock.js';
+import {nowOf, pauseDir, projectsDir, transcriptPath} from './paths.js';
 import {openLeftovers} from './leftovers.js';
 import {readJSON, writePrivate} from './private-fs.js';
-import {openTabs, transcriptPath} from './tabs.js';
+import {pidAlive as defaultPidAlive} from './procs.js';
+import {openRegistry} from './registry.js';
 
 const CLAUDECTL_JS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'claudectl.js');
 /** A claim mutex older than this (real time, against its mtime) was left
@@ -42,18 +47,16 @@ const CLAIM_STALE_MS = 10_000;
 /** known.json keeps the name and cwd of this many sessions at most. */
 const KNOWN_MAX = 256;
 
-/** process.kill(pid, 0): alive (EPERM = alive, someone else's). */
-function defaultPidAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return e.code === 'EPERM';
-  }
-}
-
 function newRequestId(nowMs) {
   return `${nowMs.toString(36)}-${randomBytes(3).toString('hex')}`;
+}
+
+function parseJSON(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 function statOrNull(p) {
@@ -64,40 +67,11 @@ function statOrNull(p) {
   }
 }
 
-/**
- * Take over a lock judged stale from `seen` (its stat at that moment). The
- * lock is renamed away (atomic: of two callers only one moves a given file)
- * and the moved file is checked to be the one judged stale; a fresh lock
- * moved by mistake (another caller took over in between) is linked back.
- * True when the stale lock is gone because of this call. Either way the
- * caller retries its O_EXCL create, which only one can win.
- */
-export function takeOverStale(lock, seen) {
-  const tomb = `${lock}.${process.pid}-${randomBytes(4).toString('hex')}.stale`;
-  try {
-    fs.renameSync(lock, tomb);
-  } catch (e) {
-    if (e.code === 'ENOENT') return false; // someone else moved it first
-    throw e;
-  }
-  const moved = statOrNull(tomb);
-  const same = Boolean(moved && moved.ino === seen.ino && moved.mtimeMs === seen.mtimeMs);
-  if (!same) {
-    try {
-      fs.linkSync(tomb, lock); // put the live lock back where its holder expects it
-    } catch {
-      // a newer lock is already in place
-    }
-  }
-  fs.rmSync(tomb, {force: true});
-  return same;
-}
-
 export function openPause(io = {}) {
-  const tabs = openTabs(io);
+  const registry = openRegistry(io);
   const leftoverScan = openLeftovers(io);
   // whole milliseconds on disk: the Swift port reads `at` as an integer
-  const now = () => Math.floor(io.nowMs ? io.nowMs() : Date.now());
+  const now = () => Math.floor(nowOf(io));
   const pidAlive = (pid) => (io.pidAlive ?? defaultPidAlive)(pid);
   const dir = () => pauseDir(io);
   // the one place a session id becomes a path: never an unvalidated one
@@ -147,7 +121,7 @@ export function openPause(io = {}) {
     const targets = rows === 'all' ? 'all' : rows.map((r) => r.session_id);
     const sessions = rows === 'all' ? [] : rows.map((r) => ({
       sessionId: r.session_id, name: r.name, cwd: r.cwd, pid: r.pid ?? null,
-      procStart: r.pid ? tabs.procStart(r.pid) : null,
+      procStart: r.pid ? registry.procStart(r.pid) : null,
     }));
     const request = parsePauseRequest({version: PAUSE_VERSION, id: newRequestId(at), kind, at, targets, from, sessions, origin});
     if (!request) throw new Error('nothing to send: no valid session id among the targets');
@@ -236,52 +210,30 @@ export function openPause(io = {}) {
     writePrivate(file(sid, 'resumed'), `${JSON.stringify({at: now()})}\n`);
   }
 
-  // A short O_EXCL mutex holding an owner token; a stale one (crashed
-  // holder) is taken over atomically, and only the holder removes it.
+  // A short exclusive mutex (excl-lock.js) holding an owner token; a stale
+  // one (crashed holder) is taken over atomically, and only the holder
+  // removes it. Busy = false: the other hook is delivering.
   function withClaim(sid, fn) {
     ensureDir();
-    const lock = path.join(dir(), `${sid}.claim`); // sid validated by claim()
-    const token = `${io.pid ?? process.pid}:${randomBytes(6).toString('hex')}\n`;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      let fd;
-      try {
-        fd = fs.openSync(lock, 'wx', 0o600);
-      } catch (e) {
-        if (e.code !== 'EEXIST') throw e;
-        const seen = statOrNull(lock);
-        if (!seen) continue; // released meanwhile
-        if (Date.now() - seen.mtimeMs < CLAIM_STALE_MS) return false;
-        takeOverStale(lock, seen);
-        continue;
-      }
-      try {
-        try {
-          fs.writeSync(fd, token);
-        } finally {
-          fs.closeSync(fd);
-        }
-        return fn();
-      } finally {
-        let held = null;
-        try {
-          held = fs.readFileSync(lock, 'utf8');
-        } catch {
-          held = null;
-        }
-        if (held === token) fs.rmSync(lock, {force: true});
-      }
+    const lock = tryLock(path.join(dir(), `${sid}.claim`), { // sid validated by claim()
+      body: (token) => `${io.pid ?? process.pid}:${token}\n`, stale: olderThan(CLAIM_STALE_MS),
+    });
+    if (!lock) return false;
+    try {
+      return fn();
+    } finally {
+      releaseLock(lock);
     }
-    return false;
   }
 
   /** The asking process, for pauseBindingOk: `pid` when the hook knows it
    *  (CLAUDE_PID), else the live session holding the id. */
   function currentProcess(sid, pid) {
     if (Number.isInteger(pid) && pid > 0) {
-      return {pid, procStart: tabs.procStart(pid), startedAt: tabs.sessionOfPid(pid)?.startedAt ?? null};
+      return {pid, procStart: registry.procStart(pid), startedAt: registry.sessionOfPid(pid)?.startedAt ?? null};
     }
-    const row = tabs.liveSessions().find((r) => r.session_id === sid);
-    return row ? {pid: row.pid, procStart: tabs.procStart(row.pid), startedAt: row.startedAt ?? null} : null;
+    const row = registry.liveSessions().find((r) => r.session_id === sid);
+    return row ? {pid: row.pid, procStart: registry.procStart(row.pid), startedAt: row.startedAt ?? null} : null;
   }
 
   /** Claim the delivery of `request` to `sid` by `via`. True for exactly
@@ -317,7 +269,7 @@ export function openPause(io = {}) {
    *  never an empty list - the double check fails closed. */
   function leftovers() {
     try {
-      return {ok: true, found: leftoverScan.scan(tabs.liveSessions()), error: null};
+      return {ok: true, found: leftoverScan.scan(registry.liveSessions()), error: null};
     } catch (e) {
       return {ok: false, found: [], error: e?.message ?? String(e)};
     }
@@ -362,7 +314,7 @@ export function openPause(io = {}) {
     if (!lock || !Number.isInteger(lock.pid) || lock.pid <= 0 || !pidAlive(lock.pid)) return false;
     // a recycled pid: the kernel start time moved (Linux; elsewhere the pid)
     if (lock.procStart && (io.platform ?? process.platform) === 'linux') {
-      return tabs.procStart(lock.pid) === lock.procStart;
+      return registry.procStart(lock.pid) === lock.procStart;
     }
     return true;
   }
@@ -372,27 +324,19 @@ export function openPause(io = {}) {
   }
 
   /** Take the waiter lock for `sid` as `pid`: a release function, or null
-   *  when another live waiter holds it. */
+   *  when another live waiter holds it. The body is the JSON every reader
+   *  (waiterLive, the GNOME panel) parses, with the owner token in it, so
+   *  the release of a waiter that was taken over never removes its
+   *  successor's lock. */
   function acquireWaiter(sid, pid = io.pid ?? process.pid) {
     if (!isPauseSessionId(sid)) return null;
     ensureDir();
-    const f = file(sid, 'waiter');
-    const body = `${JSON.stringify({pid, at: now(), procStart: tabs.procStart(pid)})}\n`;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        fs.writeFileSync(f, body, {mode: 0o600, flag: 'wx'});
-        return () => {
-          if (readJSON(f)?.pid === pid) fs.rmSync(f, {force: true});
-        };
-      } catch (e) {
-        if (e.code !== 'EEXIST') throw e;
-        const seen = statOrNull(f);
-        if (!seen) continue;
-        if (lockLive(readJSON(f))) return null;
-        takeOverStale(f, seen);
-      }
-    }
-    return null;
+    const procStart = registry.procStart(pid);
+    const lock = tryLock(file(sid, 'waiter'), {
+      body: (token) => `${JSON.stringify({pid, at: now(), procStart, token})}\n`,
+      stale: (snap) => !lockLive(parseJSON(snap.text)),
+    });
+    return lock ? () => { releaseLock(lock); } : null;
   }
 
   /** The target rows of `request` (default: the current one) and the
@@ -401,7 +345,7 @@ export function openPause(io = {}) {
    *  no longer the current one is marked superseded. */
   function status(request = readRequest()) {
     if (!request) return {request: null, rows: [], summary: pauseRows({request: null}).summary};
-    const live = tabs.liveSessions().map((r) => ({sessionId: r.session_id, name: r.name, cwd: r.cwd, pid: r.pid}));
+    const live = registry.liveSessions().map((r) => ({sessionId: r.session_id, name: r.name, cwd: r.cwd, pid: r.pid}));
     const ids = request.targets === 'all' ? live.map((l) => l.sessionId).filter(isPauseSessionId) : request.targets;
     const records = Object.fromEntries(ids.map((sid) => [sid, {
       delivered: readDelivered(sid), verdict: readVerdict(sid), waiterLive: waiterLive(sid),
@@ -412,7 +356,7 @@ export function openPause(io = {}) {
 
   return {
     dir, readRequest, sendRequest, checkpointPath, pendingCheckpoint, isPaused, pausedAt, pausedSessions,
-    readKnown, markResumed, claim, deliveryText, report, waiterLive, acquireWaiter, status, pidAlive, tabs,
+    readKnown, markResumed, claim, deliveryText, report, waiterLive, acquireWaiter, status, pidAlive, registry,
     leftovers, leftoversCommand,
   };
 }

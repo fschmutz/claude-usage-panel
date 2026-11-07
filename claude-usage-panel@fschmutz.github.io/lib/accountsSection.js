@@ -15,8 +15,8 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {
-    listProfiles, liveAccountName, readLastSwitchMs, readLiveAccount, readPendingSwitch,
-    saveCurrent, switchTo, syncBack, updateWeeklyResets, usageFor, writeUsageCache,
+    activeIn, readLastSwitchMs, readSnapshot, saveCurrent, switchTo, syncBack, updateWeeklyResets,
+    usageFor, writeUsageCache,
 } from './accounts.js';
 import {
     OUTCOME_TTL_MS, accountHealth, accountNotices, accountSummary, autoSwitchTarget,
@@ -33,7 +33,8 @@ import {vbox, vboxProps, clipLabel} from './widgets.js';
  * (refreshed if stale); an expired login is not fetched at all. The results
  * are also dropped into the usage cache the status line reads.
  */
-async function collectAccountRows(session, profiles, active, activeCards) {
+async function collectAccountRows(session, snap, active, activeCards) {
+    const {profiles} = snap;
     const results = {};
     const rows = await Promise.all(profiles.map(async profile => {
         const summary = accountSummary(profile);
@@ -57,12 +58,12 @@ async function collectAccountRows(session, profiles, active, activeCards) {
         // A parked account's stale token is refreshed here - into OUR store
         // only; accessTokenFor returns the live one untouched when this
         // account is the live login.
-        const r = await usageFor(session, profile.name);
+        const r = await usageFor(session, profile.name, snap);
         results[profile.name] = r;
         return row(r.ok ? r.cards : null, r);
     }));
-    writeUsageCache(results);
-    const kept = updateWeeklyResets(results, profiles.map(p => p.name));
+    await writeUsageCache(results);
+    const kept = await updateWeeklyResets(results, profiles.map(p => p.name));
     for (const r of rows)
         r.weeklyResetMs = kept[r.name] ?? null;
     const worst = Object.fromEntries(
@@ -352,8 +353,9 @@ export class AccountsController {
      * One row per saved login, then - if auto-switch is on and the active
      * account is over the threshold - move to the freest one.
      * @param {object[]} activeCards the cards the poll just fetched
+     * @param {?{creds, account}} live the live login this poll already read
      */
-    async refresh(activeCards) {
+    async refresh(activeCards, live = null) {
         // Off by default: no rows, no toggle, no panel prefix, no fetch.
         if (!this._settings.get_boolean('accounts-enabled')) {
             this._setActive(null, 0);
@@ -361,34 +363,38 @@ export class AccountsController {
             this.syncToggle();
             return;
         }
-        let profiles;
+        // One snapshot per poll, read without blocking: the profiles, the
+        // live login and both journals. Every question below is answered from
+        // it instead of re-reading ~/.claude.json per question.
+        let snap;
         try {
+            snap = await readSnapshot(live);
             // Claude Code rotates the live login's tokens as it runs, and the
             // refresh token it replaces is revoked. A profile only written at
             // save time therefore rots while its account is the live one, and
             // the switch back fails with HTTP 400. Sync first, every poll: it
             // compares and writes only when the blob actually moved.
-            syncBack();
-            profiles = listProfiles();
+            await syncBack(snap);
         } catch (e) {
             logError(e, 'claude-usage-panel: could not read the saved accounts');
-            profiles = [];
+            snap ??= {profiles: [], liveCreds: null, liveAccount: null, pendingSwitch: null, pendingRename: null};
         }
-        const active = liveAccountName();
-        const live = readLiveAccount();
+        if (this._isDestroyed())
+            return;
+        const {profiles} = snap;
+        const active = activeIn(snap);
         this._setActive(active, profiles.length);
         this.syncToggle();
         if (!profiles.length) {
             // Still render: "signed in but not saved" has to be reachable
             // before there is a single saved account to list it under.
-            this._render({rows: [], activeName: null, live, profiles});
+            this._render({rows: [], activeName: null, snap});
             return;
         }
-        const {rows, worst} = await collectAccountRows(
-            this._session, profiles, active, activeCards);
+        const {rows, worst} = await collectAccountRows(this._session, snap, active, activeCards);
         if (this._isDestroyed())
             return;
-        this._render({rows, activeName: active, live, profiles});
+        this._render({rows, activeName: active, snap});
 
         if (!this._settings.get_boolean('accounts-auto-switch') || this._switching)
             return;
@@ -397,7 +403,7 @@ export class AccountsController {
         const target = autoSwitchTarget({
             active, worst,
             threshold: this._settings.get_int('accounts-switch-threshold'),
-            lastSwitchMs: readLastSwitchMs(),
+            lastSwitchMs: await readLastSwitchMs(),
         });
         if (target)
             await this.switchTo(target.to, target);
@@ -405,13 +411,14 @@ export class AccountsController {
 
     /** Fold the last poll into what the section draws, and draw it. Split out
      *  so a repair can repaint without waiting for the next poll. */
-    _render({rows, activeName, live, profiles}) {
+    _render({rows, activeName, snap}) {
+        const live = snap.liveAccount;
         const notices = accountNotices({
             rows: rows.map(r => ({name: r.name, health: r.health})),
             liveEmail: typeof live?.emailAddress === 'string' ? live.emailAddress : null,
             activeName,
-            pending: readPendingSwitch(),
-            torn: activeName !== null && isTorn(profiles, activeName, live),
+            pending: snap.pendingSwitch,
+            torn: activeName !== null && isTorn(snap.profiles, activeName, live),
         });
         const names = rows.map(r => r.name);
         this._state = {
@@ -484,7 +491,7 @@ export class AccountsController {
             break;
         case 'save':
             try {
-                const saved = saveCurrent(this._state.saveAs(notice.arg));
+                const saved = await saveCurrent(this._state.saveAs(notice.arg));
                 this._setOutcome(control, true, _('saved as %s').format(saved.name));
                 this._refreshSoon();
             } catch (e) {

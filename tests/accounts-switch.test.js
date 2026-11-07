@@ -301,3 +301,47 @@ test('switching to the live login while its credentials cannot be read refreshes
     assert.equal(fs.existsSync(path.join(home, '.claude', '.credentials.json')), false);
     assert.equal(s.readPendingSwitch(), null);
 });
+
+test('a switch writes through a linked ~/.claude.json and keeps a key Claude Code wrote meanwhile', async () => {
+    // macOS, Keychain login: preparing the credentials write spawns
+    // /usr/bin/security, and Claude Code writes ~/.claude.json while it runs.
+    const {home, io} = world();
+    fs.rmSync(path.join(home, '.claude', '.credentials.json'));
+    const dotfiles = path.join(home, 'dotfiles');
+    fs.mkdirSync(dotfiles);
+    fs.renameSync(path.join(home, '.claude.json'), path.join(dotfiles, 'claude.json'));
+    fs.symlinkSync(path.join(dotfiles, 'claude.json'), path.join(home, '.claude.json'));
+    const keychain = new Map([['Claude Code-credentials', JSON.stringify(creds('pro'))]]);
+    const sec = fakeSecurity(keychain);
+    let armed = false;
+    io.platform = 'darwin';
+    io.exec = (cmd, args, opts) => {
+        if (armed && cmd === '/usr/bin/security' && !args.includes('-w')) {
+            armed = false; // the account lookup: Claude Code saves a project meanwhile
+            const cfg = JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'));
+            fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({...cfg, projects: {'/new': {}}}));
+        }
+        return sec.exec(cmd, args, opts);
+    };
+    const store = openStore(io);
+    store.saveCurrent('PRO');
+    store.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    armed = true;
+    await store.switchTo('PERSO');
+    assert.equal(armed, false, 'the concurrent write happened mid-switch');
+    assert.ok(fs.lstatSync(path.join(home, '.claude.json')).isSymbolicLink(), 'the dotfile is still a link');
+    const cfg = JSON.parse(fs.readFileSync(path.join(dotfiles, 'claude.json'), 'utf8'));
+    assert.equal(cfg.oauthAccount.emailAddress, 'perso@example.com', 'the switch landed in the link target');
+    assert.deepEqual(cfg.projects, {'/new': {}}, "Claude Code's concurrent write survives");
+    assert.equal(cfg.numStartups, 3);
+});
+
+test('the running-session count includes an npm install, whose argv is node on cli.js', async () => {
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    s.writeProfile({version: 1, name: 'PERSO', account: account('perso'), credentials: creds('perso')});
+    io.exec = (cmd) => (cmd === 'ps'
+        ? 'node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js\n/home/me/.local/bin/claude\nclaudectl\n'
+        : '');
+    assert.equal((await s.switchTo('PERSO')).running, 2);
+});

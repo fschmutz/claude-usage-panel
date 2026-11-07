@@ -669,3 +669,10 @@ test('sync-back never writes a name a rename is moving', () => {
     assert.equal(s.syncBack(), 'PRO');
     assert.equal(fs.readFileSync(path.join(accountsDir(io), 'PRO.json'), 'utf8'), before);
 });
+
+test('io.nowMs may be a clock function: the store stamps what it returns', () => {
+    const {io} = world();
+    const s = openStore({...io, nowMs: () => NOW + 1234});
+    assert.equal(s.saveCurrent('PRO').savedAt, new Date(NOW + 1234).toISOString());
+    assert.equal(s.now(), NOW + 1234);
+});

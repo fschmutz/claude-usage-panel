@@ -472,5 +472,29 @@
       {"name": "forced over the same person in another org", "save": "ME", "account": {"accountUuid": "u-me", "organizationUuid": "o-new"}, "force": true, "expected": null},
       {"name": "the same org under another name is a twin", "save": "NEW", "account": {"accountUuid": "u-me", "organizationUuid": "o-team"}, "force": false, "expected": {"kind": "twin", "profile": "TEAM", "email": "me@example.com"}}
     ]
+  },
+  "credentials": {
+    "_comment": "parseCredentials: the credentials blob every port keeps, from the parsed JSON Claude Code wrote. The nested claudeAiOauth form is kept as is; the older flat access_token / token forms are lifted into it, the flat key dropped and every other key kept; anything without a non-empty string access token is null.",
+    "cases": [
+      {"name": "the current nested form is kept as is", "raw": {"claudeAiOauth": {"accessToken": "a1", "refreshToken": "r1", "expiresAt": 5}, "mcpOAuth": {"x": 1}}, "expected": {"claudeAiOauth": {"accessToken": "a1", "refreshToken": "r1", "expiresAt": 5}, "mcpOAuth": {"x": 1}}},
+      {"name": "flat access_token is lifted", "raw": {"access_token": "a2", "refreshToken": "r2"}, "expected": {"claudeAiOauth": {"refreshToken": "r2", "accessToken": "a2"}}},
+      {"name": "flat token is lifted", "raw": {"token": "a3"}, "expected": {"claudeAiOauth": {"accessToken": "a3"}}},
+      {"name": "nested legacy access_token is lifted", "raw": {"claudeAiOauth": {"access_token": "a4", "expiresAt": 9}}, "expected": {"claudeAiOauth": {"expiresAt": 9, "accessToken": "a4"}}},
+      {"name": "an empty token is no login", "raw": {"claudeAiOauth": {"accessToken": ""}}, "expected": null},
+      {"name": "a non-string token is no login", "raw": {"claudeAiOauth": {"accessToken": 7}}, "expected": null},
+      {"name": "an array is no login", "raw": [{"accessToken": "a"}], "expected": null},
+      {"name": "a scalar is no login", "raw": "a5", "expected": null},
+      {"name": "null is no login", "raw": null, "expected": null}
+    ]
+  },
+  "claudeProcesses": {
+    "_comment": "countClaudeProcesses: Claude Code processes in a `ps -eo args=` listing - a `claude` binary or wrapper (bare or by path), or node running the npm package's cli.js. claudectl, editors and paths that only contain the word do not count.",
+    "cases": [
+      {"name": "nothing running", "ps": "bash\n/usr/bin/gnome-shell\n", "expected": 0},
+      {"name": "bare and pathed binaries, with and without arguments", "ps": "claude\n/home/me/.local/bin/claude --resume abc\n  claude -p hi\n", "expected": 3},
+      {"name": "an npm install runs node on cli.js", "ps": "node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js\n/usr/bin/node /home/me/.npm-global/lib/node_modules/@anthropic-ai/claude-code/cli.js --continue\n", "expected": 2},
+      {"name": "lookalikes do not count", "ps": "claudectl session list\nvim claude.md\n/opt/claude-usage-panel/x\nnode /tmp/claude-code/cli.js\n", "expected": 0},
+      {"name": "an empty listing", "ps": "", "expected": 0}
+    ]
   }
 }

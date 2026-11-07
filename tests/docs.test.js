@@ -174,7 +174,9 @@ test('CLAUDE.md names every pure/ module and every ClaudeUsageCore file', () => 
     const barrel = md.match(/lib\/pure\/\{([^}]+)\}\.js/);
     assert.ok(barrel, 'pure/ barrel list not found');
     const named = barrel[1].split(',').map(s => s.trim()).sort();
-    assert.deepEqual(named, list(`${EXT}/lib/pure`, '.js').map(f => f.replace(/\.js$/, '')));
+    // sorted after the extension is dropped: "awake-power.js" sorts before
+    // "awake.js", "awake-power" after "awake"
+    assert.deepEqual(named, list(`${EXT}/lib/pure`, '.js').map(f => f.replace(/\.js$/, '')).sort());
     for (const f of list('macos/Sources/ClaudeUsageCore', '.swift'))
         assert.ok(md.includes(`\`${f}\``), `CLAUDE.md misses ClaudeUsageCore/${f}`);
 });

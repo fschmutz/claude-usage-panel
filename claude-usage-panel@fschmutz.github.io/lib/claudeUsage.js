@@ -1,12 +1,11 @@
-// Data layer: query the official usage endpoint with the live Claude Code
-// token (lib/claudeFiles.js - the one reader the account store uses too), or
-// with a saved account's token. Read-only: nothing here writes.
+// Data layer: query the official usage endpoint with a token - the live
+// Claude Code one (lib/claudeFiles.js, read once per poll by the caller) or a
+// saved account's. Read-only: nothing here writes.
 
 import Soup from 'gi://Soup';
 
 import Gettext from 'gettext';
 
-import {readAccessToken} from './claudeFiles.js';
 import {parseBody, send} from './http.js';
 import {usageFailure, normalizeUsage, normalizeExtraUsage} from './pure.js';
 
@@ -28,12 +27,12 @@ function retryAfterHeader(message) {
 }
 
 /**
- * Fetch usage from the endpoint. `token` defaults to the live login's; a
- * saved account's token (lib/accounts.js) reads that account's usage instead.
+ * Fetch usage from the endpoint with `token`: the live login's, or a saved
+ * account's (lib/accounts.js) to read that account's usage instead.
  * @returns {Promise<{ok: true, cards: object[], extraUsage: ?object, raw: object}
  *                   | {ok: false, code: string, message: string}>}
  */
-export async function fetchUsage(session, token = readAccessToken(), {label = null} = {}) {
+export async function fetchUsage(session, token, {label = null} = {}) {
     if (!token) {
         return {
             ok: false,

@@ -8,8 +8,9 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import {run} from '../lib/proc.js';
-import {claudectlPath, readSnapshots} from '../lib/snapshots.js';
+import {claudectlPath} from '../lib/paths.js';
+import {lastOutputLine, run} from '../lib/proc.js';
+import {readSnapshots} from '../lib/snapshots.js';
 import {DEFAULT_SESSIONS_LAYOUT, SESSIONS_LAYOUTS, sessionsLayout} from '../lib/pure.js';
 
 export function buildSessions(prefs, settings) {
@@ -64,8 +65,10 @@ export function buildSnapshots(prefs) {
     group.add(newestRow);
 
     const cli = claudectlPath();
-    const render = () => {
-        const {newest} = readSnapshots();
+    const render = async () => {
+        const {newest} = await readSnapshots();
+        if (prefs._closed())
+            return;
         if (!cli)
             newestRow.subtitle = _('claudectl is not installed - run ./install.sh cli');
         else if (!newest)
@@ -76,7 +79,7 @@ export function buildSnapshots(prefs) {
                 newest.sessions.map(r => r.name).join(', ')].join(' · ');
         reopenBtn.sensitive = Boolean(cli && newest);
     };
-    render();
+    render().catch(logError);
     run(['systemctl', '--user', 'is-active', 'claude-usage-panel-autosave.timer'],
         {cancellable: prefs._cancellable}).then(({ok}) => {
         if (!prefs._closed())
@@ -87,10 +90,11 @@ export function buildSnapshots(prefs) {
         const {stdout, stderr} = await run([cli, 'session', 'open'], {cancellable: prefs._cancellable});
         if (prefs._closed())
             return;
+        await render();
+        if (prefs._closed())
+            return;
         // the CLI's own last line says what it did, or why it opened nothing
-        const lines = `${stdout}${stderr}`.trim().split('\n');
-        render();
-        newestRow.subtitle = lines[lines.length - 1] || newestRow.subtitle;
+        newestRow.subtitle = lastOutputLine(stdout, stderr) || newestRow.subtitle;
     });
     return group;
 }

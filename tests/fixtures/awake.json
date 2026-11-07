@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared Awake contract: lib/pure/awake.js (tests/awake.test.js) and ClaudeUsageCore/Awake.swift (AwakeParityTests) are asserted against this same file. Change one port, change the fixture, or the other port goes red.",
+  "_comment": "Shared Awake contract: lib/pure/awake.js + lib/pure/awake-power.js (tests/awake.test.js) and ClaudeUsageCore/Awake.swift + AwakePower.swift (AwakeParityTests) are asserted against this same file. Change one port, change the fixture, or the other port goes red. endReasons and thermalStates are the vocabulary Swift's enums carry (the JS side reads them only from here); defaultSeconds is what a bare `awake on` asks for (both Node surfaces). Every darwin argv (lidArgv, lowPowerArgv) is one of sudoCommands behind `sudo -n`.",
   "version": 1,
   "holds": ["timer", "sessions"],
   "endReasons": [
@@ -24,6 +24,7 @@
     "maxSeconds": 43200,
     "thermalRules": true
   },
+  "defaultSeconds": 3600,
   "sudoCommands": [
     ["/usr/bin/pmset", "-a", "disablesleep", "1"],
     ["/usr/bin/pmset", "-a", "disablesleep", "0"],

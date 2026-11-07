@@ -10,9 +10,9 @@
 // with a more specific reason (permission / question / idle).
 
 import fs from 'node:fs';
-import {fileURLToPath} from 'node:url';
 
 import {handleHook} from './waiting.js';
+import {isMain} from './is-main.js';
 
 function readStdin() {
   try {
@@ -35,7 +35,7 @@ function main() {
   handleHook(payload);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   try {
     main();
   } catch {

@@ -36,7 +36,7 @@ export function warehouseAccount(live) {
 
 /** One poll as the warehouse keeps it: the instant, the account it belongs
  *  to (`a`, absent when unknown), then each limit's percent by key. The
- *  in-memory list and the file line are the same object. */
+ *  in-memory list and the file line (its JSON.stringify) are the same object. */
 export function warehouseEntry(cards, nowMs = Date.now(), account = null) {
     const limits = {};
     for (const card of cards ?? [])
@@ -46,11 +46,6 @@ export function warehouseEntry(cards, nowMs = Date.now(), account = null) {
         entry.a = String(account);
     entry.limits = limits;
     return entry;
-}
-
-/** One line per poll. */
-export function warehouseLine(cards, nowMs = Date.now(), account = null) {
-    return JSON.stringify(warehouseEntry(cards, nowMs, account));
 }
 
 /** Parse a warehouse file. Unreadable lines are skipped, never fatal - the file

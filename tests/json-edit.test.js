@@ -92,3 +92,29 @@ test('a file that is not a JSON object is refused, not replaced', () => {
         assert.equal(fs.readFileSync(f, 'utf8'), '[1]\n');
     });
 });
+
+// Both editors write through scripts/lib/json-file.mjs (claude-code/private-fs.js
+// writeAtomic): the same symlink handling, and the mode a file had survives a
+// restrictive umask.
+const HOOKS = path.join(path.dirname(EDIT), 'install', 'hooks-edit.mjs');
+const EDITORS = [
+    ['json-edit', (f) => [EDIT, 'set', f, 'a', '1']],
+    ['hooks-edit', (f) => [HOOKS, 'add', f, '/x/waiting-hook.js']],
+];
+
+for (const [name, argv] of EDITORS) {
+    test(`${name}: edits through a symlink and keeps a 0644 mode under umask 077`, () => {
+        withTmp((d) => {
+            const real = path.join(d, 'dotfiles', 'settings.json');
+            fs.mkdirSync(path.dirname(real));
+            fs.writeFileSync(real, '{"keep":1}\n');
+            fs.chmodSync(real, 0o644);
+            const link = path.join(d, 'settings.json');
+            fs.symlinkSync(path.join('dotfiles', 'settings.json'), link);
+            execFileSync('sh', ['-c', 'umask 077 && exec "$@"', 'sh', process.execPath, ...argv(link)], {stdio: 'pipe'});
+            assert.ok(fs.lstatSync(link).isSymbolicLink());
+            assert.equal(JSON.parse(fs.readFileSync(real, 'utf8')).keep, 1);
+            assert.equal(modeOf(real), 0o644);
+        });
+    });
+}

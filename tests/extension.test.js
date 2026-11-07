@@ -7,10 +7,12 @@ import {setImmediate} from 'node:timers';
 import {TextEncoder} from 'node:util';
 
 import {SECTION_DEADLINE_MS} from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
+import {memoryFs} from './gio-memory.js';
 import {stub} from './gjs-stub.js';
 
 // ── The poll loop itself (extension.js) ─────────────────────────────────────
 
+const HOME = '/home/tester';
 const USAGE = {limits: [{kind: 'session', percent: 42, severity: 'normal', is_active: true}]};
 const CREDENTIALS = {claudeAiOauth: {
     accessToken: 'tok', subscriptionType: 'max', rateLimitTier: 'default_claude_max_20x',
@@ -22,20 +24,19 @@ const CREDENTIALS = {claudeAiOauth: {
  * object answering `flags`. Returns the button once its first poll settled,
  * with every armed poll timer, notification and logged error recorded.
  */
-async function panel(t, {token = false, flags = {}, answers = null} = {}) {
-    const rec = {timers: [], notes: [], errors: [], idles: []};
+async function panel(t, {token = false, flags = {}, answers = null, files = {}} = {}) {
+    const rec = {timers: [], notes: [], errors: [], idles: [], files};
     const encode = o => new TextEncoder().encode(JSON.stringify(o));
+    if (token)
+        files[`${HOME}/.claude/.credentials.json`] = JSON.stringify(CREDENTIALS);
+    // The file tree, async only: a synchronous read or write anywhere in the
+    // poll loop or the enable throws here (nothing may block the Shell).
+    const mem = memoryFs({files});
+    stub.overrides['gi://Gio'] = mem.Gio;
     stub.overrides['gi://GLib'] = {
-        PRIORITY_DEFAULT: 0,
-        SOURCE_REMOVE: false,
+        ...mem.GLib,
         getenv: () => null,
-        get_home_dir: () => '/nonexistent',
-        build_filenamev: parts => parts.join('/'),
-        file_get_contents: path => {
-            if (token && path.endsWith('/.credentials.json'))
-                return [true, encode(CREDENTIALS)];
-            throw new Error('no such file');
-        },
+        get_home_dir: () => HOME,
         timeout_add_seconds: (_p, seconds, fn) => rec.timers.push({seconds, fn}),
         idle_add: (_p, fn) => rec.idles.push(fn),
         Source: {remove: () => {}},
@@ -113,7 +114,7 @@ function spyOn(button, hang = []) {
         calls.push([name, ...args]);
         return hang.includes(name) ? new Promise(() => {}) : Promise.resolve();
     };
-    button._refreshCost = make('cost');
+    button._status.refreshCost = make('cost');
     // the session group: one read per section, each under its own deadline
     const reads = {waiting: make('waiting'), pause: make('pause'), today: make('sessions')};
     button._sessionGroup = {read: kind => reads[kind](), render: () => {}, destroy: () => {}};
@@ -155,7 +156,7 @@ test('a poll with no login still refreshes every section', async t => {
     assert.deepEqual(calls.map(([n]) => n).sort(),
         ['accounts', 'codex', 'cost', 'cursor', 'pause', 'sessions', 'waiting']);
     assert.deepEqual(calls.find(([n]) => n === 'accounts')[1], [], 'no live cards to report');
-    assert.equal(button._updatedLabel.text, 'No Claude credentials found. Sign in with Claude Code.');
+    assert.equal(button._status.updatedText, 'No Claude credentials found. Sign in with Claude Code.');
     assert.equal(rec.timers.length, armed + 1, 'the next poll is armed');
     button.destroy();
 });
@@ -213,22 +214,38 @@ test('a good poll shows the plan the live credentials name', async t => {
     button.destroy();
 });
 
-test('the panel notifies through the latches: once per crossing, once per pace window', async t => {
-    const {button, rec} = await panel(t, {flags: {'alerts-enabled': true}});
-    rec.notes.length = 0;
+test('the sample history notifies through the latches: once per crossing, once per pace window', async () => {
+    const {SampleHistory} = await import('../claude-usage-panel@fschmutz.github.io/lib/samples.js');
+    const notes = [];
+    const samples = new SampleHistory({
+        settings: {get_boolean: k => k === 'alerts-enabled', get_string: () => '', set_string: () => {}},
+        notify: (title, body) => notes.push(body),
+    });
     const card = percent => [{key: 'session', label: 'Session', percent, resetsAt: null}];
-    button._checkAlerts(card(91));
-    button._checkAlerts(card(95));
-    button._checkAlerts(card(100));
-    assert.deepEqual(rec.notes.map(([, body]) => body), ['Session reached 90%', 'Session reached 100%']);
-    rec.notes.length = 0;
-    button._forecasts.set('session', {
+    samples.checkAlerts(card(91));
+    samples.checkAlerts(card(95));
+    samples.checkAlerts(card(100));
+    assert.deepEqual(notes, ['Session reached 90%', 'Session reached 100%']);
+    notes.length = 0;
+    samples.forecasts.set('session', {
         exhaustsBeforeReset: true, marginHours: -2, pctPerHour: 10, projectedFullAt: Date.now(),
     });
-    button._checkAlerts(card(50));
-    button._checkAlerts(card(52));
-    assert.equal(rec.notes.length, 1);
-    assert.match(rec.notes[0][1], /^Session is on pace to run out before it resets - /);
+    samples.checkAlerts(card(50));
+    samples.checkAlerts(card(52));
+    assert.equal(notes.length, 1);
+    assert.match(notes[0], /^Session is on pace to run out before it resets - /);
+});
+
+test('the 90-day history loads after enable and a moved poll appends to it, never twice', async t => {
+    const history = `${HOME}/.local/state/claude-usage-panel/history.jsonl`;
+    const old = {t: Date.now() - 7 * 86_400_000, limits: {session: 30}};
+    const files = {[history]: `${JSON.stringify(old)}\n`};
+    const {button} = await panel(t, {token: true, files});
+    spyOn(button);
+    await button._warehouseLoaded;
+    await button._warehouseWrite;
+    assert.equal(button._warehouse.length, 2, 'the kept line, then the first poll');
+    assert.equal(files[history].trim().split('\n').length, 2, 'the first poll was appended once');
     button.destroy();
 });
 
@@ -245,7 +262,7 @@ test('a dropped connection keeps the last cards up and retries soon, like a 429'
     await button.refresh();
     assert.equal(button._cards.size, 1, 'the card stays up');
     assert.equal(button._panelLabel.text.endsWith('42%'), true);
-    assert.match(button._updatedLabel.text, /^Could not resolve host - retrying/);
+    assert.match(button._status.updatedText, /^Could not resolve host - retrying/);
     assert.equal(rec.timers.at(-1).seconds, 60, 'retried in a minute, not at the 10-minute base');
     button.destroy();
 });
@@ -290,7 +307,7 @@ test('a 403 is its own failure: the server words, no refresh hint, cards blanked
     const {button} = await panel(t, {token: true, answers: [good, refused]});
     spyOn(button);
     await button.refresh();
-    assert.equal(button._updatedLabel.text, 'HTTP 403 permission_error: missing scope user:profile');
+    assert.equal(button._status.updatedText, 'HTTP 403 permission_error: missing scope user:profile');
     assert.equal(button._cards.size, 0);
     button.destroy();
 });

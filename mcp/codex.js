@@ -123,8 +123,9 @@ export const CODEX_TOOLS = [
       },
       required: ['to', 'changed', 'tokenState'],
     },
+    // Replaces $CODEX_HOME/auth.json: destructive, so a client asks first.
     annotations: {
-      readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false,
+      readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false,
     },
   },
   {
@@ -156,8 +157,6 @@ export const CODEX_TOOLS = [
     annotations: {readOnlyHint: true, openWorldHint: false},
   },
 ];
-
-export const CODEX_TOOL_NAMES = new Set(CODEX_TOOLS.map((t) => t.name));
 
 function renderCodexAccounts({active, accounts}) {
   if (!accounts.length) {

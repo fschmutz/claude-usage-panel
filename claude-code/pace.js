@@ -10,12 +10,16 @@ import fs from 'node:fs';
 import {clockPace, forecast} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pace.js';
 import {usageReading} from '../claude-usage-panel@fschmutz.github.io/lib/pure/usage.js';
 import {historyPath as defaultHistoryPath} from './paths.js';
+import {writeAtomic} from './private-fs.js';
 
 // ── Shared sample history ───────────────────────────────────────────────────────
 // One tmp file, keyed by card key ("session", "weekly_all", "weekly_scoped:Fable"),
 // appended by whichever client runs so each densifies the other's history.
 // Best-effort: a concurrent write may win a race - one sample lost, never an
-// error - and a read-only tmp dir just means no forecast.
+// error - and a read-only tmp dir just means no forecast. The write is atomic
+// (writeAtomic): the file holds EVERY account's series, so a reader that
+// caught it half-written would start from {} and its write would erase them
+// all.
 //
 // With an `account` (the live login's warehouseAccount) the key is
 // "<account>|<card key>": two logins are two quota pools, and one series
@@ -73,7 +77,7 @@ export function recordHistory(cards, {nowMs = Date.now(), historyPath = defaultH
     hist[key] = list.slice(-HISTORY_MAX_SAMPLES);
   }
   try {
-    fs.writeFileSync(historyPath, JSON.stringify(hist), {mode: 0o600});
+    writeAtomic(historyPath, JSON.stringify(hist));
   } catch {
     // read-only tmp dir just means no forecast; not fatal
   }

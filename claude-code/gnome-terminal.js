@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
-import {gnomeTabsPath} from './paths.js';
+import {gnomeTabsPath, nowOf} from './paths.js';
 import {writePrivate} from './private-fs.js';
 
 const DEST = 'org.gnome.Terminal';
@@ -109,7 +109,7 @@ export async function recordTabs({before, groups, io = {}, timeoutMs = 5000, ste
       for (const [w, rec] of Object.entries(record.windows)) {
         if (rec.service !== service || !alive.has(w)) delete record.windows[w];
       }
-      const at = io.nowMs ? io.nowMs() : Date.now();
+      const at = nowOf(io);
       // gnome-terminal opens the --window groups of one command in order
       fresh.slice(0, groups.length).forEach((w, i) => {
         record.windows[w] = {service, at, tabs: groups[i].map((r) => ({session_id: r.session_id}))};

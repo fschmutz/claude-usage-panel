@@ -79,3 +79,22 @@ test('each account keeps densifying its own series in the shared file', (t) => {
     assert.deepEqual(JSON.parse(fs.readFileSync(p, 'utf8')),
         {'a|session': [[1, 10], [3, 11]], 'b|session': [[2, 70]]});
 });
+
+test('the history file is replaced atomically: a reader of the old file never sees it torn', (t) => {
+    const p = tmpHistory(t);
+    // Two logins' series: an in-place rewrite truncates the file first, and a
+    // reader catching that moment parses {} and its own write then erases both.
+    const before = {'ACME|session': [[NOW - HOUR, 10]], 'PERSO|session': [[NOW - HOUR, 20]]};
+    fs.writeFileSync(p, JSON.stringify(before), {mode: 0o600});
+    const reader = fs.openSync(p, 'r');
+    t.after(() => fs.closeSync(reader));
+    const inode = fs.statSync(p).ino;
+    recordHistory([card(30)], {nowMs: NOW, historyPath: p, account: 'ACME'});
+    assert.notEqual(fs.statSync(p).ino, inode, 'a new file renamed into place, never the old one rewritten');
+    assert.deepEqual(JSON.parse(fs.readFileSync(reader, 'utf8')), before, 'the open reader still reads the whole old file');
+    const after = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.deepEqual(after['PERSO|session'], [[NOW - HOUR, 20]]);
+    assert.deepEqual(after['ACME|session'], [[NOW - HOUR, 10], [NOW, 30]]);
+    assert.equal(fs.statSync(p).mode & 0o777, 0o600);
+    assert.deepEqual(fs.readdirSync(path.dirname(p)).filter((f) => f.endsWith('.tmp')), [], 'no tmp left behind');
+});

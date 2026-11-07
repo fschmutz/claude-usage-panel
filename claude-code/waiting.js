@@ -1,7 +1,7 @@
 // Waiting-on-you I/O: Claude Code's live-session registry plus the
 // `<pid>.waiting.json` markers the hooks write next to it. Pure joining,
 // age and focus plans live in lib/pure/waiting.js; this file reads the
-// registry the same way tabs.js does (dead pids dropped), writes markers
+// registry through registry.js (dead pids dropped), writes markers
 // atomically, and raises the session's terminal through the same layout
 // terminals.js / layout.js already know.
 
@@ -16,13 +16,9 @@ import {
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/waiting.js';
 import {focusTab, terminalEnvOf} from './gnome-terminal.js';
 import {captureLayout} from './layout.js';
-import {sessionRegistryDir} from './paths.js';
+import {nowOf, sessionRegistryDir} from './paths.js';
 import {writePrivate} from './private-fs.js';
-import {openTabs} from './tabs.js';
-
-function nowMs(io) {
-  return io?.nowMs ? io.nowMs() : Date.now();
-}
+import {openRegistry} from './registry.js';
 
 function envOf(io) {
   return io?.env ?? process.env;
@@ -72,16 +68,16 @@ function readMarkers(io) {
 
 /**
  * Live sessions that are waiting, oldest wait first. Dead pids never appear:
- * openTabs already drops a registry row whose process is gone.
+ * openRegistry already drops a registry row whose process is gone.
  */
 export function listWaiting(io = {}) {
-  const sessions = openTabs(io).liveSessions().map((r) => ({
+  const sessions = openRegistry(io).liveSessions().map((r) => ({
     pid: r.pid,
     sessionId: r.session_id,
     name: r.name,
     cwd: r.cwd,
   }));
-  return waitingList(sessions, readMarkers(io), nowMs(io));
+  return waitingList(sessions, readMarkers(io), nowOf(io));
 }
 
 function pidFromEnv(io) {
@@ -93,7 +89,7 @@ function pidFromEnv(io) {
 function pidForSession(io, sessionId) {
   if (!sessionId)
     return null;
-  return openTabs(io).liveSessions().find((r) => r.session_id === sessionId)?.pid ?? null;
+  return openRegistry(io).liveSessions().find((r) => r.session_id === sessionId)?.pid ?? null;
 }
 
 /**
@@ -113,7 +109,7 @@ export function handleHook(payload, io = {}) {
     const file = markerPath(io, pid);
     // The marker on disk: a re-mark for the same session and reason keeps
     // its `at`, so the wait does not restart at 0s.
-    const decision = applyHookEvent(event, payload ?? {}, nowMs(io), readMarker(file));
+    const decision = applyHookEvent(event, payload ?? {}, nowOf(io), readMarker(file));
     if (decision.action === 'ignore')
       return decision;
     if (decision.action === 'clear') {
@@ -185,7 +181,7 @@ export function focusSession(row, io = {}) {
   const wantPid = Number.isInteger(row?.pid) ? row.pid : null;
   const wantId = row?.sessionId ?? row?.session_id ?? '';
   const wantName = row?.name ?? '';
-  const live = openTabs(io).liveSessions();
+  const live = openRegistry(io).liveSessions();
   const found = live.find((s) =>
     (wantPid && s.pid === wantPid) || (wantId && s.session_id === wantId)
     || (wantName && s.name === wantName));

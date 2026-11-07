@@ -11,8 +11,7 @@ import St from 'gi://St';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {lastOutputLine, run} from './proc.js';
-import {claudectlPath} from './snapshots.js';
+import {runClaudectl} from './claudectl.js';
 import {focusArgv, focusPlan} from './pure.js';
 import {listWaiting} from './waiting.js';
 import {vbox, clipLabel} from './widgets.js';
@@ -111,18 +110,14 @@ export class WaitingController {
         return _('question');
     }
 
-    _focus(row) {
+    async _focus(row) {
         this._menu.close();
-        const cli = claudectlPath();
-        if (cli) {
-            run(focusCommand(cli, row)).then(({ok, stdout, stderr}) => {
-                if (this._isDestroyed() || ok)
-                    return;
-                this._notify(_('Claude usage'),
-                    lastOutputLine(stdout, stderr) || _('Could not focus %s').format(row.name));
-            });
+        const {status} = await runClaudectl(cli => focusCommand(cli, row), {
+            notify: this._notify, isDestroyed: this._isDestroyed,
+            failText: _('Could not focus %s').format(row.name),
+        });
+        if (status !== 'missing')
             return;
-        }
         const argv = focusArgv(focusPlan({pid: row.pid}));
         if (!argv || !GLib.find_program_in_path(argv[0])) {
             this._notify(_('Claude usage'),

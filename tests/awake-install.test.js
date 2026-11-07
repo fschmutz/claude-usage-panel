@@ -11,17 +11,28 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {AWAKE_BACKSTOP_GRACE_MS} from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js';
+import {
+  AWAKE_SUDO_COMMANDS, awakeSudoArgv, awakeSudoersBody,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake-power.js';
+import {awakeDir} from '../claude-code/paths.js';
 import {run, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BACKSTOP = path.join(ROOT, 'scripts', 'awake-backstop.sh');
 const INSTALL = path.join(ROOT, 'install.sh');
 
+/** The undo the backstop owes for a journal key, as the fake sudo records
+ *  it: AWAKE_SUDO_COMMANDS's own argv, so the shell's copy cannot drift. */
+const undo = (key) => awakeSudoArgv(key, false).join(' ')
+  .replace('/usr/bin/sudo', 'sudo').replace('/usr/bin/pmset', 'pmset');
+
 /**
  * A HOME plus a directory holding a fake `sudo` and `pmset`. The script
  * hardcodes the absolute paths of both (a PATH lookup for a privileged
  * command is a bug), so the suite aims it at the fakes through its one named
- * test hook, CUP_TEST_PMSET_DIR.
+ * test hook, CUP_TEST_PMSET_DIR. The store is where claude-code/paths.js
+ * puts it, handed to the script the way the installed schedule hands it.
  */
 function world(t, {darwin = true} = {}) {
   const home = stubbedHome(t, {prefix: 'cup-backstop-'});
@@ -34,11 +45,10 @@ function world(t, {darwin = true} = {}) {
   fs.chmodSync(path.join(fakes, 'sudo'), 0o755);
   fs.writeFileSync(path.join(fakes, 'pmset'), '#!/bin/sh\nexit 0\n');
   fs.chmodSync(path.join(fakes, 'pmset'), 0o755);
-  const stateDir = darwin
-    ? path.join(home, 'Library', 'Application Support', 'claude-usage-panel')
-    : path.join(home, 'state', 'claude-usage-panel');
-  const awakeDir = path.join(stateDir, 'awake');
-  fs.mkdirSync(awakeDir, {recursive: true});
+  const dir = awakeDir({
+    platform: darwin ? 'darwin' : 'linux', homedir: home, env: {XDG_STATE_HOME: path.join(home, 'state')},
+  });
+  fs.mkdirSync(dir, {recursive: true});
   const env = {
     ...process.env,
     HOME: home,
@@ -53,11 +63,11 @@ function world(t, {darwin = true} = {}) {
   return {
     home,
     env,
-    awakeDir,
-    journal: path.join(awakeDir, 'journal.json'),
-    session: path.join(awakeDir, 'session.json'),
-    lock: path.join(awakeDir, '.hold.lock'),
-    log: path.join(stateDir, 'awake-backstop.log'),
+    awakeDir: dir,
+    journal: path.join(dir, 'journal.json'),
+    session: path.join(dir, 'session.json'),
+    lock: path.join(dir, '.hold.lock'),
+    log: path.join(path.dirname(dir), 'awake-backstop.log'),
     calls: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : []),
     failSudo: () => fs.writeFileSync(path.join(home, 'sudo-fails'), ''),
   };
@@ -65,7 +75,7 @@ function world(t, {darwin = true} = {}) {
 
 /** Run the backstop with its privileged commands pointed at the fakes. */
 function backstop(w, args = []) {
-  return run('bash', [BACKSTOP, ...args], {env: w.env});
+  return run('bash', [BACKSTOP, '--awake-dir', w.awakeDir, ...args], {env: w.env});
 }
 
 const journalText = (o) => `${JSON.stringify({version: 1, ...o}, null, 2)}\n`;
@@ -104,10 +114,8 @@ test('past the grace window it gives sleep back and clears the flag', (t) => {
   fs.writeFileSync(w.session, '{"version":1}\n');
   const r = backstop(w);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.deepEqual(w.calls().map((c) => c.replace(/\/\S*pmset/, 'pmset')), [
-    'sudo -n pmset -a disablesleep 0',
-    'sudo -n pmset -b lowpowermode 0',
-  ]);
+  assert.deepEqual(w.calls().map((c) => c.replace(/\/\S*pmset/, 'pmset')),
+    [undo('sleepDisabled'), undo('lowPower')]);
   const journal = fs.readFileSync(w.journal, 'utf8');
   assert.match(journal, /"sleepDisabled": false/);
   assert.match(journal, /"lowPower": false/);
@@ -121,8 +129,7 @@ test('--force overrides the deadline, so `claudectl awake off` can use it', (t) 
     at: Date.now(), endsAt: Date.now() + 3_600_000, sleepDisabled: true,
   }));
   assert.equal(backstop(w, ['--force']).status, 0);
-  assert.deepEqual(w.calls().map((c) => c.replace(/\/\S*pmset/, 'pmset')),
-    ['sudo -n pmset -a disablesleep 0']);
+  assert.deepEqual(w.calls().map((c) => c.replace(/\/\S*pmset/, 'pmset')), [undo('sleepDisabled')]);
 });
 
 test('a pmset that fails keeps the claim and exits non-zero so the next run retries', (t) => {
@@ -157,8 +164,59 @@ test('a lock whose holder is gone is taken over', (t) => {
   }));
   fs.writeFileSync(w.lock, '999999\n');
   assert.equal(backstop(w).status, 0);
-  assert.deepEqual(w.calls().map((c) => c.replace(/\/\S*pmset/, 'pmset')),
-    ['sudo -n pmset -a disablesleep 0']);
+  assert.deepEqual(w.calls().map((c) => c.replace(/\/\S*pmset/, 'pmset')), [undo('sleepDisabled')]);
+  assert.equal(fs.existsSync(w.lock), false, 'released');
+  assert.deepEqual(fs.readdirSync(w.awakeDir).filter((f) => f.startsWith('.hold.lock')), [], 'no lock and no takeover guard left');
+});
+
+test('the grace window is the JS contract\'s: just inside it nothing runs, just past it the undo does', (t) => {
+  const w = world(t);
+  const at = (endedAgoMs) => journalText({at: 1, endsAt: Date.now() - endedAgoMs, sleepDisabled: true});
+  fs.writeFileSync(w.journal, at(AWAKE_BACKSTOP_GRACE_MS - 30_000));
+  assert.equal(backstop(w).status, 0);
+  assert.deepEqual(w.calls(), [], 'still inside the grace window');
+  fs.writeFileSync(w.journal, at(AWAKE_BACKSTOP_GRACE_MS + 30_000));
+  assert.equal(backstop(w).status, 0);
+  assert.equal(w.calls().length, 1, 'just past it');
+});
+
+test('without the store it was installed with, the backstop refuses rather than guess', (t) => {
+  const w = world(t);
+  for (const args of [[], ['--awake-dir', 'relative/awake'], ['--awake-dir']]) {
+    const r = run('bash', [BACKSTOP, ...args], {env: w.env});
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /--awake-dir/);
+  }
+  assert.deepEqual(w.calls(), []);
+});
+
+test('the backstop releases only its own lock, never one taken over from it', (t) => {
+  const w = world(t);
+  fs.writeFileSync(w.journal, journalText({
+    at: Date.now() - 3_600_000, endsAt: Date.now() - 600_000, sleepDisabled: true,
+  }));
+  // While the run holds the lock, another holder takes it over (the run
+  // overran the stale window): its lock must survive the run's exit.
+  const other = `${process.pid}\nsomeone-else\n`;
+  const sudo = path.join(w.env.CUP_TEST_PMSET_DIR, 'sudo');
+  fs.writeFileSync(sudo, `#!/bin/sh\nprintf '%s' '${other}' >"${w.lock}.new" && mv "${w.lock}.new" "${w.lock}"\nexit 0\n`);
+  assert.equal(backstop(w).status, 0);
+  assert.equal(fs.readFileSync(w.lock, 'utf8'), other, 'the newer holder keeps its lock');
+});
+
+test('the backstop lock carries its pid on the first line, then an owner token', (t) => {
+  const w = world(t);
+  fs.writeFileSync(w.journal, journalText({
+    at: Date.now() - 3_600_000, endsAt: Date.now() - 600_000, sleepDisabled: true,
+  }));
+  const sudo = path.join(w.env.CUP_TEST_PMSET_DIR, 'sudo');
+  const seen = path.join(w.home, 'lock-seen');
+  fs.writeFileSync(sudo, `#!/bin/sh\ncat "${w.lock}" >"${seen}"\nexit 0\n`);
+  assert.equal(backstop(w).status, 0);
+  const [pid, token, rest] = fs.readFileSync(seen, 'utf8').split('\n');
+  assert.match(pid, /^\d+$/);
+  assert.match(token, /^\d+-\d+-\d+$/);
+  assert.equal(rest, '');
 });
 
 test('on Linux a journal that claims a pmset setting is reported, never run', (t) => {
@@ -195,7 +253,7 @@ test('install.sh --dry-run awake schedules the backstop and writes nothing', (t)
   };
   const r = run('bash', [INSTALL, '--dry-run', 'awake'], {env});
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /would: add crontab line: \* \* \* \* \* .*awake-backstop\.sh --quiet/);
+  assert.match(r.stdout, /would: add crontab line: \* \* \* \* \* .*awake-backstop\.sh --awake-dir \S+ --quiet/);
   assert.match(r.stdout, /would: chmod \+x .*awake-backstop\.sh/);
   assert.equal(fs.existsSync(path.join(home, 'crontab.txt')), false, 'dry-run writes nothing');
 });
@@ -254,7 +312,9 @@ test('install.sh update awakelid never asks for a password when the rule is in f
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const sudo = fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8') : '';
   assert.doesNotMatch(sudo, /^sudo (?!-n -l )/m, `only non-interactive checks may run: ${sudo}`);
-  assert.match(sudo, /^sudo -n -l \/usr\/bin\/pmset/m, 'the rule is checked, not assumed');
+  // the rule is checked, not assumed - and for exactly the commands it grants
+  assert.deepEqual(sudo.trim().split('\n').map((l) => l.replace(/^sudo -n -l /, '')),
+    AWAKE_SUDO_COMMANDS.map((c) => c.join(' ')));
 });
 
 /** A Darwin-looking sandbox where sudo runs the command as is and visudo
@@ -288,7 +348,6 @@ test('install.sh awakelid writes the rendered rule 0440 and leaves no temp behin
   const w = sudoersWorld(t);
   const r = run('bash', [INSTALL, 'awakelid'], {env: w.env});
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const {awakeSudoersBody} = await import('../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js');
   const {userInfo} = await import('node:os');
   assert.equal(fs.readFileSync(w.rule, 'utf8'), awakeSudoersBody(userInfo().username));
   assert.equal(fs.statSync(w.rule).mode & 0o777, 0o440);
@@ -302,17 +361,37 @@ test('install.sh awakelid never installs a rule that differs from what it render
   assert.deepEqual(fs.readdirSync(w.sudoersDir), [], 'neither the rule nor the temp is left');
 });
 
-test('the backstop grace window and lock staleness match the JS contract', async () => {
-  const {AWAKE_BACKSTOP_GRACE_MS} =
-    await import('../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js');
-  const text = fs.readFileSync(BACKSTOP, 'utf8');
-  const grace = Number(/^GRACE_SECONDS=(\d+)$/m.exec(text)[1]);
-  assert.equal(grace * 1000, AWAKE_BACKSTOP_GRACE_MS);
-  // The lock path and the state dir are a second copy of claude-code/paths.js;
-  // a rename there has to land here too.
-  assert.match(text, /AWAKE_DIR="\$STATE_DIR\/awake"/);
-  assert.match(text, /HOLD_LOCK="\$AWAKE_DIR\/\.hold\.lock"/);
-  assert.match(text, /Library\/Application Support\/claude-usage-panel/);
+test('the installed schedule repairs the store claude-code/paths.js names', (t) => {
+  // Not a dry run: install, read the line cron would run, and run it against
+  // a journal written where every Node client writes it. Linux, so the run
+  // ends on "not macOS" - which it can only say after reading THAT journal.
+  const home = stubbedHome(t, {prefix: 'cup-awake-sched-'});
+  const env = {
+    ...process.env,
+    HOME: home,
+    XDG_STATE_HOME: path.join(home, 'state'),
+    XDG_CONFIG_HOME: path.join(home, '.config'),
+    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    CUP_TEST_SCHEDULER: 'cron',
+  };
+  fs.writeFileSync(path.join(home, 'bin', 'uname'),
+    '#!/bin/sh\ncase "$1" in -s|"") echo Linux ;; *) /bin/uname "$@" ;; esac\n');
+  fs.chmodSync(path.join(home, 'bin', 'uname'), 0o755);
+  const r = run('bash', [INSTALL, 'awake'], {env});
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const line = fs.readFileSync(path.join(home, 'crontab.txt'), 'utf8')
+    .split('\n').find((l) => l.includes('awake-backstop.sh'));
+  const command = line.split(' ').slice(5).join(' ').replace(/ {2}# claude-usage-panel.*$/, '')
+    .replace(/\\%/g, '%');
+
+  const dir = awakeDir({platform: 'linux', homedir: home, env});
+  fs.mkdirSync(dir, {recursive: true});
+  fs.writeFileSync(path.join(dir, 'journal.json'),
+    journalText({at: 1, endsAt: Date.now() - 3_600_000, sleepDisabled: true}));
+  const ran = run('bash', ['-c', command], {env});
+  assert.equal(ran.status, 1, ran.stdout + ran.stderr);
+  assert.match(fs.readFileSync(path.join(path.dirname(dir), 'awake-backstop.log'), 'utf8'),
+    /journal claims sleepDisabled, but this is not macOS/);
 });
 
 test('every runner install.sh makes executable is committed executable', () => {

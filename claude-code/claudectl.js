@@ -10,13 +10,11 @@
 // TTY questions); `main` is exported for the tests and runs when the file is
 // invoked directly (the install.sh shim, the npm bin symlink).
 
-import fs from 'node:fs';
-import {pathToFileURL} from 'node:url';
-
 import * as account from './account-cli.js';
 import * as awake from './awake-cli.js';
 import {commandHelp, helpRequest} from './cli-help.js';
 import * as codex from './codex-cli.js';
+import {isMain} from './is-main.js';
 import * as session from './session-cli.js';
 import * as waiting from './waiting-cli.js';
 
@@ -77,16 +75,9 @@ async function ttyAsk(question) {
 
 const ttyConfirm = async (question) => (await ttyAsk(question))?.trim().toLowerCase() === 'y';
 
-// Run when executed directly - including through the npm bin shim, which
-// invokes us via a node_modules/.bin symlink, so compare realpaths.
-const invokedAs = (() => {
-  try {
-    return process.argv[1] && pathToFileURL(fs.realpathSync(process.argv[1])).href;
-  } catch {
-    return null;
-  }
-})();
-if (invokedAs === import.meta.url) {
+// Run when executed directly - by path, or through the npm/npx bin shim's
+// symlink (is-main.js compares real paths).
+if (isMain(import.meta.url)) {
   main(process.argv.slice(2), {confirm: ttyConfirm, ask: ttyAsk}).then(
     (code) => process.exit(code),
     (e) => {

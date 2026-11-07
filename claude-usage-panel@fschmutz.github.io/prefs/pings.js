@@ -21,9 +21,10 @@ export function buildPings(prefs, settings, page) {
         title: _('Session pings'),
         description: _('A 5-hour window is anchored to its first message, so pinging claude (haiku, one turn) at a fixed time lines the day’s windows up with the hours you actually work. Same schedule as ./install.sh sessionping.'),
     });
-    const schedule = readSchedule();
-    let times = schedule.times.slice();
-    const days = new Set(schedule.days);
+    // Filled from the units once their async read lands (start, below);
+    // nothing is connected before then, so filling the rows writes nothing.
+    let times = [];
+    const days = new Set();
 
     const enableRow = new Adw.SwitchRow({
         title: _('Open the 5h session window on schedule'),
@@ -31,7 +32,6 @@ export function buildPings(prefs, settings, page) {
             ? _('Runs scripts/session-ping.sh from a systemd user timer')
             : _('Needs a systemd user session - use ./install.sh sessionping here'),
     });
-    enableRow.active = schedule.enabled;
     enableRow.sensitive = hasSystemd();
     pings.add(enableRow);
 
@@ -56,9 +56,8 @@ export function buildPings(prefs, settings, page) {
     const daysRow = new Adw.ActionRow({title: _('Days')});
     const dayNames = [_('Mon'), _('Tue'), _('Wed'), _('Thu'), _('Fri'), _('Sat'), _('Sun')];
     const daysBox = new Gtk.Box({spacing: 4, valign: Gtk.Align.CENTER});
-    const dayButtons = dayNames.map((name, i) => {
+    const dayButtons = dayNames.map(name => {
         const btn = new Gtk.ToggleButton({label: name, valign: Gtk.Align.CENTER});
-        btn.active = days.has(i + 1);
         daysBox.append(btn);
         return btn;
     });
@@ -92,8 +91,10 @@ export function buildPings(prefs, settings, page) {
     });
 
     const renderStatus = () => {
-        const last = formatLastPing(readLastPing(), Date.now());
-        statusRow.subtitle = last || _('never');
+        readLastPing().then(raw => {
+            if (!prefs._closed())
+                statusRow.subtitle = formatLastPing(raw, Date.now()) || _('never');
+        });
         const plan = evaluateWindows(times, workDay());
         coverageRow.subtitle = plan
             ? _('%d%% of %s-%s covered').format(
@@ -151,38 +152,55 @@ export function buildPings(prefs, settings, page) {
         renderStatus();
     };
 
-    addBtn.connect('clicked', () => {
-        times.push('09:00');
-        renderTimes();
-        apply();
-    });
-    suggestBtn.connect('clicked', () => {
-        times = planWindows(workDay(), Math.max(2, times.length)).pingTimes;
-        renderTimes();
-        apply();
-    });
-    for (const entry of [startEntry, endEntry]) {
-        entry.connect('changed', () => {
-            const start = parseHHMM(startEntry.text);
-            const end = parseHHMM(endEntry.text);
-            if (start === null || end === null || end <= start)
-                return;
-            settings.set_string('work-start', startEntry.text);
-            settings.set_string('work-end', endEntry.text);
-            renderStatus();
+    const start = schedule => {
+        times = schedule.times.slice();
+        schedule.days.forEach(d => days.add(d));
+        enableRow.active = schedule.enabled;
+        dayButtons.forEach((btn, i) => {
+            btn.active = days.has(i + 1);
         });
-    }
-    dayButtons.forEach((btn, i) => btn.connect('toggled', () => {
-        if (btn.active) {
-            days.add(i + 1);
-        } else if (days.size > 1) {
-            days.delete(i + 1);
-        } else {
-            btn.active = true; // never leave a schedule with no days
-            return;
+        connectControls();
+        renderTimes();
+    };
+
+    const connectControls = () => {
+        addBtn.connect('clicked', () => {
+            times.push('09:00');
+            renderTimes();
+            apply();
+        });
+        suggestBtn.connect('clicked', () => {
+            times = planWindows(workDay(), Math.max(2, times.length)).pingTimes;
+            renderTimes();
+            apply();
+        });
+        for (const entry of [startEntry, endEntry]) {
+            entry.connect('changed', () => {
+                const from = parseHHMM(startEntry.text);
+                const to = parseHHMM(endEntry.text);
+                if (from === null || to === null || to <= from)
+                    return;
+                settings.set_string('work-start', startEntry.text);
+                settings.set_string('work-end', endEntry.text);
+                renderStatus();
+            });
         }
-        apply();
-    }));
-    enableRow.connect('notify::active', () => apply());
-    renderTimes();
+        dayButtons.forEach((btn, i) => btn.connect('toggled', () => {
+            if (btn.active) {
+                days.add(i + 1);
+            } else if (days.size > 1) {
+                days.delete(i + 1);
+            } else {
+                btn.active = true; // never leave a schedule with no days
+                return;
+            }
+            apply();
+        }));
+        enableRow.connect('notify::active', () => apply());
+    };
+
+    readSchedule().then(schedule => {
+        if (!prefs._closed())
+            start(schedule);
+    }).catch(logError);
 }

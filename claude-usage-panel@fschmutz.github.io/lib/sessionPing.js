@@ -8,8 +8,7 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Gettext from 'gettext';
 
-// eslint-disable-next-line no-restricted-imports -- backlog: unit files + last-ping, GNOME review row 22
-import {readText, writeText} from './fs.js';
+import {readTextAsync, writeTextAsync} from './fs.js';
 import {stateDir} from './paths.js';
 import {run} from './proc.js';
 
@@ -36,19 +35,20 @@ function lastPingPath() {
     return GLib.build_filenamev([stateDir(), 'last-ping']);
 }
 
-/** The raw stamp written by the last successful ping, or null. */
-export function readLastPing() {
-    const raw = readText(lastPingPath());
+/** The raw stamp written by the last successful ping, or null. Read without
+ *  blocking: the dropdown asks after every poll. */
+export async function readLastPing() {
+    const raw = await readTextAsync(lastPingPath());
     return raw ? raw.trim() : null;
 }
 
 /**
  * The installed schedule.
- * @returns {{enabled: boolean, times: string[], days: number[], runner: ?string}}
+ * @returns {Promise<{enabled: boolean, times: string[], days: number[], runner: ?string}>}
  */
-export function readSchedule() {
-    const timer = readText(unitPath('timer'));
-    const {runner, days} = parseServiceExec(readText(unitPath('service')));
+export async function readSchedule() {
+    const [timer, service] = await Promise.all([readTextAsync(unitPath('timer')), readTextAsync(unitPath('service'))]);
+    const {runner, days} = parseServiceExec(service);
     if (!timer)
         return {enabled: false, times: DEFAULT_TIMES.slice(), days: DEFAULT_DAYS.slice(), runner};
     const times = parseTimerTimes(timer);
@@ -110,12 +110,12 @@ export async function applySchedule({enabled, times, days, extensionPath}) {
     }
     if (!times.length)
         return _('Add at least one ping time (HH:MM).');
-    const runner = resolveRunner(readSchedule().runner, extensionPath);
+    const runner = resolveRunner((await readSchedule()).runner, extensionPath);
     if (!runner)
         return _('session-ping.sh not found - reinstall with ./install.sh gnome.');
     try {
-        writeText(unitPath('service'), serviceText(runner, days));
-        writeText(unitPath('timer'), timerText(times));
+        await writeTextAsync(unitPath('service'), serviceText(runner, days));
+        await writeTextAsync(unitPath('timer'), timerText(times));
     } catch (e) {
         return _('Could not write the systemd units: %s').replace('%s', () => e.message);
     }

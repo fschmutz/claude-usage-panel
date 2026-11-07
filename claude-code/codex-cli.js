@@ -8,6 +8,7 @@
 // as the estimate it is.
 
 import {openCodexStore} from './codex.js';
+import {nowOf} from './paths.js';
 import {codexIdentity} from '../claude-usage-panel@fschmutz.github.io/lib/pure/codex.js';
 import {resetHint} from './stamps.js';
 
@@ -159,6 +160,6 @@ export async function main(argv, io = {}) {
   return run({
     store, name, flags, json: flags.has('--json'),
     out: io.stdout ?? ((s) => process.stdout.write(s)),
-    nowMs: io.nowMs ?? Date.now(),
+    nowMs: nowOf(io),
   });
 }

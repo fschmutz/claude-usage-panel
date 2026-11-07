@@ -13,6 +13,8 @@
 // session id, so a pid the kernel reused for a later session never inherits
 // a stale marker. The I/O layer hands only live registry rows in.
 
+import {isObject} from './json.js';
+
 export const WAITING_REASONS = Object.freeze(['permission', 'question', 'idle']);
 export const WAITING_HOOK_EVENTS = Object.freeze([
     'Notification', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'SessionEnd',
@@ -93,7 +95,7 @@ export function applyHookEvent(name, payload = {}, nowMs = 0, previous = null) {
 
 /** A marker object, or null when a field is the wrong JSON type. */
 export function parseWaitingMarker(raw) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    if (!isObject(raw))
         return null;
     const sessionId = raw.sessionId;
     const pid = raw.pid;

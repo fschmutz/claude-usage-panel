@@ -8,105 +8,36 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {setImmediate} from 'node:timers';
 import {URL} from 'node:url';
-import {TextDecoder, TextEncoder} from 'node:util';
 
+import {memoryFs} from './gio-memory.js';
 import {stub} from './gjs-stub.js';
 
 const HOME = '/home/tester';
 const SESSIONS = `${HOME}/.codex/sessions`;
 const AUTH = `${HOME}/.codex/auth.json`;
 const PROFILES = `${HOME}/.local/state/claude-usage-panel/codex-accounts`;
-const DIRECTORY = 2;
-const encode = new TextEncoder();
-const decode = new TextDecoder();
 
 /**
- * GLib + Gio over `files` (path -> text) and `mtimes` (path -> epoch s).
- * Directories are implied by the paths under them. `onRead(path)` runs on
- * every file_get_contents. Every sessions/ listing is recorded in `listed`;
- * a synchronous enumerate_children there throws.
+ * GLib + Gio over `files` (path -> text) and `mtimes` (path -> epoch s),
+ * async only (tests/gio-memory.js): a synchronous read, write or walk of the
+ * Codex home throws. `onRead(path)` runs on every read. Every sessions/
+ * listing is recorded in `listed`.
  */
 function install({files, mtimes = {}, onRead = () => {}}) {
     const listed = [];
-    const children = dir => {
-        const out = new Map();
-        for (const f of Object.keys(files)) {
-            if (!f.startsWith(`${dir}/`))
-                continue;
-            const rest = f.slice(dir.length + 1).split('/');
-            out.set(rest[0], rest.length > 1);
-        }
-        return out;
-    };
-    const info = (dir, name, isDir) => ({
-        get_name: () => name,
-        get_file_type: () => (isDir ? DIRECTORY : 1),
-        get_attribute_uint64: () => mtimes[`${dir}/${name}`] ?? 0,
+    const mem = memoryFs({
+        files,
+        mtimes: Object.fromEntries(Object.entries(mtimes).map(([p, s]) => [p, s * 1000])),
+        onRead: path => { onRead(path); },
+        onList: path => {
+            if (path.startsWith(SESSIONS))
+                listed.push(path.slice(SESSIONS.length + 1));
+        },
     });
     stub.overrides['gi://GLib'] = {
-        PRIORITY_LOW: 300,
-        SeekType: {SET: 0},
-        FileSetContentsFlags: {CONSISTENT: 0},
-        getenv: () => null,
-        get_home_dir: () => HOME,
-        build_filenamev: parts => parts.join('/'),
-        path_get_dirname: p => p.slice(0, p.lastIndexOf('/')),
-        mkdir_with_parents: () => 0,
-        get_real_time: () => 1,
-        file_get_contents: path => {
-            onRead(path);
-            if (!(path in files))
-                throw new Error(`no such file: ${path}`);
-            return [true, encode.encode(files[path])];
-        },
-        file_set_contents_full: (path, bytes) => {
-            files[path] = decode.decode(bytes);
-            return true;
-        },
+        ...mem.GLib, SeekType: {SET: 0}, getenv: () => null, get_home_dir: () => HOME, get_real_time: () => 1,
     };
-    stub.overrides['gi://Gio'] = {
-        _promisify: () => {},
-        FileQueryInfoFlags: {NONE: 0},
-        FileCopyFlags: {OVERWRITE: 0},
-        FileType: {DIRECTORY},
-        File: {
-            new_for_path: path => ({
-                path,
-                enumerate_children() {
-                    if (path.startsWith(SESSIONS))
-                        throw new Error('synchronous walk of the sessions tree');
-                    const names = [...children(path).keys()];
-                    let i = 0;
-                    return {next_file: () => (i < names.length ? {get_name: () => names[i++]} : null)};
-                },
-                enumerate_children_async() {
-                    listed.push(path.slice(SESSIONS.length + 1));
-                    const kids = children(path);
-                    if (!kids.size)
-                        return Promise.reject(new Error('not found'));
-                    let batch = [...kids].map(([name, isDir]) => info(path, name, isDir));
-                    return Promise.resolve({
-                        next_files_async: () => {
-                            const out = batch;
-                            batch = [];
-                            return Promise.resolve(out);
-                        },
-                        close_async: () => Promise.resolve(true),
-                    });
-                },
-                query_info_async: () => Promise.resolve({get_size: () => files[path].length}),
-                read_async: () => Promise.resolve({
-                    seek() {},
-                    read_bytes_async: () => Promise.resolve({get_data: () => encode.encode(files[path])}),
-                    close_async: () => Promise.resolve(true),
-                }),
-                move(target) {
-                    files[target.path] = files[path];
-                    delete files[path];
-                },
-            }),
-        },
-    };
+    stub.overrides['gi://Gio'] = mem.Gio;
     return listed;
 }
 
@@ -158,7 +89,7 @@ test('a GNOME switch keeps a token the codex CLI rotated between the sync-back a
             files[AUTH] = JSON.stringify(rotated);
     }});
     const {switchCodexTo} = await import('../claude-usage-panel@fschmutz.github.io/lib/codex.js');
-    const r = switchCodexTo(ben.name);
+    const r = await switchCodexTo(ben.name);
     assert.deepEqual({from: r.from, changed: r.changed}, {from: ana.name, changed: true});
     const saved = JSON.parse(files[`${PROFILES}/${ana.name}.json`]);
     assert.equal(saved.auth.tokens.refresh_token, 'rt-rotated');
@@ -176,11 +107,35 @@ test('the Codex section draws its accounts at once and the usage when the scan l
         menu: {addMenuItem() {}},
         isDestroyed: () => false,
     });
-    assert.equal(section.refresh(), undefined, 'refresh returns before any transcript is read');
-    assert.equal(section._scanning, true);
-    section.refresh();
+    const drawn = section.refresh();
+    assert.ok(drawn instanceof Promise, 'the store is read without blocking');
+    await drawn;
+    assert.equal(section._scanning, true, 'the accounts are drawn before any transcript is read');
+    section._scanUsage(); // what the next refresh does once its store read lands
     assert.equal(section._rescan, true, 'a refresh during a scan queues one more, never a second walk');
     while (section._scanning)
         await new Promise(resolve => setImmediate(resolve));
     assert.match(section._note.text, /^Recorded by the codex CLI at /);
+});
+
+test('one Codex read lists the store and reads auth.json once, and syncs the rotated login', async t => {
+    t.after(() => { stub.overrides = {}; });
+    const fix = JSON.parse(fs.readFileSync(new URL('./fixtures/codex.json', import.meta.url), 'utf8'));
+    const [ana, ben] = fix.team.profiles;
+    const rotated = {...ana.auth, tokens: {...ana.auth.tokens, refresh_token: 'rt-rotated'}};
+    const files = {
+        [`${PROFILES}/${ana.name}.json`]: JSON.stringify(ana),
+        [`${PROFILES}/${ben.name}.json`]: JSON.stringify(ben),
+        [AUTH]: JSON.stringify(rotated),
+    };
+    const reads = [];
+    install({files, onRead: path => reads.push(path)});
+    const {readCodexAccounts} = await import('../claude-usage-panel@fschmutz.github.io/lib/codex.js');
+    const state = await readCodexAccounts();
+    assert.equal(state.active, ana.name);
+    assert.deepEqual(state.accounts.map(a => [a.name, a.active]), [[ana.name, true], [ben.name, false]]);
+    assert.equal(reads.filter(p => p === AUTH).length, 1, 'auth.json is read once');
+    for (const p of [ana, ben])
+        assert.equal(reads.filter(r => r === `${PROFILES}/${p.name}.json`).length, 1, `${p.name} is read once`);
+    assert.equal(JSON.parse(files[`${PROFILES}/${ana.name}.json`]).auth.tokens.refresh_token, 'rt-rotated');
 });

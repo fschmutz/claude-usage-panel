@@ -8,6 +8,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {TextDecoder, TextEncoder} from 'node:util';
 
+import {memoryFs} from './gio-memory.js';
 import {stub} from './gjs-stub.js';
 
 const HOME = '/home/tester';
@@ -46,16 +47,14 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
     const timers = new Map();
     const removed = [];
     let nextTimer = 1;
+    // The store's file tree, async only: lib/accounts.js runs on the Shell's
+    // main loop, so a synchronous read or write there fails these tests.
+    const mem = memoryFs({files, mtimes, onRead, onQueryInfo, writes});
     stub.overrides['gi://GLib'] = {
-        PRIORITY_DEFAULT: 0,
-        SOURCE_REMOVE: false,
+        ...mem.GLib,
         getenv: () => null,
         get_home_dir: () => HOME,
-        build_filenamev: parts => parts.join('/'),
-        path_get_dirname: p => p.slice(0, p.lastIndexOf('/')),
-        mkdir_with_parents: () => 0,
         get_real_time: () => 1,
-        FileSetContentsFlags: {CONSISTENT: 0},
         timeout_add_seconds: () => 1,
         // Timers are kept, not run: a test fires one with fire(id). The
         // refresh lock's poll sleep is the exception - it really waits.
@@ -68,36 +67,11 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
         },
         Source: {remove: id => { removed.push(id); timers.delete(id); }},
         uuid_string_random: () => `id-${nextTimer++}`,
-        Bytes: class {
-            constructor(data) { this.data = data; }
-        },
-        file_get_contents: path => {
-            const early = onRead?.(path);
-            if (typeof early === 'string')
-                return [true, encode.encode(early)];
-            if (!(path in files)) throw new Error(`no such file: ${path}`);
-            return [true, encode.encode(files[path])];
-        },
-        file_set_contents: (path, bytes) => {
-            files[path] = decode.decode(bytes);
-            return true;
-        },
-        file_set_contents_full: (path, bytes) => {
-            files[path] = decode.decode(bytes);
-            return true;
-        },
     };
-    // A file tree in a plain object: enumerate lists one level, move renames,
-    // delete drops. Enough for the real store's atomic write and its listing.
     // Subprocess answers `ps` with no Claude running, so a switch does not
     // wait forever on a callback the generic stub never makes.
-    const exists = {matches: (_domain, code) => code === 'EXISTS'};
-    const notFound = {matches: (_domain, code) => code === 'NOT_FOUND'};
     stub.overrides['gi://Gio'] = {
-        FileQueryInfoFlags: {NONE: 0},
-        FileCreateFlags: {PRIVATE: 1},
-        IOErrorEnum: {EXISTS: 'EXISTS', NOT_FOUND: 'NOT_FOUND'},
-        FileCopyFlags: {NONE: 0, OVERWRITE: 1},
+        ...mem.Gio,
         SubprocessFlags: {STDOUT_PIPE: 1, STDERR_PIPE: 2},
         Cancellable: class {
             cancel() {}
@@ -109,56 +83,6 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
                     get_successful: () => true,
                 }, null),
                 force_exit() {},
-            }),
-        },
-        File: {
-            new_for_path: path => ({
-                path,
-                get_path: () => path,
-                enumerate_children() {
-                    const names = Object.keys(files)
-                        .filter(f => f.startsWith(`${path}/`))
-                        .map(f => f.slice(path.length + 1))
-                        .filter(f => !f.includes('/'));
-                    let i = 0;
-                    return {next_file: () => (i < names.length
-                        ? {get_name: () => names[i++]} : null)};
-                },
-                move(target) {
-                    if (!(path in files))
-                        throw notFound;
-                    files[target.path] = files[path];
-                    mtimes[target.path] = mtimes[path];
-                    delete files[path];
-                    delete mtimes[path];
-                    writes.push(target.path);
-                },
-                delete: () => {
-                    delete files[path];
-                    delete mtimes[path];
-                },
-                // O_EXCL: the refresh lock.
-                create() {
-                    if (path in files)
-                        throw exists;
-                    files[path] = '';
-                    mtimes[path] = Date.now();
-                    return {
-                        write_all: bytes => { files[path] = decode.decode(bytes); },
-                        close() {},
-                    };
-                },
-                // mtimes[path] in ms (default: now); onQueryInfo(path) may
-                // stand in for the answer, as a waiter's earlier look would.
-                query_info: () => {
-                    const early = onQueryInfo?.(path);
-                    if (early)
-                        return early;
-                    if (!(path in files))
-                        throw notFound;
-                    const ms = mtimes[path] ?? Date.now();
-                    return {get_modification_date_time: () => ({to_unix: () => Math.floor(ms / 1000)})};
-                },
             }),
         },
     };
@@ -395,7 +319,7 @@ test('the store never refreshes the live login, even when its credentials cannot
         token: () => ({status: 200, body: {access_token: 'x', refresh_token: 'y', expires_in: 60}}),
     });
     const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
-    assert.equal(store.liveAccountName(), 'PRO');
+    assert.equal(await store.liveAccountName(), 'PRO');
     await assert.rejects(store.accessTokenFor(session, 'PRO'), {code: 'no_token'});
     await assert.rejects(store.switchTo(session, 'PRO'), {code: 'no_token'});
     assert.deepEqual(exchanges, [], 'the refresh token Claude Code holds was not spent');
@@ -508,16 +432,48 @@ test('renameProfile moves the profile and its cached entries under the refresh l
     });
     const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
     assert.equal((await store.renameProfile('PRO', 'WORK')).name, 'WORK');
-    assert.deepEqual(store.listProfiles().map(p => p.name), ['PERSO', 'WORK']);
+    assert.deepEqual((await store.listProfiles()).map(p => p.name), ['PERSO', 'WORK']);
     assert.equal(`${ACCOUNTS}/PRO.json` in files, false);
-    assert.equal(store.liveAccountName(), 'WORK');
+    assert.equal(await store.liveAccountName(), 'WORK');
     assert.deepEqual(JSON.parse(files[`${ACCOUNTS}/.usage-cache.json`]).accounts, {WORK: {worst: 40}});
     assert.deepEqual(JSON.parse(files[`${ACCOUNTS}/.weekly-resets.json`]), {PERSO: 6, WORK: 5});
     assert.equal(Object.keys(files).some(f => f.includes('/.refresh-')), false, 'the lock is released');
 
     await store.renameProfile('WORK', 'Work');
-    assert.deepEqual(store.listProfiles().map(p => p.name), ['PERSO', 'Work']);
+    assert.deepEqual((await store.listProfiles()).map(p => p.name), ['PERSO', 'Work']);
     await assert.rejects(store.renameProfile('Work', 'perso'), /PERSO already exists/);
     files[`${ACCOUNTS}/.switch-pending.json`] = JSON.stringify({at: 1, from: 'Work', to: 'PERSO'});
     await assert.rejects(store.renameProfile('Work', 'X'), /switch to PERSO did not finish/);
+});
+
+test('one poll reads ~/.claude.json and each profile once, never per question', async t => {
+    const reads = [];
+    const {c} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PRO.json`]: profile('PRO', 'u-pro'),
+            [`${ACCOUNTS}/PERSO.json`]: profile('PERSO', 'u-perso'),
+            [`${ACCOUNTS}/OLD.json`]: profile('OLD', 'u-old'),
+            [`${ACCOUNTS}/WORK.json`]: profile('WORK', 'u-work'),
+            ...liveLogin('PRO', 'u-pro'),
+        },
+        onRead: path => { reads.push(path); },
+    });
+    await c.refresh([]);
+    const count = path => reads.filter(r => r === path).length;
+    assert.equal(count(`${HOME}/.claude.json`), 1, 'the config is parsed once per poll');
+    assert.equal(count(`${HOME}/.claude/.credentials.json`), 1);
+    for (const name of ['PRO', 'PERSO', 'OLD', 'WORK'])
+        assert.equal(count(`${ACCOUNTS}/${name}.json`), 1, `${name} is read once`);
+    assert.equal(c._state.rows.length, 4);
+
+    // The live login the poll already read is handed down, not read again.
+    reads.length = 0;
+    const live = {
+        creds: JSON.parse(liveLogin('PRO', 'u-pro')[`${HOME}/.claude/.credentials.json`]),
+        account: {accountUuid: 'u-pro', emailAddress: 'pro@example.com'},
+    };
+    await c.refresh([], live);
+    assert.equal(count(`${HOME}/.claude.json`), 0);
+    assert.equal(count(`${HOME}/.claude/.credentials.json`), 0);
+    assert.equal(c._state.activeName, 'PRO');
 });

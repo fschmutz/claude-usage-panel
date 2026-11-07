@@ -15,8 +15,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {awakeCommand, readAwakeState, syncAwakeConfig} from './awake.js';
-import {lastOutputLine, run} from './proc.js';
-import {claudectlPath} from './snapshots.js';
+import {runClaudectl} from './claudectl.js';
 import {awakeBadge, formatAwakeDuration} from './pure.js';
 import {vbox} from './widgets.js';
 
@@ -108,7 +107,7 @@ export class AwakeController {
         try {
             // The holder reads the floors from disk, so the preferences have
             // to reach it before a session can be started with them.
-            syncAwakeConfig(this._settings);
+            await syncAwakeConfig(this._settings);
             return await readAwakeState();
         } catch (e) {
             logError(e, 'claude-usage-panel: awake scan failed');
@@ -162,26 +161,17 @@ export class AwakeController {
     async act(action, opts = {}) {
         if (this._busy)
             return;
-        const cli = claudectlPath();
-        if (!cli) {
-            this._notify(_('Claude usage'),
-                _('Install claudectl (./install.sh awake) to keep this machine awake.'));
-            return;
-        }
         // Lid mode is never implied by a click: it is the one mode that can
         // cook a laptop in a closed bag, so it is a setting the user turned on
         // deliberately, and it only ever rides along with a new session.
         const lid = action === 'on' && this._settings.get_boolean('awake-lid-enabled');
-        this._setBusy(true);
-        const {ok, stdout, stderr} = await run(awakeCommand(cli, action, {...opts, lid}));
-        if (this._isDestroyed())
-            return;
-        this._setBusy(false);
-        if (!ok) {
-            this._notify(_('Claude usage'),
-                lastOutputLine(stdout, stderr) || _('Could not change the awake state'));
-        }
-        await this.refresh();
+        const {status} = await runClaudectl(cli => awakeCommand(cli, action, {...opts, lid}), {
+            notify: this._notify, isDestroyed: this._isDestroyed, onBusy: busy => this._setBusy(busy),
+            installHint: _('Install claudectl (./install.sh awake) to keep this machine awake.'),
+            failText: _('Could not change the awake state'),
+        });
+        if (status === 'done')
+            await this.refresh();
     }
 
     _setBusy(busy) {

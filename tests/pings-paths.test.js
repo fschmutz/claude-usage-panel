@@ -11,8 +11,9 @@ import {
     formatLastPing, nextPing, shiftLocalDay,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import {
-    historyPath, lastPingPath, scratchDir, tokensCachePath,
+    historyPath, lastPingPath, nowOf, scratchDir, tokensCachePath,
 } from '../claude-code/paths.js';
+import {run, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -64,23 +65,25 @@ test('shiftLocalDay steps calendar days whatever the day length', (t) => {
     assert.deepEqual([fri.getFullYear(), fri.getMonth(), fri.getDate()], [2026, 2, 27]);
 });
 
-// scripts/session-ping.sh is the only writer of last-ping. Read its STATE_DIR
-// line and expand it the way bash would, so the reader cannot drift from it.
-function scriptPingPath(env, home) {
-    const text = fs.readFileSync(path.join(ROOT, 'scripts', 'session-ping.sh'), 'utf8');
-    const m = /^STATE_DIR="\$\{XDG_STATE_HOME:-\$HOME\/([^}]+)\}\/([^"]+)"$/m.exec(text);
-    assert.ok(m, 'session-ping.sh STATE_DIR line changed shape');
-    const base = env.XDG_STATE_HOME || path.join(home, m[1]);
-    return path.join(base, m[2], 'last-ping');
-}
-
-for (const platform of ['linux', 'darwin']) {
-    for (const env of [{}, {XDG_STATE_HOME: '/x/state'}]) {
-        test(`lastPingPath (${platform}, ${JSON.stringify(env)}) is where session-ping.sh writes`, () => {
-            const home = platform === 'darwin' ? '/Users/me' : '/home/me';
-            assert.equal(lastPingPath({platform, homedir: home, env}), scriptPingPath(env, home));
-        });
-    }
+// scripts/session-ping.sh is the only writer of last-ping, and it writes the
+// same place on every platform. Run it (a recording `claude` on the one named
+// test PATH) in a sandbox HOME and look where the stamp landed.
+for (const xdg of [false, true]) {
+    test(`lastPingPath is where session-ping.sh writes${xdg ? ' (XDG_STATE_HOME set)' : ''}`, (t) => {
+        const home = stubbedHome(t, {prefix: 'cup-pingpath-'});
+        const env = {
+            HOME: home,
+            PATH: '/usr/bin:/bin',
+            SP_TEST_CLAUDE_PATHS: path.join(home, 'bin'),
+            ...(xdg ? {XDG_STATE_HOME: path.join(home, 'xdg-state')} : {}),
+        };
+        const r = run('bash', [path.join(ROOT, 'scripts', 'session-ping.sh'), '--force', '--quiet'], {env});
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        for (const platform of ['linux', 'darwin']) {
+            const want = lastPingPath({platform, homedir: home, env});
+            assert.ok(fs.existsSync(want), `${platform}: no stamp at ${want}`);
+        }
+    });
 }
 
 test('scratch files never sit under a shared tmp dir on Linux', () => {
@@ -99,4 +102,14 @@ test('scratch files use the per-user $TMPDIR on macOS, and an injected tmpdir wi
     assert.equal(scratchDir({platform: 'darwin', homedir: '/Users/me', env: {}}), os.tmpdir());
     assert.equal(historyPath({tmpdir: '/sandbox', platform: 'linux', env: {XDG_RUNTIME_DIR: '/r'}}),
         '/sandbox/claude-usage-history.json');
+});
+
+test('nowOf reads io.nowMs as a number or a function, else the wall clock', () => {
+    assert.equal(nowOf({nowMs: 42}), 42);
+    assert.equal(nowOf({nowMs: () => 43}), 43);
+    const before = Date.now();
+    for (const io of [undefined, {}, {nowMs: null}, {nowMs: Number.NaN}, {nowMs: 'x'}]) {
+        const t = nowOf(io);
+        assert.ok(t >= before && t <= Date.now(), JSON.stringify(io));
+    }
 });

@@ -54,58 +54,14 @@ DAYS="1,2,3,4,5"
     exit 1
 }
 
-# `sort -V` is not POSIX and BSD sort only grew it recently; fall back to a
-# lexical reverse sort where it is missing (one installed version is the
-# common case, and the fallback still puts the newest first for same-width
-# version numbers).
-version_sort_desc() {
-    if printf '' | sort -V >/dev/null 2>&1; then
-        sort -Vr
-    else
-        sort -r
-    fi
-}
-
-# Node version managers install the CLI under a per-version prefix that no
-# scheduler has on PATH - which is exactly where `npm i -g
-# @anthropic-ai/claude-code` lands when node comes from nvm, the most common
-# way to get the CLI on Linux. Print one candidate bin dir per line, newest
-# version first so a node upgrade does not strand the ping on an old install.
-node_manager_bins() {
-    local spec root sub version path
-    for spec in "${NVM_DIR:-$HOME/.nvm}/versions/node|bin" \
-        "${FNM_DIR:-$HOME/.local/share/fnm}/node-versions|installation/bin" \
-        "${ASDF_DATA_DIR:-$HOME/.asdf}/installs/nodejs|bin"; do
-        root="${spec%|*}"
-        sub="${spec#*|}"
-        if [ -d "$root" ]; then
-            # A glob, not `ls`: a version directory with a space or a newline in
-            # its name would be split into two bogus candidates (SC2012).
-            for path in "$root"/*; do
-                [ -d "$path" ] || continue
-                printf '%s\n' "${path##*/}"
-            done | version_sort_desc | while IFS= read -r version; do
-                printf '%s/%s/%s\n' "$root" "$version" "$sub"
-            done
-        fi
-    done
-    # volta shims every tool from one flat dir, no per-version prefix.
-    printf '%s\n' "${VOLTA_HOME:-$HOME/.volta}/bin"
-}
-
-# Schedulers run with a minimal PATH; probe the usual claude locations first.
+# Schedulers run with a minimal PATH; probe the shared list (scheduler_path in
+# lib.sh: user bins, version-manager pointers and per-version prefixes, where
+# `npm i -g @anthropic-ai/claude-code` lands under nvm) before PATH itself.
 # Prints the absolute path, or nothing if the CLI is not installed.
 # SP_TEST_CLAUDE_PATHS is a unit-test hook: it replaces the probed locations so
 # tests never resolve (and ping) a real claude install.
 resolve_claude() {
-    local probe dir
-    probe="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin"
-    while IFS= read -r dir; do
-        if [ -n "$dir" ]; then
-            probe="$probe:$dir"
-        fi
-    done <<<"$(node_manager_bins)"
-    PATH="${SP_TEST_CLAUDE_PATHS-$probe}:$PATH" command -v claude || true
+    PATH="${SP_TEST_CLAUDE_PATHS-$(scheduler_path)}:$PATH" command -v claude || true
 }
 
 # Read the installed schedule back from whichever scheduler artifact exists

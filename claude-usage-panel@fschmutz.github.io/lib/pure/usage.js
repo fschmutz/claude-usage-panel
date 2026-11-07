@@ -7,6 +7,8 @@
 // Model.swift is the Swift twin; tests/fixtures/normalize.json +
 // extra-usage.json pin the numbers.
 
+import {isObject, num} from './json.js';
+
 const KIND_LABELS = {
     session: 'Current session',
     weekly_all: 'Weekly · all models',
@@ -57,16 +59,12 @@ export function kindLabel(kind) {
     return words(k) || 'Limit';
 }
 
-// The payload is read strictly, the way Model.swift's `as?` casts read it: a
-// field of the wrong JSON type counts as absent. Number("42") and Number(null)
-// would otherwise turn a string or a null into a reading Swift never shows
-// (tests/fixtures/normalize.json pins the malformed shapes).
-const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+// The payload is read strictly (json.js num / isObject), the way Model.swift's
+// `as?` casts read it (tests/fixtures/normalize.json pins the malformed shapes).
 const str = v => (typeof v === 'string' ? v : null);
 const SEVERITIES = ['normal', 'warning', 'critical'];
 // Swift casts limits[] as [[String: Any]]: one non-object entry fails the
-// whole cast and the legacy fields are read instead.
-const isObject = v => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+// whole cast and the legacy fields are read instead (isObject below).
 
 function normalizeLimit(entry) {
     const kind = str(entry?.kind) ?? 'unknown';

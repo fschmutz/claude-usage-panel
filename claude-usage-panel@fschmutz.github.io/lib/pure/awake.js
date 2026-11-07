@@ -3,7 +3,8 @@
 //
 // Awake: keep the machine from sleeping while Claude Code is working, for a
 // timer, or both. Twin of ClaudeUsageCore/Awake.swift; pinned by
-// tests/fixtures/awake.json.
+// tests/fixtures/awake.json. The platform half (pmset / sysfs / thermal
+// parsing and every argv) is ./awake-power.js, the twin of AwakePower.swift.
 //
 // The safety design is adapted from Insomnia (https://github.com/krishhgg/Insomnia,
 // MIT): a recovery journal written BEFORE every machine change, a backstop
@@ -14,16 +15,13 @@
 // session lasts, whether it is still held, which floor action is owed, what
 // the backstop must undo, and the exact argv each platform needs.
 
+import {isObject, num} from './json.js';
+
 export const AWAKE_VERSION = 1;
 
-/** Why a session is still being held. */
+/** Why a session is still being held. The end reasons and the thermal
+ *  states are vocabulary only the fixture (and Swift's enums) spell out. */
 export const AWAKE_HOLDS = Object.freeze(['timer', 'sessions']);
-
-/** Why a session is over. `user` is the only one the machine did not decide. */
-export const AWAKE_END_REASONS = Object.freeze([
-    'timer', 'sessions', 'max-session', 'user', 'battery', 'battery-unreadable',
-    'thermal', 'recovery',
-]);
 
 /** What the journal can own, and the order the backstop undoes it in: the
  *  sleep setting first (the one that keeps a closed laptop running), then the
@@ -33,9 +31,6 @@ export const AWAKE_END_REASONS = Object.freeze([
  *  Linux lid inhibitor are child processes, so the kernel gives them back when
  *  the holder exits and there is nothing for a backstop to undo. */
 export const AWAKE_JOURNAL_KEYS = Object.freeze(['sleepDisabled', 'lowPower']);
-
-/** Thermal states, weakest first - the same four macOS reports. */
-export const AWAKE_THERMAL_STATES = Object.freeze(['nominal', 'fair', 'serious', 'critical']);
 
 /** Shortest session worth taking: below a minute the release costs more than
  *  the hold. */
@@ -62,19 +57,13 @@ export const AWAKE_DEFAULTS = Object.freeze({
     thermalRules: true,
 });
 
-/** The ONLY four commands the macOS lid mode ever runs as root, and the only
- *  ones the sudoers rule grants - the same shape Insomnia's installer writes.
- *  Each is an exact argv: a rule that ended in a wildcard would hand the
- *  account every pmset setting there is. */
-export const AWAKE_SUDO_COMMANDS = Object.freeze([
-    Object.freeze(['/usr/bin/pmset', '-a', 'disablesleep', '1']),
-    Object.freeze(['/usr/bin/pmset', '-a', 'disablesleep', '0']),
-    Object.freeze(['/usr/bin/pmset', '-b', 'lowpowermode', '1']),
-    Object.freeze(['/usr/bin/pmset', '-b', 'lowpowermode', '0']),
-]);
+/** What a bare `awake on` (CLI or MCP) asks for when it names no duration and
+ *  does not hold on sessions: a session with no end of its own is the one
+ *  thing this feature must never create. */
+export const AWAKE_DEFAULT_SECONDS = 3600;
 
 const SECONDS = {s: 1, m: 60, h: 3600, d: 86400};
-const HOLD_SET = new Set(AWAKE_HOLDS);
+const NO_OWNER = Object.freeze({pid: 0, host: '', kind: ''});
 
 /**
  * Seconds in a duration written the way a person writes one: `90m`, `2h`,
@@ -179,6 +168,19 @@ export function normalizeAwakeConfig(config = {}) {
     };
 }
 
+/** The one reading of an `owner` block, for a session and a journal alike:
+ *  {pid, host, kind} with a non-positive or non-integer pid read as 0 and a
+ *  non-string field as ''. null when it is not an object at all. */
+export function parseAwakeOwner(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return null;
+    return {
+        pid: Number.isInteger(raw.pid) && raw.pid > 0 ? raw.pid : 0,
+        host: typeof raw.host === 'string' ? raw.host : '',
+        kind: typeof raw.kind === 'string' ? raw.kind : '',
+    };
+}
+
 /**
  * A fresh session. `seconds` null means "no timer of its own": it then runs
  * on the hard ceiling, so `endsAt` is always a real deadline and a session
@@ -206,27 +208,19 @@ export function newAwakeSession({
         timed,
         whileSessions: Boolean(whileSessions),
         lid: Boolean(lid),
-        owner: owner ? {pid: owner.pid ?? 0, host: owner.host ?? '', kind: owner.kind ?? ''} : null,
+        owner: parseAwakeOwner(owner),
     };
 }
 
 /** A session object, or null when a field is the wrong JSON type. A session
  *  with no deadline is not a session: it would be a hold nobody ends. */
 export function parseAwakeSession(raw) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    if (!isObject(raw))
         return null;
-    const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
     const startedAt = num(raw.startedAt);
     const endsAt = num(raw.endsAt);
     if (startedAt === null || endsAt === null)
         return null;
-    const owner = raw.owner && typeof raw.owner === 'object' && !Array.isArray(raw.owner)
-        ? {
-            pid: Number.isInteger(raw.owner.pid) && raw.owner.pid > 0 ? raw.owner.pid : 0,
-            host: typeof raw.owner.host === 'string' ? raw.owner.host : '',
-            kind: typeof raw.owner.kind === 'string' ? raw.owner.kind : '',
-        }
-        : null;
     return {
         version: Number.isInteger(raw.version) ? raw.version : AWAKE_VERSION,
         startedAt,
@@ -234,7 +228,7 @@ export function parseAwakeSession(raw) {
         timed: raw.timed !== false,
         whileSessions: raw.whileSessions === true,
         lid: raw.lid === true,
-        owner,
+        owner: parseAwakeOwner(raw.owner),
     };
 }
 
@@ -409,7 +403,7 @@ export function awakeJournalEntry({
         version: AWAKE_VERSION,
         at: nowMs,
         endsAt,
-        owner: {pid: owner?.pid ?? 0, host: owner?.host ?? '', kind: owner?.kind ?? ''},
+        owner: parseAwakeOwner(owner) ?? {...NO_OWNER},
         sleepDisabled: Boolean(sleepDisabled),
         lowPower: Boolean(lowPower),
     };
@@ -419,24 +413,17 @@ export function awakeJournalEntry({
  *  NOT a clean one: the backstop must leave the machine alone and say so
  *  rather than assume there is nothing to undo. */
 export function parseAwakeJournal(raw) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    if (!isObject(raw))
         return null;
-    const num = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
     for (const key of AWAKE_JOURNAL_KEYS) {
         if (raw[key] !== undefined && typeof raw[key] !== 'boolean')
             return null;
     }
     return {
         version: Number.isInteger(raw.version) ? raw.version : AWAKE_VERSION,
-        at: num(raw.at, 0),
-        endsAt: num(raw.endsAt, 0),
-        owner: raw.owner && typeof raw.owner === 'object' && !Array.isArray(raw.owner)
-            ? {
-                pid: Number.isInteger(raw.owner.pid) && raw.owner.pid > 0 ? raw.owner.pid : 0,
-                host: typeof raw.owner.host === 'string' ? raw.owner.host : '',
-                kind: typeof raw.owner.kind === 'string' ? raw.owner.kind : '',
-            }
-            : {pid: 0, host: '', kind: ''},
+        at: num(raw.at) ?? 0,
+        endsAt: num(raw.endsAt) ?? 0,
+        owner: parseAwakeOwner(raw.owner) ?? {...NO_OWNER},
         sleepDisabled: raw.sleepDisabled === true,
         lowPower: raw.lowPower === true,
     };
@@ -489,187 +476,24 @@ export function awakeRecoveryNotice(journal, nowMs = 0) {
     return {codes: steps, endedAgoMs, endedAgo: formatAwakeDuration(endedAgoMs / 1000)};
 }
 
-// ── Platform commands ───────────────────────────────────────────────────────
-// Every privileged or long-lived command this feature runs, written down once
-// so the tests can drive a fake runner and the docs can quote the real thing.
-
 /**
- * The child that holds the idle/sleep assertion. It is a CHILD on purpose:
- * the kernel releases the assertion when it exits, so a holder that is
- * SIGKILLed cannot leave the machine awake forever.
+ * The sentence a refused start is reported with, for every surface that can
+ * start a hold (`claudectl awake on`, the MCP tool). `endHint` is how THAT
+ * surface ends a running session - the only part the surfaces word apart.
  *
- *  - darwin: `caffeinate -i -w <pid>` - released when the holder exits.
- *  - linux:  `systemd-inhibit --what=idle:sleep --mode=block … sleep <n>` -
- *    bounded by its own sleep, so an orphan still expires on time.
+ * @param {{reason?: string, owner?: object, steps?: string[], log?: string}} result
+ * @param {{endHint?: string}} [opts]
  */
-export function awakeInhibitArgv(platform, {
-    seconds = AWAKE_MAX_SECONDS, pid = 0, who = 'claude-usage-panel',
-    why = 'Claude Code is working',
-} = {}) {
-    const secs = String(Math.max(1, Math.floor(Number(seconds) || 0)));
-    if (platform === 'darwin')
-        return ['/usr/bin/caffeinate', '-i', '-w', String(pid)];
-    if (platform === 'linux') {
-        return ['systemd-inhibit', '--what=idle:sleep', '--mode=block',
-            `--who=${who}`, `--why=${why}`, 'sleep', secs];
+export function awakeStartError(result, {endHint = ''} = {}) {
+    switch (result?.reason) {
+        case 'already-held':
+            return `already awake, held by pid ${result.owner?.pid ?? '?'}${endHint ? ` - ${endHint}` : ''}`;
+        case 'recovery-pending':
+            return `a previous session left ${(result.steps ?? []).join(', ')} to give back`
+                + ' - run `claudectl awake recover --force` first';
+        case 'busy':
+            return 'another Awake change holds the lock - nothing was started, try again in a moment';
+        default:
+            return `the holder did not start${result?.log ? `:\n${result.log}` : ''}`;
     }
-    return null;
-}
-
-/**
- * Closed-lid mode, which is the dangerous half and is off by default.
- *
- *  - darwin: `sudo -n pmset -a disablesleep 1|0`, one of the four commands the
- *    sudoers rule grants. `-n` NEVER prompts: without the rule it fails fast
- *    with a readable error instead of hanging on a password prompt.
- *  - linux: a logind inhibitor on the lid switch, which needs no root at all
- *    when polkit allows it, and expires by itself.
- */
-export function awakeLidArgv(platform, on, {
-    seconds = AWAKE_MAX_SECONDS, who = 'claude-usage-panel',
-    why = 'Claude Code is working with the lid closed',
-} = {}) {
-    if (platform === 'darwin')
-        return ['/usr/bin/sudo', '-n', '/usr/bin/pmset', '-a', 'disablesleep', on ? '1' : '0'];
-    if (platform === 'linux') {
-        // There is nothing to run for "off": the inhibitor is a child, and
-        // letting it go is the release.
-        if (!on)
-            return null;
-        return ['systemd-inhibit', '--what=handle-lid-switch', '--mode=block',
-            `--who=${who}`, `--why=${why}`, 'sleep',
-            String(Math.max(1, Math.floor(Number(seconds) || 0)))];
-    }
-    return null;
-}
-
-/** Low Power Mode, macOS only (Linux has no single equivalent). */
-export function awakeLowPowerArgv(platform, on) {
-    if (platform !== 'darwin')
-        return null;
-    return ['/usr/bin/sudo', '-n', '/usr/bin/pmset', '-b', 'lowpowermode', on ? '1' : '0'];
-}
-
-/** The sudoers file `./install.sh awakelid` writes, for this user only. */
-export function awakeSudoersBody(user) {
-    const lines = [
-        '# Installed by claude-usage-panel (./install.sh awakelid).',
-        '# Exactly four commands, nothing else. Remove with ./install.sh --uninstall awakelid.',
-    ];
-    for (const argv of AWAKE_SUDO_COMMANDS)
-        lines.push(`${user} ALL=(root) NOPASSWD: ${argv.join(' ')}`);
-    return `${lines.join('\n')}\n`;
-}
-
-/**
- * The first `SleepDisabled` line of `pmset -g`: true for 1, false for 0, null
- * when there is no such line or its value is anything else. null is NOT
- * "off": output we cannot read is not proof the bit was set, and a lid mode
- * that cannot be read back is reported as failed rather than trusted.
- */
-export function parseSleepDisabled(output) {
-    for (const rawLine of String(output ?? '').split(/\r?\n/)) {
-        const parts = rawLine.trim().split(/[ \t]+/);
-        if (parts[0] !== 'SleepDisabled')
-            continue;
-        if (parts[1] === '1')
-            return true;
-        if (parts[1] === '0')
-            return false;
-        return null;
-    }
-    return null;
-}
-
-/**
- * `pmset -g batt`: the percentage, whether it is charging, and whether there
- * is a battery at all. A Mac mini prints "Now drawing from 'AC Power'" and no
- * battery line; `hasBattery` tells that apart from a battery we failed to
- * read, which is the difference between "no floor applies" and "end the
- * session".
- */
-export function parsePmsetBattery(output) {
-    const text = String(output ?? '');
-    const drawing = /Now drawing from '([^']+)'/.exec(text);
-    const onAC = drawing ? /ac/i.test(drawing[1]) : false;
-    const line = /InternalBattery[^\n]*/.exec(text)?.[0] ?? '';
-    const hasBattery = line !== '';
-    const pct = /(\d{1,3})%/.exec(line);
-    const percent = pct ? Math.min(100, Math.max(0, Number(pct[1]))) : null;
-    if (!hasBattery)
-        return {percent: null, charging: true, hasBattery: false};
-    // The battery line is the honest one: it says discharging even while the
-    // adapter is plugged in but not actually charging. Only without a word of
-    // its own does the "Now drawing from" line decide.
-    let charging;
-    if (/discharging/i.test(line))
-        charging = false;
-    else if (/charging|charged|AC attached/i.test(line))
-        charging = true;
-    else
-        charging = onAC;
-    return {percent, charging, hasBattery: true};
-}
-
-/**
- * Linux `/sys/class/power_supply/BAT*`: `capacity` (a percentage) and
- * `status` (Charging / Discharging / Full / Not charging / Unknown). Either
- * file missing or unreadable is an unreadable battery, not a full one.
- */
-export function parseSysfsBattery({capacity = null, status = null, present = true} = {}) {
-    if (!present)
-        return {percent: null, charging: true, hasBattery: false};
-    const raw = String(capacity ?? '').trim();
-    const percent = /^\d{1,3}$/.test(raw) ? Math.min(100, Number(raw)) : null;
-    const state = String(status ?? '').trim().toLowerCase();
-    return {
-        percent,
-        charging: state === 'charging' || state === 'full' || state === 'not charging',
-        hasBattery: true,
-    };
-}
-
-/**
- * A thermal state from the only number Linux offers without a kernel-specific
- * driver: the hottest thermal zone, in millidegrees. The thresholds are a
- * heuristic (there is no portable "serious" bit), chosen so `serious` asks
- * for Low Power Mode and `critical` ends the session well before a CPU
- * throttles itself into the ground.
- */
-export function thermalFromMillidegrees(milli, {serious = 85_000, critical = 95_000} = {}) {
-    const n = Number(milli);
-    if (!Number.isFinite(n) || n <= 0)
-        return 'nominal';
-    if (n >= critical)
-        return 'critical';
-    if (n >= serious)
-        return 'serious';
-    if (n >= serious - 10_000)
-        return 'fair';
-    return 'nominal';
-}
-
-/**
- * macOS `pmset -g therm`: `CPU_Speed_Limit` is 100 on a cool Mac and drops as
- * the SMC throttles it. Mapped onto the same four states so both ports read
- * one vocabulary.
- */
-export function thermalFromSpeedLimit(output) {
-    const m = /CPU_Speed_Limit\s*=\s*(\d+)/.exec(String(output ?? ''));
-    if (!m)
-        return 'nominal';
-    const limit = Number(m[1]);
-    if (limit >= 100)
-        return 'nominal';
-    if (limit >= 75)
-        return 'fair';
-    if (limit >= 50)
-        return 'serious';
-    return 'critical';
-}
-
-/** Is `hold` one of the two the contract knows? Guards a value read back from
- *  a file or an MCP argument. */
-export function isAwakeHold(hold) {
-    return HOLD_SET.has(hold);
 }

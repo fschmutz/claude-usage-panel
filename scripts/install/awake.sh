@@ -24,17 +24,15 @@ _awake_installed() { _sched_installed "$AW_UNIT" "$AW_LABEL" "$AW_CRON_TAG"; }
 # installed_targets runs under a scheduler's PATH and must never prompt.
 _awakelid_installed() { [ -f "$AW_SUDOERS" ]; }
 
-# Show (or hide) the Awake section in every panel this machine has; a missing
-# panel is fine. KEY is the GSettings key, VALUE true|false.
-_awake_toggle() { # KEY DEFAULTS_KEY true|false
-    local schemas="$HOME/.local/share/gnome-shell/extensions/$UUID/schemas"
-    if [ -d "$schemas" ] && command -v gsettings >/dev/null &&
-        grep -qs "$1" "$schemas"/*.xml; then
-        act gsettings --schemadir "$schemas" set org.gnome.shell.extensions.claude-usage-panel "$1" "$3"
-    fi
-    if [ "$(uname -s)" = Darwin ]; then
-        act defaults write io.github.fschmutz.claude-usage-panel "$2" -bool "$3"
-    fi
+# The awake store, as claude-code/paths.js defines it for every Node client:
+# asked of that module (node is this target's prerequisite), never derived a
+# second time in shell. The backstop is handed it on its command line.
+_awake_dir() {
+    node --input-type=module -e '
+      const {pathToFileURL} = await import("node:url");
+      const m = await import(pathToFileURL(process.argv[1]).href);
+      process.stdout.write(m.awakeDir());
+    ' "$ROOT/claude-code/paths.js"
 }
 
 # Whether `sudo -n` already grants all four commands, asked WITHOUT running
@@ -59,8 +57,12 @@ install_awake() {
     fi
     _cli_installed || install_cli
     _install_node_tree
-    local runner="$ROOT/scripts/awake-backstop.sh"
+    local runner="$ROOT/scripts/awake-backstop.sh" awake_dir
     act chmod +x "$runner"
+    awake_dir="$(_awake_dir)" && [ -n "$awake_dir" ] || {
+        skip_fatal "awake: could not resolve the awake store from claude-code/paths.js (node failed)"
+        return 0
+    }
 
     # The backstop runs every minute, like Insomnia's recovery agent: the one
     # thing that must still work when the panel is gone.
@@ -71,7 +73,7 @@ Documentation=https://github.com/fschmutz/claude-usage-panel
 
 [Service]
 Type=oneshot
-ExecStart=$(_sched_systemd_word "$runner") --quiet"
+ExecStart=$(_sched_systemd_word "$runner") --awake-dir $(_sched_systemd_word "$awake_dir") --quiet"
     sched_timer="[Unit]
 Description=Claude Usage Panel - awake recovery backstop
 
@@ -92,6 +94,8 @@ WantedBy=timers.target"
   <array>
     <string>/bin/bash</string>
     <string>$(_sched_xml_escape "$runner")</string>
+    <string>--awake-dir</string>
+    <string>$(_sched_xml_escape "$awake_dir")</string>
     <string>--quiet</string>
   </array>
   <key>RunAtLoad</key><true/>
@@ -100,7 +104,7 @@ WantedBy=timers.target"
   <key>LowPriorityIO</key><true/>
 </dict>
 </plist>"
-    sched_cron="* * * * * $(_sched_cron_word "$runner") --quiet  $AW_CRON_TAG"
+    sched_cron="* * * * * $(_sched_cron_word "$runner") --awake-dir $(_sched_cron_word "$awake_dir") --quiet  $AW_CRON_TAG"
 
     if ! _sched_install "$AW_UNIT" "$AW_LABEL" "$AW_CRON_TAG" "every minute" \
         "$sched_service" "$sched_timer" "$sched_plist" "$sched_cron"; then
@@ -108,7 +112,7 @@ WantedBy=timers.target"
         return 0
     fi
     # A reinstall keeps the user's own choice: only a first install turns it on.
-    [ "${action:-install}" = update ] || _awake_toggle awake-enabled awakeEnabled true
+    [ "${action:-install}" = update ] || _panel_setting awake-enabled awakeEnabled true
     if $DRY; then
         ok "dry-run: no changes written"
         return 0
@@ -116,13 +120,13 @@ WantedBy=timers.target"
     ok "installed"
     echo "  Start:   claudectl awake on --for 2h   |   claudectl awake on --while-sessions"
     echo "  Status:  claudectl awake status        |   Stop: claudectl awake off"
-    echo "  Backstop: $runner --status"
+    echo "  Backstop: $runner --awake-dir '$awake_dir' --status"
     echo "  Closed-lid mode is a separate, explicit step: ./install.sh awakelid"
 }
 
 uninstall_awake() {
     info "Awake: keep this machine awake while Claude Code works"
-    _awake_toggle awake-enabled awakeEnabled false
+    _panel_setting awake-enabled awakeEnabled false
     # End any session first: removing the backstop while something is held
     # would take away the one thing that could still release it.
     if ! $DRY && command -v node >/dev/null && [ -x "$HOME/.local/bin/claudectl" ]; then
@@ -149,7 +153,7 @@ install_awakelid() {
         echo "  Linux: a logind inhibitor (--what=handle-lid-switch), taken as you."
         echo "  No root, no file, nothing to undo: it goes away with the holder."
         echo "  If polkit refuses it, see wiki/Awake.md (org.freedesktop.login1.inhibit-handle-lid-switch)."
-        [ "${action:-install}" = update ] || _awake_toggle awake-lid-enabled awakeLidEnabled true
+        [ "${action:-install}" = update ] || _panel_setting awake-lid-enabled awakeLidEnabled true
         $DRY || ok "closed-lid mode available: claudectl awake on --for 2h --lid"
         return 0
     fi
@@ -186,7 +190,7 @@ install_awakelid() {
       const {pathToFileURL} = await import("node:url");
       const m = await import(pathToFileURL(process.argv[1]).href);
       process.stdout.write(m.awakeSudoersBody(process.argv[2]));
-    ' "$ROOT/claude-usage-panel@fschmutz.github.io/lib/pure/awake.js" "$me")" && [ -n "$body" ] || {
+    ' "$ROOT/claude-usage-panel@fschmutz.github.io/lib/pure/awake-power.js" "$me")" && [ -n "$body" ] || {
         skip_fatal "awakelid: could not render the sudoers rule (node failed)"
         return 0
     }
@@ -214,13 +218,13 @@ install_awakelid() {
         skip_fatal "awakelid: 'sudo -n pmset' is still not permitted - check $AW_SUDOERS"
         return 0
     fi
-    [ "${action:-install}" = update ] || _awake_toggle awake-lid-enabled awakeLidEnabled true
+    [ "${action:-install}" = update ] || _panel_setting awake-lid-enabled awakeLidEnabled true
     ok "closed-lid mode available: claudectl awake on --for 2h --lid"
 }
 
 uninstall_awakelid() {
     info "Awake: closed-lid mode (EXPERIMENTAL)"
-    _awake_toggle awake-lid-enabled awakeLidEnabled false
+    _panel_setting awake-lid-enabled awakeLidEnabled false
     if [ "$(uname -s)" = Darwin ] && [ -f "$AW_SUDOERS" ]; then
         # Give sleep back before the rule that allows it goes away.
         if ! $DRY && [ -x "$HOME/.local/bin/claudectl" ]; then

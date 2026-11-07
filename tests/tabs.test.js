@@ -8,10 +8,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-    flagValue, isValidLabel, matchSession, openTabs, resumePrompt, sameSessions, stampLabel, transcriptPath,
+    isValidLabel, matchSession, openTabs, resumePrompt, sameSessions, stampLabel,
 } from '../claude-code/tabs.js';
 import {DETAILS, main} from '../claude-code/session-cli.js';
-import {tabsDir} from '../claude-code/paths.js';
+import {tabsDir, transcriptPath} from '../claude-code/paths.js';
+import {flagValue} from '../claude-code/registry.js';
 import {TMUX_SESSION} from '../claude-code/terminals.js';
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
 import {binDir, sandboxHome} from './helpers.js';
@@ -160,6 +161,15 @@ test('save --exclude-self drops the session running the command', (t) => {
 test('save refuses a bad label and an empty set', (t) => {
     assert.throws(() => openTabs(world(t, [A])).save('../x'), /bad label/);
     assert.throws(() => openTabs(world(t, [])).save('x'), /no running/);
+});
+
+// Snapshots go through private-fs.js writeAtomic like every other store: a
+// write that cannot land throws and leaves no tmp file in the store.
+test('a snapshot that cannot be written leaves no tmp file behind', (t) => {
+    const io = world(t, [A]);
+    fs.mkdirSync(path.join(tabsDir(io), 'x.json'), {recursive: true}); // the rename over it fails
+    assert.throws(() => openTabs(io).save('x'));
+    assert.deepEqual(fs.readdirSync(tabsDir(io)), ['x.json']);
 });
 
 test('resolve: newest by default, exact label, unique prefix, 1-based index', (t) => {
@@ -425,6 +435,17 @@ test('CLI: list marks the current session, store and show read the snapshot', as
     await cli(io, 'save', 'snap1');
     assert.match((await cli(io, 'store')).text, /1 {2}snap1 .* {2}2 {2}API, WEB/);
     assert.match((await cli(io, 'show', 'snap1')).text, /API .*running/);
+});
+
+test('CLI: a name or cwd carrying escape sequences prints without a control character', async (t) => {
+    // OSC 52 writes the terminal clipboard; OSC 0 retitles the window.
+    const osc = '\u001b]52;c;ZXZpbA==\u0007';
+    const io = world(t, [{...A, name: `API${osc}`}, {...B, name: `W\u001b]0;pwned\u0007EB`}]);
+    for (const argv of [['list'], ['save', 's'], ['store'], ['show']]) {
+        const {text} = await cli(io, ...argv);
+        assert.doesNotMatch(text.replace(/\n/g, ''), /[\u0000-\u001f\u007f-\u009f]/, argv.join(' '));
+    }
+    assert.match((await cli(io, 'list')).text, /API ]52;c;ZXZpbA== /);
 });
 
 test('CLI: open --dry-run prints the launch, --only narrows it, nothing spawns', async (t) => {

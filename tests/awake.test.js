@@ -16,15 +16,51 @@ const NOW = fix.nowMs;
 test('awake constants match the fixture', () => {
     assert.equal(pure.AWAKE_VERSION, fix.version);
     assert.deepEqual([...pure.AWAKE_HOLDS], fix.holds);
-    assert.deepEqual([...pure.AWAKE_END_REASONS], fix.endReasons);
     assert.deepEqual([...pure.AWAKE_JOURNAL_KEYS], fix.journalKeys);
-    assert.deepEqual([...pure.AWAKE_THERMAL_STATES], fix.thermalStates);
     assert.equal(pure.AWAKE_MIN_SECONDS, fix.minSeconds);
     assert.equal(pure.AWAKE_MAX_SECONDS, fix.maxSeconds);
     assert.equal(pure.AWAKE_BACKSTOP_GRACE_MS, fix.backstopGraceMs);
     assert.equal(pure.AWAKE_POLL_SECONDS, fix.pollSeconds);
     assert.deepEqual({...pure.AWAKE_DEFAULTS}, fix.defaults);
     assert.deepEqual(pure.AWAKE_SUDO_COMMANDS.map((c) => [...c]), fix.sudoCommands);
+    assert.equal(pure.AWAKE_DEFAULT_SECONDS, fix.defaultSeconds);
+});
+
+test('every darwin sudo argv is one of the granted commands, behind sudo -n', () => {
+    const granted = fix.sudoCommands.map((c) => c.join(' '));
+    const used = [true, false].flatMap((on) => [
+        pure.awakeLidArgv('darwin', on), pure.awakeLowPowerArgv('darwin', on),
+    ]);
+    for (const argv of used) {
+        assert.deepEqual(argv.slice(0, 2), ['/usr/bin/sudo', '-n']);
+        assert.ok(granted.includes(argv.slice(2).join(' ')), argv.join(' '));
+    }
+    assert.deepEqual(new Set(used.map((a) => a.slice(2).join(' '))), new Set(granted), 'all four used');
+    assert.equal(pure.awakeSudoArgv('somethingElse', true), null, 'nothing outside the rule');
+});
+
+test('one owner reading for a session and a journal alike', () => {
+    const raw = {pid: -3, host: 7, kind: 'cli'};
+    const want = {pid: 0, host: '', kind: 'cli'};
+    assert.deepEqual(pure.parseAwakeOwner(raw), want);
+    assert.deepEqual(pure.parseAwakeSession({startedAt: 1, endsAt: 2, owner: raw}).owner, want);
+    assert.deepEqual(pure.parseAwakeJournal({owner: raw}).owner, want);
+    assert.deepEqual(pure.newAwakeSession({owner: raw}).owner, want);
+    assert.deepEqual(pure.awakeJournalEntry({owner: raw}).owner, want);
+    assert.equal(pure.parseAwakeOwner([]), null);
+    assert.deepEqual(pure.awakeJournalEntry({}).owner, {pid: 0, host: '', kind: ''});
+});
+
+test('awakeStartError: one sentence per refusal, the end hint per surface', () => {
+    const held = {ok: false, reason: 'already-held', owner: {pid: 42}};
+    assert.equal(pure.awakeStartError(held, {endHint: 'use action "off" to end it'}),
+        'already awake, held by pid 42 - use action "off" to end it');
+    assert.equal(pure.awakeStartError(held), 'already awake, held by pid 42');
+    assert.match(pure.awakeStartError({reason: 'recovery-pending', steps: ['sleepDisabled']}),
+        /left sleepDisabled to give back - run `claudectl awake recover --force` first/);
+    assert.match(pure.awakeStartError({reason: 'busy'}), /holds the lock - nothing was started/);
+    assert.equal(pure.awakeStartError({reason: 'no-holder', log: 'x\ny'}), 'the holder did not start:\nx\ny');
+    assert.equal(pure.awakeStartError({reason: 'no-holder'}), 'the holder did not start');
 });
 
 for (const c of fix.parseDuration) {
@@ -216,9 +252,3 @@ for (const [i, c] of fix.thermalSpeedLimit.entries()) {
     test(`thermalFromSpeedLimit case ${i}`, () =>
         assert.equal(pure.thermalFromSpeedLimit(c.output), c.expected));
 }
-
-test('isAwakeHold guards a value read back from a file', () => {
-    assert.equal(pure.isAwakeHold('timer'), true);
-    assert.equal(pure.isAwakeHold('sessions'), true);
-    assert.equal(pure.isAwakeHold('forever'), false);
-});

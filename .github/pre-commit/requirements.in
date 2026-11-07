@@ -1,0 +1,8 @@
+# The pre-commit the CI lint job installs. A file of its own so Dependabot's
+# pip ecosystem bumps it (a version inside a workflow `run:` line is invisible
+# to every ecosystem). requirements.txt is compiled from this file with every
+# transitive dependency pinned AND hashed, so pip installs in hash-checking
+# mode and a re-uploaded or swapped distribution fails the job. Regenerate
+# (Dependabot does it on a bump) with:
+#   pip-compile --allow-unsafe --generate-hashes --no-emit-index-url --output-file=requirements.txt --strip-extras requirements.in
+pre-commit==4.7.0

@@ -13,20 +13,18 @@
 // calls, sessions.js the session/ping index, warehouse.js the 90-day history
 // read.
 
-import fs from 'node:fs';
-import {pathToFileURL} from 'node:url';
-
 import {warehouseAccount} from '../claude-usage-panel@fschmutz.github.io/lib/pure/warehouse.js';
 import {openStore} from '../claude-code/accounts.js';
 import {openCodexStore} from '../claude-code/codex.js';
+import {isMain} from '../claude-code/is-main.js';
 import {liveLoginUsage} from '../claude-code/login-usage.js';
 import {withPace} from '../claude-code/pace.js';
-import {historyPath, warehousePath} from '../claude-code/paths.js';
+import {historyPath, nowOf, warehousePath} from '../claude-code/paths.js';
 import {AWAKE_TOOL, callAwakeTool} from './awake.js';
-import {CODEX_TOOL_NAMES, CODEX_TOOLS, callCodexTool} from './codex.js';
+import {CODEX_TOOLS, callCodexTool} from './codex.js';
 import {readLastPing, refreshSessions, renderPing, renderSessions} from './sessions.js';
 import {
-  ACCOUNT_TOOL_NAMES, ACCOUNT_TOOLS, GET_USAGE_TOOL, callAccountTool, currentAccount,
+  ACCOUNT_TOOLS, GET_USAGE_TOOL, callAccountTool, currentAccount,
   renderAccount, renderCards, renderExtraUsage,
 } from './tools.js';
 import {WAITING_TOOL, getWaiting} from './waiting.js';
@@ -56,7 +54,7 @@ export async function getUsage(io = {}) {
   }
   const result = await liveLoginUsage(store);
   if (!result.ok) return result;
-  const nowMs = io.nowMs ?? Date.now();
+  const nowMs = nowOf(io);
   // Pace history and warehouse trend are both filed under the live login
   // (warehouseAccount): two logins are two quota pools. The status line keys the
   // shared history file the same way.
@@ -81,6 +79,35 @@ export async function getUsage(io = {}) {
   };
 }
 
+const toolError = (text) => ({content: [{type: 'text', text}], isError: true});
+
+/**
+ * Every tool the server exposes, in tools/list order: its schema and how to
+ * call it with the request's arguments and the environment. tools/list is
+ * this list's schemas and tools/call one lookup in it, so a tool cannot be
+ * listed without being callable, or the other way round.
+ */
+const TOOLS = [
+  {
+    schema: GET_USAGE_TOOL,
+    call: async (args, io) => {
+      const r = await getUsage(io);
+      return r.ok
+        ? {content: r.content, structuredContent: r.structuredContent}
+        : toolError(`${r.code}: ${r.message}`);
+    },
+  },
+  {schema: WAITING_TOOL, call: (args, io) => getWaiting(io)},
+  {schema: AWAKE_TOOL, call: (args, io) => callAwakeTool(args, io)},
+  ...ACCOUNT_TOOLS.map((schema) => ({
+    schema, call: (args, io) => callAccountTool(schema.name, args, openStore(io)),
+  })),
+  ...CODEX_TOOLS.map((schema) => ({
+    schema, call: (args, io) => callCodexTool(schema.name, args, openCodexStore(io), io.nowMs ?? Date.now()),
+  })),
+];
+const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.schema.name, t]));
+
 /**
  * One JSON-RPC request. `io` is the environment (homedir, env, platform,
  * tmpdir, nowMs, fetchImpl, exec - all optional, see claude-code/paths.js and
@@ -101,49 +128,18 @@ export async function handleRequest(msg, io = {}) {
     case 'ping':
       return {};
     case 'tools/list':
-      return {tools: [GET_USAGE_TOOL, WAITING_TOOL, AWAKE_TOOL, ...ACCOUNT_TOOLS, ...CODEX_TOOLS]};
+      return {tools: TOOLS.map((t) => t.schema)};
     case 'tools/call': {
       const name = msg.params?.name;
-      if (name === 'waiting') {
-        try {
-          return getWaiting(io);
-        } catch (e) {
-          return {content: [{type: 'text', text: e.message}], isError: true};
-        }
-      }
-      if (name === 'awake') {
-        try {
-          return callAwakeTool(msg.params?.arguments, io);
-        } catch (e) {
-          return {content: [{type: 'text', text: e.message}], isError: true};
-        }
-      }
-      if (ACCOUNT_TOOL_NAMES.has(name)) {
-        try {
-          return await callAccountTool(name, msg.params?.arguments, openStore(io));
-        } catch (e) {
-          return {content: [{type: 'text', text: e.message}], isError: true};
-        }
-      }
-      if (CODEX_TOOL_NAMES.has(name)) {
-        try {
-          return callCodexTool(
-            name, msg.params?.arguments, openCodexStore(io), io.nowMs ?? Date.now());
-        } catch (e) {
-          return {content: [{type: 'text', text: e.message}], isError: true};
-        }
-      }
-      if (name !== 'get_usage') throw new RpcError(-32602, `Unknown tool: ${name}`);
-      let result;
+      const tool = TOOL_BY_NAME.get(name);
+      if (!tool) throw new RpcError(-32602, `Unknown tool: ${name}`);
+      // Whatever a tool throws is a tool error the model can read, never a
+      // JSON-RPC -32603 that reads as a broken server.
       try {
-        result = await getUsage(io);
+        return await tool.call(msg.params?.arguments, io);
       } catch (e) {
-        result = {ok: false, code: 'internal_error', message: e.message};
+        return toolError(e.message);
       }
-      if (!result.ok) {
-        return {content: [{type: 'text', text: `${result.code}: ${result.message}`}], isError: true};
-      }
-      return {content: result.content, structuredContent: result.structuredContent};
     }
     default:
       throw new RpcError(-32601, `Method not found: ${msg.method}`);
@@ -216,15 +212,8 @@ export function main() {
   });
 }
 
-// Run when executed directly - including through the npm/npx bin shim, which
-// invokes us via a node_modules/.bin symlink, so compare realpaths.
-const invokedAs = (() => {
-  try {
-    return process.argv[1] && pathToFileURL(fs.realpathSync(process.argv[1])).href;
-  } catch {
-    return null;
-  }
-})();
-if (invokedAs === import.meta.url) {
+// Run when executed directly - by path, or through the npm/npx bin shim's
+// symlink (is-main.js compares real paths).
+if (isMain(import.meta.url)) {
   main();
 }

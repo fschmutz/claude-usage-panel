@@ -29,7 +29,7 @@ function liveWorld(t, sessions = [{pid: 11, name: 'API', id: A}]) {
 
 const send = (io, kind = 'pause') => {
     const pause = openPause(io);
-    return pause.sendRequest({kind, rows: pause.tabs.liveSessions()});
+    return pause.sendRequest({kind, rows: pause.registry.liveSessions()});
 };
 
 test('waiter: idle until a request names its session, then exit 2 with the protocol, exactly once', async (t) => {
@@ -64,7 +64,7 @@ test('waiter: a second waiter for the same session leaves at once', async (t) =>
 test('waiter: a request for another session, a subagent payload or no session id never fire', async (t) => {
     const io = liveWorld(t, [{pid: 11, name: 'API', id: A}, {pid: 12, name: 'WEB', id: B}]);
     const pause = openPause(io);
-    pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions().filter((r) => r.session_id === B)});
+    pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions().filter((r) => r.session_id === B)});
     assert.equal((await startWaiter(payload(A), {...io, pollMs: 20, maxMs: 150}).done).code, 0);
     assert.equal((await startWaiter(payload(B, {agent_id: 'x'}), {...io, maxMs: 150}).done).code, 0);
     assert.equal((await startWaiter({}, io).done).code, 0);
@@ -109,7 +109,7 @@ test('waiter: an expired request is never delivered', async (t) => {
     const io = liveWorld(t);
     const pause = openPause(io);
     io.nowMs = () => Date.now() - 2 * 3_600_000;
-    pause.sendRequest({kind: 'pause', rows: pause.tabs.liveSessions()});
+    pause.sendRequest({kind: 'pause', rows: pause.registry.liveSessions()});
     io.nowMs = () => Date.now();
     assert.equal((await startWaiter(payload(A), {...io, pollMs: 20, maxMs: 150}).done).code, 0);
 });

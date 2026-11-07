@@ -137,7 +137,7 @@ test('install.sh cli: claudectl shim, autosave cron line, pre-2.0 shim migrated'
     assert.match(body, /claude-usage-panel\/claude-code\/claudectl\.js/);
     assert.ok(!fs.existsSync(shim(home, 'claude-account')), 'our old shim is removed');
     const cron = fs.readFileSync(path.join(home, 'crontab.txt'), 'utf8');
-    assert.match(cron, /^\*\/30 \* \* \* \* ".+node" ".+claudectl\.js" session autosave .*# claude-usage-panel session autosave$/m);
+    assert.match(cron, /^\*\/30 \* \* \* \* \S*node \S+claudectl\.js session autosave .*# claude-usage-panel session autosave$/m);
 
     // the installed tree runs through the shim, and still does with no node
     // on PATH (a GUI app's launchd PATH): it falls back to the install-time node
@@ -155,6 +155,31 @@ test('install.sh cli: claudectl shim, autosave cron line, pre-2.0 shim migrated'
     assert.equal(u.status, 0, u.stderr);
     assert.ok(!fs.existsSync(shim(home, 'claudectl')));
     assert.doesNotMatch(fs.readFileSync(path.join(home, 'crontab.txt'), 'utf8'), /session autosave/);
+});
+
+test('install.sh cli: a HOME with shell syntax in it is data in the shim and the cron line', (t) => {
+    // The shim and the crontab line are shell text with the install path in
+    // them. Double quotes left $(...) and " live: running claudectl, or cron
+    // running autosave, ran whatever the path spelled.
+    const base = stubbedHome(t, {prefix: 'cup-cli-q-'});
+    const home = path.join(base, 'we"ird $(touch PWNED) `touch PWNED2` it\'s');
+    fs.mkdirSync(home);
+    const e = {...env(home), PATH: `${path.join(base, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`};
+    const r = run('bash', [INSTALL, 'cli'], {env: e, cwd: base});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+
+    const help = run('bash', [shim(home, 'claudectl'), 'session', 'help'], {env: e, cwd: base});
+    assert.match(help.stdout, /claudectl session - save/, help.stderr);
+    const line = fs.readFileSync(path.join(home, 'crontab.txt'), 'utf8')
+        .split('\n').find((l) => l.includes('session autosave'));
+    // what cron hands /bin/sh: the command after the five schedule fields,
+    // with cron's own \% unescaped
+    const command = line.split(' ').slice(5).join(' ').replace(/ {2}# claude-usage-panel.*$/, '')
+        .replace(/\\%/g, '%').replace('session autosave', 'session help');
+    const ran = run('bash', ['-c', command.replace(/ >\/dev\/null 2>&1$/, '')], {env: e, cwd: base});
+    assert.match(ran.stdout, /claudectl session - save/, ran.stderr);
+    for (const f of ['PWNED', 'PWNED2'])
+        assert.ok(!fs.existsSync(path.join(base, f)), `${f}: the path was run as code`);
 });
 
 test('install.sh cli never removes a claude-account it did not write', (t) => {

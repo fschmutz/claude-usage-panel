@@ -4,8 +4,9 @@
 // right claudectl argv, and the section reads nothing at all while it is off.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {TextEncoder} from 'node:util';
+import {TextDecoder} from 'node:util';
 
+import {memoryFs} from './gio-memory.js';
 import {stub} from './gjs-stub.js';
 
 const HOME = '/home/tester';
@@ -13,7 +14,6 @@ const AWAKE = `${HOME}/.local/state/claude-usage-panel/awake`;
 // Relative to the real clock: the section reads `Date.now()` itself, exactly
 // as it does on a poll.
 const NOW = Date.now();
-const encode = new TextEncoder();
 
 const settings = (overrides = {}) => ({
     get_boolean: key => overrides[key] ?? key === 'awake-enabled',
@@ -52,60 +52,34 @@ function installSt() {
     };
 }
 
-/** GLib + Gio over `files` (path -> text). Only the async reads work. */
+/** GLib + Gio over `files` (path -> text), async only (tests/gio-memory.js):
+ *  a synchronous read or write throws. Returns the [path, text] writes. */
 function install(files) {
     installSt();
-    const sync = name => () => {
-        throw new Error(`synchronous ${name} on the Shell main loop`);
-    };
     const written = [];
+    const mem = memoryFs({files});
     stub.overrides['gi://GLib'] = {
-        PRIORITY_LOW: 300,
-        PRIORITY_DEFAULT: 0,
+        ...mem.GLib,
         getenv: () => null,
         get_home_dir: () => HOME,
         get_real_time: () => 1,
-        build_filenamev: parts => parts.join('/'),
-        mkdir_with_parents: () => 0,
-        file_get_contents: path => {
-            if (!(path in files))
-                throw new Error('no such file');
-            return [true, encode.encode(files[path])];
-        },
-        file_set_contents_full: (path, bytes) => written.push([path, new TextDecoder().decode(bytes)]),
         timeout_add_seconds: () => 1,
         Source: {remove: () => {}},
     };
+    const file = mem.Gio.File.new_for_path;
     stub.overrides['gi://Gio'] = {
-        _promisify: () => {},
-        FileQueryInfoFlags: {NONE: 0},
-        FileCopyFlags: {OVERWRITE: 1},
+        ...mem.Gio,
         File: {
-            new_for_path: path => ({
-                enumerate_children: sync('enumerate_children'),
-                load_contents: sync('load_contents'),
-                move: () => true,
-                async enumerate_children_async() {
-                    const names = Object.keys(files).filter(f => f.startsWith(`${path}/`))
-                        .map(f => f.slice(path.length + 1));
-                    if (!names.length)
-                        throw new Error('not found');
-                    let batch = names.map(name => ({get_name: () => name}));
-                    return {
-                        next_files_async: async () => {
-                            const out = batch;
-                            batch = [];
-                            return out;
-                        },
-                        close_async: async () => true,
-                    };
-                },
-                async load_contents_async() {
-                    if (!(path in files))
-                        throw new Error(`no such file: ${path}`);
-                    return [encode.encode(files[path]), ''];
-                },
-            }),
+            ...mem.Gio.File,
+            new_for_path: path => {
+                const f = file(path);
+                const replace = f.replace_contents_bytes_async;
+                f.replace_contents_bytes_async = async bytes => {
+                    written.push([path, new TextDecoder().decode(bytes.data)]);
+                    return replace(bytes);
+                };
+                return f;
+            },
         },
     };
     return written;
@@ -209,7 +183,9 @@ test('the floors reach the holder through config.json, written only when they mo
     t.after(() => { stub.overrides = {}; });
     const written = install({});
     const {syncAwakeConfig} = await import('../claude-usage-panel@fschmutz.github.io/lib/awake.js');
-    assert.equal(syncAwakeConfig(settings()), true);
+    assert.equal(await syncAwakeConfig(settings()), true);
+    assert.equal(written.length, 1);
+    assert.equal(await syncAwakeConfig(settings()), false, 'unchanged floors write nothing');
     assert.equal(written.length, 1);
     assert.deepEqual(JSON.parse(written[0][1]),
         {lowPowerFloor: 40, endFloor: 10, maxSeconds: 43200, thermalRules: true});

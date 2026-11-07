@@ -6,6 +6,8 @@
 // Mirrored by ClaudeUsageCore/SessionBoard.swift and pinned by
 // tests/fixtures/board.json.
 
+import {num} from './json.js';
+
 /** The layouts the setting takes; anything else reads as the default. */
 export const SESSIONS_LAYOUTS = ['merged', 'tabs', 'separate'];
 export const DEFAULT_SESSIONS_LAYOUT = 'merged';
@@ -22,7 +24,6 @@ const RANK = {waiting: 0, live: 1, ended: 2};
 
 const text = v => (typeof v === 'string' ? v : '');
 const posInt = v => (Number.isInteger(v) && v > 0 ? v : null);
-const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 // UTF-16 code-unit order (what `<` on two strings does); the Swift twin
 // compares `utf16` for the same answer.
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);

@@ -372,3 +372,16 @@ test('the resume prompt names the peers, and who shares a working tree', async (
     assert.ok(p.indexOf('You are not alone') < p.indexOf('Same rules as before'));
     assert.doesNotMatch(resumePrompt({label: 'l', savedAt: 0, nowMs: 60_000}), /not alone/);
 });
+
+// macOS TYPES the resume prompt into the new tab: another session's name or
+// cwd carrying a newline, ^C or an escape would act on the terminal first.
+test('peersNote blanks every control character in other sessions\' names and directories', async () => {
+    const {peersNote} = await import('../claude-code/tabs.js');
+    const peers = [
+        {name: 'api\nrm -rf ~\n', cwd: '/h/Git/api\u0003'}, {name: 'web\u001b[2J\u009b', cwd: '/h/Git/web\u007f'},
+    ];
+    const note = peersNote(peers, '/h');
+    assert.doesNotMatch(note.replace(/\n/g, ''), /[\u0000-\u001f\u007f-\u009f]/);
+    assert.equal(note.split('\n').filter(Boolean).length, 1, 'no line break but the note\'s own');
+    assert.match(note, /api rm -rf ~ {2}\(~\/Git\/api \), web \[2J {2}\(~\/Git\/web \) are up too/);
+});

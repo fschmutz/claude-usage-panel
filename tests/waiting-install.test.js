@@ -15,9 +15,13 @@ const INSTALL = path.join(ROOT, 'install.sh');
 const UUID = 'claude-usage-panel@fschmutz.github.io';
 const HOOK = /waiting-hook\.js/;
 
-function sandbox(t) {
+function sandbox(t, {schemaKey = true} = {}) {
     const home = stubbedHome(t, {prefix: 'cup-waiting-'});
-    fs.mkdirSync(path.join(home, '.local/share/gnome-shell/extensions', UUID, 'schemas'), {recursive: true});
+    const schemas = path.join(home, '.local/share/gnome-shell/extensions', UUID, 'schemas');
+    fs.mkdirSync(schemas, {recursive: true});
+    // an older extension's schema lacks the key, and gsettings refuses it
+    fs.writeFileSync(path.join(schemas, 'x.gschema.xml'),
+        schemaKey ? '<key name="waiting-enabled" type="b"/>\n' : '<key name="other" type="b"/>\n');
     const gs = path.join(home, 'bin', 'gsettings');
     fs.writeFileSync(gs, '#!/bin/sh\necho "gsettings $*" >>"$HOME/calls.log"\n');
     fs.chmodSync(gs, 0o755);
@@ -45,6 +49,14 @@ const calls = home => {
     const f = path.join(home, 'calls.log');
     return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
 };
+
+test('install waiting leaves an extension whose schema predates the key alone', t => {
+    const home = sandbox(t, {schemaKey: false});
+    const r = sh(home, ['waiting']);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.doesNotMatch(calls(home), /gsettings/);
+    assert.match(settings(home), HOOK);
+});
 
 test('install waiting: every hook event, the section on, listed; uninstall reverses it', t => {
     const home = sandbox(t);

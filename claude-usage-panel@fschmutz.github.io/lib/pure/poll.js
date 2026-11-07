@@ -92,7 +92,8 @@ export function sameUsage(previous, current) {
 // The dropdown's other sections (session cost, today's sessions, Cursor spend,
 // saved accounts) do not need the Claude token, and the account switcher is
 // the very fix for an expired one, so they refresh after every poll, failed or
-// not. GNOME only: no Swift twin and no fixture.
+// not. Swift twin: PollSections (sectionCards + the deadline pinned by
+// tests/fixtures/poll.json "sections").
 // The poll timer re-arms only once they settle, so each one gets a
 // deadline: one hung child process must never stop the panel polling.
 

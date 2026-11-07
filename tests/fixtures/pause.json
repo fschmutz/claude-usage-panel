@@ -7,7 +7,9 @@
     "`claudectl session pause-status --json` shape the menu-bar app reads, and the panel",
     "rows it builds). NODE ONLY, no Swift twin (the app never delivers or joins records):",
     "hookTimeoutS, fileNames, parseDelivered, parseVerdict, shouldDeliver, bindingOk,",
-    "pretoolEligible, pauseOwed, rowState, rows (pauseRows, the one row join), exitCode.",
+    "pretoolEligible, pauseOwed, rowState, rows (pauseRows, the one row join), exitCode,",
+    "waiterOwnership (whether a pause waiter's session is still its own: the registry",
+    "decides once it named the pid, before that the pid and its start time).",
     "A verdict wins over liveness; a record for an older request is ignored; a newer",
     "request supersedes an unanswered row; past the TTL every unanswered row is terminal.",
     "Labels are per port and not asserted, except summary.label."
@@ -172,5 +174,15 @@
     "panel": [{"sessionId":"aaaa1111-0000-4000-8000-000000000001","name":"API","cwd":"/w/api-2","live":true,"state":"not-safe"},{"sessionId":"bbbb2222-0000-4000-8000-000000000002","name":"WEB","cwd":"/w/web","live":false,"state":"pending"},{"sessionId":"cccc3333-0000-4000-8000-000000000003","name":"infra","cwd":"/w/infra","live":false,"state":"gone"},{"sessionId":"ffff9999","name":"blog","cwd":"/w/blog/","live":true,"state":null}],
     "summaryLabel": "0/3 safe",
     "summaryDone": false
-  }
+  },
+  "waiterOwnership": [
+    {"name": "no claude pid to check against", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": null}, "expected": {"ours": true, "sawRegistry": false}},
+    {"name": "the registry names our session", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": 42, "registry": {"session_id": "aaaa1111-0000-4000-8000-000000000001"}}, "expected": {"ours": true, "sawRegistry": true}},
+    {"name": "/clear moved the pid to a new session id", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": 42, "registry": {"session_id": "bbbb2222-0000-4000-8000-000000000002"}}, "expected": {"ours": false, "sawRegistry": true}},
+    {"name": "early SessionStart: no entry yet, the pid lives with its armed start time", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": 42, "alive": true, "armedStart": "100", "start": "100"}, "expected": {"ours": true, "sawRegistry": false}},
+    {"name": "no entry, start time unknown at arming: the live pid is enough", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": 42, "alive": true, "armedStart": null, "start": null}, "expected": {"ours": true, "sawRegistry": false}},
+    {"name": "a recycled pid has another start time", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": 42, "alive": true, "armedStart": "100", "start": "250"}, "expected": {"ours": false, "sawRegistry": false}},
+    {"name": "claude crashed: no entry, pid gone", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": 42, "alive": false, "armedStart": "100"}, "expected": {"ours": false, "sawRegistry": false}},
+    {"name": "the entry it saw went away: the session ended, a live pid notwithstanding", "input": {"sessionId": "aaaa1111-0000-4000-8000-000000000001", "owner": 42, "sawRegistry": true, "alive": true, "armedStart": "100", "start": "100"}, "expected": {"ours": false, "sawRegistry": true}}
+  ]
 }

@@ -305,20 +305,23 @@ and the Swift twin together, and keep the fixture matching.
 
 - **`claude-usage-panel@fschmutz.github.io/lib/pure.js`** - GNOME pure logic,
   a barrel over `lib/pure/{usage,pace,cursor,warehouse,events,poll,pings,
- sessions,accounts,notices,codex,snapshots,layout,waiting,pause,leftovers,board,awake}.js` (`layout.js`, the dropdown
+ sessions,accounts,accountStore,notices,codex,snapshots,layout,waiting,pause,pause-protocol,leftovers,board,awake,awake-power,json}.js` (`layout.js`, the dropdown
   geometry, is GNOME-only: the macOS popover sizes itself). No `gi`/GJS
   imports anywhere under `pure/`, so it all runs under plain `node` for tests
   and in the Node clients. This is the reference implementation: the GNOME
   code imports the `lib/pure.js` barrel, the Node code the module it needs
   (the barrel is not installed into the Node tree).
 - **`macos/Sources/ClaudeUsageCore/`** - Foundation-only mirror of `pure.js`
- (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `AccountRename.swift`, `Notices.swift`,
+ (`Model.swift`, `CursorModel.swift`, `Accounts.swift`, `AccountRename.swift`, `LiveLogin.swift`, `Notices.swift`,
  `Codex.swift`, `Warehouse.swift`,
  `EventHooks.swift`, `Sessions.swift`, `SessionPing.swift`, `WindowPlanner.swift`,
  `Snapshots.swift`, `Waiting.swift`, `Pause.swift`, `SessionBoard.swift`, `ShellQuote.swift`, `DataProvenance.swift`,
  `HttpFailure.swift`, `UpdateStatus.swift`, `ReleaseTags.swift`,
  `NotifyScript.swift`, `Countdown.swift` (`ResetCountdown`, `Sparkline`),
- `PlanLabel.swift`, `Awake.swift` + `AwakePower.swift`).
+ `PlanLabel.swift`, `Awake.swift` + `AwakePower.swift`, `PollSections.swift`,
+ `ExclusiveLock.swift`, `Setting.swift`; and the small Foundation I/O the app
+ shares so it is tested too: `Shell.swift` (every child process, with a
+ deadline) and `PrivateFile.swift` (the one 0600 atomic write)).
   No networking/SwiftUI, so it unit-tests on Linux CI. The files say "Mirrors
   the GNOME extension's lib/pure.js" - keep it that way.
 - **`claude-code/`** - the Node clients' I/O over `lib/pure/`, one concern
@@ -326,9 +329,22 @@ and the Swift twin together, and keep the fixture matching.
   and forecast are `lib/pure/pace.js`), `stamps.js` (the compact "3h06m"
   `resetHint`, rendered from `lib/pure/usage.js` `resetParts`), `paths.js`
   (every state/cache/config path derived from one `io`, nothing at module
-  load), `accounts.js` (`openStore(io)`),
-  `accounts-usage.js` (its usage half), `private-fs.js` (0600 JSON I/O shared
-  by the account and Codex stores), `codex.js` / `codex-cli.js` (the Codex
+  load; `nowOf(io)` is the ONE clock read - `io.nowMs` is a number for some
+  callers and a function for others, and handleRequest hands one io to every
+  MCP tool, so nothing reads `io.nowMs` itself), `accounts.js` (`openStore(io)`),
+  `accounts-usage.js` (its usage half), `private-fs.js` (`readJSON` and
+  `writeAtomic`, the ONE atomic write: O_EXCL tmp + rename, no tmp left on
+  failure, `keepMode` for settings files; every store, scratch file and
+  `scripts/lib/json-file.mjs` write through it), `excl-lock.js` (the ONE
+  lock-file mutex: body with an owner token, released only while ours, a
+  stale lock moved aside by rename and checked; the Awake hold, the refresh
+  lock, the pause claim and waiter, and `scripts/awake-backstop.sh` follows
+  the same rules), `procs.js` (`procStat`, `pidAlive`, the one
+  `isClaudeArgv` / `isClaudeCommand` test, `processIdentity`), `registry.js`
+  (`openRegistry(io)`: live sessions from Claude Code's `sessions/<pid>.json`
+  registry, checked against `/proc` start time; what pause, awake and waiting
+  import - never `tabs.js`), `is-main.js` (`isMain(import.meta.url)`, the run
+  guard of every entry point), `codex.js` / `codex-cli.js` (the Codex
   vault),
   `login-usage.js` (which login's usage and its auth-failure label: a live
   token keeps the refresh hint, a stored one names the profile),
@@ -342,19 +358,22 @@ and the Swift twin together, and keep the fixture matching.
   resume | report | pause-status | leftovers`; the hooks are installed ONLY by the opt-in
   `./install.sh pause`: an asyncRewake `wait` on SessionStart + Stop, one live
   waiter per session by lock, exactly-once delivery by claim, a PreToolUse
-  `pretool` backstop that skips subagents; shapes, row states and the protocol
-  texts are `lib/pure/pause.js`, pinned by `tests/fixtures/pause.json`; a
+  `pretool` backstop that skips subagents; shapes, row states and whether a
+  waiter's session is still its own (`waiterOwnership`) are `lib/pure/pause.js`,
+  pinned by `tests/fixtures/pause.json`, the protocol texts
+  `lib/pure/pause-protocol.js`; a
   reopen of a session with a pending checkpoint gets the resume protocol),
   `leftovers.js` (`claudectl session leftovers` and the pause double check:
   the process table with each process's `CLAUDE_CODE_SESSION_ID`, `/proc` on
   Linux, two `ps` runs on macOS; which process is a job is pure
   `lib/pure/leftovers.js` `pauseLeftovers`, Node-only; it never kills), `transcript-tokens.js` (a transcript's token totals and their incremental
   on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
-  (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
-  registry, checked against `/proc` start time; the snapshot store;
+  (`openTabs(io)`: the registry's operations plus the snapshot store;
   autosave; Node-only, no port to mirror), `close.js` (`claudectl session
   close`: SIGTERM claude, then SIGHUP the shell ancestors on its tty so the
-  tab closes; refuses self, busy and foreign work on the tab; Node-only), `terminals.js` (which terminal
+  tab closes; refuses self, busy and foreign work on the tab; every pid is
+  pinned to its `processIdentity` before the confirm and re-checked before
+  each signal; Node-only), `terminals.js` (which terminal
   `session open` uses - the panels' own setting, never a separate one - and
   how it gets a tab per session; `TERMINALS` / `terminalArgv` /
   `pickTerminal` are `lib/pure/sessions.js`, imported), `layout.js`

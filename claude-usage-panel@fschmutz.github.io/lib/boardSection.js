@@ -12,8 +12,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {pauseStateText, pauseSummaryText} from './pauseSection.js';
-import {lastOutputLine, run} from './proc.js';
-import {claudectlPath} from './snapshots.js';
+import {runClaudectl} from './claudectl.js';
 import {
     BOARD_TABS, boardDefaultTab, boardMetaParts, boardTab, boardVisible, compactTokens, sessionBoard,
 } from './pure.js';
@@ -207,16 +206,10 @@ export class BoardController {
             return;
         }
         this._menu.close();
-        const cli = claudectlPath();
-        if (!cli) {
-            this._notify(_('Claude usage'), _('Install claudectl (./install.sh cli) to jump to a session.'));
-            return;
-        }
-        run(boardFocusCommand(cli, row)).then(({ok, stdout, stderr}) => {
-            if (this._isDestroyed() || ok)
-                return;
-            this._notify(_('Claude usage'),
-                lastOutputLine(stdout, stderr) || _('Could not focus %s').format(row.name));
+        runClaudectl(cli => boardFocusCommand(cli, row), {
+            notify: this._notify, isDestroyed: this._isDestroyed,
+            installHint: _('Install claudectl (./install.sh cli) to jump to a session.'),
+            failText: _('Could not focus %s').format(row.name),
         });
     }
 

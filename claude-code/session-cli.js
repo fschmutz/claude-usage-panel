@@ -6,9 +6,10 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import {cleanPauseText} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
 import {AUTO_KEEP, describeLaunch, matchSession, openTabs, resumePrompt, stampLabel} from './tabs.js';
-import {tabsDir} from './paths.js';
+import {nowOf, tabsDir} from './paths.js';
 import {openPause} from './pause.js';
 import {PAUSE_COMMANDS, PAUSE_DETAILS, PAUSE_HELP, runPause} from './pause-cli.js';
 import {focusSession} from './waiting.js';
@@ -158,7 +159,7 @@ async function closeSessions(tabs, keys, opts, {io, out, confirm}) {
   }
   const closer = openClose(io);
   const ps = closer.table();
-  const plans = rows.map((row) => ({row, plan: closePlan(ps, row.pid)}));
+  const plans = rows.map((row) => ({row, plan: closer.pin(row, closePlan(ps, row.pid))}));
   const todo = [];
   for (const p of plans) {
     const why = closeBlocker(p.row, p.plan, {self});
@@ -178,7 +179,7 @@ async function closeSessions(tabs, keys, opts, {io, out, confirm}) {
     out('aborted\n');
     return 1;
   }
-  const snap = tabs.save(`${AUTO_SNAPSHOT_PREFIX}closed-${stampLabel(io.nowMs ? io.nowMs() : Date.now())}`,
+  const snap = tabs.save(`${AUTO_SNAPSHOT_PREFIX}closed-${stampLabel(nowOf(io))}`,
     {sessions: todo.map((p) => p.row)});
   out(`saved as ${snap.label} - \`claudectl session open ${snap.label}\` reopens them\n`);
   let failed = 0;
@@ -190,9 +191,18 @@ async function closeSessions(tabs, keys, opts, {io, out, confirm}) {
   return failed ? 1 : 0;
 }
 
+// Session names, custom titles, cwds and snapshot labels come out of files
+// any process can write, and they reach a terminal: every line printed here
+// has its control characters blanked (an ESC there retitles the terminal or,
+// through OSC 52, writes its clipboard). Newlines between lines stay.
+function printable(text) {
+  return String(text).split('\n').map((line) => cleanPauseText(line, Infinity) ?? '').join('\n');
+}
+
 export async function main(argv, io = {}) {
   const tabs = openTabs(io);
-  const out = io.stdout ?? ((s) => process.stdout.write(s));
+  const write = io.stdout ?? ((s) => process.stdout.write(s));
+  const out = (s) => write(printable(s));
   const confirm = io.confirm ?? (() => false);
   // the answer typed at a terminal; null when there is none to ask in
   const ask = io.ask ?? (async () => null);
@@ -303,7 +313,7 @@ export async function main(argv, io = {}) {
       const generated = !opts['no-prompt'] && typeof opts.prompt !== 'string';
       const checkpoints = new Map(generated
         ? open.map((row) => [row.session_id, pause.pendingCheckpoint(row.session_id)]) : []);
-      const nowMs = io.nowMs ? io.nowMs() : Date.now();
+      const nowMs = nowOf(io);
       // everyone up after this: the reopened ones and those still running
       const peers = [...open, ...tabs.liveSessions().filter((l) => !open.some((o) => o.session_id === l.session_id))];
       const prompt = opts['no-prompt'] ? ''

@@ -155,3 +155,22 @@ export function historyPath(io) {
 export function tokensCachePath(io) {
   return path.join(scratchDir(io), 'claude-usage-statusline-tokens.json');
 }
+
+/** Claude Code's transcript for a session: projects/<cwd, every non
+ *  alphanumeric turned into '-'>/<id>.jsonl. */
+export function transcriptPath(projects, cwd, sessionId) {
+  return path.join(projects, cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sessionId}.jsonl`);
+}
+
+/**
+ * The clock every Node client reads, from the same `io`. `io.nowMs` is either
+ * a number (a pinned instant: the account and Codex stores, the MCP tests) or
+ * a function returning one (a clock that moves: awake, pause, the session
+ * tools). handleRequest hands ONE io to tools of both kinds, so every
+ * consumer reads the clock here and never `io.nowMs` itself.
+ */
+export function nowOf(io) {
+  const n = io?.nowMs;
+  if (typeof n === 'function') return n();
+  return Number.isFinite(n) ? n : Date.now();
+}
