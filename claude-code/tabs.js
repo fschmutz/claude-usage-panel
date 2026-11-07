@@ -142,14 +142,14 @@ export function sameSessions(a, b) {
  * re-read where it stopped and re-check what moved meanwhile before it
  * carries on, and restates that approvals do not carry over a restart.
  */
-export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = '', checkpoint = null}) {
+export function resumePrompt({label, savedAt, nowMs, peers = [], homedir = '', checkpoint = null, leftovers = null}) {
   // Under a minute the countdown floors to "0m" (or '' when not past):
   // "(moments ago)" reads right, "(0m ago)" does not.
   const hint = resetHint(new Date(nowMs).toISOString(), savedAt);
   const ago = hint && hint !== '0m' ? hint : 'moments';
   // A session paused with `claudectl session pause` wrote a checkpoint: the
   // RESUME PROTOCOL (lib/pure/pause.js) replaces the generic three steps.
-  const steps = checkpoint ? `${resumeProtocolText(checkpoint)}\n\n`
+  const steps = checkpoint ? `${resumeProtocolText(checkpoint, leftovers)}\n\n`
     : '1. Re-read the end of this conversation: my last request, what you finished, what was ' +
       'still running or waiting.\n' +
       '2. Check what moved while you were down: git status and recent commits here, and the ' +

@@ -10,6 +10,7 @@ delivered and what it answered: `SAFE TO CLOSE` or `NOT SAFE: <why>`.
 claudectl session pause --all          # every live session but the one you type it in
 claudectl session pause API WEB        # by name, pid or session-id prefix
 claudectl session pause-status         # the last request, one row per session
+claudectl session leftovers            # jobs each session (open or closed) left running
 claudectl session resume --all         # running: resume protocol; closed: reopened with it
 ```
 
@@ -41,6 +42,7 @@ TTL rule, in the terminal and in both panels.
 | `pause [NAME...\|--all] [--include-self] [--wait[=S]\|--no-wait] [--json]` | Send the pause protocol and follow each row until every one is terminal or the wait ends (180 s by default) |
 | `resume [NAME...\|--all] [--wait[=S]\|--no-wait] [--terminal=BIN] [--dry-run]` | Every session paused and not resumed since: running ones get the resume protocol; closed ones with a pending checkpoint are reopened in your terminal with it |
 | `pause-status [--json]` | The last pause / resume request, one row per session, from disk |
+| `leftovers [NAME...\|--session ID] [--json]` | Every job a session, open or closed, left running (see [Double check](#double-check)); exit 0 none, 3 some. Kills nothing |
 | `report --request ID --verdict SAFE\|NOT_SAFE [--checkpoint P] [--reason TEXT\|--reason-file F\|-] [--session ID]` | What a paused session runs to answer; you do not type it. `--reason-file` (a file, or `-` for stdin) keeps a reason with quotes away from shell quoting |
 
 `NAME` is a session name, a pid or a session-id prefix. `--all` is resolved
@@ -69,7 +71,47 @@ claudectl session pause --all && systemctl suspend
 ```
 
 `--json` prints the structured status (`rows` plus the `summary` below)
-instead of the table.
+instead of the table. With a wait it also carries `recheck` (the status of
+the second ask, or null) and `leftovers` (what the double check still found).
+
+## Double check
+
+A session's own word is not enough: a subagent, a workflow child or a Bash
+job shown as "completed" can still be running, and an orphan whose shell died
+is invisible to it. Every process Claude Code starts for a session carries
+`CLAUDE_CODE_SESSION_ID`, and each Bash tool command runs under a
+`shell-snapshots/snapshot-*.sh` wrapper, so the process table answers it.
+`claudectl session leftovers` lists, per session, every process with that id
+that is not the harness's own (hook waiters and MCP servers are), one line
+per job no other job started:
+
+```text
+  API aaaa1111 (open): 1 job, 2 processes
+    pid 40 (+1 under it): $ make test
+  bbbb2222 (closed): 1 job, 1 process
+    pid 60 (orphaned): node watch.js
+  closed sessions left these running; stop them with: kill 60
+```
+
+It is used three times:
+
+1. **At delivery.** A pause names the jobs claudectl already sees for that
+   session before step 1, and step 4 of the protocol force-stops every
+   listed agent and workflow (a status label is not proof), then runs
+   `leftovers --session <id>` and must find nothing.
+2. **After every verdict is in** (`pause --wait`). A session that answered
+   SAFE and still has jobs is asked once more, by a pause naming them. What
+   survives that fails the run (exit 3) and is printed; jobs of sessions that
+   are no longer open are printed with a `kill` line, since nobody is left
+   to ask. Nothing is killed by claudectl. `--no-wait` (the panels) skips
+   this round: steps 1 and 3 still apply.
+3. **On resume.** The resume protocol, delivered or in a reopened session's
+   prompt, runs `leftovers --session <id>` after reading the checkpoint:
+   what outlived the pause is stopped, or adopted when the checkpoint names
+   it as persistent by design.
+
+Linux reads `/proc`; macOS runs `ps` twice (with `-E` for the id only: no
+environment value is ever printed).
 
 ## What a session receives
 

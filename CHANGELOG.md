@@ -6,6 +6,19 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- **Pause: a double check from the process table.** `claudectl session
+  leftovers` lists every job a session, open or closed, left running: each
+  process carrying its `CLAUDE_CODE_SESSION_ID` that is not a hook or an MCP
+  server, grouped by the job that started it, orphans marked. A pause names
+  what it already sees, the protocol force-stops every listed agent and
+  workflow (a "completed" label included) and gates on `leftovers` finding
+  nothing; `pause --wait` asks a session that answered SAFE with jobs still
+  running once more, then fails (exit 3) on what survives and prints a
+  `kill` line for closed sessions' orphans. The resume protocol runs it
+  after reading the checkpoint. Nothing is killed by claudectl.
+
 ### Fixed
 
 - **Session ping: no orphaned `sleep 120` after each ping.** Killing the

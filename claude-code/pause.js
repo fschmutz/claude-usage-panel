@@ -4,7 +4,8 @@
 // in a 0700 dir written temp + rename (private-fs.js). The shapes, which
 // request a session still owes, the row states, the row join and the
 // protocol texts are lib/pure/pause.js; the live sessions come from tabs.js
-// (Claude Code's registry, checked against the process table).
+// (Claude Code's registry, checked against the process table), what each
+// session left running from leftovers.js.
 //
 // Exactly-once delivery: the waiter (asyncRewake) and the PreToolUse
 // backstop can race for the same session. Each claims under a short
@@ -29,6 +30,7 @@ import {
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {shellQuote} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {pauseDir, projectsDir} from './paths.js';
+import {openLeftovers} from './leftovers.js';
 import {readJSON, writePrivate} from './private-fs.js';
 import {openTabs, transcriptPath} from './tabs.js';
 
@@ -92,6 +94,7 @@ export function takeOverStale(lock, seen) {
 
 export function openPause(io = {}) {
   const tabs = openTabs(io);
+  const leftoverScan = openLeftovers(io);
   // whole milliseconds on disk: the Swift port reads `at` as an integer
   const now = () => Math.floor(io.nowMs ? io.nowMs() : Date.now());
   const pidAlive = (pid) => (io.pidAlive ?? defaultPidAlive)(pid);
@@ -302,12 +305,30 @@ export function openPause(io = {}) {
       `--session ${sid} --request ${requestId}`;
   }
 
-  /** What `sid` receives for `request`, delivered by `via`. */
+  /** The command a session runs to list what it left running. */
+  function leftoversCommand(sid) {
+    const node = io.execPath ?? process.execPath;
+    return `${shellQuote(node)} ${shellQuote(io.claudectl ?? CLAUDECTL_JS)} session leftovers --session ${sid}`;
+  }
+
+  /** What every session left running (pure pauseLeftovers over the live
+   *  process table). A scan that fails is empty: it never blocks a pause. */
+  function leftovers() {
+    try {
+      return leftoverScan.scan(tabs.liveSessions());
+    } catch {
+      return [];
+    }
+  }
+
+  /** What `sid` receives for `request`, delivered by `via`. A pause names
+   *  the jobs claudectl already sees running for it. */
   function deliveryText(sid, request, via) {
     const checkpoint = checkpointPath(sid);
+    const found = request.kind === 'pause' ? leftovers().find((s) => s.sessionId === sid)?.jobs ?? [] : [];
     return pauseDeliveryText({
       request, via, sentAt: formatClock(request.at), checkpoint,
-      checkpointExists: fs.existsSync(checkpoint),
+      checkpointExists: fs.existsSync(checkpoint), leftovers: leftoversCommand(sid), found,
       report: reportCommand(sid, request.id), verdictFile: file(sid, 'verdict'), reasonFile: file(sid, 'reason'),
     });
   }
@@ -389,5 +410,6 @@ export function openPause(io = {}) {
   return {
     dir, readRequest, sendRequest, checkpointPath, pendingCheckpoint, isPaused, pausedAt, pausedSessions,
     readKnown, markResumed, claim, deliveryText, report, waiterLive, acquireWaiter, status, pidAlive, tabs,
+    leftovers, leftoversCommand,
   };
 }

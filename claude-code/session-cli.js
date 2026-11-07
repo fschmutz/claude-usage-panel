@@ -310,7 +310,7 @@ export async function main(argv, io = {}) {
         : (typeof opts.prompt === 'string' ? opts.prompt
           : (row) => resumePrompt({
             label: snap.label, savedAt: snap.savedAt, nowMs, peers, homedir: io.homedir ?? os.homedir(),
-            checkpoint: checkpoints.get(row.session_id) ?? null,
+            checkpoint: checkpoints.get(row.session_id) ?? null, leftovers: pause.leftoversCommand(row.session_id),
           }));
       const dryRun = Boolean(opts['dry-run']);
       const how = {terminal, windows: Boolean(opts.windows), tmux: Boolean(opts.tmux), prompt};

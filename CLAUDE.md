@@ -338,13 +338,16 @@ and the Swift twin together, and keep the fixture matching.
   Notification marks, Stop marks idle, UserPromptSubmit / PreToolUse / PostToolUse /
   SessionEnd clear; a marker counts only for the same pid AND session id),
   `pause.js` / `pause-hook.js` / `pause-cli.js` (`claudectl session pause |
-  resume | report | pause-status`; the hooks are installed ONLY by the opt-in
+  resume | report | pause-status | leftovers`; the hooks are installed ONLY by the opt-in
   `./install.sh pause`: an asyncRewake `wait` on SessionStart + Stop, one live
   waiter per session by lock, exactly-once delivery by claim, a PreToolUse
   `pretool` backstop that skips subagents; shapes, row states and the protocol
   texts are `lib/pure/pause.js`, pinned by `tests/fixtures/pause.json`; a
   reopen of a session with a pending checkpoint gets the resume protocol),
-  `transcript-tokens.js` (a transcript's token totals and their incremental
+  `leftovers.js` (`claudectl session leftovers` and the pause double check:
+  the process table with each process's `CLAUDE_CODE_SESSION_ID`, `/proc` on
+  Linux, two `ps` runs on macOS; which process is a job is pure
+  `pauseLeftovers`; it never kills), `transcript-tokens.js` (a transcript's token totals and their incremental
   on-disk cache, over `lib/pure/sessions.js` `turnTokens`), `tabs.js`
   (`openTabs(io)`: live sessions from Claude Code's `sessions/<pid>.json`
   registry, checked against `/proc` start time; the snapshot store;

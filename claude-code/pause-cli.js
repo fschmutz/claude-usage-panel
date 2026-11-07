@@ -8,12 +8,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 
-import {cleanPauseText, pauseExitCode, PAUSE_REASON_MAX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {cleanPauseText, leftoverLines, leftoverRoots, pauseExitCode, PAUSE_REASON_MAX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
 import {openPause} from './pause.js';
 import {describeLaunch, resumePrompt} from './tabs.js';
 
-export const PAUSE_COMMANDS = new Set(['pause', 'resume', 'report', 'pause-status']);
+export const PAUSE_COMMANDS = new Set(['pause', 'resume', 'report', 'pause-status', 'leftovers']);
 
 export const PAUSE_HELP = `
   claudectl session pause [NAME...|--all] [--wait[=S]|--no-wait] [--json]
@@ -26,6 +26,9 @@ export const PAUSE_HELP = `
                                              running: send the resume protocol;
                                              closed with a checkpoint: reopen it
   claudectl session pause-status [--json]    the last request, one row per session
+  claudectl session leftovers [NAME...|--session ID] [--json]
+                                             jobs each session (open or closed) left
+                                             running; exit 0 none, 3 some
   claudectl session report --request ID --verdict SAFE|NOT_SAFE
                          [--checkpoint P] [--reason TEXT|--reason-file F|-]
                          [--session ID]
@@ -48,6 +51,12 @@ a pending checkpoint is reopened in your terminal with it (--terminal=BIN
 picks the terminal, --dry-run prints and runs nothing).`,
   'pause-status': `The last pause or resume request, from disk: one row per session with
 where its delivery and verdict stand.`,
+  leftovers: `Every process still carrying a session's CLAUDE_CODE_SESSION_ID that is not
+the harness's own (hooks, MCP servers): Bash tool commands and what they
+started, and anything orphaned, for open and closed sessions alike. One line
+per job no other job started, with how many run under it. A paused session
+runs it as its last check; \`pause --wait\` runs it once every verdict is in.
+Nothing is killed here: the pids are printed for you to stop.`,
   report: `You do not type this: a paused session runs it to answer the request.
 --reason-file (a file, or - for stdin) keeps a reason with quotes away from
 shell quoting.`,
@@ -56,6 +65,8 @@ shell quoting.`,
 const DEFAULT_WAIT_S = 180;
 // `--wait` takes its value only as --wait=S: `pause --wait API` names API.
 const VALUE_FLAGS = new Set(['request', 'verdict', 'checkpoint', 'reason', 'reason-file', 'session', 'from', 'terminal']);
+/** Jobs per session cut after this many lines in the text output. */
+const LEFTOVER_LINES_MAX = 12;
 /** `--from`, internal to the panels (they pass gnome / macos); not in HELP. */
 const FLAG_SOURCES = new Set(['cli', 'gnome', 'macos']);
 /** Exit status of a `--wait` whose request a newer one replaced. */
@@ -163,14 +174,15 @@ async function follow(pause, request, seconds, io, {json, out}) {
   }
 }
 
-async function sendAndFollow(pause, kind, rows, opts, io, out, who) {
+async function sendAndFollow(pause, kind, rows, opts, io, out, who, {printJson = true} = {}) {
   const request = pause.sendRequest({kind, rows, ...who});
   const json = Boolean(opts.json);
   const seconds = waitSeconds(opts);
   if (!json) out(`${kind} ${request.id} sent to ${rows.map((r) => r.name).join(', ')}\n`);
   const st = seconds ? await follow(pause, request, seconds, io, {json, out}) : pause.status(request);
-  if (json) out(`${JSON.stringify(st, null, 2)}\n`);
-  else {
+  if (json) {
+    if (printJson) out(`${JSON.stringify(st, null, 2)}\n`);
+  } else {
     printTable(out, st);
     if (seconds && !st.summary.done && !st.superseded) {
       out(`still open after ${seconds}s - \`claudectl session pause-status\` follows up\n`);
@@ -179,15 +191,103 @@ async function sendAndFollow(pause, kind, rows, opts, io, out, who) {
   return st;
 }
 
+/** A session's name: the live row, else known.json, else the id. */
+function nameOf(sessionId, live, known) {
+  return live.find((r) => r.session_id === sessionId)?.name || known.get(sessionId)?.name || sessionId.slice(0, 8);
+}
+
+/** Text lines for leftovers (pure pauseLeftovers rows). */
+function printLeftovers(out, found, live, known) {
+  for (const s of found) {
+    const roots = leftoverRoots(s.jobs);
+    out(`  ${nameOf(s.sessionId, live, known)} ${s.sessionId.slice(0, 8)} (${s.running ? 'open' : 'closed'}): ` +
+      `${roots.length} job${roots.length === 1 ? '' : 's'}, ${s.jobs.length} process${s.jobs.length === 1 ? '' : 'es'}\n`);
+    const lines = leftoverLines(s.jobs, '    ').split('\n');
+    out(`${lines.slice(0, LEFTOVER_LINES_MAX).join('\n')}\n`);
+    if (lines.length > LEFTOVER_LINES_MAX) out(`    ... ${lines.length - LEFTOVER_LINES_MAX} more (\`claudectl session leftovers --json\`)\n`);
+  }
+}
+
+/** Kill command for the root jobs of sessions that are no longer open:
+ *  nobody is left to ask, so the user decides. */
+function closedKillHint(out, found) {
+  const pids = found.filter((s) => !s.running).flatMap((s) => leftoverRoots(s.jobs).map((j) => j.pid));
+  if (pids.length) out(`  closed sessions left these running; stop them with: kill ${pids.join(' ')}\n`);
+}
+
+/**
+ * The double check after every verdict is in: the process table, not the
+ * sessions' word. A session that answered SAFE but still has jobs is asked
+ * once more (a pause naming them); jobs that outlive that are printed and
+ * fail the run. Jobs of closed sessions are printed with a kill command.
+ */
+async function recheck(pause, rows, st, opts, io, out, who) {
+  const live = pause.tabs.liveSessions();
+  const known = pause.readKnown();
+  const json = Boolean(opts.json);
+  const safeIds = new Set(st.rows.filter((r) => r.state === 'safe').map((r) => r.sessionId));
+  let found = pause.leftovers();
+  const dirty = rows.filter((r) => safeIds.has(r.session_id) && found.some((s) => s.sessionId === r.session_id && s.running));
+  let again = null;
+  if (dirty.length) {
+    if (!json) {
+      out('double check: SAFE, yet still running:\n');
+      printLeftovers(out, found.filter((s) => dirty.some((r) => r.session_id === s.sessionId)), live, known);
+      out('asking those sessions again\n');
+    }
+    again = await sendAndFollow(pause, 'pause', dirty, opts, io, out, who, {printJson: false});
+    found = pause.leftovers();
+  }
+  const pausedIds = new Set(rows.map((r) => r.session_id));
+  const left = found.filter((s) => pausedIds.has(s.sessionId) || !s.running);
+  if (!json) {
+    if (left.length) {
+      out('double check: still running after the pause:\n');
+      printLeftovers(out, left, live, known);
+      closedKillHint(out, left);
+    } else {
+      out('double check: no session left a job running\n');
+    }
+  }
+  return {again, found: left, ok: !left.some((s) => pausedIds.has(s.sessionId))};
+}
+
 async function pauseCmd(pause, args, opts, io, out) {
   const live = pause.tabs.liveSessions();
   const self = opts['include-self'] ? null : pause.tabs.selfPid(live);
   const who = sender(pause, opts, io, live);
   const rows = pick(live, args, {all: Boolean(opts.all), self});
   if (!rows.length) throw new Error('no running Claude Code session to pause');
-  const st = await sendAndFollow(pause, 'pause', rows, opts, io, out, who);
-  if (st.superseded) return EXIT_SUPERSEDED;
-  return waitSeconds(opts) ? pauseExitCode(st.summary) : 0;
+  const wait = waitSeconds(opts);
+  const st = await sendAndFollow(pause, 'pause', rows, opts, io, out, who, {printJson: !wait});
+  if (!wait) return 0;
+  if (st.superseded) {
+    if (opts.json) out(`${JSON.stringify(st, null, 2)}\n`);
+    return EXIT_SUPERSEDED;
+  }
+  const check = await recheck(pause, rows, st, opts, io, out, who);
+  if (opts.json) out(`${JSON.stringify({...st, recheck: check.again, leftovers: check.found}, null, 2)}\n`);
+  if (check.again?.superseded) return EXIT_SUPERSEDED;
+  const answered = check.again ? pauseExitCode(check.again.summary) : 0;
+  return pauseExitCode(st.summary) || answered || (check.ok ? 0 : 3);
+}
+
+function leftoversCmd(pause, args, opts, out) {
+  const live = pause.tabs.liveSessions();
+  const known = pause.readKnown();
+  let found = pause.leftovers();
+  const keys = typeof opts.session === 'string' ? [opts.session, ...args] : args;
+  if (keys.length) {
+    found = found.filter((s) => keys.some((k) => s.sessionId === k ||
+      (k.length >= 4 && s.sessionId.startsWith(k)) || nameOf(s.sessionId, live, known) === k));
+  }
+  if (opts.json) out(`${JSON.stringify(found.map((s) => ({...s, name: nameOf(s.sessionId, live, known)})), null, 2)}\n`);
+  else if (!found.length) out('no leftover jobs\n');
+  else {
+    printLeftovers(out, found, live, known);
+    closedKillHint(out, found);
+  }
+  return found.length ? 3 : 0;
 }
 
 /** A closed session to reopen: the name and cwd known.json kept from the
@@ -239,6 +339,7 @@ async function resumeCmd(pause, args, opts, io, out) {
       const prompt = (row) => resumePrompt({
         label: null, savedAt: pause.pausedAt(row.session_id) ?? nowMs, nowMs, peers,
         homedir: io.homedir ?? os.homedir(), checkpoint: pause.pendingCheckpoint(row.session_id, row.cwd),
+        leftovers: pause.leftoversCommand(row.session_id),
       });
       const r = pause.tabs.launch(open, {terminal: typeof opts.terminal === 'string' ? opts.terminal : undefined, prompt, dryRun});
       if (!dryRun) for (const row of open) pause.markResumed(row.session_id);
@@ -301,6 +402,8 @@ export async function runPause(cmd, argv, io = {}) {
       return resumeCmd(pause, args, opts, io, out);
     case 'report':
       return reportCmd(pause, opts, io, out);
+    case 'leftovers':
+      return leftoversCmd(pause, args, opts, out);
     default: {
       const st = pause.status();
       if (opts.json) out(`${JSON.stringify(st, null, 2)}\n`);

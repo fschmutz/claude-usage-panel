@@ -98,7 +98,7 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     │   ├── snapshots.js# the claudectl snapshot summary the preferences show
     │   ├── layout.js   # dropdown geometry (GNOME-only: no Swift mirror)
     │   ├── waiting.js  # waiting-on-you list: hook events, markers, age, focus plan
-    │   ├── pause.js    # pause / resume: request, delivery and verdict shapes, row state, the protocol texts
+    │   ├── pause.js    # pause / resume: request, delivery and verdict shapes, row state, leftovers, the protocol texts
     │   ├── board.js    # the session board: waiting + pause + today's sessions joined per session id
     │   └── awake.js    # keep-awake: session math, the battery/thermal floors, the recovery journal, every platform argv
     ├── claudeFiles.js  # the live credentials + oauthAccount, read one way
@@ -230,7 +230,8 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── waiting-cli.js      # `claudectl waiting`: list and focus
 ├── pause.js            # openPause(io): the pause request, deliveries, verdicts, waiter locks, checkpoints
 ├── pause-hook.js       # Claude Code hook: asyncRewake waiter (SessionStart / Stop) + PreToolUse backstop
-├── pause-cli.js        # `claudectl session pause | resume | report | pause-status`
+├── pause-cli.js        # `claudectl session pause | resume | report | pause-status | leftovers`
+├── leftovers.js        # what each session left running: the process table + CLAUDE_CODE_SESSION_ID
 ├── awake.js            # openAwake(io): the awake session, the recovery journal, the lock, the readings
 ├── awake-worker.js     # the detached holder: owns the inhibitor child and the floors for one session
 ├── awake-cli.js        # `claudectl awake`: status, on, off, extend, recover
