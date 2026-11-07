@@ -233,11 +233,11 @@ ping_pid=$!
 # watchdog subshell does not kill its sleep, so the TERM trap takes it down:
 # without it every ping left a `sleep 120` orphaned for two minutes.
 (
-    sleeper=""
-    trap '[ -n "$sleeper" ] && kill "$sleeper" 2>/dev/null; exit 0' TERM
+    # every job of this subshell: a TERM that lands before `$!` is set still
+    # finds the sleep
+    trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM
     sleep "$PING_TIMEOUT" &
-    sleeper=$!
-    wait "$sleeper" && kill "$ping_pid" 2>/dev/null
+    wait "$!" && kill "$ping_pid" 2>/dev/null
 ) </dev/null >/dev/null 2>&1 &
 watchdog_pid=$!
 disown "$watchdog_pid" # no job-control noise when it gets killed below
