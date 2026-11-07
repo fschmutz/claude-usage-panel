@@ -42,9 +42,10 @@
       <summary>Command to run on a usage event</summary>
       <description>
         Shell command run when a limit crosses 90% or 100%, or when its window
-        resets. Empty disables it. Placeholders, each shell-quoted when
-        substituted: %e event (threshold|reset), %k limit key, %l label,
-        %p percent, %t threshold crossed, %% a literal percent sign.
+        resets. Empty disables it. Placeholders, each a reference to a CUP_*
+        environment variable (never pasted as text): %e event (threshold|reset),
+        %k limit key, %l label, %p percent, %t threshold crossed, %% a literal
+        percent sign.
       </description>
     </key>
     <key name="codex-enabled" type="b">

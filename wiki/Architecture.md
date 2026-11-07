@@ -34,7 +34,8 @@ poll that moved, under `XDG_STATE_HOME` (Application Support on macOS), pruned
 to 90 days, written by the two panels and read by everything -
 `tests/fixtures/warehouse.json`. **Event hooks** (`tests/fixtures/events.json`)
 detect the crossings and resets between two polls and expand the user's command
-template with shell-quoted values.
+template: each placeholder becomes a reference to a `CUP_*` environment variable,
+quoted for its position, so no value is ever command text.
 
 **Waiting on you** (`tests/fixtures/waiting.json`, asserted by
 `tests/waiting.test.js` and the Swift `WaitingParityTests`) is the live-session

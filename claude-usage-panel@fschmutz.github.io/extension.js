@@ -42,7 +42,7 @@ import {stateDir} from './lib/paths.js';
 import {SavedSessionsController} from './lib/savedSessions.js';
 import {
     severityClass, panelGauge, refreshSections, isRetryableFailure,
-    nextPollSeconds, nextResetMs, sameUsage, detectEvents, expandEventCommand,
+    nextPollSeconds, nextResetMs, sameUsage, detectEvents, eventEnv, expandEventCommand,
     warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
     formatLastPing, nextPing, compactTokens, formatClock, panelCard, panelText, popupWidth, usageReading,
     shownCards,
@@ -410,8 +410,9 @@ class ClaudeUsageButton extends PanelMenu.Button {
 
     // The user's own command for the two moments worth acting on: a limit
     // crossing 90/100 %, and a window rolling over. Run through bash -lc so a
-    // one-liner with a pipe works, with every substituted value shell-quoted -
-    // the label comes from the API.
+    // one-liner with a pipe works; the values travel as CUP_* environment
+    // variables the expanded template references - the label comes from the
+    // API and must never become command text.
     _runEventCommand(events) {
         if (!events.length)
             return;
@@ -421,7 +422,10 @@ class ClaudeUsageButton extends PanelMenu.Button {
         for (const event of events) {
             const command = expandEventCommand(template, event);
             try {
-                Gio.Subprocess.new(['bash', '-lc', command], Gio.SubprocessFlags.NONE);
+                const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
+                for (const [name, value] of Object.entries(eventEnv(event)))
+                    launcher.setenv(name, value, true);
+                launcher.spawnv(['bash', '-lc', command]);
             } catch (e) {
                 logError(e, `claude-usage-panel: event command failed (${event.event})`);
             }

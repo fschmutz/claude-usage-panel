@@ -211,4 +211,18 @@ final class EventHooksParityTests: XCTestCase {
                 EventHooks.expand(c["template"] as! String, event), c["expected"] as! String, name)
         }
     }
+
+    func testEnvironmentMatchesSharedFixtures() throws {
+        for c in try fixture()["env"] as! [[String: Any]] {
+            let e = c["event"] as! [String: Any]
+            let event = UsageEvent(
+                event: UsageEvent.Kind(rawValue: e["event"] as! String)!,
+                key: e["key"] as! String, label: e["label"] as! String,
+                percent: (e["percent"] as! NSNumber).intValue,
+                threshold: (e["threshold"] as! NSNumber).intValue)
+            XCTAssertEqual(
+                EventHooks.environment(event), c["expected"] as! [String: String],
+                c["name"] as? String ?? "?")
+        }
+    }
 }

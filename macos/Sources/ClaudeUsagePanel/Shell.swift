@@ -46,10 +46,14 @@ enum Shell {
 
     /// Start `exe args…` and do not wait - for notifications and the user's
     /// event command, whose output nobody reads.
-    static func launch(_ exe: String, _ args: [String]) {
+    static func launch(_ exe: String, _ args: [String], extraEnv: [String: String] = [:]) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: exe)
         proc.arguments = args
+        if !extraEnv.isEmpty {
+            proc.environment = ProcessInfo.processInfo.environment.merging(extraEnv) { _, new in new
+            }
+        }
         proc.standardOutput = FileHandle.nullDevice
         proc.standardError = FileHandle.nullDevice
         try? proc.run()

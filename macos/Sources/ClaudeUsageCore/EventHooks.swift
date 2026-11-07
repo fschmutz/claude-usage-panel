@@ -58,32 +58,65 @@ public enum EventHooks {
         return events
     }
 
+    /// The environment variable each placeholder reads (twin of pure/events.js EVENT_VARS).
+    public static let vars: [Character: String] = [
+        "e": "CUP_EVENT", "k": "CUP_KEY", "l": "CUP_LABEL", "p": "CUP_PERCENT",
+        "t": "CUP_THRESHOLD",
+    ]
+
+    /// The values of one event, as the environment the command runs with.
+    public static func environment(_ event: UsageEvent) -> [String: String] {
+        [
+            "CUP_EVENT": event.event.rawValue, "CUP_KEY": event.key, "CUP_LABEL": event.label,
+            "CUP_PERCENT": String(event.percent), "CUP_THRESHOLD": String(event.threshold),
+        ]
+    }
+
+    /// The template with each placeholder turned into a reference to its
+    /// environment variable, quoted for where it stands: bare `"${V}"`, inside
+    /// double quotes `${V}`, inside single quotes `'"${V}"'`. No value is ever
+    /// pasted into the command text, so API text is data in every position.
     /// %e event  %k key  %l label  %p percent  %t threshold  %% literal %
     public static func expand(_ template: String, _ event: UsageEvent) -> String {
         guard !template.isEmpty else { return "" }
-        let values: [Character: String] = [
-            "e": event.event.rawValue, "k": event.key, "l": event.label,
-            "p": String(event.percent), "t": String(event.threshold),
-        ]
-        var out = ""
         let chars = Array(template)
+        var out = ""
+        var quote: Character?
         var i = 0
         while i < chars.count {
-            guard chars[i] == "%", i + 1 < chars.count else {
-                out.append(chars[i])
-                i += 1
+            let ch = chars[i]
+            if ch == "%", i + 1 < chars.count {
+                let next = chars[i + 1]
+                if next == "%" {
+                    out.append("%")
+                    i += 2
+                    continue
+                }
+                if let name = vars[next] {
+                    switch quote {
+                    case "\"": out += "${\(name)}"
+                    case "'": out += "'\"${\(name)}\"'"
+                    default: out += "\"${\(name)}\""
+                    }
+                    i += 2
+                    continue
+                }
+            }
+            if ch == "\\", quote != "'", i + 1 < chars.count {
+                out.append(ch)
+                out.append(chars[i + 1])
+                i += 2
                 continue
             }
-            let next = chars[i + 1]
-            if next == "%" {
-                out.append("%")
-            } else if let value = values[next] {
-                out += ShellQuote.quote(value)
-            } else {
-                out.append("%")
-                out.append(next)
+            if ch == "\"" || ch == "'" {
+                if quote == nil {
+                    quote = ch
+                } else if quote == ch {
+                    quote = nil
+                }
             }
-            i += 2
+            out.append(ch)
+            i += 1
         }
         return out
     }

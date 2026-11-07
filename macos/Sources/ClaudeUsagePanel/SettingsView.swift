@@ -55,8 +55,8 @@ struct SettingsView: View {
             TextField("Run on limit crossing or reset", text: $model.eventCommand)
             Text(
                 "%e event (threshold or reset) · %l label · %p percent · %t threshold · "
-                    + "%k key · %% a literal %. Empty disables it. Values are shell-quoted "
-                    + "when substituted."
+                    + "%k key · %% a literal %. Empty disables it. Values reach the command "
+                    + "as CUP_* environment variables, never as command text."
             )
             .font(.footnote).foregroundColor(.secondary)
         }

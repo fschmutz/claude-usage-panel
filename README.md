@@ -185,7 +185,7 @@ plus terminal and in-conversation projections.
 | ⏱️ **Session pings, everywhere** | Schedule the `claude` ping that opens the 5h window from the GNOME preferences or the macOS settings, not only from the CLI - and every client shows when it last fired |
 | ▶️ **Resume today's sessions** | The dropdown lists today's five biggest token spenders and opens one in a terminal, resumed where you left it, in its own project directory |
 | 👥 **Named accounts** | Save each login as `PRO` / `PERSO`, see every account's limits side by side, switch in one click (or let it switch for you at 90%) - no logout, no browser |
-| 🪝 **Run your own command** | One setting: a shell command fired when a limit crosses 90/100% or a window resets, with the event, label, percent and threshold substituted (shell-quoted) |
+| 🪝 **Run your own command** | One setting: a shell command fired when a limit crosses 90/100% or a window resets, with the event, label, percent and threshold passed as `CUP_*` environment variables, never as command text |
 | 🗓 **90 days of history** | Every poll that moved is kept locally, so each card can say "peak 71% this week · 84% last" long after Claude's own 30-day cleanup |
 | ☕ **Stays awake for the run** | Hold the machine up while Claude Code works or on a timer, with a countdown in the bar, battery and thermal floors that end a session rather than warn about it, and a backstop that undoes anything a crash left behind |
 | 💤 **Polls when it matters** | Idle windows back off to 15 min, a poll always lands just after a reset, and both panels refresh on wake from sleep and when the network returns |

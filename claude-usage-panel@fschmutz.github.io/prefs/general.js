@@ -61,8 +61,8 @@ export function buildBehavior(prefs, settings) {
     behavior.add(alertsRow);
 
     // Run something of your own at the two moments worth acting on. Values
-    // are shell-quoted when substituted, so a label from the API cannot
-    // turn into part of the command.
+    // reach the command as CUP_* environment variables the template
+    // references, so a label from the API cannot turn into part of it.
     const commandRow = new Adw.EntryRow({
         title: _('Run on limit crossing or reset'),
     });

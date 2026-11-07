@@ -1,5 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import os from 'node:os';
 
 import {
     clampPercent, severityClass, normalizeUsage, sparkline, SPARK_SAMPLES,
@@ -272,7 +274,7 @@ test('an idle poll is one where no limit moved', () => {
 // ── Event hooks ─────────────────────────────────────────────────────────────────
 // Same fixture the Swift EventHooksParityTests asserts.
 import {
-    detectEvents, expandEventCommand,
+    detectEvents, eventEnv, expandEventCommand,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 
 const eventFix = JSON.parse(
@@ -291,6 +293,25 @@ for (const c of eventFix.expansions) {
         assert.equal(expandEventCommand(c.template, c.event), c.expected);
     });
 }
+for (const c of eventFix.env) {
+    test(`eventEnv - ${c.name}`, () => assert.deepEqual(eventEnv(c.event), c.expected));
+}
+
+// Run for real: a label from the API is data in every quoting position the
+// template can put it in, never code (security review 2026-11-07).
+test('event command: a hostile label never runs, in any quoting position', (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-event-'));
+    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+    const pwned = path.join(dir, 'pwned');
+    const label = `$(touch ${pwned})\`touch ${pwned}\`'; touch ${pwned}; "`;
+    const event = {event: 'threshold', key: 'k', label, percent: 91, threshold: 90};
+    for (const template of ['printf "%s|" %l', 'printf "%s|" "Claude %l"', "printf '%%s|' '[%l]'", 'printf "%s|" \\"%l']) {
+        const r = spawnSync('bash', ['-c', expandEventCommand(template, event)], {env: {...eventEnv(event), PATH: process.env.PATH}, encoding: 'utf8'});
+        assert.equal(r.status, 0, template);
+        assert.ok(r.stdout.includes(label), `${template} -> ${r.stdout}`);
+        assert.equal(fs.existsSync(pwned), false, `${template} ran the label`);
+    }
+});
 
 // ── Usage warehouse ─────────────────────────────────────────────────────────────
 // Same fixture the Swift WarehouseParityTests asserts.

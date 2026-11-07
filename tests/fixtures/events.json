@@ -172,7 +172,7 @@
   ],
   "expansions": [
     {
-      "name": "every placeholder is substituted, quoted",
+      "name": "every placeholder is a quoted reference to its variable",
       "template": "notify-send %e %l %p %t %k",
       "event": {
         "event": "threshold",
@@ -181,11 +181,23 @@
         "percent": 91,
         "threshold": 90
       },
-      "expected": "notify-send 'threshold' 'Weekly · all models' '91' '90' 'weekly_all'"
+      "expected": "notify-send \"${CUP_EVENT}\" \"${CUP_LABEL}\" \"${CUP_PERCENT}\" \"${CUP_THRESHOLD}\" \"${CUP_KEY}\""
     },
     {
-      "name": "a quote in the label cannot break out of the command",
-      "template": "echo %l",
+      "name": "inside double quotes the reference is bare: the documented example",
+      "template": "notify-send \"Claude %l\" \"%e at %p%%\"",
+      "event": {
+        "event": "threshold",
+        "key": "weekly_all",
+        "label": "$(touch /tmp/pwned)",
+        "percent": 91,
+        "threshold": 90
+      },
+      "expected": "notify-send \"Claude ${CUP_LABEL}\" \"${CUP_EVENT} at ${CUP_PERCENT}%\""
+    },
+    {
+      "name": "inside single quotes the reference steps out and back in",
+      "template": "echo '[%l]'",
       "event": {
         "event": "reset",
         "key": "session",
@@ -193,7 +205,19 @@
         "percent": 0,
         "threshold": 0
       },
-      "expected": "echo 'it'\\''s; touch /tmp/pwned'"
+      "expected": "echo '['\"${CUP_LABEL}\"']'"
+    },
+    {
+      "name": "an escaped quote does not open a quoted span",
+      "template": "echo \\\"%l",
+      "event": {
+        "event": "reset",
+        "key": "session",
+        "label": "s",
+        "percent": 0,
+        "threshold": 0
+      },
+      "expected": "echo \\\"\"${CUP_LABEL}\""
     },
     {
       "name": "a double percent is a literal one, unknown escapes are left alone",
@@ -205,7 +229,7 @@
         "percent": 4,
         "threshold": 0
       },
-      "expected": "echo 100% %z '4'"
+      "expected": "echo 100% %z \"${CUP_PERCENT}\""
     },
     {
       "name": "an empty template runs nothing",
@@ -218,6 +242,25 @@
         "threshold": 0
       },
       "expected": ""
+    }
+  ],
+  "env": [
+    {
+      "name": "every value travels as a string",
+      "event": {
+        "event": "threshold",
+        "key": "weekly_all",
+        "label": "L",
+        "percent": 91,
+        "threshold": 90
+      },
+      "expected": {
+        "CUP_EVENT": "threshold",
+        "CUP_KEY": "weekly_all",
+        "CUP_LABEL": "L",
+        "CUP_PERCENT": "91",
+        "CUP_THRESHOLD": "90"
+      }
     }
   ]
 }

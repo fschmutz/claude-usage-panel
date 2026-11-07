@@ -489,13 +489,16 @@ final class UsageModel: ObservableObject {
 
     /// The user's own command for the two moments worth acting on: a limit
     /// crossing 90/100 %, and a window rolling over. Run through bash -lc so a
-    /// one-liner with a pipe works; every substituted value is shell-quoted,
-    /// because the label comes from the API.
+    /// one-liner with a pipe works; the values travel as CUP_* environment
+    /// variables the expanded template references, because the label comes
+    /// from the API and must never become command text.
     private func runEventCommand(_ events: [UsageEvent]) {
         let template = eventCommand.trimmingCharacters(in: .whitespaces)
         guard !template.isEmpty else { return }
         for event in events {
-            Shell.launch("/bin/bash", ["-lc", EventHooks.expand(template, event)])
+            Shell.launch(
+                "/bin/bash", ["-lc", EventHooks.expand(template, event)],
+                extraEnv: EventHooks.environment(event))
         }
     }
 

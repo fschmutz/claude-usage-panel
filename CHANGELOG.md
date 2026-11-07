@@ -8,6 +8,13 @@ semantic versioning.
 
 ### Security
 
+- **Event command: API text can no longer run as shell code.** Each value
+  was shell-quoted, but the documented template `notify-send "Claude %l"`
+  puts `%l` inside double quotes, where a label like `$(cmd)` from the usage
+  endpoint ran in your session (GNOME and macOS). Placeholders now expand to
+  references to `CUP_*` environment variables, quoted for their position;
+  no value is pasted into the command. A test runs a hostile label through
+  bash in every quoting position.
 - **Awake closed-lid install: the sudoers rule cannot be swapped before it
   lands.** The rule was rendered into a user-owned temp file, checked with
   `visudo`, then installed: any process of yours could rewrite it while sudo
