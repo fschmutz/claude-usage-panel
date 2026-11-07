@@ -6,6 +6,17 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Security
+
+- **Awake closed-lid install: the sudoers rule cannot be swapped before it
+  lands.** The rule was rendered into a user-owned temp file, checked with
+  `visudo`, then installed: any process of yours could rewrite it while sudo
+  waited for the password, which is passwordless root. It is now written
+  only into a root-owned temp beside the target, validated, compared byte
+  for byte with what was rendered, and renamed into place; the checkout path
+  reaches node as argv. A test rewrites the temp mid-install and asserts
+  nothing is installed.
+
 ### Added
 
 - **Pause: a double check from the process table.** `claudectl session

@@ -257,6 +257,51 @@ test('install.sh update awakelid never asks for a password when the rule is in f
   assert.match(sudo, /^sudo -n -l \/usr\/bin\/pmset/m, 'the rule is checked, not assumed');
 });
 
+/** A Darwin-looking sandbox where sudo runs the command as is and visudo
+ *  accepts, writing the rule into a sandbox sudoers.d. */
+function sudoersWorld(t, {tamper = false} = {}) {
+  const home = stubbedHome(t, {prefix: 'cup-awakelid-w-'});
+  const sudoersDir = path.join(home, 'sudoers.d');
+  fs.mkdirSync(sudoersDir);
+  const env = {
+    ...process.env,
+    HOME: home,
+    XDG_STATE_HOME: path.join(home, 'state'),
+    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    CUP_TEST_SCHEDULER: 'cron',
+    CUP_TEST_SUDOERS: path.join(sudoersDir, 'claude-usage-panel-awake'),
+  };
+  const bin = (name, body) => {
+    fs.writeFileSync(path.join(home, 'bin', name), `#!/bin/sh\n${body}\n`);
+    fs.chmodSync(path.join(home, 'bin', name), 0o755);
+  };
+  bin('uname', 'case "$1" in -s|"") echo Darwin ;; *) /bin/uname "$@" ;; esac');
+  bin('defaults', 'exit 0');
+  // visudo -cf F: accept, but a tampering visudo stands for anything that
+  // rewrites the temp between render and install
+  bin('visudo', tamper ? 'chmod u+w "$2"; echo "ALL ALL=(ALL) NOPASSWD: ALL" >"$2"; exit 0' : 'exit 0');
+  bin('sudo', '[ "$1" = -n ] && [ "$2" = -l ] && exit 0\nexec "$@"');
+  return {home, sudoersDir, env, rule: env.CUP_TEST_SUDOERS};
+}
+
+test('install.sh awakelid writes the rendered rule 0440 and leaves no temp behind', async (t) => {
+  const w = sudoersWorld(t);
+  const r = run('bash', [INSTALL, 'awakelid'], {env: w.env});
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const {awakeSudoersBody} = await import('../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js');
+  const {userInfo} = await import('node:os');
+  assert.equal(fs.readFileSync(w.rule, 'utf8'), awakeSudoersBody(userInfo().username));
+  assert.equal(fs.statSync(w.rule).mode & 0o777, 0o440);
+  assert.deepEqual(fs.readdirSync(w.sudoersDir), ['claude-usage-panel-awake'], 'the temp is gone');
+});
+
+test('install.sh awakelid never installs a rule that differs from what it rendered', (t) => {
+  const w = sudoersWorld(t, {tamper: true});
+  const r = run('bash', [INSTALL, 'awakelid'], {env: w.env});
+  assert.match(r.stdout + r.stderr, /failed validation - nothing was written/);
+  assert.deepEqual(fs.readdirSync(w.sudoersDir), [], 'neither the rule nor the temp is left');
+});
+
 test('the backstop grace window and lock staleness match the JS contract', async () => {
   const {AWAKE_BACKSTOP_GRACE_MS} =
     await import('../claude-usage-panel@fschmutz.github.io/lib/pure/awake.js');

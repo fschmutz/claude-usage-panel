@@ -16,7 +16,7 @@
 AW_UNIT="claude-usage-panel-awake"                     # systemd user units
 AW_LABEL="io.github.fschmutz.claude-usage-panel.awake"  # launchd agent
 AW_CRON_TAG="# claude-usage-panel awake backstop"       # cron marker line
-AW_SUDOERS=/etc/sudoers.d/claude-usage-panel-awake
+AW_SUDOERS="${CUP_TEST_SUDOERS:-/etc/sudoers.d/claude-usage-panel-awake}"
 
 _awake_installed() { _sched_installed "$AW_UNIT" "$AW_LABEL" "$AW_CRON_TAG"; }
 
@@ -174,25 +174,38 @@ install_awakelid() {
         ok "sudoers rule in force, kept"
         return 0
     fi
-    local tmp
-    tmp="$(mktemp)"
-    node -e '
-      import("'"$ROOT"'/claude-usage-panel@fschmutz.github.io/lib/pure/awake.js")
-        .then((m) => process.stdout.write(m.awakeSudoersBody(process.argv[1])));
-    ' "$me" >"$tmp" || {
-        rm -f "$tmp"
+    # The body is rendered in memory and written ONLY into a root-owned temp
+    # beside the target (a dot file, which sudo's includedir skips), then
+    # validated, compared byte for byte with what was rendered, and renamed
+    # into place. A user-owned temp could be rewritten by any process of this
+    # user while sudo waits for the password, between the visudo check and the
+    # install: that is passwordless root. The checkout path reaches node as
+    # argv, never spliced into the script text.
+    local body rtmp dir
+    body="$(node --input-type=module -e '
+      const {pathToFileURL} = await import("node:url");
+      const m = await import(pathToFileURL(process.argv[1]).href);
+      process.stdout.write(m.awakeSudoersBody(process.argv[2]));
+    ' "$ROOT/claude-usage-panel@fschmutz.github.io/lib/pure/awake.js" "$me")" && [ -n "$body" ] || {
         skip_fatal "awakelid: could not render the sudoers rule (node failed)"
         return 0
     }
+    dir="$(dirname "$AW_SUDOERS")"
     echo "  Writing $AW_SUDOERS (asks for your password once)"
-    if sudo visudo -cf "$tmp" >/dev/null; then
-        sudo install -m 0440 -o root -g wheel "$tmp" "$AW_SUDOERS"
+    rtmp="$(sudo mktemp "$dir/.claude-usage-panel-awake.XXXXXX")" || {
+        skip_fatal "awakelid: could not create a temp file in $dir - nothing was written"
+        return 0
+    }
+    if printf '%s\n' "$body" | sudo tee "$rtmp" >/dev/null &&
+        sudo chmod 0440 "$rtmp" &&
+        sudo visudo -cf "$rtmp" >/dev/null &&
+        printf '%s\n' "$body" | sudo cmp -s - "$rtmp"; then
+        sudo mv -f "$rtmp" "$AW_SUDOERS"
     else
-        rm -f "$tmp"
-        skip_fatal "awakelid: the sudoers file failed visudo validation - nothing was written"
+        sudo rm -f "$rtmp"
+        skip_fatal "awakelid: the sudoers file failed validation - nothing was written"
         return 0
     fi
-    rm -f "$tmp"
     # Proven, not assumed: without the rule in force no session can undo
     # pmset, and the backstop would have nothing to recover with.
     if _awake_rule_effective; then
