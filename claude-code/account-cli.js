@@ -2,6 +2,7 @@
 // the login Claude Code holds now under a name, list the saved ones (with
 // their usage), switch, forget, refresh. claudectl.js dispatches here.
 
+import {openAccountExec} from './account-exec.js';
 import {openStore} from './accounts.js';
 import {nowOf} from './paths.js';
 import {tokenState} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
@@ -16,6 +17,7 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
   claudectl account rename NAME NEW           rename a saved account
   claudectl account remove NAME               forget a saved account
   claudectl account refresh [NAME]            refresh the stored token(s) now
+  claudectl account exec NAME -- CMD [ARG...]  run CMD as NAME, the current login untouched
 
 Names: letters, digits, . _ - (e.g. PRO, PERSO), case-insensitive. Running
 Claude Code sessions keep their old login until restarted. Saved logins are
@@ -39,6 +41,13 @@ Running sessions keep their old login until restarted.`,
 usage and its kept weekly reset. The login Claude Code uses now is not
 touched. NEW must be free, ignoring case; changing only the case is fine.`,
   remove: `Forgets NAME. The login Claude Code uses now is not touched.`,
+  exec: `Runs CMD with a throwaway Claude Code config dir holding only NAME's
+login (CLAUDE_CONFIG_DIR), so \`claude -p ...\` and anything else reading the
+Claude login acts as NAME while the current login, running sessions and
+~/.claude stay as they are. A stale token is refreshed first; a token the
+command rotates is written back to NAME. The dir carries no settings, hooks
+or MCP servers and is removed when CMD exits. Exits with CMD's code. The
+current login itself is refused (run the command directly).`,
   refresh: `Refreshes the stored token of NAME, or of every saved login. The login
 Claude Code uses now is never refreshed here: Claude Code holds the same
 single-use refresh token.`,
@@ -60,6 +69,13 @@ function fmtUsage(cards, nowMs) {
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export async function main(argv, io = {}) {
+  // exec first: everything after `--` is the command's, flags included
+  if (argv[0] === 'exec') {
+    const sep = argv.indexOf('--');
+    const name = argv[1];
+    if (!name || name === '--' || sep < 0) throw new Error('usage: claudectl account exec NAME -- CMD [ARG...]');
+    return openAccountExec(io).exec(name, argv.slice(sep + 1), {stdio: io.stdio ?? 'inherit'});
+  }
   const store = openStore(io);
   const out = io.stdout ?? ((s) => process.stdout.write(s));
   const args = argv.filter((a) => !a.startsWith('--'));

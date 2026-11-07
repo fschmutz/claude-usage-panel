@@ -190,6 +190,7 @@ claudectl account use NAME [--json]               make NAME the current login
 claudectl account rename NAME NEW                 rename a saved account
 claudectl account remove NAME                     forget a saved account
 claudectl account refresh [NAME]                  refresh the stored token(s) now
+claudectl account exec NAME -- CMD [ARG...]       run CMD as NAME, the current login untouched
 ```
 
 `save` refuses a name that already belongs to a different account, and refuses
@@ -198,6 +199,20 @@ overrides both. `list --usage` reads every account's limits (refreshing where
 needed) and writes the snapshot the status line reads. `refresh` without a
 name goes through every saved account even when one fails, and exits 1 if any
 did.
+
+`exec` runs one command as a saved login without switching:
+`claudectl account exec PERSO -- claude -p "list my routines"`. The command
+gets a throwaway `CLAUDE_CONFIG_DIR` (mode 0700, in the per-user scratch dir)
+holding only PERSO's credentials and account block - no settings, hooks or MCP
+servers - and `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+`CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_SECURESTORAGE_CONFIG_DIR` are dropped
+from its environment. A stale token is refreshed first; a token the command
+rotates is written back to PERSO, never to the current login; the dir (and on
+macOS its own Keychain item) is removed when the command exits, and one left
+by a run that died is synced back and removed by the next `exec`. The current
+login itself is refused: Claude Code holds its single-use refresh token. Two
+long `exec` runs of the same NAME at once can both rotate its token; keep
+concurrent runs short.
 
 ## When a percentage is not shown
 

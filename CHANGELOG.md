@@ -8,6 +8,12 @@ semantic versioning.
 
 ### Added
 
+- **Run a command as another saved login.** `claudectl account exec NAME --
+  CMD` gives CMD a throwaway Claude Code config dir holding only NAME's login,
+  so `claude -p ...` acts as NAME while the current login, running sessions
+  and `~/.claude` stay untouched. Stale tokens are refreshed first, rotated
+  ones written back to NAME, the dir removed on exit (and swept after a
+  crash); the current login is refused.
 - **Pause: a double check from the process table.** `claudectl session
   leftovers` lists every job a session, open or closed, left running: each
   process carrying its `CLAUDE_CODE_SESSION_ID` that is not a hook or an MCP

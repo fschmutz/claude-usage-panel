@@ -12,6 +12,10 @@ const HELP_FLAGS = new Set(['--help', '-h']);
  * @returns {{group?: string, cmd?: string} | null}
  */
 export function helpRequest(argv) {
+  // everything after `--` is another program's argv (`account exec NAME --
+  // claude --help`): its --help is that program's
+  const end = argv.indexOf('--');
+  if (end >= 0) argv = argv.slice(0, end);
   const words = argv.filter((a) => !a.startsWith('-'));
   const helpAt = words.indexOf('help');
   const asked = argv.some((a) => HELP_FLAGS.has(a)) || (helpAt >= 0 && helpAt <= 1);
