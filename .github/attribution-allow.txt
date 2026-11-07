@@ -40,6 +40,10 @@ fschmutz@premaccess.com
 giovanni.bthx@gmail.com
 124669058+Giovannibthx@users.noreply.github.com
 
+# Fabio Huebel, an outside contributor (pull request #54 from his fork): his
+# GitHub forwarding address, the one his commits carry.
+74417491+fabiohuebel@users.noreply.github.com
+
 # Dependabot opens the bumps the `deps` gate expects (.github/dependabot.yml
 # covers github-actions, pre-commit, pip, docker and npm). The login is built
 # into the script as well; it is written out here because this repository
