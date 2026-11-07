@@ -296,8 +296,12 @@ release_published() {
         *) return 0 ;;
     esac
     command -v curl >/dev/null 2>&1 || return 2
+    # The REST API, not the html page: github.com/<slug>/releases/tag/<t>
+    # renders a bare tag (one release.yml refused) with 200 too. The API is
+    # 404 unless a Release exists; a rate limit (403/429) is "cannot tell".
     code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
-        "https://github.com/$slug/releases/tag/v$tag" 2>/dev/null)" || return 2
+        -H 'Accept: application/vnd.github+json' \
+        "https://api.github.com/repos/$slug/releases/tags/v$tag" 2>/dev/null)" || return 2
     case "$code" in
         200) return 0 ;;
         404) return 1 ;;

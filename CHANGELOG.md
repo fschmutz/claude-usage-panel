@@ -16,6 +16,9 @@ semantic versioning.
   for byte with what was rendered, and renamed into place; the checkout path
   reaches node as argv. A test rewrites the temp mid-install and asserts
   nothing is installed.
+- **Auto-update: a tag counts as released only when the GitHub API has its
+  Release.** The check fetched the html release page, which answers 200 for
+  a bare tag too, so a tag release.yml refused could still auto-install.
 
 ### Added
 
