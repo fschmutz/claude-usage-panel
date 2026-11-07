@@ -40,10 +40,6 @@
     // generated SVGs. A system tool (apt librsvg2-bin), not an npm package.
     "ignoreBinaries": ["rsvg-convert"],
 
-    // Git worktrees Claude Code agents check out inside the repo
-    // (.claude/worktrees/<agent>): copies of this tree, not part of it.
-    "ignore": [".claude/worktrees/**"],
-
     // ESLint runs from pre-commit (mirrors-eslint), not from package.json, so
     // knip's eslint plugin does not switch itself on; without this it reads
     // eslint.config.js as a dead file.
