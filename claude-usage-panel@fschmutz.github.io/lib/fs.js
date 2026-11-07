@@ -14,6 +14,11 @@ Gio._promisify(Gio.File.prototype, 'enumerate_children_async', 'enumerate_childr
 Gio._promisify(Gio.File.prototype, 'load_contents_async', 'load_contents_finish');
 Gio._promisify(Gio.FileEnumerator.prototype, 'next_files_async', 'next_files_finish');
 Gio._promisify(Gio.FileEnumerator.prototype, 'close_async', 'close_finish');
+Gio._promisify(Gio.File.prototype, 'query_info_async', 'query_info_finish');
+Gio._promisify(Gio.File.prototype, 'read_async', 'read_finish');
+Gio._promisify(Gio.File.prototype, 'replace_contents_bytes_async', 'replace_contents_finish');
+Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async', 'read_bytes_finish');
+Gio._promisify(Gio.InputStream.prototype, 'close_async', 'close_finish');
 
 /** Children fetched per next_files_async round trip. */
 const ENUMERATE_BATCH = 64;
@@ -21,7 +26,7 @@ const ENUMERATE_BATCH = 64;
 /** The file's text, or null when it is missing or unreadable. */
 export function readText(path) {
     try {
-        const [ok, bytes] = GLib.file_get_contents(path);
+        const [ok, bytes] = GLib.file_get_contents(path); // eslint-disable-line no-restricted-properties -- the sync reader itself; callers are declared where they import it
         return ok ? new TextDecoder().decode(bytes) : null;
     } catch {
         return null;
@@ -93,6 +98,18 @@ export async function listChildrenAsync(path, attributes, map) {
 }
 
 /**
+ * Write `text` to `path` atomically without blocking: GIO writes a temp file
+ * beside it and renames it over the target on close. The parent directory is
+ * created first (one mkdir syscall, no file I/O). Throws on failure, like
+ * writeText.
+ */
+export async function writeTextAsync(path, text) {
+    GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+    await Gio.File.new_for_path(path).replace_contents_bytes_async(
+        new GLib.Bytes(new TextEncoder().encode(text)), null, false, Gio.FileCreateFlags.NONE, null);
+}
+
+/**
  * Write `text` to `path` atomically. Creates the parent directory (0700 when
  * a mode is given, else the platform default). Throws on failure - callers
  * that can live without the write catch it.
@@ -103,9 +120,9 @@ export function writeText(path, text, {mode} = {}) {
     const tmp = `${path}.${GLib.get_real_time()}.tmp`;
     const bytes = new TextEncoder().encode(text);
     if (mode === undefined)
-        GLib.file_set_contents(tmp, bytes);
+        GLib.file_set_contents(tmp, bytes); // eslint-disable-line no-restricted-properties -- the sync writer itself; callers are declared where they import it
     else
-        GLib.file_set_contents_full(tmp, bytes, GLib.FileSetContentsFlags.CONSISTENT, mode);
+        GLib.file_set_contents_full(tmp, bytes, GLib.FileSetContentsFlags.CONSISTENT, mode); // eslint-disable-line no-restricted-properties -- the sync writer itself; callers are declared where they import it
     Gio.File.new_for_path(tmp).move(
         Gio.File.new_for_path(path), Gio.FileCopyFlags.OVERWRITE, null, null);
 }

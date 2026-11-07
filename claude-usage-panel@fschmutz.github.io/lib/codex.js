@@ -18,6 +18,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+// eslint-disable-next-line no-restricted-imports -- backlog: Codex profiles, GNOME review row 10
 import {listChildrenAsync, readJSON, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {
@@ -27,12 +28,8 @@ import {
 } from './pure.js';
 
 // The transcript scan runs on the shell's main loop: every call on the way is
-// the async variant, so a tree of thousands of rollouts never stalls a frame
-// (the directory walk is fs.js listChildrenAsync).
-Gio._promisify(Gio.File.prototype, 'query_info_async', 'query_info_finish');
-Gio._promisify(Gio.File.prototype, 'read_async', 'read_finish');
-Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async', 'read_bytes_finish');
-Gio._promisify(Gio.InputStream.prototype, 'close_async', 'close_finish');
+// the async variant (promisified once, in fs.js), so a tree of thousands of
+// rollouts never stalls a frame (the directory walk is fs.js listChildrenAsync).
 
 /** Tail of a session transcript read when looking for the last rate-limit
  *  snapshot: the newest events are at the end of a rollout file. */
@@ -67,13 +64,13 @@ function listCodexProfiles() {
     const dir = Gio.File.new_for_path(codexAccountsDir());
     let children;
     try {
-        children = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        children = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null); // eslint-disable-line no-restricted-properties -- backlog: the Codex profile list moves to async (GNOME review row 10)
     } catch {
         return [];
     }
     const out = [];
     let info;
-    while ((info = children.next_file(null)) !== null) {
+    while ((info = children.next_file(null)) !== null) { // eslint-disable-line no-restricted-properties -- backlog: the Codex profile list moves to async (GNOME review row 10)
         const file = info.get_name();
         if (!file.endsWith('.json') || file.startsWith('.'))
             continue;

@@ -3,6 +3,7 @@
 // fetch and the account store both go through here, so "which login is live"
 // has exactly one answer (and honors CLAUDE_CONFIG_DIR, via lib/paths.js).
 
+// eslint-disable-next-line no-restricted-imports -- backlog: live login read, GNOME review row 2
 import {readJSON} from './fs.js';
 import {claudeConfigPath, credentialsPath} from './paths.js';
 

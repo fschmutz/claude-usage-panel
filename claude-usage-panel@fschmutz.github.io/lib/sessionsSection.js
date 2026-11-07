@@ -12,6 +12,7 @@ import St from 'gi://St';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {run} from './proc.js';
 import {refreshSessions} from './sessionIndex.js';
 import {compactTokens, interactiveResume, pickTerminal, terminalArgv} from './pure.js';
 import {vbox, clipLabel} from './widgets.js';
@@ -140,19 +141,14 @@ export class SessionsController {
 
     // The terminal to open: pickTerminal() decides (setting, $TERMINAL, the
     // desktop's default, then the first known one installed); this only
-    // gathers its inputs. `xdg-terminal-exec --print-id` runs on a click, not
-    // in the refresh path, and is a short shell script.
-    _detectTerminal() {
+    // gathers its inputs. `xdg-terminal-exec --print-id` runs on a click, as
+    // a child the main loop waits for without blocking, cut off after 2 s.
+    async _detectTerminal() {
         const installed = bin => GLib.find_program_in_path(bin) !== null;
         let desktopId = null;
         if (installed('xdg-terminal-exec')) {
-            try {
-                const [ok, out] = GLib.spawn_command_line_sync('xdg-terminal-exec --print-id');
-                if (ok)
-                    desktopId = new TextDecoder().decode(out).trim() || null;
-            } catch {
-                desktopId = null;
-            }
+            const r = await run(['xdg-terminal-exec', '--print-id'], {timeoutSeconds: 2});
+            desktopId = (r.ok && r.stdout.trim()) || null;
         }
         let alternative = null;
         try {
@@ -169,8 +165,8 @@ export class SessionsController {
     }
 
     /** Resume `session` in a terminal. The board's ended rows call this too. */
-    open(session) {
-        const bin = this._detectTerminal();
+    async open(session) {
+        const bin = await this._detectTerminal();
         if (!bin) {
             this._notify(_('Claude usage'),
                 _('No terminal found - set one in the extension preferences.'));

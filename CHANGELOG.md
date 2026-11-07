@@ -23,6 +23,13 @@ semantic versioning.
 
 ### Fixed
 
+- **GNOME: today's sessions no longer stall the desktop.** The session index
+  walked `~/.claude/projects` (hundreds of directories), read the index and
+  every transcript with synchronous file calls on the Shell's main loop at
+  each refresh; all of it is async now, and so is the terminal lookup on a
+  Resume click. A lint rule fails any new synchronous file call or
+  subprocess in the extension, and the calls left are each declared with
+  their reason.
 - **Session ping: no orphaned `sleep 120` after each ping.** Killing the
   timeout watchdog left its `sleep` running for two minutes after every
   successful ping; a TERM trap now takes it down. A test fails if a ping

@@ -16,6 +16,7 @@ import Gio from 'gi://Gio';
 
 import {readLiveAccount, readLiveCredentials} from './claudeFiles.js';
 import {fetchUsage} from './claudeUsage.js';
+// eslint-disable-next-line no-restricted-imports -- backlog: the account store, GNOME review rows 2-3
 import {readJSON, readText, writeText} from './fs.js';
 import {jsonMessage, parseBody, send} from './http.js';
 import {claudeConfigPath, credentialsPath, stateDir} from './paths.js';
@@ -123,13 +124,13 @@ export function listProfiles() {
     const dir = Gio.File.new_for_path(accountsDir());
     let children;
     try {
-        children = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        children = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null); // eslint-disable-line no-restricted-properties -- backlog: the account store moves to async (GNOME review row 2)
     } catch {
         return [];
     }
     const out = [];
     let info;
-    while ((info = children.next_file(null)) !== null) {
+    while ((info = children.next_file(null)) !== null) { // eslint-disable-line no-restricted-properties -- backlog: the account store moves to async (GNOME review row 2)
         const file = info.get_name();
         if (!file.endsWith('.json') || file.startsWith('.'))
             continue;

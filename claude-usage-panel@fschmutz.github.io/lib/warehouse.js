@@ -6,6 +6,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+// eslint-disable-next-line no-restricted-imports -- backlog: the 90-day history, GNOME review row 9
 import {readText, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {parseWarehouse, pruneWarehouse} from './pure.js';

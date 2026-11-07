@@ -36,6 +36,7 @@ import {hideTooltip, destroyTooltip} from './lib/tooltip.js';
 import {watchWakeAndNetwork} from './lib/wakeWatch.js';
 import {exportFocusService} from './lib/focusService.js';
 import {vbox} from './lib/widgets.js';
+// eslint-disable-next-line no-restricted-imports -- backlog: event-hook script write, on a settings change
 import {writeText} from './lib/fs.js';
 import {stateDir} from './lib/paths.js';
 import {SavedSessionsController} from './lib/savedSessions.js';

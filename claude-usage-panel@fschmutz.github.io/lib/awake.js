@@ -10,6 +10,7 @@
 
 import GLib from 'gi://GLib';
 
+// eslint-disable-next-line no-restricted-imports -- backlog: awake session + journal, GNOME review row 12
 import {readJSON, readJSONAsync, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {awakeState, normalizeAwakeConfig} from './pure.js';

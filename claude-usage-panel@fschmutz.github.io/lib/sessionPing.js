@@ -8,6 +8,7 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Gettext from 'gettext';
 
+// eslint-disable-next-line no-restricted-imports -- backlog: unit files + last-ping, GNOME review row 22
 import {readText, writeText} from './fs.js';
 import {stateDir} from './paths.js';
 import {run} from './proc.js';

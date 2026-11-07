@@ -11,11 +11,15 @@
 //
 // The index file is shared, by design, with the node ports (status line, MCP
 // server) - same machine, same logs, same shape.
+//
+// Every file call on the way is the async variant (fs.js promisifies them):
+// a ~/.claude/projects with hundreds of directories is walked, read and
+// written back without ever stalling a frame of the Shell.
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
-import {readJSON, writeText} from './fs.js';
+import {listChildrenAsync, readJSONAsync, writeTextAsync} from './fs.js';
 import {configDir} from './paths.js';
 import {foldSessionLine, indexMtime, localDay, newSessionAcc, pruneByDay, rankSessions} from './pure.js';
 
@@ -39,8 +43,8 @@ export function projectsDir() {
     return GLib.build_filenamev([configDir(), 'projects']);
 }
 
-function loadIndex() {
-    const parsed = readJSON(indexPath());
+async function loadIndex() {
+    const parsed = await readJSONAsync(indexPath());
     if (parsed?.version !== INDEX_VERSION || typeof parsed.files !== 'object')
         return {version: INDEX_VERSION, files: {}};
     return parsed;
@@ -48,9 +52,9 @@ function loadIndex() {
 
 // Atomic: a crash mid-write must not leave a truncated index that every
 // client on this machine would then re-fold from scratch.
-function saveIndex(index) {
+async function saveIndex(index) {
     try {
-        writeText(indexPath(), JSON.stringify(index));
+        await writeTextAsync(indexPath(), JSON.stringify(index));
     } catch {
         // A read-only cache dir just means no cache, not a broken panel.
     }
@@ -59,58 +63,37 @@ function saveIndex(index) {
 // Transcripts whose mtime is today or yesterday - the only ones that can carry
 // tokens the UI will rank. Yesterday is kept so a session started before
 // midnight still resolves its header fields.
-function candidates(nowMs) {
+async function candidates(nowMs) {
     const cutoff = (nowMs - 2 * 86_400_000) / 1000;
+    const root = projectsDir();
+    // [] when there is no ~/.claude/projects yet
+    const dirs = await listChildrenAsync(root, 'standard::name,standard::type', info =>
+        (info.get_file_type() === Gio.FileType.DIRECTORY ? info.get_name() : null));
     const out = [];
-    const root = Gio.File.new_for_path(projectsDir());
-    let dirs;
-    try {
-        dirs = root.enumerate_children(
-            'standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
-    } catch {
-        return out; // no ~/.claude/projects yet
-    }
-    let dirInfo;
-    while ((dirInfo = dirs.next_file(null)) !== null) {
-        if (dirInfo.get_file_type() !== Gio.FileType.DIRECTORY)
-            continue;
-        const dir = dirs.get_child(dirInfo);
-        let files;
-        try {
-            files = dir.enumerate_children(
-                'standard::name,standard::size,time::modified',
-                Gio.FileQueryInfoFlags.NONE, null);
-        } catch {
-            continue;
-        }
-        let info;
-        while ((info = files.next_file(null)) !== null) {
-            const name = info.get_name();
-            if (!name.endsWith('.jsonl'))
-                continue;
+    for (const name of dirs.filter(Boolean)) {
+        const dir = GLib.build_filenamev([root, name]);
+        const files = await listChildrenAsync(dir, 'standard::name,standard::size,time::modified', info => {
+            const file = info.get_name();
             const mtime = info.get_attribute_uint64('time::modified');
-            if (mtime < cutoff)
-                continue;
-            out.push({
-                path: files.get_child(info).get_path(),
+            if (!file.endsWith('.jsonl') || mtime < cutoff)
+                return null;
+            return {
+                path: GLib.build_filenamev([dir, file]),
                 size: info.get_size(),
                 mtimeMs: indexMtime(mtime * 1000),
-            });
-        }
+            };
+        });
+        out.push(...files.filter(Boolean));
     }
     return out;
 }
 
-function readChunk(stream, cancellable) {
-    return new Promise(resolve => {
-        stream.read_bytes_async(CHUNK_BYTES, GLib.PRIORITY_LOW, cancellable, (self, res) => {
-            try {
-                resolve(self.read_bytes_finish(res));
-            } catch {
-                resolve(null);
-            }
-        });
-    });
+async function readChunk(stream, cancellable) {
+    try {
+        return await stream.read_bytes_async(CHUNK_BYTES, GLib.PRIORITY_LOW, cancellable);
+    } catch {
+        return null;
+    }
 }
 
 function lastNewline(bytes) {
@@ -148,7 +131,8 @@ async function foldTail(file, entry, budget, nowMs, cancellable) {
     const day = localDay(nowMs);
     let stream;
     try {
-        stream = Gio.File.new_for_path(file.path).read(cancellable);
+        stream = await Gio.File.new_for_path(file.path).read_async(GLib.PRIORITY_LOW, cancellable);
+        // an lseek, no I/O
         if (start > 0)
             stream.seek(start, GLib.SeekType.SET, cancellable);
     } catch {
@@ -175,11 +159,8 @@ async function foldTail(file, entry, budget, nowMs, cancellable) {
             foldSessionLine(line, entry, day);
         carry = buf.slice(cut + 1);
     }
-    try {
-        stream.close(null);
-    } catch {
-        // closing a stream we already read is best-effort
-    }
+    // closing a stream we already read is best-effort
+    await stream.close_async(GLib.PRIORITY_LOW, null).catch(() => {});
     entry.offset = start + Math.max(0, read - carry.length);
     entry.byDay = pruneByDay(entry.byDay, nowMs);
     return read;
@@ -197,8 +178,8 @@ async function foldTail(file, entry, budget, nowMs, cancellable) {
 export async function refreshSessions({
     nowMs = Date.now(), limit = 5, budgetBytes = DEFAULT_BUDGET, cancellable = null,
 } = {}) {
-    const index = loadIndex();
-    const files = candidates(nowMs);
+    const index = await loadIndex();
+    const files = await candidates(nowMs);
     let budget = budgetBytes;
     let pending = false;
     let dirty = false;
@@ -242,7 +223,7 @@ export async function refreshSessions({
         }
     }
     if (dirty)
-        saveIndex(index);
+        await saveIndex(index);
 
     return {sessions: rankSessions(Object.values(index.files), {nowMs, limit}), pending};
 }

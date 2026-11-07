@@ -4,6 +4,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
+// eslint-disable-next-line no-restricted-imports -- backlog: snapshot list, GNOME review row 8
 import {readJSON} from './fs.js';
 import {stateDir} from './paths.js';
 import {summarizeSnapshots} from './pure.js';
@@ -16,10 +17,10 @@ function snapshotsDir() {
 export function readSnapshots() {
     const files = [];
     try {
-        const en = Gio.File.new_for_path(snapshotsDir())
+        const en = Gio.File.new_for_path(snapshotsDir()) // eslint-disable-line no-restricted-properties -- backlog: the snapshot list moves to async (GNOME review row 8)
             .enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
         let info;
-        while ((info = en.next_file(null)) !== null) {
+        while ((info = en.next_file(null)) !== null) { // eslint-disable-line no-restricted-properties -- backlog: the snapshot list moves to async (GNOME review row 8)
             const name = info.get_name();
             if (name.endsWith('.json'))
                 files.push({label: name.slice(0, -5), data: readJSON(GLib.build_filenamev([snapshotsDir(), name]))});

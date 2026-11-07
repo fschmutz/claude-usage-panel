@@ -12,6 +12,23 @@ const rules = {
     semi: ['error', 'always'],
 };
 
+// The Shell's main loop runs extension.js and lib/: a synchronous file walk,
+// read, write or subprocess there stalls every frame of the desktop (CLAUDE.md:
+// nothing on the Shell main thread may block). Each call has an async variant
+// (lib/fs.js, lib/proc.js). An exception is one `eslint-disable-next-line`
+// naming this rule and its reason, on the one line it excuses.
+const SHELL_SYNC_BANS = [
+    ['enumerate_children', 'enumerate_children_async (fs.js listChildrenAsync)'],
+    ['next_file', 'next_files_async (fs.js listChildrenAsync)'],
+    ['file_get_contents', 'fs.js readTextAsync / readJSONAsync'],
+    ['file_set_contents', 'fs.js writeTextAsync'],
+    ['file_set_contents_full', 'fs.js writeTextAsync'],
+    ['load_contents', 'load_contents_async'],
+    ['replace_contents', 'replace_contents_bytes_async (fs.js writeTextAsync)'],
+    ['spawn_command_line_sync', 'proc.js run'],
+    ['spawn_sync', 'proc.js run'],
+].map(([property, use]) => ({property, message: `blocks the Shell main thread: use ${use}`}));
+
 const NODE_FILES = ['claude-code/**/*.js', 'mcp/**/*.js', 'tests/**/*.js', '**/*.mjs'];
 
 export default [
@@ -57,5 +74,20 @@ export default [
             },
         },
         rules,
+    },
+    {
+        files: ['claude-usage-panel@fschmutz.github.io/extension.js', 'claude-usage-panel@fschmutz.github.io/lib/**/*.js'],
+        ignores: ['claude-usage-panel@fschmutz.github.io/lib/pure/**', 'claude-usage-panel@fschmutz.github.io/lib/pure.js'],
+        rules: {
+            'no-restricted-properties': ['error', ...SHELL_SYNC_BANS],
+            // fs.js's sync wrappers are the same calls one level up
+            'no-restricted-imports': ['error', {paths: [{
+                name: './fs.js', importNames: ['readText', 'readJSON', 'writeText'],
+                message: 'blocks the Shell main thread: use readTextAsync / readJSONAsync / writeTextAsync',
+            }, {
+                name: './lib/fs.js', importNames: ['readText', 'readJSON', 'writeText'],
+                message: 'blocks the Shell main thread: use readTextAsync / readJSONAsync / writeTextAsync',
+            }]}],
+        },
     },
 ];
