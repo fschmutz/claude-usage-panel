@@ -234,13 +234,16 @@ export async function renameProfile(from, to) {
             renamed = writeProfile({...profile, name: to});
         } catch (e) {
             // a file named `to` that still says `from` is listed by no port;
-            // a move that itself failed left only the journal to remove
-            try {
-                if (moved)
+            // a failed move left only the journal; a failed put-back keeps it
+            let restored = !moved;
+            if (moved) {
+                try {
                     move(to, from);
-            } finally {
-                removeFile(renamePendingPath());
+                    restored = true;
+                } catch {} // journal kept for recoverRename; the write error is reported
             }
+            if (restored)
+                removeFile(renamePendingPath());
             throw e;
         }
         if (!caseOnly)

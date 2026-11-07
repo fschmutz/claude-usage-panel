@@ -329,6 +329,29 @@ test('renameProfile puts a case-only rename back when the write fails', async ()
     assert.ok(fs.readdirSync(dir).includes('PRO.json'));
 });
 
+test('renameProfile keeps the journal when the put-back itself fails', async (t) => {
+    // The write fails, then putting the name back fails too: the journal is
+    // all that lets the next store operation finish or undo the rename, so it
+    // must survive, and the write error is the one reported.
+    const {io, s} = world();
+    s.saveCurrent('PRO');
+    const dir = accountsDir(io);
+    if (fs.readdirSync(dir).includes('pro.json')) return; // case-insensitive volume
+    fs.mkdirSync(path.join(dir, `Pro.json.${process.pid}.tmp`));
+    const real = fs.renameSync;
+    fs.renameSync = (a, b) => {
+        // the put-back: Pro.json -> PRO.json (writePrivate renames too)
+        if (path.basename(a) === 'Pro.json' && path.basename(b) === 'PRO.json') throw new Error('put-back refused');
+        return real(a, b);
+    };
+    t.after(() => {
+        fs.renameSync = real;
+    });
+    await assert.rejects(s.renameProfile('PRO', 'Pro'), (e) => !/put-back refused/.test(e.message));
+    fs.renameSync = real;
+    assert.equal(fs.existsSync(path.join(dir, '.rename-pending.json')), true);
+});
+
 test('renameProfile that cannot move the file leaves no journal behind', async () => {
     // A directory already sits at the new name, so the case-only file move
     // fails before any profile is written. The journal written first must not

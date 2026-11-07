@@ -30,7 +30,9 @@ semantic versioning.
 - **Account rename: a failed file move no longer leaves the rename journal.** A
   case-only rename whose file move failed (Node CLI/MCP and GNOME) kept
   `.rename-pending.json`, refusing every rename for 30 s. The journal is now
-  removed on that failure, as the macOS port already did.
+  removed on that failure; when putting the name back after a failed write
+  itself fails, every port now keeps the journal so the next store operation
+  finishes or undoes the rename.
 
 ## [3.11.0] - 2026-10-24
 

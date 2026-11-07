@@ -262,9 +262,11 @@ enum AccountStore {
                         credentials: profile.credentials))
             } catch {
                 // A file named `to` that still says `from` is listed by no
-                // port: put the name back before failing.
-                if caseOnly { _ = rename(profileURL(to).path, profileURL(from).path) }
-                try? FileManager.default.removeItem(at: renamePendingURL)
+                // port: put the name back before failing. A put-back that
+                // fails keeps the journal for recoverRename.
+                if !caseOnly || rename(profileURL(to).path, profileURL(from).path) == 0 {
+                    try? FileManager.default.removeItem(at: renamePendingURL)
+                }
                 throw error
             }
             if !caseOnly { try FileManager.default.removeItem(at: profileURL(from)) }

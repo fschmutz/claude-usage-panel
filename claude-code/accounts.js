@@ -205,12 +205,19 @@ export function openStore(io = {}) {
       } catch (e) {
         // A file named `to` that still says `from` is listed by no port and
         // reachable by no command: put the name back before failing. A move
-        // that itself failed left nothing to put back, only the journal.
-        try {
-          if (moved) fs.renameSync(profilePath(to), profilePath(from));
-        } finally {
-          fs.rmSync(renamePendingPath(), {force: true});
+        // that itself failed left nothing to put back, only the journal. A
+        // put-back that fails keeps the journal: the next store operation
+        // finishes or undoes the rename (renameRecovery).
+        let restored = !moved;
+        if (moved) {
+          try {
+            fs.renameSync(profilePath(to), profilePath(from));
+            restored = true;
+          } catch {
+            // journal kept; the write error below is the one reported
+          }
         }
+        if (restored) fs.rmSync(renamePendingPath(), {force: true});
         throw e;
       }
       if (!caseOnly) fs.rmSync(profilePath(from), {force: true});
