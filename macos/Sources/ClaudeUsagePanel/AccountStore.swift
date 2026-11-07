@@ -105,24 +105,11 @@ enum AccountStore {
 
     // MARK: private, atomic files
 
-    // Atomic, private write: a tmp file in the same dir CREATED 0600 (never a
-    // world-readable instant), then moved over the target.
+    /// Atomic, private write - the one both credential stores use
+    /// (PrivateFile: tmp created 0600 with O_EXCL under a random name, then
+    /// rename(2), so the result is 0600 even over a wider file).
     static func writePrivate(_ data: Data, to url: URL) throws {
-        let fm = FileManager.default
-        let dir = url.deletingLastPathComponent()
-        try fm.createDirectory(
-            at: dir, withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700])
-        let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).\(getpid()).tmp")
-        guard
-            fm.createFile(
-                atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600])
-        else { throw AccountError.message("could not write \(url.path)") }
-        if fm.fileExists(atPath: url.path) {
-            _ = try fm.replaceItemAt(url, withItemAt: tmp)
-        } else {
-            try fm.moveItem(at: tmp, to: url)
-        }
+        try PrivateFile.write(data, to: url)
     }
 
     static func readJSON(_ url: URL) -> Any? {
@@ -278,12 +265,10 @@ enum AccountStore {
 
     // MARK: the live login
 
+    /// The one parse every port shares (ClaudeUsageCore, pinned by
+    /// accounts.json `credentials`): the legacy flat forms are lifted too.
     private static func parseCredentials(_ data: Data) -> [String: Any]? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let oauth = json["claudeAiOauth"] as? [String: Any],
-            oauth["accessToken"] is String
-        else { return nil }
-        return json
+        Accounts.parseCredentials(try? JSONSerialization.jsonObject(with: data))
     }
 
     private static func security(_ args: [String]) -> Shell.Result {
@@ -396,6 +381,51 @@ enum AccountStore {
             profiles: list(), token: liveToken(readLiveCredentials()), account: readLiveAccount())
     }
 
+    // MARK: one poll's read, off the main actor
+
+    /// The live login as one poll reads it: the credentials and the account
+    /// block, read once. Without a credentials file each credentials read is
+    /// two or more `security` subprocesses, so it is never done on the main
+    /// actor and never more than once per poll.
+    struct LiveLogin: @unchecked Sendable {
+        // Immutable JSON, read and never mutated after: safe to hand across.
+        let credentials: [String: Any]?
+        let account: [String: Any]?
+        var oauth: [String: Any]? { credentials?["claudeAiOauth"] as? [String: Any] }
+    }
+
+    static func readLiveLogin() async -> LiveLogin {
+        await Task.detached(priority: .utility) {
+            LiveLogin(credentials: readLiveCredentials(), account: readLiveAccount())
+        }.value
+    }
+
+    /// What the accounts section needs from the store this poll, from that
+    /// one read: the live login synced back into its profile first (Claude
+    /// Code rotates its tokens as it runs), then the profiles and which one
+    /// is live.
+    struct Snapshot: Sendable {
+        let profiles: [AccountProfile]
+        let activeName: String?
+        let pendingTo: String?
+    }
+
+    static func snapshot(_ login: LiveLogin) async -> Snapshot {
+        await Task.detached(priority: .utility) {
+            recoverRename()
+            if let creds = login.credentials {
+                _ = try? syncBack(creds: creds, account: login.account)
+            }
+            let profiles = list()
+            return Snapshot(
+                profiles: profiles,
+                activeName: Accounts.liveProfileName(
+                    profiles: profiles, token: liveToken(login.credentials),
+                    account: login.account),
+                pendingTo: readPendingSwitch()?.to)
+        }.value
+    }
+
     static var pendingSwitchURL: URL { directory.appendingPathComponent(switchPendingFile) }
 
     /// The unfinished switch: its source (nil when unknown) and target.
@@ -418,7 +448,11 @@ enum AccountStore {
     static func syncBack() throws -> String? {
         recoverRename()
         guard let creds = readLiveCredentials() else { return nil }
-        let account = readLiveAccount()
+        return try syncBack(creds: creds, account: readLiveAccount())
+    }
+
+    /// syncBack from credentials and an account block already read.
+    private static func syncBack(creds: [String: Any], account: [String: Any]?) throws -> String? {
         let profiles = list()
         let plan = Accounts.syncBackPlan(
             profiles: profiles, token: liveToken(creds), account: account,
@@ -490,10 +524,7 @@ enum AccountStore {
 
     /// Claude Code processes alive right now - they keep the old token.
     static func runningClaudeCount() -> Int {
-        Shell.run("/bin/ps", ["-eo", "args="]).out.split(separator: "\n").filter {
-            $0.trimmingCharacters(in: .whitespaces)
-                .range(of: #"(^|/)claude(\s|$)"#, options: .regularExpression) != nil
-        }.count
+        Accounts.countClaudeProcesses(Shell.run("/bin/ps", ["-eo", "args="]).out)
     }
 
     // MARK: switch
@@ -505,14 +536,20 @@ enum AccountStore {
     /// login - even after Claude Code rotates the old token past any match -
     /// until a switch finishes the job.
     private static func installLogin(_ target: AccountProfile, from: String?) throws {
-        let config = try configWithAccount(target.account)
+        _ = try configWithAccount(target.account)  // refused here, before any write
         let credentials = try JSONSerialization.data(withJSONObject: target.credentials)
         let destination = try credentialsTarget(for: credentials)
         let mark: [String: Any] = [
             "at": nowMs(), "from": from as Any? ?? NSNull(), "to": target.name,
         ]
         try writePrivate(JSONSerialization.data(withJSONObject: mark), to: pendingSwitchURL)
-        try writePrivate(pretty(config), to: claudeConfigURL)
+        // Re-read right before the write: Claude Code rewrites ~/.claude.json
+        // as it runs, and a copy read earlier would put back whatever it
+        // changed since. Through a symlink to its target, so a dotfile
+        // manager's link is kept instead of replaced by a plain file.
+        try writePrivate(
+            pretty(configWithAccount(target.account)),
+            to: PrivateFile.resolved(claudeConfigURL))
         try writeLiveCredentials(credentials, to: destination)
         clearPendingSwitch()
     }

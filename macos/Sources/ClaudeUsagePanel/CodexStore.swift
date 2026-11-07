@@ -54,38 +54,10 @@ enum CodexStore {
 
     // MARK: private, atomic files
 
-    /// A tmp file renamed over `url` with rename(2), as the Node port does:
-    /// the inode is swapped, so the result is 0600 even when the file it
-    /// replaces (an auth.json the codex CLI wrote 0644) was not.
-    /// `replaceItemAt` would keep the replaced file's permissions. The tmp is
-    /// CREATED 0600 with open(O_CREAT | O_EXCL): `createFile(attributes:)`
-    /// applies the mode after writing, leaving the token in a wider-moded file
-    /// for an instant in ~/.codex, and O_EXCL fails on a planted tmp or symlink
-    /// instead of writing through it.
+    /// The one private atomic write both credential stores use (PrivateFile):
+    /// the result is 0600 even over an auth.json the codex CLI wrote 0644.
     private static func writePrivate(_ data: Data, to url: URL) throws {
-        let fm = FileManager.default
-        let dir = url.deletingLastPathComponent()
-        try fm.createDirectory(
-            at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).\(getpid()).tmp")
-        unlink(tmp.path)
-        let fd = open(tmp.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
-        guard fd >= 0 else { throw AccountError.message("could not write \(url.path)") }
-        // Through FileHandle: plain write(2) is shadowed by this type's own
-        // `write(_:)`.
-        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: false)
-        do {
-            try handle.write(contentsOf: data)
-            try handle.close()
-        } catch {
-            try? handle.close()
-            unlink(tmp.path)
-            throw AccountError.message("could not write \(url.path)")
-        }
-        guard rename(tmp.path, url.path) == 0 else {
-            unlink(tmp.path)
-            throw AccountError.message("could not replace \(url.path)")
-        }
+        try PrivateFile.write(data, to: url)
     }
 
     private static func readJSON(_ url: URL) -> Any? {

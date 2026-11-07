@@ -135,23 +135,19 @@ enum ClaudeUsage {
     /// parameter (UsageModel does).
     static let live: any UsageEndpoint = LiveUsageEndpoint()
 
-    /// The live login's OAuth block (access token, plan) - the credentials
-    /// file under the Claude config dir, else the login Keychain item, exactly
-    /// as the account store reads them.
-    static func readLiveOAuth() -> [String: Any]? {
-        AccountStore.readLiveCredentials()?["claudeAiOauth"] as? [String: Any]
-    }
-
     /// Usage for the live login: its own token, and the plan label only it can
-    /// supply (the endpoint names no plan).
-    static func fetchLive(_ endpoint: any UsageEndpoint = live) async throws -> UsageResult {
-        let oauth = readLiveOAuth()
+    /// supply (the endpoint names no plan). `login` is the poll's one read of
+    /// the credentials file, else the login Keychain item, exactly as the
+    /// account store reads them.
+    static func fetchLive(_ endpoint: any UsageEndpoint = live, login: AccountStore.LiveLogin)
+        async throws -> UsageResult
+    {
+        let oauth = login.oauth
         guard let token = oauth?["accessToken"] as? String, !token.isEmpty else {
             throw UsageError.noToken
         }
+        let plan = oauth.map { PlanLabel.label(oauth: $0) }
         let result = try await endpoint.usage(token: token, label: nil)
-        return UsageResult(
-            cards: result.cards, extraUsage: result.extraUsage,
-            planLabel: oauth.map { PlanLabel.label(oauth: $0) })
+        return UsageResult(cards: result.cards, extraUsage: result.extraUsage, planLabel: plan)
     }
 }

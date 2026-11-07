@@ -45,6 +45,10 @@ struct SettingsView: View {
             Picker("Refresh interval", selection: $model.refreshMinutes) {
                 ForEach([1, 5, 10, 15, 30, 60], id: \.self) { Text("\($0) min").tag($0) }
             }
+            Picker("Menu bar shows", selection: $model.panelMode) {
+                Text("Worst limit").tag(PanelCard.Mode.worst)
+                Text("Current session").tag(PanelCard.Mode.session)
+            }
             Toggle("Show the weekly Fable card", isOn: $model.showModelLimits)
                 .help(
                     "Off hides it; its usage still counts in the weekly card, "

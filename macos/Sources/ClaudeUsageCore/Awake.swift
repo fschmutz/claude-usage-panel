@@ -1,7 +1,8 @@
 import Foundation
 
 // Awake: keep the Mac from sleeping while Claude Code is working, for a
-// timer, or both. Mirrors the GNOME extension's lib/pure/awake.js;
+// timer, or both. Mirrors the GNOME extension's lib/pure/awake.js (the
+// platform half, AwakePower.swift, mirrors lib/pure/awake-power.js);
 // tests/fixtures/awake.json pins both.
 //
 // The safety design is adapted from Insomnia
@@ -21,7 +22,7 @@ public enum AwakeHold: String, Sendable, CaseIterable {
 }
 
 /// Why a session is over. `user` is the only one the machine did not decide.
-public enum AwakeEndReason: String, Sendable {
+public enum AwakeEndReason: String, Sendable, CaseIterable {
     case timer
     case sessions
     case maxSession = "max-session"
@@ -175,15 +176,10 @@ public struct AwakeBattery: Equatable, Sendable {
 public enum Awake {
     public static let version = 1
     public static let holds = ["timer", "sessions"]
-    public static let endReasons = [
-        "timer", "sessions", "max-session", "user", "battery", "battery-unreadable", "thermal",
-        "recovery",
-    ]
     /// What the journal can own, and the order the backstop undoes it in.
     /// Only a PERSISTENT change belongs here: the idle/sleep assertion is a
     /// child process the kernel gives back when the holder exits.
     public static let journalKeys = ["sleepDisabled", "lowPower"]
-    public static let thermalStates = ["nominal", "fair", "serious", "critical"]
 
     /// Shortest session worth taking.
     public static let minSeconds = 60
@@ -196,15 +192,6 @@ public enum Awake {
     public static let pollSeconds = 30
 
     public static let defaults = AwakeConfig()
-
-    /// The ONLY four commands the lid mode ever runs as root, and the only
-    /// ones the sudoers rule grants.
-    public static let sudoCommands: [[String]] = [
-        ["/usr/bin/pmset", "-a", "disablesleep", "1"],
-        ["/usr/bin/pmset", "-a", "disablesleep", "0"],
-        ["/usr/bin/pmset", "-b", "lowpowermode", "1"],
-        ["/usr/bin/pmset", "-b", "lowpowermode", "0"],
-    ]
 
     private static let unitSeconds: [Character: Int] = ["s": 1, "m": 60, "h": 3600, "d": 86400]
 

@@ -137,33 +137,91 @@ enum AwakeStore {
     // MARK: the lock
 
     /// Hold the lock for `body`, or return nil without doing anything. A
-    /// caller that cannot get the lock must NEVER proceed unlocked.
+    /// caller that cannot get the lock must NEVER proceed unlocked. The lock
+    /// is shared with the Node holder and scripts/awake-backstop.sh, so it
+    /// follows their protocol (ExclusiveLock): a pid + owner-token body
+    /// created exclusively, a stale holder removed only under the
+    /// `.takeover` guard and only if it is still the lock judged stale,
+    /// release only while the body is still ours.
     static func withLock<T>(_ body: () -> T) -> T? {
         ensureDirectory()
+        let path = lockURL.path
+        let mine = ExclusiveLock.body(pid: getpid(), token: ExclusiveLock.newToken())
         let deadline = Date().addingTimeInterval(lockWait)
         while true {
-            let fd = open(lockURL.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
-            if fd >= 0 {
-                let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: false)
-                try? handle.write(contentsOf: Data("\(getpid())\n".utf8))
-                try? handle.close()
-                defer { unlink(lockURL.path) }
+            if createLock(path, body: mine) {
+                defer { releaseLock(path, body: mine) }
                 return body()
             }
-            let held = (try? String(contentsOf: lockURL, encoding: .utf8))?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let pid = Int(held ?? "") ?? 0
-            let attributes =
-                (try? FileManager.default.attributesOfItem(atPath: lockURL.path)) ?? [:]
-            let modified = attributes[.modificationDate] as? Date
-            let stale = modified.map { Date().timeIntervalSince($0) > lockStale } ?? true
-            if (pid > 0 && kill(pid_t(pid), 0) != 0 && errno == ESRCH) || stale {
-                unlink(lockURL.path)
-                continue
+            if let judged = lockSnapshot(path),
+                ExclusiveLock.isStale(
+                    judged, nowMs: nowMs(), staleMs: lockStale * 1000,
+                    pidAlive: { kill($0, 0) == 0 || errno != ESRCH }),
+                takeOverStale(path, judged: judged)
+            {
+                continue  // the stale lock is gone: retry the create at once
             }
             if Date() >= deadline { return nil }
             usleep(50_000)
         }
+    }
+
+    private static func nowMs() -> Double { Date().timeIntervalSince1970 * 1000 }
+
+    /// The lock as it is now (body, inode, mtime), or nil once it is gone.
+    private static func lockSnapshot(_ path: String) -> ExclusiveLock.Snapshot? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+            let data = FileManager.default.contents(atPath: path),
+            let inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value,
+            let modified = attrs[.modificationDate] as? Date
+        else { return nil }
+        return ExclusiveLock.Snapshot(
+            text: String(decoding: data, as: UTF8.self), inode: inode,
+            mtimeMs: modified.timeIntervalSince1970 * 1000)
+    }
+
+    /// O_CREAT | O_EXCL with the whole body: true when the lock is ours.
+    private static func createLock(_ path: String, body: String) -> Bool {
+        let fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        guard fd >= 0 else { return false }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: false)
+        try? handle.write(contentsOf: Data(body.utf8))
+        try? handle.close()
+        return true
+    }
+
+    /// Unlink the lock only while its body is still exactly ours.
+    private static func releaseLock(_ path: String, body: String) {
+        let current = FileManager.default.contents(atPath: path)
+            .map { String(decoding: $0, as: UTF8.self) }
+        if ExclusiveLock.isOurs(current: current, mine: body) { unlink(path) }
+    }
+
+    /// Remove a lock judged stale under the `.takeover` guard, and only if
+    /// it is still that lock. A guard someone else holds ends this round; a
+    /// guard left by a crash is removed and this round still ends. True when
+    /// the judged lock was removed.
+    private static func takeOverStale(_ path: String, judged: ExclusiveLock.Snapshot) -> Bool {
+        let guardPath = path + ".takeover"
+        let fd = open(guardPath, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        guard fd >= 0 else {
+            let modified =
+                (try? FileManager.default.attributesOfItem(atPath: guardPath))?[
+                    .modificationDate] as? Date
+            if let modified,
+                ExclusiveLock.takeoverGuardIsStale(
+                    mtimeMs: modified.timeIntervalSince1970 * 1000, nowMs: nowMs())
+            {
+                unlink(guardPath)
+            }
+            return false
+        }
+        close(fd)
+        defer { unlink(guardPath) }
+        guard ExclusiveLock.sameAsJudged(judged: judged, now: lockSnapshot(path)) else {
+            return false
+        }
+        return unlink(path) == 0
     }
 
     // MARK: the machine

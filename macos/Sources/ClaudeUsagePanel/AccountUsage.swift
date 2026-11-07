@@ -72,24 +72,26 @@ extension AccountStore {
         return (text, modified)
     }
 
-    /// A stale lock is moved aside, never removed in place: a rename is
-    /// atomic, so of two waiters that judged one lock stale only one moves it
-    /// (the other gets ENOENT and waits again). The mover checks it moved the
-    /// lock it judged; one a faster waiter had already replaced is put back
-    /// with O_EXCL, so it never lands over a newer holder's.
-    private static func takeOverStale(_ url: URL, judged: (text: String, modified: Date)) throws {
-        let aside = URL(fileURLWithPath: url.path + ".stale-" + UUID().uuidString)
-        guard rename(url.path, aside.path) == 0 else {
-            if errno == ENOENT { return }
-            throw AccountError.message(
-                "could not take over the stale refresh lock \(url.lastPathComponent)")
+    /// A stale lock is removed only under the `<lock>.takeover` guard
+    /// (O_EXCL): holding it, the taker re-reads the lock and removes it only
+    /// if it is still exactly the one judged. Takeovers go one at a time and a
+    /// lock created since is never touched - the rule every port and the
+    /// awake backstop share. A guard older than two minutes was left by a
+    /// crashed taker and is cleared for the next round.
+    private static func takeOverStale(_ url: URL, judged: (text: String, modified: Date)) {
+        let guardURL = URL(fileURLWithPath: url.path + ".takeover")
+        guard createLock(guardURL, "") else {
+            if let held = lockSnapshot(guardURL),
+                Date().timeIntervalSince(held.modified) > 120
+            {
+                unlink(guardURL.path)
+            }
+            return
         }
-        if let moved = lockSnapshot(aside),
-            moved.text != judged.text || moved.modified != judged.modified
-        {
-            _ = createLock(url, moved.text)  // false: a newer holder is already in
+        defer { unlink(guardURL.path) }
+        if let now = lockSnapshot(url), now.text == judged.text, now.modified == judged.modified {
+            unlink(url.path)
         }
-        unlink(aside.path)
     }
 
     /// O_EXCL create, 0600. The lock carries a random id so a holder only
@@ -110,7 +112,7 @@ extension AccountStore {
             // Released between the two calls: try again at once.
             guard let judged = lockSnapshot(url) else { continue }
             if Date().timeIntervalSince(judged.modified) * 1000 > Accounts.RefreshLock.staleMs {
-                try takeOverStale(url, judged: judged)  // a crashed holder
+                takeOverStale(url, judged: judged)  // a crashed holder
                 continue
             }
             if Date().timeIntervalSince(start) * 1000 > Accounts.RefreshLock.waitMs {

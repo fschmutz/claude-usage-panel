@@ -156,6 +156,8 @@ public struct SessionAcc: Codable, Equatable, Sendable {
     public var lastMs: Double
     public var byDay: [String: Int]
     public var ids: [String]
+    /// Cache reads over the whole file, which turnTokens leaves out of byDay.
+    public var cacheRead: Int
     /// Bytes of the transcript already folded (files are append-only).
     public var offset: Int
     public var size: Int?
@@ -163,7 +165,7 @@ public struct SessionAcc: Codable, Equatable, Sendable {
 
     public init(
         sessionId: String? = nil, cwd: String? = nil, title: String? = nil, lastMs: Double = 0,
-        byDay: [String: Int] = [:], ids: [String] = [], offset: Int = 0,
+        byDay: [String: Int] = [:], ids: [String] = [], cacheRead: Int = 0, offset: Int = 0,
         size: Int? = nil, mtimeMs: Double? = nil
     ) {
         self.sessionId = sessionId
@@ -172,13 +174,14 @@ public struct SessionAcc: Codable, Equatable, Sendable {
         self.lastMs = lastMs
         self.byDay = byDay
         self.ids = ids
+        self.cacheRead = cacheRead
         self.offset = offset
         self.size = size
         self.mtimeMs = mtimeMs
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sessionId, cwd, title, lastMs, byDay, ids, offset, size, mtimeMs
+        case sessionId, cwd, title, lastMs, byDay, ids, cacheRead, offset, size, mtimeMs
     }
 
     /// Tolerant: the index is written by every port, and the JS ones read a
@@ -193,6 +196,7 @@ public struct SessionAcc: Codable, Equatable, Sendable {
         lastMs = try c.decodeIfPresent(Double.self, forKey: .lastMs) ?? 0
         byDay = try c.decodeIfPresent([String: Int].self, forKey: .byDay) ?? [:]
         ids = try c.decodeIfPresent([String].self, forKey: .ids) ?? []
+        cacheRead = try c.decodeIfPresent(Int.self, forKey: .cacheRead) ?? 0
         offset = try c.decodeIfPresent(Int.self, forKey: .offset) ?? 0
         size = try c.decodeIfPresent(Int.self, forKey: .size)
         mtimeMs = try c.decodeIfPresent(Double.self, forKey: .mtimeMs)
@@ -276,6 +280,7 @@ public enum SessionIndexer {
         }
         let day = at.map { SessionFormat.day($0, zone: zone) } ?? defaultDay
         acc.byDay[day, default: 0] += turnTokens(usage)
+        acc.cacheRead += (usage["cache_read_input_tokens"] as? NSNumber)?.intValue ?? 0
     }
 
     /// The mtime an index entry records: whole seconds, in ms. The entry is
@@ -356,6 +361,34 @@ public enum SessionIndexer {
 // MARK: - Resuming one of them
 
 public enum SessionResume {
+    /// Why this session must not be typed into a terminal, or nil when it
+    /// may. iTerm (`write text`) and Terminal.app (`do script`) TYPE the
+    /// command into the new tab, where a control character (^C, ^D, a
+    /// newline, a C1 code) acts before the shell ever sees the quoting; and a
+    /// session id is a UUID, so anything else is not one Claude Code wrote.
+    /// The Node twin is claude-code/tabs.js `blocker`.
+    public static func refusal(cwd: String, sessionId: String) -> String? {
+        if cwd.unicodeScalars.contains(where: isControl) {
+            return "Not opened: the session's directory contains a control character."
+        }
+        if !isSessionId(sessionId) {
+            return "Not opened: \"\(sessionId)\" is not a session id."
+        }
+        return nil
+    }
+
+    /// U+0000-U+001F, U+007F-U+009F.
+    static func isControl(_ s: Unicode.Scalar) -> Bool {
+        s.value <= 0x1f || (0x7f...0x9f).contains(s.value)
+    }
+
+    /// 8-4-4-4-12 hex digits, the shape of every id Claude Code writes.
+    public static func isSessionId(_ id: String) -> Bool {
+        let groups = id.split(separator: "-", omittingEmptySubsequences: false)
+        guard groups.map(\.count) == [8, 4, 4, 4, 12] else { return false }
+        return groups.allSatisfy { $0.unicodeScalars.allSatisfy(\.properties.isASCIIHexDigit) }
+    }
+
     /// The command that resumes one session where it was left.
     public static func command(cwd: String, sessionId: String, claudeBin: String = "claude")
         -> String

@@ -238,6 +238,11 @@ enum TerminalLauncher {
     /// Open `session` in a terminal. Returns an error line for the UI, or nil.
     @discardableResult
     static func open(session: RankedSession, choice: Choice) -> String? {
+        // The command is TYPED into the new tab: a control character in the
+        // directory, or anything but a session id, never reaches it.
+        if let refusal = SessionResume.refusal(cwd: session.cwd, sessionId: session.sessionId) {
+            return refusal
+        }
         let command = SessionResume.command(cwd: session.cwd, sessionId: session.sessionId)
         let r = Shell.run(
             "/usr/bin/osascript", ["-e", script(for: choice, command: command)], mergeStderr: true)

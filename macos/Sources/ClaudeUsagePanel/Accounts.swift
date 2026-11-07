@@ -54,27 +54,41 @@ struct AccountRow: Identifiable, Equatable, Sendable {
 extension UsageModel {
     /// Re-read the store, fetch the other accounts' usage, refresh the status
     /// line's cache, then let the auto-switch decide. Runs at the end of every
-    /// poll; the active account's cards are the ones just fetched.
-    func refreshAccounts() async {
+    /// poll; the active account's cards are `cards` (the poll's
+    /// PollSections.sectionCards: none after a hard failure, so the old
+    /// figures never drive the auto-switch or the usage cache), else the ones
+    /// on screen. `login` is the poll's one read of the live login.
+    func refreshAccounts(cards liveCards: [LimitCard]? = nil, login: AccountStore.LiveLogin? = nil)
+        async
+    {
         // Off by default: no rows, no menu-bar prefix, no fetch.
+        guard accountsEnabled else {
+            liveLoginEmail = nil
+            accounts = []
+            activeAccount = nil
+            accountNotices = []
+            return
+        }
         // Claude Code rotates the live login's tokens as it runs, and the
         // refresh token it replaces is revoked. A profile only written at save
         // time therefore rots while its account is the live one, and the switch
-        // back fails with HTTP 400. Sync first, every poll: it compares and
-        // writes only when the blob actually moved.
-        if accountsEnabled { _ = try? AccountStore.syncBack() }
-        let profiles = accountsEnabled ? AccountStore.list() : []
-        let liveAccount = accountsEnabled ? AccountStore.readLiveAccount() : nil
+        // back fails with HTTP 400. The snapshot syncs first, every poll (it
+        // compares and writes only when the blob actually moved), all of it
+        // off the main actor.
+        let live: AccountStore.LiveLogin
+        if let login { live = login } else { live = await AccountStore.readLiveLogin() }
+        let snapshot = await AccountStore.snapshot(live)
+        let profiles = snapshot.profiles
+        let liveAccount = live.account
+        let current = liveCards ?? self.cards
         liveLoginEmail = liveAccount?["emailAddress"] as? String
         guard !profiles.isEmpty else {
             accounts = []
             activeAccount = nil
-            accountNotices =
-                accountsEnabled
-                ? Notices.accountNotices(rows: [], liveEmail: liveLoginEmail) : []
+            accountNotices = Notices.accountNotices(rows: [], liveEmail: liveLoginEmail)
             return
         }
-        let active = AccountStore.liveAccountName()
+        let active = snapshot.activeName
         activeAccount = active
         let nowMs = Date().timeIntervalSince1970 * 1000
         var rows: [AccountRow] = []
@@ -84,7 +98,7 @@ extension UsageModel {
             var result = AccountUsage.unread
             if p.name == active {
                 result = AccountUsage(
-                    cards: self.cards.isEmpty ? nil : self.cards, errorCode: nil, message: nil)
+                    cards: current.isEmpty ? nil : current, errorCode: nil, message: nil)
             } else if summary.tokenState != .expired {
                 // A parked account's stale token is refreshed here - into OUR
                 // store only. The live login is Claude Code's to refresh, and
@@ -103,7 +117,13 @@ extension UsageModel {
                         tokenState: summary.tokenState, errorCode: result.errorCode,
                         live: result.live)))
         }
-        let kept = AccountStore.updateWeeklyResets(usage, names: profiles.map(\.name))
+        // Two small files, written off the main actor like the reads above.
+        let names = profiles.map(\.name)
+        let written = usage
+        let kept = await Task.detached(priority: .utility) {
+            AccountStore.writeUsageCache(written)
+            return AccountStore.updateWeeklyResets(written, names: names)
+        }.value
         accounts = rows.map {
             var row = $0
             row.weeklyResetMs = kept[row.name]
@@ -113,10 +133,9 @@ extension UsageModel {
         accountNotices = Notices.accountNotices(
             rows: accounts.map { (name: $0.name, health: $0.health) },
             liveEmail: liveLoginEmail, activeName: active,
-            pendingTo: AccountStore.readPendingSwitch()?.to,
+            pendingTo: snapshot.pendingTo,
             torn: Accounts.isTorn(profiles: profiles, name: active ?? "", account: liveAccount)
                 && active != nil)
-        AccountStore.writeUsageCache(usage)
         await autoSwitchIfNeeded(usage: usage, active: active)
     }
 

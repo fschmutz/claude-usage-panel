@@ -60,6 +60,7 @@ final class SessionsParityTests: XCTestCase {
         XCTAssertEqual(acc.lastMs, (expected["lastMs"] as! NSNumber).doubleValue)
         let byDay = (expected["byDay"] as! [String: NSNumber]).mapValues(\.intValue)
         XCTAssertEqual(acc.byDay, byDay)
+        XCTAssertEqual(acc.cacheRead, (expected["cacheRead"] as! NSNumber).intValue)
     }
 
     func testRank() throws {

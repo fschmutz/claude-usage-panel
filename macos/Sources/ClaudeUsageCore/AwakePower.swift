@@ -1,13 +1,38 @@
 import Foundation
 
 // Awake, part two: the floors' platform half and every command the feature
-// runs. Mirrors the second half of the GNOME extension's lib/pure/awake.js;
+// runs. Mirrors the GNOME extension's lib/pure/awake-power.js;
 // tests/fixtures/awake.json pins both. Split out of Awake.swift (which holds
 // the session arithmetic, the state and the recovery journal) only because no
 // file in this repo is over 700 lines.
 
 extension Awake {
     // MARK: Platform commands
+
+    /// The ONLY four commands the lid mode ever runs as root, and the only
+    /// ones the sudoers rule grants. Every darwin argv below is taken from
+    /// this list (`sudoArgv`), so the rule and the runner cannot drift.
+    public static let sudoCommands: [[String]] = [
+        ["/usr/bin/pmset", "-a", "disablesleep", "1"],
+        ["/usr/bin/pmset", "-a", "disablesleep", "0"],
+        ["/usr/bin/pmset", "-b", "lowpowermode", "1"],
+        ["/usr/bin/pmset", "-b", "lowpowermode", "0"],
+    ]
+
+    /// The pmset setting each journal key owns.
+    private static let pmsetSetting = ["sleepDisabled": "disablesleep", "lowPower": "lowpowermode"]
+
+    /// `sudo -n <the granted command>` that turns the setting a journal key
+    /// owns on or off, or nil for a key the rule does not grant. `-n` NEVER
+    /// prompts: without the rule it fails fast instead of hanging.
+    public static func sudoArgv(key: String, on: Bool) -> [String]? {
+        guard let setting = pmsetSetting[key],
+            let granted = sudoCommands.first(where: {
+                $0.count == 4 && $0[2] == setting && $0[3] == (on ? "1" : "0")
+            })
+        else { return nil }
+        return ["/usr/bin/sudo", "-n"] + granted
+    }
 
     /// The child that holds the idle/sleep assertion. It is a CHILD on
     /// purpose: the kernel releases the assertion when it exits, so a holder
@@ -28,16 +53,13 @@ extension Awake {
     }
 
     /// Closed-lid mode, which is the dangerous half and is off by default.
-    /// `sudo -n` NEVER prompts: without the sudoers rule it fails fast with a
-    /// readable error instead of hanging on a password prompt.
+    /// On macOS one of the granted commands (`sudoArgv`).
     public static func lidArgv(
         platform: String, on: Bool, seconds: Int = Awake.maxSeconds,
         who: String = "claude-usage-panel",
         why: String = "Claude Code is working with the lid closed"
     ) -> [String]? {
-        if platform == "darwin" {
-            return ["/usr/bin/sudo", "-n", "/usr/bin/pmset", "-a", "disablesleep", on ? "1" : "0"]
-        }
+        if platform == "darwin" { return sudoArgv(key: "sleepDisabled", on: on) }
         if platform == "linux" {
             // Nothing to run for "off": the inhibitor is a child, and letting
             // it go is the release.
@@ -53,7 +75,7 @@ extension Awake {
     /// Low Power Mode, macOS only (Linux has no single equivalent).
     public static func lowPowerArgv(platform: String, on: Bool) -> [String]? {
         guard platform == "darwin" else { return nil }
-        return ["/usr/bin/sudo", "-n", "/usr/bin/pmset", "-b", "lowpowermode", on ? "1" : "0"]
+        return sudoArgv(key: "lowPower", on: on)
     }
 
     /// The sudoers file `./install.sh awakelid` writes, for this user only.
@@ -164,9 +186,6 @@ extension Awake {
             }
         }
     #endif
-
-    /// Is `hold` one of the two the contract knows?
-    public static func isHold(_ hold: String) -> Bool { holds.contains(hold) }
 
     // MARK: Helpers
 

@@ -7,7 +7,7 @@ import SwiftUI
 // MARK: - View model
 
 @MainActor
-final class UsageModel: ObservableObject {
+final class UsageModel: ObservableObject, SettingsOwner {
     @Published var cards: [LimitCard] = []
     /// Prepaid credit spend, when the account has extra usage enabled.
     @Published var extraUsage: ExtraUsage?
@@ -16,45 +16,70 @@ final class UsageModel: ObservableObject {
     @Published var costText: String?
     @Published var updated: String = ""
 
-    @Published var refreshMinutes: Int {
-        didSet {
-            UserDefaults.standard.set(refreshMinutes, forKey: "refreshMinutes")
-            restart()
-        }
+    // Preferences. Each one lives in UserDefaults under the key named here -
+    // the same keys the hand-written versions used, so stored prefs survive -
+    // and is read and written straight through @Setting. A didSet acts on
+    // change.
+    @Setting("refreshMinutes", default: 10) var refreshMinutes: Int {
+        didSet { restart() }
     }
-    @Published var showCost: Bool {
-        didSet {
-            UserDefaults.standard.set(showCost, forKey: "showCost")
-            Task { await refreshCost() }
-        }
+    @Setting("showCost", default: false) var showCost: Bool {
+        didSet { Task { await refreshCost() } }
     }
     /// Per-model weekly sub-caps (Fable) as their own card and in the
     /// menu-bar ranking. Off hides them; alerts still read every card.
-    @Published var showModelLimits: Bool {
-        didSet { UserDefaults.standard.set(showModelLimits, forKey: "showModelLimits") }
-    }
+    @Setting("showModelLimits", default: true) var showModelLimits: Bool
     /// Cards drawn as name, percentage, bar and reset countdown only.
-    @Published var compactCards: Bool {
-        didSet { UserDefaults.standard.set(compactCards, forKey: "compactCards") }
-    }
-    /// The cards the popup lists and the menu bar ranks (ShownCards).
-    var shownCards: [LimitCard] { ShownCards.filter(cards, showModelLimits: showModelLimits) }
-    @Published var alertsEnabled: Bool {
-        didSet { UserDefaults.standard.set(alertsEnabled, forKey: "alertsEnabled") }
-    }
+    @Setting("compactCards", default: false) var compactCards: Bool
+    /// Which card the menu bar shows: the worst honest reading, or the
+    /// session one (the GNOME `panel-mode`).
+    @Setting("panelMode", default: PanelCard.Mode.worst) var panelMode: PanelCard.Mode
+    @Setting("alertsEnabled", default: true) var alertsEnabled: Bool
     /// Shell command run when a limit crosses 90/100 % or a window resets.
     /// Empty disables it.
-    @Published var eventCommand: String {
-        didSet { UserDefaults.standard.set(eventCommand, forKey: "eventCommand") }
+    @Setting("eventCommand", default: "") var eventCommand: String
+    @Setting("cursorEnabled", default: false) var cursorEnabled: Bool {
+        didSet { Task { await refreshCursor() } }
     }
+    /// The named-accounts master switch - off by default, so nothing
+    /// account-related shows until the user asks for it.
+    @Setting("accountsEnabled", default: false) var accountsEnabled: Bool {
+        didSet { Task { await refreshAccounts() } }
+    }
+    @Setting("accountsAutoSwitch", default: false) var accountsAutoSwitch: Bool
+    @Setting("accountsSwitchThreshold", default: AutoSwitch.threshold)
+    var accountsSwitchThreshold: Int
+    @Setting("showAccountInMenuBar", default: true) var showAccountInMenuBar: Bool
+    /// Keep the "Auto-switch at N%" toggle under the account rows in the
+    /// popup; off hides it there, the option itself stays in Settings.
+    @Setting("showAutoSwitchInMenu", default: true) var showAutoSwitchInMenu: Bool
+    /// Show each saved login's email on its own line under the name in the
+    /// popup; off keeps it in the row's tooltip only.
+    @Setting("showAccountEmailInMenu", default: true) var showAccountEmailInMenu: Bool
+    /// The OpenAI Codex vault, off by default.
+    @Setting("codexEnabled", default: false) var codexEnabled: Bool {
+        didSet { Task { await refreshCodex() } }
+    }
+    /// Today's sessions: the work the plan was actually spent on, ranked by
+    /// the tokens each one burned, each resumable in a terminal with one click.
+    @Setting("showSessions", default: true) var showSessions: Bool {
+        didSet { Task { await refreshSessions() } }
+    }
+    @Setting("terminalChoice", default: TerminalLauncher.Choice.auto)
+    var terminalChoice: TerminalLauncher.Choice
+    /// Waiting on you: off by default, like the GNOME `waiting-enabled`; with
+    /// it off the registry is not read. `./install.sh waiting` turns it on.
+    @Setting("waitingEnabled", default: false) var waitingEnabled: Bool {
+        didSet { Task { await refreshWaiting() } }
+    }
+
+    /// A setting is about to change: re-render, as a @Published one would.
+    func settingWillChange() { objectWillChange.send() }
+
+    /// The cards the popup lists and the menu bar ranks (ShownCards).
+    var shownCards: [LimitCard] { ShownCards.filter(cards, showModelLimits: showModelLimits) }
     @Published var launchAtLogin: Bool {
         didSet { LoginItem.setEnabled(launchAtLogin) }
-    }
-    @Published var cursorEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(cursorEnabled, forKey: "cursorEnabled")
-            Task { await refreshCursor() }
-        }
     }
     /// Committed by the Settings field on submit / Save, never per keystroke:
     /// each write is a Keychain delete + add and a Cursor API round-trip.
@@ -71,14 +96,6 @@ final class UsageModel: ObservableObject {
     // Named accounts: saved logins, the active one, and the opt-in auto-switch.
     // Behavior lives in Accounts.swift (extension UsageModel); only the stored
     // properties are here because extensions cannot declare them.
-    /// The master switch - off by default, so nothing account-related shows
-    /// until the user asks for it.
-    @Published var accountsEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(accountsEnabled, forKey: "accountsEnabled")
-            Task { await refreshAccounts() }
-        }
-    }
     @Published var accounts: [AccountRow] = []
     @Published var activeAccount: String?
     /// The live login's email, for the Settings "save as" row.
@@ -93,66 +110,18 @@ final class UsageModel: ObservableObject {
     @Published var outcomes: [String: ControlOutcome] = [:]
     var outcomeTask: Task<Void, Never>?
 
-    // OpenAI Codex: a sibling vault, off by default. Behaviour lives in
-    // Codex.swift (extension UsageModel); only the stored properties are here.
-    @Published var codexEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(codexEnabled, forKey: "codexEnabled")
-            refreshCodex()
-        }
-    }
+    // OpenAI Codex: a sibling vault. Behaviour lives in Codex.swift
+    // (extension UsageModel); only the stored properties are here.
     @Published var codexAccounts: [CodexRow] = []
     @Published var codexActive: String?
     @Published var codexLiveEmail: String?
     /// The last reading the codex CLI recorded, or the reason there is none.
     @Published var codexUsage: CodexStore.RecordedUsage?
-    @Published var accountsAutoSwitch: Bool {
-        didSet { UserDefaults.standard.set(accountsAutoSwitch, forKey: "accountsAutoSwitch") }
-    }
-    @Published var accountsSwitchThreshold: Int {
-        didSet {
-            UserDefaults.standard.set(accountsSwitchThreshold, forKey: "accountsSwitchThreshold")
-        }
-    }
-    @Published var showAccountInMenuBar: Bool {
-        didSet { UserDefaults.standard.set(showAccountInMenuBar, forKey: "showAccountInMenuBar") }
-    }
-    /// Keep the "Auto-switch at N%" toggle under the account rows in the
-    /// popup; off hides it there, the option itself stays in Settings.
-    @Published var showAutoSwitchInMenu: Bool {
-        didSet { UserDefaults.standard.set(showAutoSwitchInMenu, forKey: "showAutoSwitchInMenu") }
-    }
-    /// Show each saved login's email on its own line under the name in the
-    /// popup; off keeps it in the row's tooltip only.
-    @Published var showAccountEmailInMenu: Bool {
-        didSet {
-            UserDefaults.standard.set(showAccountEmailInMenu, forKey: "showAccountEmailInMenu")
-        }
-    }
 
-    // Today's sessions: the work the plan was actually spent on, ranked by the
-    // tokens each one burned, each resumable in a terminal with one click.
-    @Published var showSessions: Bool {
-        didSet {
-            UserDefaults.standard.set(showSessions, forKey: "showSessions")
-            Task { await refreshSessions() }
-        }
-    }
-    @Published var terminalChoice: TerminalLauncher.Choice {
-        didSet { UserDefaults.standard.set(terminalChoice.rawValue, forKey: "terminalChoice") }
-    }
     @Published var sessions: [RankedSession] = []
     /// The index is still catching up, so the token numbers are a floor.
     @Published var sessionsPending = false
     @Published var sessionError: String?
-    /// Waiting on you: off by default, like the GNOME `waiting-enabled`; with
-    /// it off the registry is not read. `./install.sh waiting` turns it on.
-    @Published var waitingEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(waitingEnabled, forKey: "waitingEnabled")
-            Task { await refreshWaiting() }
-        }
-    }
     /// Live sessions blocked on a permission prompt, a question, or idle after Stop.
     @Published var waiting: [WaitingSession] = []
 
@@ -180,6 +149,10 @@ final class UsageModel: ObservableObject {
     /// Enough for the forecast's 6 h window; ~15 h at the 10-minute default.
     private static let historyMax = 90
 
+    /// The last good reading, kept when a hard failure blanks `cards`: what
+    /// the next success is compared with (idle streak, reset events) and what
+    /// a transient failure puts back up (the GNOME `_latest`).
+    private var latestCards: [LimitCard] = []
     private var loopTask: Task<Void, Never>?
     private var wakeTask: Task<Void, Never>?
     /// The poll in flight, if any: a second caller joins it instead of racing
@@ -207,26 +180,6 @@ final class UsageModel: ObservableObject {
 
     init(endpoint: any UsageEndpoint = ClaudeUsage.live) {
         self.endpoint = endpoint
-        refreshMinutes = UserDefaults.standard.object(forKey: "refreshMinutes") as? Int ?? 10
-        showCost = UserDefaults.standard.bool(forKey: "showCost")
-        alertsEnabled = UserDefaults.standard.object(forKey: "alertsEnabled") as? Bool ?? true
-        showModelLimits = UserDefaults.standard.object(forKey: "showModelLimits") as? Bool ?? true
-        compactCards = UserDefaults.standard.bool(forKey: "compactCards")
-        eventCommand = UserDefaults.standard.string(forKey: "eventCommand") ?? ""
-        cursorEnabled = UserDefaults.standard.bool(forKey: "cursorEnabled")
-        codexEnabled = UserDefaults.standard.bool(forKey: "codexEnabled")
-        waitingEnabled = UserDefaults.standard.bool(forKey: "waitingEnabled")
-        accountsEnabled = UserDefaults.standard.bool(forKey: "accountsEnabled")
-        accountsAutoSwitch = UserDefaults.standard.bool(forKey: "accountsAutoSwitch")
-        accountsSwitchThreshold =
-            UserDefaults.standard.object(forKey: "accountsSwitchThreshold") as? Int
-            ?? AutoSwitch.threshold
-        showAccountInMenuBar =
-            UserDefaults.standard.object(forKey: "showAccountInMenuBar") as? Bool ?? true
-        showAutoSwitchInMenu =
-            UserDefaults.standard.object(forKey: "showAutoSwitchInMenu") as? Bool ?? true
-        showAccountEmailInMenu =
-            UserDefaults.standard.object(forKey: "showAccountEmailInMenu") as? Bool ?? true
         // Key lives in the Keychain. Migrate a value stored in UserDefaults by
         // pre-Keychain versions once, then scrub it from the plist.
         if let legacy = UserDefaults.standard.string(forKey: "cursorApiKey"), !legacy.isEmpty {
@@ -244,11 +197,6 @@ final class UsageModel: ObservableObject {
             return []
         }
         launchAtLogin = LoginItem.isEnabled
-        showSessions = UserDefaults.standard.object(forKey: "showSessions") as? Bool ?? true
-        terminalChoice =
-            TerminalLauncher.Choice(
-                rawValue: UserDefaults.standard.string(forKey: "terminalChoice") ?? "")
-            ?? .auto
 
         // First launch: register the login item by default, matching the GNOME
         // extension's auto-enable. Only once - a later user opt-out is respected.
@@ -290,7 +238,7 @@ final class UsageModel: ObservableObject {
                 // and lands late on the one tick that matters - the reset.
                 let delay = PollSchedule.nextPollSeconds(
                     baseSeconds: base, idleStreak: self.idleStreak,
-                    nextReset: PollSchedule.nextReset(self.cards), retry: self.retry,
+                    nextReset: PollSchedule.nextReset(self.latestCards), retry: self.retry,
                     retryStreak: self.retryStreak, retryAfterSeconds: self.retryAfterSeconds)
                 try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
             }
@@ -340,16 +288,22 @@ final class UsageModel: ObservableObject {
     }
 
     private func poll() async {
+        // The live login, read once per poll and off the main actor: on a Mac
+        // without a credentials file each read is `security` subprocesses.
+        let login = await AccountStore.readLiveLogin()
+        var failureCode: String?
+        var fresh: [LimitCard] = []
         do {
-            let result = try await ClaudeUsage.fetchLive(endpoint)
+            let result = try await ClaudeUsage.fetchLive(endpoint, login: login)
+            fresh = result.cards
             let nowMs = Date().timeIntervalSince1970 * 1000
-            let moved = !PollSchedule.sameUsage(cards, result.cards)
+            let moved = !PollSchedule.sameUsage(latestCards, result.cards)
             idleStreak = moved ? 0 : idleStreak + 1
             // Only record what moved: a flat afternoon would otherwise write an
             // identical line every poll for 90 days.
             // Filed under the live login: the file is shared by every account
             // on this Mac and a peak must never come from another one.
-            let account = Warehouse.account(AccountStore.readLiveAccount())
+            let account = Warehouse.account(login.account)
             if moved {
                 warehouse.append(Warehouse.append(result.cards, nowMs: nowMs, account: account))
             }
@@ -359,7 +313,8 @@ final class UsageModel: ObservableObject {
                         warehouse, key: card.id, nowMs: nowMs, account: account
                     ).map { (card.id, $0) }
                 }, uniquingKeysWith: { a, _ in a })
-            runEventCommand(EventHooks.detect(previous: cards, current: result.cards))
+            runEventCommand(EventHooks.detect(previous: latestCards, current: result.cards))
+            latestCards = result.cards
             cards = result.cards
             extraUsage = result.extraUsage
             planLabel = result.planLabel
@@ -371,28 +326,64 @@ final class UsageModel: ObservableObject {
             recordHistory(result.cards, nowMs: nowMs)
             checkAlerts(result.cards)
         } catch {
-            // A transient answer keeps the cards and says so under them; the
-            // popup only blanks on a failure that is not going to clear itself.
             let usageError = error as? UsageError
+            failureCode = usageError?.code ?? "unknown"
             retry = usageError?.isTransient ?? false
             retryStreak = retry ? retryStreak + 1 : 0
             retryAfterSeconds = retry ? usageError?.retryAfterSeconds : nil
-            if retry, !cards.isEmpty {
+            if retry, !latestCards.isEmpty {
+                // A "not now" answer keeps the last good cards up and says so
+                // under them. Redrawn all the same: a window that reset during
+                // the outage turns to `–` now, not at the next success.
+                cards = latestCards
                 errorText = "\(error.localizedDescription) - retrying, showing the last reading"
             } else {
+                // A failure that is not going to clear itself (401, no
+                // login): no cards, so the menu bar reads "?" and nothing
+                // downstream takes the old figures for the live login's.
+                cards = []
+                extraUsage = nil
                 errorText = error.localizedDescription
             }
         }
-        await refreshCost()
         sessionPing.refreshLastPing()
         saved.reload()
-        await refreshSessions()
-        await refreshWaiting()
-        await pause.refresh()
-        await awake.refresh()
-        await refreshCursor()
-        await refreshAccounts()
-        refreshCodex()
+        await refreshSections(
+            PollSections.sectionCards(
+                failureCode: failureCode, cards: fresh, latest: latestCards),
+            login: login)
+    }
+
+    /// After every poll, failed or not: none of these needs the Claude token,
+    /// and the account switcher is the fix for an expired login. They run side
+    /// by side, each bounded by PollSections' deadline, so a hung child
+    /// process (a stalled `ccusage`) costs one section one poll instead of
+    /// stopping every poll after it.
+    private func refreshSections(_ sectionCards: [LimitCard], login: AccountStore.LiveLogin)
+        async
+    {
+        let reports = await PollSections.run([
+            (name: "cost", refresh: { @MainActor in await self.refreshCost() }),
+            (name: "sessions", refresh: { @MainActor in await self.refreshSessions() }),
+            (name: "waiting", refresh: { @MainActor in await self.refreshWaiting() }),
+            (name: "pause", refresh: { @MainActor in await self.pause.refresh() }),
+            (name: "awake", refresh: { @MainActor in await self.awake.refresh() }),
+            (name: "cursor", refresh: { @MainActor in await self.refreshCursor() }),
+            (
+                name: "accounts",
+                refresh: { @MainActor in
+                    await self.refreshAccounts(cards: sectionCards, login: login)
+                }
+            ),
+            (name: "codex", refresh: { @MainActor in await self.refreshCodex() }),
+        ])
+        for report in reports where report.outcome != .done {
+            NSLog(
+                "[ClaudeUsagePanel] the \(report.section) section "
+                    + (report.outcome == .timeout
+                        ? "is still refreshing, polling on"
+                        : "failed to refresh: \(report.error ?? "?")"))
+        }
     }
 
     private func refreshCost() async {
@@ -522,10 +513,12 @@ final class UsageModel: ObservableObject {
         Shell.launch("/usr/bin/osascript", NotifyScript.arguments(title: title, body: body))
     }
 
-    /// The card the menu bar shows: the worst honest reading, ranked exactly
-    /// like the GNOME top bar (PanelCard), so a rolled-over window's stale
-    /// percentage never parks itself in the menu bar.
-    private var panelCard: LimitCard? { PanelCard.pick(shownCards, mode: .worst, now: Date()) }
+    /// The card the menu bar shows: per `panelMode`, the worst honest reading
+    /// or the session card, ranked exactly like the GNOME top bar (PanelCard),
+    /// so a rolled-over window's stale percentage never parks itself there.
+    private var panelCard: LimitCard? {
+        PanelCard.pick(shownCards, mode: panelMode, now: Date())
+    }
 
     /// The menu-bar gauge: filled to that card's reading, tinted by its
     /// severity - lifted to warning while the forecast says the limit runs
@@ -545,8 +538,8 @@ final class UsageModel: ObservableObject {
             exhaustsBeforeReset: forecasts[worst.id]?.exhaustsBeforeReset == true)
     }
 
-    /// Worst (highest %) limit, for the menu-bar title; the gauge next to it
-    /// carries the color.
+    /// The menu-bar card's label and reading; the gauge next to it carries
+    /// the color.
     var titleText: String {
         guard let worst = panelCard else {
             return errorText == nil ? "…" : "?"

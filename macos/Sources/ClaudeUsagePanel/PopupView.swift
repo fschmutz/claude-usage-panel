@@ -117,55 +117,108 @@ struct PopupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Title, plan, then the controls as icons - the GNOME header's
-            // layout: auto-switch (only with something to switch between),
-            // refresh, settings, and quit as the cross in the corner.
-            HStack(alignment: .center, spacing: 4) {
-                Text("Claude usage").font(.system(size: 15, weight: .bold))
-                Spacer()
-                if let plan = model.planLabel, !plan.isEmpty {
-                    Text(plan).font(.system(size: 12, weight: .semibold)).foregroundColor(
-                        .secondary)
-                }
-                if model.accountsEnabled && model.accounts.count >= 2
-                    && model.showAutoSwitchInMenu
-                {
-                    // No text of its own, so the hover title says which way it is set.
-                    HeaderIcon(
-                        systemImage: "person.2.circle",
-                        title: "Auto-switch at \(model.accountsSwitchThreshold)% · "
-                            + (model.accountsAutoSwitch ? "on" : "off"),
-                        lit: model.accountsAutoSwitch
-                    ) { model.accountsAutoSwitch.toggle() }
-                }
-                // Reopen the newest session snapshot as tabs. Shown only when
-                // there is one, exactly as on GNOME.
-                if model.saved.canReopen {
-                    HeaderIcon(
-                        systemImage: "clock.arrow.circlepath",
-                        title: "Reopen \(model.saved.newestLine)"
-                    ) { model.saved.reopen() }
-                }
-                // Snapshot the open sessions now, so threads closed since the
-                // last autosave do not come back on the next Reopen.
-                if model.saved.canSave {
-                    HeaderIcon(
-                        systemImage: "square.and.arrow.down",
-                        title: "Save the open sessions now (what Reopen opens)"
-                    ) { model.saved.save() }
-                }
-                HeaderIcon(systemImage: "arrow.clockwise", title: "Refresh now") {
-                    Task { await model.refresh() }
-                }
-                SettingsIcon()
-                HeaderIcon(systemImage: "xmark", title: "Quit") {
-                    // A closed-lid session outlives this process, so give it
-                    // back here rather than leave it to the backstop.
-                    model.awake.releaseNow()
-                    NSApplication.shared.terminate(nil)
-                }
+            PopupHeader(model: model)
+            StatusBlock(model: model)
+            SessionsArea(model: model, layout: SessionsLayout.of(sessionsLayout))
+
+            // Right under the session sections it exists for: what is
+            // keeping this Mac up is only interesting next to what is running.
+            if model.awake.enabled {
+                AwakeSectionView(awake: model.awake)
             }
 
+            if model.cursorEnabled {
+                CursorSectionView(model: model)
+            }
+
+            // Notices too: "signed in but not saved" has to be reachable
+            // before there is a single saved account to list it under.
+            if model.accountsEnabled && !(model.accounts.isEmpty && model.accountNotices.isEmpty) {
+                AccountsSectionView(model: model)
+            }
+
+            // Codex last, and only when asked for: this app is Claude-first,
+            // and a sibling vault does not get to reorder the popup.
+            if model.codexEnabled {
+                CodexSectionView(model: model)
+            }
+
+            Divider()
+
+            PopupFooter(model: model)
+        }
+        .padding(14)
+        .frame(width: 340)
+        .onAppear {
+            model.sessionPing.reload()
+            model.saved.reload()
+        }
+    }
+}
+
+// Title, plan, then the controls as icons.
+private struct PopupHeader: View {
+    @ObservedObject var model: UsageModel
+
+    var body: some View {
+        // Title, plan, then the controls as icons - the GNOME header's
+        // layout: auto-switch (only with something to switch between),
+        // refresh, settings, and quit as the cross in the corner.
+        HStack(alignment: .center, spacing: 4) {
+            Text("Claude usage").font(.system(size: 15, weight: .bold))
+            Spacer()
+            if let plan = model.planLabel, !plan.isEmpty {
+                Text(plan).font(.system(size: 12, weight: .semibold)).foregroundColor(
+                    .secondary)
+            }
+            if model.accountsEnabled && model.accounts.count >= 2
+                && model.showAutoSwitchInMenu
+            {
+                // No text of its own, so the hover title says which way it is set.
+                HeaderIcon(
+                    systemImage: "person.2.circle",
+                    title: "Auto-switch at \(model.accountsSwitchThreshold)% · "
+                        + (model.accountsAutoSwitch ? "on" : "off"),
+                    lit: model.accountsAutoSwitch
+                ) { model.accountsAutoSwitch.toggle() }
+            }
+            // Reopen the newest session snapshot as tabs. Shown only when
+            // there is one, exactly as on GNOME.
+            if model.saved.canReopen {
+                HeaderIcon(
+                    systemImage: "clock.arrow.circlepath",
+                    title: "Reopen \(model.saved.newestLine)"
+                ) { model.saved.reopen() }
+            }
+            // Snapshot the open sessions now, so threads closed since the
+            // last autosave do not come back on the next Reopen.
+            if model.saved.canSave {
+                HeaderIcon(
+                    systemImage: "square.and.arrow.down",
+                    title: "Save the open sessions now (what Reopen opens)"
+                ) { model.saved.save() }
+            }
+            HeaderIcon(systemImage: "arrow.clockwise", title: "Refresh now") {
+                Task { await model.refresh() }
+            }
+            SettingsIcon()
+            HeaderIcon(systemImage: "xmark", title: "Quit") {
+                // A closed-lid session outlives this process, so give it
+                // back here rather than leave it to the backstop.
+                model.awake.releaseNow()
+                NSApplication.shared.terminate(nil)
+            }
+        }
+    }
+}
+
+// The limit cards (or why there are none), extra usage, cost, and the lines
+// saying how fresh all of it is.
+private struct StatusBlock: View {
+    @ObservedObject var model: UsageModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
             if let err = model.errorText, model.cards.isEmpty {
                 Text(err).font(.system(size: 12)).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -221,69 +274,53 @@ struct PopupView: View {
             if let u = model.updates.status, u.needsAttention {
                 Text(u.summary).font(.system(size: 11)).foregroundColor(.cuCritical)
             }
+        }
+    }
+}
 
-            // One Sessions board, tabs, or the three sections apart
-            // (Settings ▸ Sessions ▸ Layout).
-            if SessionsLayout.of(sessionsLayout) != .separate {
-                if SessionBoardView.visible(model: model, layout: SessionsLayout.of(sessionsLayout))
-                {
-                    SessionBoardView(
-                        model: model, pause: model.pause, layout: SessionsLayout.of(sessionsLayout))
-                }
-            } else {
-                if !model.waiting.isEmpty {
-                    WaitingSectionView(model: model)
-                }
+// The session sections, laid out per Settings ▸ Sessions ▸ Layout.
+private struct SessionsArea: View {
+    @ObservedObject var model: UsageModel
+    let layout: SessionsLayout
 
-                if model.pause.enabled {
-                    PauseSectionView(pause: model.pause)
-                }
-
-                if model.showSessions && !model.sessions.isEmpty {
-                    SessionsSectionView(model: model)
-                }
+    var body: some View {
+        // One Sessions board, tabs, or the three sections apart
+        // (Settings ▸ Sessions ▸ Layout).
+        if layout != .separate {
+            if SessionBoardView.visible(model: model, layout: layout) {
+                SessionBoardView(
+                    model: model, pause: model.pause, layout: layout)
+            }
+        } else {
+            if !model.waiting.isEmpty {
+                WaitingSectionView(model: model)
             }
 
-            // Right under the session sections it exists for: what is
-            // keeping this Mac up is only interesting next to what is running.
-            if model.awake.enabled {
-                AwakeSectionView(awake: model.awake)
+            if model.pause.enabled {
+                PauseSectionView(pause: model.pause)
             }
 
-            if model.cursorEnabled {
-                CursorSectionView(model: model)
-            }
-
-            // Notices too: "signed in but not saved" has to be reachable
-            // before there is a single saved account to list it under.
-            if model.accountsEnabled && !(model.accounts.isEmpty && model.accountNotices.isEmpty) {
-                AccountsSectionView(model: model)
-            }
-
-            // Codex last, and only when asked for: this app is Claude-first,
-            // and a sibling vault does not get to reorder the popup.
-            if model.codexEnabled {
-                CodexSectionView(model: model)
-            }
-
-            Divider()
-
-            HStack {
-                Toggle("Cost", isOn: $model.showCost).toggleStyle(.checkbox).font(.system(size: 12))
-                Toggle("Alerts", isOn: $model.alertsEnabled).toggleStyle(.checkbox).font(
-                    .system(size: 12))
-                Spacer()
-                Text("Refresh").font(.system(size: 12)).foregroundColor(.secondary)
-                Picker("", selection: $model.refreshMinutes) {
-                    ForEach([1, 5, 10, 15, 30, 60], id: \.self) { Text("\($0)m").tag($0) }
-                }.labelsHidden().frame(width: 70)
+            if model.showSessions && !model.sessions.isEmpty {
+                SessionsSectionView(model: model)
             }
         }
-        .padding(14)
-        .frame(width: 340)
-        .onAppear {
-            model.sessionPing.reload()
-            model.saved.reload()
+    }
+}
+
+// The quick toggles under the divider.
+private struct PopupFooter: View {
+    @ObservedObject var model: UsageModel
+
+    var body: some View {
+        HStack {
+            Toggle("Cost", isOn: $model.showCost).toggleStyle(.checkbox).font(.system(size: 12))
+            Toggle("Alerts", isOn: $model.alertsEnabled).toggleStyle(.checkbox).font(
+                .system(size: 12))
+            Spacer()
+            Text("Refresh").font(.system(size: 12)).foregroundColor(.secondary)
+            Picker("", selection: $model.refreshMinutes) {
+                ForEach([1, 5, 10, 15, 30, 60], id: \.self) { Text("\($0)m").tag($0) }
+            }.labelsHidden().frame(width: 70)
         }
     }
 }

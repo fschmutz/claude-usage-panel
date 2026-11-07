@@ -18,9 +18,10 @@ final class AwakeParityTests: XCTestCase {
         let fix = try fixture()
         XCTAssertEqual(Awake.version, (fix["version"] as! NSNumber).intValue)
         XCTAssertEqual(Awake.holds, fix["holds"] as! [String])
-        XCTAssertEqual(Awake.endReasons, fix["endReasons"] as! [String])
+        XCTAssertEqual(
+            AwakeEndReason.allCases.map(\.rawValue), fix["endReasons"] as! [String])
         XCTAssertEqual(Awake.journalKeys, fix["journalKeys"] as! [String])
-        XCTAssertEqual(Awake.thermalStates, fix["thermalStates"] as! [String])
+        XCTAssertEqual(AwakeThermal.allCases.map(\.rawValue), fix["thermalStates"] as! [String])
         XCTAssertEqual(Awake.minSeconds, (fix["minSeconds"] as! NSNumber).intValue)
         XCTAssertEqual(Awake.maxSeconds, (fix["maxSeconds"] as! NSNumber).intValue)
         XCTAssertEqual(Awake.backstopGraceMs, num(fix["backstopGraceMs"]))
@@ -342,9 +343,22 @@ final class AwakeParityTests: XCTestCase {
         }
     }
 
-    func testIsHold() {
-        XCTAssertTrue(Awake.isHold("timer"))
-        XCTAssertTrue(Awake.isHold("sessions"))
-        XCTAssertFalse(Awake.isHold("forever"))
+    func testEveryDarwinSudoArgvIsGranted() throws {
+        let granted = (try fixture()["sudoCommands"] as! [[String]]).map {
+            $0.joined(separator: " ")
+        }
+        var used: [String] = []
+        for on in [true, false] {
+            for argv in [
+                Awake.lidArgv(platform: "darwin", on: on),
+                Awake.lowPowerArgv(platform: "darwin", on: on),
+            ] {
+                let argv = try XCTUnwrap(argv)
+                XCTAssertEqual(Array(argv.prefix(2)), ["/usr/bin/sudo", "-n"])
+                used.append(argv.dropFirst(2).joined(separator: " "))
+            }
+        }
+        XCTAssertEqual(Set(used), Set(granted))
+        XCTAssertNil(Awake.sudoArgv(key: "somethingElse", on: true))
     }
 }

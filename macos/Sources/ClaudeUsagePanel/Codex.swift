@@ -6,13 +6,22 @@ import Foundation
 // UsageModel itself (extensions cannot declare them).
 //
 // Everything here is local file work - there is no network client on the Codex
-// path at all - so it runs synchronously at the end of a poll rather than
-// adding another await to it.
+// path at all - but walking sessions/** and reading transcript tails is still
+// too much for the main actor, so the read runs detached, like the session
+// index.
+
+/// One refresh's worth of the Codex vault, read off the main actor.
+private struct CodexRead: Sendable {
+    let liveEmail: String?
+    let active: String?
+    let rows: [CodexRow]
+    let usage: CodexStore.RecordedUsage
+}
 
 extension UsageModel {
     /// Re-read the Codex store and the newest recorded reading. Off by
     /// default: with the toggle off, nothing under the Codex home is opened.
-    func refreshCodex() {
+    func refreshCodex() async {
         guard codexEnabled else {
             codexAccounts = []
             codexActive = nil
@@ -20,18 +29,24 @@ extension UsageModel {
             codexUsage = nil
             return
         }
-        // The codex CLI rotates its tokens as it runs; sync first so the saved
-        // copy of the live login does not rot into a dead refresh token.
-        _ = try? CodexStore.syncBack()
-        let live = CodexStore.readLiveAuth()
-        codexLiveEmail = Codex.identity(live).email
-        let active = CodexStore.liveName()
-        codexActive = active
-        let nowMs = Date().timeIntervalSince1970 * 1000
-        codexAccounts = CodexStore.list().map {
-            CodexRow(summary: $0.summary(nowMs: nowMs), active: $0.name == active)
-        }
-        codexUsage = CodexStore.recordedUsage()
+        let read = await Task.detached(priority: .utility) { () -> CodexRead in
+            // The codex CLI rotates its tokens as it runs; sync first so the
+            // saved copy of the live login does not rot into a dead refresh
+            // token.
+            _ = try? CodexStore.syncBack()
+            let active = CodexStore.liveName()
+            let nowMs = Date().timeIntervalSince1970 * 1000
+            return CodexRead(
+                liveEmail: Codex.identity(CodexStore.readLiveAuth()).email, active: active,
+                rows: CodexStore.list().map {
+                    CodexRow(summary: $0.summary(nowMs: nowMs), active: $0.name == active)
+                },
+                usage: CodexStore.recordedUsage())
+        }.value
+        codexLiveEmail = read.liveEmail
+        codexActive = read.active
+        codexAccounts = read.rows
+        codexUsage = read.usage
     }
 
     func switchCodexAccount(_ name: String) {
@@ -42,7 +57,7 @@ extension UsageModel {
                 r.changed
                     ? "now on \(name) - restart codex to use it"
                     : "\(name) was already the Codex login")
-            refreshCodex()
+            Task { await refreshCodex() }
         } catch {
             setOutcome(
                 "codex:\(name)", ok: false,
@@ -54,7 +69,7 @@ extension UsageModel {
         do {
             let p = try CodexStore.saveCurrent(name.trimmingCharacters(in: .whitespaces))
             setOutcome("codex-save", ok: true, "saved as \(p.name)")
-            refreshCodex()
+            Task { await refreshCodex() }
         } catch {
             setOutcome("codex-save", ok: false, error.localizedDescription)
         }
@@ -64,7 +79,7 @@ extension UsageModel {
         do {
             try CodexStore.remove(name)
             setOutcome("codex-remove:\(name)", ok: true, "removed")
-            refreshCodex()
+            Task { await refreshCodex() }
         } catch {
             setOutcome("codex-remove:\(name)", ok: false, error.localizedDescription)
         }
