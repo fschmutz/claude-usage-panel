@@ -123,6 +123,32 @@ test('resolves claude from a node version manager prefix, newest version first',
     assert.match(calls(home), /^v22\.9\.0 -p ping /);
 });
 
+/** Pids of processes still running with this sandbox as HOME (Linux). */
+function leftUnder(home) {
+    const out = [];
+    for (const n of fs.readdirSync('/proc').filter((x) => /^\d+$/.test(x))) {
+        try {
+            if (fs.readFileSync(`/proc/${n}/environ`, 'utf8').split('\0').includes(`HOME=${home}`)) out.push(Number(n));
+        } catch {
+            // gone, or not ours
+        }
+    }
+    return out;
+}
+
+test('a ping leaves no process behind: the watchdog takes its sleep down', {skip: process.platform !== 'linux'}, async (t) => {
+    const home = makeSandbox(t);
+    const r = run('bash', [SCRIPT, '--force'], {env: env(home)});
+    assert.equal(r.status, 0);
+    let left = leftUnder(home);
+    for (let i = 0; left.length && i < 20; i++) {
+        await new Promise((res) => setTimeout(res, 100));
+        left = leftUnder(home);
+    }
+    for (const pid of left) process.kill(pid); // never leak into the machine, even on failure
+    assert.deepEqual(left, [], 'the watchdog sleep outlived the ping');
+});
+
 test('a failing claude exits 1', (t) => {
     const home = makeSandbox(t);
     fs.writeFileSync(path.join(home, 'bin', 'claude'), '#!/bin/sh\nexit 3\n');

@@ -229,10 +229,15 @@ mkdir -p "$STATE_DIR/ping-cwd"
         --output-format text) >/dev/null 2>&1 &
 ping_pid=$!
 # stdio fully detached: an inherited pipe would keep the caller waiting on the
-# orphaned sleep for the full timeout even after a fast successful ping.
+# sleep for the full timeout even after a fast successful ping. Killing the
+# watchdog subshell does not kill its sleep, so the TERM trap takes it down:
+# without it every ping left a `sleep 120` orphaned for two minutes.
 (
-    sleep "$PING_TIMEOUT"
-    kill "$ping_pid" 2>/dev/null
+    sleeper=""
+    trap '[ -n "$sleeper" ] && kill "$sleeper" 2>/dev/null; exit 0' TERM
+    sleep "$PING_TIMEOUT" &
+    sleeper=$!
+    wait "$sleeper" && kill "$ping_pid" 2>/dev/null
 ) </dev/null >/dev/null 2>&1 &
 watchdog_pid=$!
 disown "$watchdog_pid" # no job-control noise when it gets killed below

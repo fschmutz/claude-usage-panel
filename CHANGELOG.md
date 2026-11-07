@@ -8,6 +8,10 @@ semantic versioning.
 
 ### Fixed
 
+- **Session ping: no orphaned `sleep 120` after each ping.** Killing the
+  timeout watchdog left its `sleep` running for two minutes after every
+  successful ping; a TERM trap now takes it down. A test fails if a ping
+  leaves any process behind.
 - **Account rename: a failed file move no longer leaves the rename journal.** A
   case-only rename whose file move failed (Node CLI/MCP and GNOME) kept
   `.rename-pending.json`, refusing every rename for 30 s. The journal is now
