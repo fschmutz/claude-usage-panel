@@ -111,7 +111,13 @@ for (const [name, argv] of EDITORS) {
             fs.chmodSync(real, 0o644);
             const link = path.join(d, 'settings.json');
             fs.symlinkSync(path.join('dotfiles', 'settings.json'), link);
-            execFileSync('sh', ['-c', 'umask 077 && exec "$@"', 'sh', process.execPath, ...argv(link)], {stdio: 'pipe'});
+            // the child inherits our umask: no shell in between
+            const was = process.umask(0o077);
+            try {
+                execFileSync(process.execPath, argv(link), {stdio: 'pipe'});
+            } finally {
+                process.umask(was);
+            }
             assert.ok(fs.lstatSync(link).isSymbolicLink());
             assert.equal(JSON.parse(fs.readFileSync(real, 'utf8')).keep, 1);
             assert.equal(modeOf(real), 0o644);
