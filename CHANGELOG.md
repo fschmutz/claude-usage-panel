@@ -45,16 +45,25 @@ semantic versioning.
   rate runs out before the reset, the reset countdown and the session cost;
   a toast at 90% and 100%. It reads only what Claude Code hands a mod - no
   credentials, no network - and drops detail as the terminal narrows.
-  `./install.sh footer` installs it from the checkout (it then loads in place,
-  so auto-update moves it too); `/plugin install usage-footer --marketplace
-  fschmutz/claude-usage-panel` works without a clone. Details:
+  Its gauges follow the shared contract (`usageReading`, `panelGauge`): a
+  window with no number or whose reset has passed reads `–` over an empty
+  track, never 0% or a stale percent; burn-rate samples are kept per login and
+  window and merged across sessions, and the toast latch survives a reload.
+  Opt-in and a target of its own: `./install.sh footer` writes a directory
+  marketplace of its own (`claude-usage-panel-local`, never the public name),
+  installs the plugin, checks `enabledPlugins`, and only then replaces the
+  status line; it refuses a symlinked `~/.claude/settings.json`, and
+  `--uninstall footer` removes only the marketplace it added. `update` never
+  swaps the status line for the footer. `/plugin install usage-footer
+  --marketplace fschmutz/claude-usage-panel` works without a clone. Details:
   [wiki/Footer](https://github.com/fschmutz/claude-usage-panel/wiki/Footer).
 - `scripts/sync-footer-pure.sh` keeps the footer's copies of the `lib/pure/`
   modules it imports (a plugin may only import its own files) byte-identical
   to their source; `--check` runs in pre-commit (`footer-pure-sync`) and CI.
   The `plugin-validate` job validates `footer/` and runs `claude plugin test
   footer`, on the pinned CLI, now 2.1.318 - whose validator wants an icon,
-  so both plugins ship the project's app icon.
+  so both plugins ship the project's app icon. `scripts/typecheck-footer.sh`
+  typechecks `footer/` with the TypeScript pinned in `.github/typescript`.
 
 ### Changed
 

@@ -46,6 +46,7 @@ Name targets to be explicit (`bash -s -- <target…>` through the one-liner, or
 | `gnome` | Top-bar panel + dropdown, alerts, sparklines (GNOME Shell 45–51) | [docs/GNOME.md](docs/GNOME.md) |
 | `macos` | Native SwiftUI menu-bar app, starts at login (macOS 13+); also installable without a checkout: `brew install --cask fschmutz/tap/claude-usage-panel` (upgrade: `brew upgrade --cask claude-usage-panel`) | [macos/README.md](macos/README.md) |
 | `statusline` | One-line usage gauge under the Claude Code prompt | [claude-code/README.md](claude-code/README.md) |
+| `footer` | Opt-in Claude Code plugin redrawing the line under the prompt: model, project, branch on the left; context, session and week gauges flush right. Replaces the status line only when you install it by name | [wiki/Footer](https://github.com/fschmutz/claude-usage-panel/wiki/Footer) |
 | `mcp` | `get_usage` + account tools inside Claude Code **and** Cursor - ask "how much of my plan have I used?" or "switch me to PERSO" | [mcp/README.md](mcp/README.md) |
 | `cli` | `claudectl`: `account` saves each Claude login under a name (`PRO`, `PERSO`) and switches between them without a browser; `session` snapshots every running Claude Code session (autosave every 30 min) and reopens them as tabs of one terminal window, each in its own directory; `codex` does what `account` does for OpenAI Codex logins | [Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts), [Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs), [Codex](https://github.com/fschmutz/claude-usage-panel/wiki/Codex) |
 | `autoupdate` | Daily check for a new release, installed automatically (on by default) | [wiki](https://github.com/fschmutz/claude-usage-panel/wiki/Installation#staying-up-to-date) |
@@ -231,6 +232,7 @@ with your own admin key.
 | [docs/GNOME.md](docs/GNOME.md) | GNOME install, Wayland relog, settings, nested-shell testing |
 | [macos/README.md](macos/README.md) | macOS build, release, notarization, Homebrew cask |
 | [claude-code/README.md](claude-code/README.md) | Status line segments, token modes, manual setup |
+| [wiki/Footer](https://github.com/fschmutz/claude-usage-panel/wiki/Footer) | The footer plugin under the Claude Code prompt: what it shows, install, replacing the status line |
 | [mcp/README.md](mcp/README.md) | MCP server, `get_usage` + account tools, all four install paths |
 | [wiki/Accounts](https://github.com/fschmutz/claude-usage-panel/wiki/Accounts) | Named accounts: what a switch touches, token refresh, auto-switch, CLI |
 | [wiki/Tabs](https://github.com/fschmutz/claude-usage-panel/wiki/Tabs) | Session tabs: snapshot the running sessions, reopen them as tabs, autosave |

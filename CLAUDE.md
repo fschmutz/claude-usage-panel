@@ -45,6 +45,7 @@ node scripts/check-deps.mjs audit      # OSV for direct pins + npm audit of ever
 ./install.sh                 # auto-detect OS → install the sensible set
 ./install.sh gnome           # GNOME extension only → then log out/in (Wayland)
 ./install.sh statusline      # status line → merges into ~/.claude/settings.json
+./install.sh footer          # usage-footer plugin (opt-in) from a marketplace of our own; replaces the status line only when named
 ./install.sh mcp             # MCP server → claude mcp add + ~/.cursor/mcp.json
 ./install.sh cli             # claudectl: `account` (named logins) + `session` (snapshot/reopen as tabs) + `codex` (Codex logins) + 30-min autosave
 ./install.sh macos           # build macos/ClaudeUsagePanel.app
@@ -161,6 +162,29 @@ is not worth it. It is the one gate deliberately outside `ci-gate`.
 The `plugin-validate` job runs `claude plugin validate` on the marketplace
 and on `plugin/` with the CLI pinned in `.github/claude-cli` (Dependabot's npm
 ecosystem), and fails on any warning.
+
+The same job validates `footer/` (the opt-in `usage-footer` plugin, a Claude
+Code mod drawing the line under the prompt) and runs `claude plugin test
+footer` (which transpiles, it does not check types).
+`scripts/typecheck-footer.sh` typechecks it, strict, with the TypeScript pinned
+in `.github/typescript`, against the mod API declarations Claude Code lays in
+`footer/.claude-plugin/types/` (gitignored) or `$CLAUDE_CODE_TYPES`: no package
+ships them, so it is not in `ci-gate` yet. The footer's gauges go through
+`footer/hooks/gauges.js` (usageReading, panelGauge, samples keyed
+`<account>|<kind>` and merged on write, the toast latch in `$.store`), pinned
+by `tests/footer-gauges.test.js` on the shared fixtures. A plugin may only import files inside its own
+folder, so **`footer/hooks/pure/` is the one generated-copy exception to "the
+Node side never copies a pure module"**: byte-identical copies of the
+`lib/pure/` modules the footer imports, written by
+`scripts/sync-footer-pure.sh` and failed on drift by its `--check`
+(pre-commit + CI). Never edit them; change `lib/pure/` and re-run the script.
+`./install.sh footer` (`scripts/install/footer.sh`) installs it from a
+directory marketplace it owns, `claude-usage-panel-local` under the state dir
+(never the public `claude-usage-panel` name: `marketplace add` repoints an
+existing name silently), refuses a symlinked `~/.claude/settings.json`, and
+drops the status line only after the plugin is verified in `enabledPlugins`
+and only on an explicit `footer` install - `update` never swaps one target
+for the other (`tests/footer-install.test.js`).
 
 The `deps` job (`scripts/check-deps.mjs`) also runs weekly on a schedule: a
 pin is current or a NAMED hold in `.github/dependency-holds` (version-pinned,

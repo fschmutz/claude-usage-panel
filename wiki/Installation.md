@@ -23,6 +23,7 @@ uninstalls every client.
 | `./install.sh` | auto-detect OS → the sensible set |
 | `./install.sh gnome` | GNOME Shell extension |
 | `./install.sh statusline` | Claude Code status line |
+| `./install.sh footer` | The usage-footer plugin under the Claude Code prompt ([[Footer]]; opt-in, replaces the status line only when you run it) |
 | `./install.sh mcp` | `get_usage`, `waiting` + `awake` MCP tools → Claude Code + Cursor |
 | `./install.sh macos` | build + install the macOS `.app` |
 | `./install.sh autoupdate` | daily check for a new release + auto-install |

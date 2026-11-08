@@ -19,7 +19,7 @@
     {
       "name": "usage-footer",
       "source": "./footer",
-      "description": "The line under the Claude Code prompt, drawn by a mod: model, project, branch and agents on the left; context and plan-limit gauges (session, week) flush right, with the clock tick, a burn-rate warning and a toast at 90% / 100%. Replaces the former status line.",
+      "description": "The line under the Claude Code prompt, drawn by a mod: model, project, branch and agents on the left; context and plan-limit gauges (session, week) flush right, with the clock tick, a burn-rate warning, and a toast at 90% / 100%. Opt-in; ./install.sh footer replaces the status line with it.",
       "author": {"name": "Falco Schmutz"},
       "homepage": "https://fschmutz.github.io/claude-usage-panel/",
       "repository": "https://github.com/fschmutz/claude-usage-panel",

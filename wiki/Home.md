@@ -23,6 +23,7 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 - [[Cursor Integration]] - optional team-spend section
 - [[macOS]] - the SwiftUI menu-bar app
 - [[Status Line]] - condensed usage under the Claude Code prompt
+- [[Footer]] - the line under the Claude Code prompt, as a plugin (opt-in): context and plan-limit gauges
 - [[MCP Tool]] - ask Claude or Cursor for your usage in-conversation
 - [[Accounts]] - save each Claude login under a name (PRO, PERSO) and switch without a browser
 - [[Codex]] - the same for the OpenAI Codex logins, opt-in and clearly labelled

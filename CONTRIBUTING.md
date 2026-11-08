@@ -57,6 +57,8 @@ wiki page.
 ├── linux/                   # usage-bar.mjs: one-line usage for waybar, polybar, tmux…
 ├── Casks/                   # the Homebrew cask, pinned to each release
 ├── plugin/                  # Claude Code plugin wrapping the MCP server
+├── footer/                  # usage-footer plugin: the line under the Claude Code prompt (a mod;
+│                            # hooks/pure/ = generated lib/pure copies, scripts/sync-footer-pure.sh)
 ├── docs/                    # GitHub Pages site + the /install bootstrap
 ├── logo/                    # the logo (svg + png); each client's icon derives from it
 ├── wiki/                    # source of the GitHub wiki (published by wiki.yml)
@@ -71,7 +73,8 @@ See the [Architecture](https://github.com/fschmutz/claude-usage-panel/wiki/Archi
 wiki page. The normalization contract has two copies, one per language:
 `lib/pure/usage.js` (the GNOME extension reaches it through the `lib/pure.js`
 barrel; the status line, the MCP server, `claudectl` and `linux/usage-bar.mjs`
-import the module directly - never copy it into `claude-code/`) and macOS
+import the module directly - never copy it into `claude-code/`; the footer plugin
+carries generated copies, `scripts/sync-footer-pure.sh`) and macOS
 `ClaudeUsageCore/Model.swift`. `tests/parity.test.js` + its Swift twin keep
 the two identical against one shared fixture (`tests/fixtures/normalize.json`):
 change `lib/pure/`, the Swift twin and the fixture together.
