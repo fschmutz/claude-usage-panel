@@ -39,12 +39,22 @@ const seriesOf = (kind: string): Sample[] => samples[sampleKey(account, kind)] ?
 
 // The login this session runs as, from Claude Code's own config file (the
 // engine tells a mod only how it is signed in). Unreadable: no account key.
+// Checked before every write: a /login or an account switch mid-session
+// rewrites the file, and its samples and latches must file under the new
+// login. The file is read again only when its mtime moved.
+let accountMtime: number | null = null
 async function readAccount($: EngineInterface) {
   try {
     const dir = (await $.env.get('CLAUDE_CONFIG_DIR')) || (await $.env.get('HOME'))
-    account = dir ? accountFromConfig(await $.fs.read(`${dir}/.claude.json`)) : null
+    if (!dir) throw new Error('no config dir')
+    const file = `${dir}/.claude.json`
+    const { mtimeMs } = await $.fs.stat(file)
+    if (mtimeMs === accountMtime) return
+    account = accountFromConfig(await $.fs.read(file))
+    accountMtime = mtimeMs
   } catch {
     account = null
+    accountMtime = null
   }
 }
 
@@ -63,6 +73,7 @@ async function readEnv($: EngineInterface) {
 }
 
 async function record($: EngineInterface, limits: UsageLimit[], ctx: Partial<UsageSnapshot>) {
+  await readAccount($)
   const now = Date.now()
   // Only honest readings are sampled and announced: no number, or a window
   // whose reset has passed, is neither a data point nor a crossing.
@@ -96,8 +107,9 @@ async function record($: EngineInterface, limits: UsageLimit[], ctx: Partial<Usa
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    accountMtime = null
     await readAccount($)
-    samples = mergeSamples(await $.store.get('samples'), {}, Date.now()) as Samples
+    samples =mergeSamples(await $.store.get('samples'), {}, Date.now()) as Samples
 
     const usage = await $.session.usage()
     await record($, toLimits(usage.rateLimits), {

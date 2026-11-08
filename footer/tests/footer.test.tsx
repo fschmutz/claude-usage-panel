@@ -174,6 +174,38 @@ test('a window whose reset has passed reads – with an empty bar: no stale perc
   await ui.unmount()
 })
 
+test('a login switched mid-session files its samples and latch under the new login', async ($, on) => {
+  const toasts: string[] = []
+  const login = { mtime: 1, account: 'aaaa' }
+  mock.store(on)
+  mock.env(on, { HOME: '/home/me' })
+  on('fs.stat', () => ({ value: { kind: 'file', size: 10, mtimeMs: login.mtime, isLink: false } }))
+  on('fs.read', () => ({ value: JSON.stringify({ oauthAccount: { accountUuid: login.account } }) }))
+  stubEnv(on)
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.measure', (_, e) => ({ changed: e.changed }))
+  on('clock.every', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => (toasts.push(e.text), { value: undefined }))
+  const week =(percentUsed: number) => [{ kind: 'seven_day', percentUsed, resetsAt: inHours(50) }]
+  const context = { tokens: 12_000, window: 200_000, percent: 6 }
+  on('session.usage', () => ({ value: { startedAt: Date.now(), context, rateLimits: week(92) } }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(toasts).toEqual(['Weekly limit at 92%'])
+
+  // The same login again: latched, no second toast.
+  await $.session.measure({ context, rateLimits: week(93), changed: ['rateLimits'] })
+  expect(toasts).toEqual(['Weekly limit at 92%'])
+
+  // /login as someone else rewrites ~/.claude.json: a pool of its own.
+  login.mtime = 2
+  login.account = 'bbbb'
+  await $.session.measure({ context, rateLimits: week(94), changed: ['rateLimits'] })
+  expect(toasts).toEqual(['Weekly limit at 92%', 'Weekly limit at 94%'])
+  const ui = await $.ui.mount({ ...MODES(180), surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^ 94%$/ }))?.text).toBe(' 94%')
+  await ui.unmount()
+})
+
 test('the toast latch is kept in $.store: a crossing already announced is not announced again', async ($, on) => {
   const toasts: string[] = []
   mock.store(on, { fired: { '|seven_day': 90 } })
