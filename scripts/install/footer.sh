@@ -1,17 +1,30 @@
 # shellcheck shell=bash
 # Sourced by install.sh: the Claude Code footer - the usage-footer plugin
-# (footer/), a mod that draws the line under the prompt - and the retirement
-# of the Node status line it replaces.
+# (footer/), a mod that draws the line under the prompt. Opt-in, and a target
+# of its own: the Node status line (node.sh) stays installable next to it.
 #
-# The plugin is installed from THIS checkout as a directory marketplace, so
-# Claude Code reads it in place from footer/: the auto-update that moves the
-# checkout to a new tag moves the footer with it, no plugin update needed.
+# The plugin comes from a directory marketplace this installer owns, under its
+# own name: <state dir>/footer-marketplace, a generated marketplace.json and a
+# `footer` link to this checkout's footer/. Claude Code reads a directory
+# marketplace's plugin in place, so the auto-update that moves the checkout to
+# a new tag moves the footer with it. The name is NOT `claude-usage-panel`:
+# that is the public GitHub marketplace, and `marketplace add` of a directory
+# under an existing name silently repoints it - and every plugin installed
+# from it - at that directory.
 #
-# `statusline` is an alias of this target (targets.sh). A machine that still
-# has the old statusLine entry reports `footer` as installed, so the next
-# `update` - the daily job included - migrates it: the entry goes, the plugin
-# comes in.
-FOOTER_PLUGIN="usage-footer@claude-usage-panel"
+# Rules every path below keeps:
+#   - install before remove: the status line goes only after the plugin is
+#     installed AND enabled in settings.json, and only on an explicit
+#     `./install.sh footer` - `update` reinstalls what is there and never
+#     swaps one for the other;
+#   - a settings.json that is a symlink (dotfiles) is never edited: both the
+#     JSON editor and `claude plugin install` would write the linked file;
+#   - a marketplace of our name that points elsewhere is left alone;
+#   - every step's exit status is checked, a failure is a skip_fatal.
+FOOTER_MARKETPLACE="claude-usage-panel-local"
+FOOTER_PLUGIN="usage-footer@$FOOTER_MARKETPLACE"
+
+_footer_marketplace_dir() { echo "$(_state_dir)/footer-marketplace"; }
 
 # Read from settings.json with grep: installed_targets must answer under a
 # scheduler's PATH, with neither node nor the claude CLI on it.
@@ -19,71 +32,188 @@ _footer_installed() {
     [ -f "$CLAUDE_SETTINGS" ] && grep -Eq "\"$FOOTER_PLUGIN\"[[:space:]]*:[[:space:]]*true" "$CLAUDE_SETTINGS"
 }
 
-# The retired status line, by the command the old installer wrote.
-_statusline_installed() {
-    [ -f "$CLAUDE_SETTINGS" ] && grep -Eq "$SL_OURS_RE" "$CLAUDE_SETTINGS"
+# The claude CLI: PATH first, then where its own installer puts it, which a
+# scheduler's PATH usually lacks.
+_footer_claude() {
+    local c
+    c="$(command -v claude 2>/dev/null)" && [ -n "$c" ] && {
+        echo "$c"
+        return 0
+    }
+    for c in "$HOME/.local/bin/claude" "$HOME/.claude/local/claude"; do
+        [ -x "$c" ] && {
+            echo "$c"
+            return 0
+        }
+    done
+    return 1
 }
 
-# Drop the old statusLine entry, putting back a foreign one it had replaced.
-# Returns 1 (after a skip_fatal) when it is there and cannot be removed.
-_remove_legacy_statusline() {
+# Where the marketplace named $FOOTER_MARKETPLACE points today: its path, or
+# nothing when there is none. Exit 1 when the list cannot be read.
+_footer_marketplace_path() { # CLAUDE
+    local out
+    out="$("$1" plugin marketplace list --json 2>/dev/null)" || return 1
+    printf '%s' "$out" | node -e '
+        let s = "";
+        process.stdin.on("data", (d) => (s += d)).on("end", () => {
+            let list;
+            try { list = JSON.parse(s); } catch { process.exit(1); }
+            if (!Array.isArray(list)) process.exit(1);
+            const m = list.find((x) => x && x.name === process.argv[1]);
+            if (m) process.stdout.write(String(m.path || m.installLocation || "?"));
+        });' "$FOOTER_MARKETPLACE"
+}
+
+# The steps for someone whose settings.json we will not edit.
+_footer_manual_steps() {
+    echo "  To install the footer by hand (Claude Code edits the file the link points to):"
+    echo "    claude plugin marketplace add fschmutz/claude-usage-panel"
+    echo "    claude plugin install usage-footer@claude-usage-panel --scope user"
+    echo "  then, to replace the status line with it, drop the \"statusLine\" key from that file."
+}
+
+# Drop the Node status line's entry, putting back a foreign one it had
+# replaced. Every edit is checked: a failure is a skip_fatal and returns 1,
+# never a "removed" line over an entry that is still there.
+_footer_drop_statusline() {
     local prev="$HOME/.claude/claude-usage-statusline.prev.json"
-    if _statusline_installed; then
-        if ! command -v node >/dev/null; then
-            skip_fatal "footer: Node.js not found on PATH - remove the old \"statusLine\" key from $CLAUDE_SETTINGS by hand (or re-run with node on PATH)"
+    # node is on PATH: install_footer refuses to start without it.
+    if [ -f "$prev" ]; then
+        if ! _json set "$CLAUDE_SETTINGS" statusLine "$(cat "$prev")"; then
+            skip_fatal "footer: installed, but restoring your previous statusLine into $CLAUDE_SETTINGS failed - the status line stays"
             return 1
         fi
-        if $DRY; then
-            echo "  would: drop the retired statusLine from $CLAUDE_SETTINGS, restoring $prev if present"
-        elif [ -f "$prev" ] && _json set "$CLAUDE_SETTINGS" statusLine "$(cat "$prev")" 2>/dev/null; then
-            echo "  retired status line removed, your previous statusLine restored"
-        else
-            _json delete "$CLAUDE_SETTINGS" statusLine
-            echo "  retired status line removed"
+        echo "  status line replaced, your previous statusLine restored"
+    else
+        if ! _json delete "$CLAUDE_SETTINGS" statusLine; then
+            skip_fatal "footer: installed, but removing the status line from $CLAUDE_SETTINGS failed - it stays"
+            return 1
         fi
+        echo "  status line removed: the footer replaces it"
     fi
-    act rm -f "$prev"
+    if ! rm -f "$prev"; then
+        skip_fatal "footer: could not remove $prev"
+        return 1
+    fi
+    _prune_node_tree
 }
 
 install_footer() {
     info "Claude Code footer (usage-footer plugin)"
-    _remove_legacy_statusline || return 0
-    if ! command -v claude >/dev/null; then
-        # Installed already: it loads in place from the checkout, so there is
-        # nothing to redo. Not installed yet: the target was not delivered.
-        if _footer_installed; then
-            ok "already installed - loads in place from $ROOT/footer"
-        else
-            skip_fatal "footer: claude CLI not found on PATH"
-        fi
+    if [ -L "$CLAUDE_SETTINGS" ]; then
+        skip_fatal "footer: $CLAUDE_SETTINGS is a symlink - not editing a file managed elsewhere, nothing was changed"
+        _footer_manual_steps
         return 0
     fi
+    local claude
+    if ! claude="$(_footer_claude)"; then
+        skip_fatal "footer: claude CLI not found on PATH"
+        return 0
+    fi
+    if ! command -v node >/dev/null; then
+        skip_fatal "footer: Node.js not found on PATH"
+        return 0
+    fi
+    local dir current
+    dir="$(_footer_marketplace_dir)"
+    if ! current="$(_footer_marketplace_path "$claude")"; then
+        skip_fatal "footer: could not read the Claude Code marketplaces (claude plugin marketplace list --json) - nothing was changed"
+        return 0
+    fi
+    if [ -n "$current" ] && [ "$current" != "$dir" ]; then
+        skip_fatal "footer: a marketplace named $FOOTER_MARKETPLACE already points at $current - left as it is, nothing installed"
+        return 0
+    fi
+    local replace=false
+    # shellcheck disable=SC2154  # action: install.sh's argument loop sets it (install|update|uninstall)
+    [ "$action" = install ] && _statusline_installed && replace=true
     if $DRY; then
-        echo "  would: claude plugin marketplace add $ROOT"
+        echo "  would: write $dir (marketplace $FOOTER_MARKETPLACE, footer -> $ROOT/footer)"
+        [ -n "$current" ] || echo "  would: claude plugin marketplace add $dir"
         echo "  would: claude plugin install $FOOTER_PLUGIN --scope user"
+        $replace && echo "  would: then drop the status line from $CLAUDE_SETTINGS"
         ok "dry-run: no changes written"
         return 0
     fi
-    claude plugin marketplace add "$ROOT" >/dev/null
-    claude plugin install "$FOOTER_PLUGIN" --scope user >/dev/null
-    _prune_node_tree
+
+    # 1. the marketplace, ours alone
+    if ! mkdir -p "$dir/.claude-plugin" ||
+        ! printf '%s\n' "{\"name\": \"$FOOTER_MARKETPLACE\", \"owner\": {\"name\": \"claude-usage-panel install.sh\"}, \"plugins\": [{\"name\": \"usage-footer\", \"source\": \"./footer\", \"description\": \"The line under the Claude Code prompt, from this checkout.\"}]}" \
+            >"$dir/.claude-plugin/marketplace.json" ||
+        ! ln -sfn "$ROOT/footer" "$dir/footer"; then
+        skip_fatal "footer: could not write the marketplace at $dir - nothing was installed"
+        return 0
+    fi
+    if [ -z "$current" ]; then
+        if ! "$claude" plugin marketplace add "$dir" >/dev/null; then
+            skip_fatal "footer: claude plugin marketplace add $dir failed - nothing was installed"
+            return 0
+        fi
+        # What uninstall_footer may remove: only a marketplace this added.
+        : >"$dir/.added-by-install"
+    fi
+    # 2. the plugin
+    if ! "$claude" plugin install "$FOOTER_PLUGIN" --scope user >/dev/null; then
+        skip_fatal "footer: claude plugin install $FOOTER_PLUGIN failed - nothing else was changed"
+        return 0
+    fi
+    # 3. proof it is on: what installed_targets will read next time
+    if ! _footer_installed; then
+        skip_fatal "footer: $FOOTER_PLUGIN is not enabled in $CLAUDE_SETTINGS after the install - nothing else was changed"
+        return 0
+    fi
     ok "installed - loads from $ROOT/footer; open a new Claude Code session to see it"
+    # 4. only now, and only when asked for by name, the status line goes
+    if $replace; then
+        _footer_drop_statusline || return 0
+    fi
+    return 0
 }
 
 uninstall_footer() {
     info "Claude Code footer (usage-footer plugin)"
-    _remove_legacy_statusline || return 0
-    if _footer_installed; then
-        if ! command -v claude >/dev/null; then
-            skip_fatal "footer: claude CLI not found on PATH - run: claude plugin uninstall $FOOTER_PLUGIN"
+    local dir claude=""
+    dir="$(_footer_marketplace_dir)"
+    if ! _footer_installed && [ ! -f "$dir/.added-by-install" ]; then
+        act rm -rf "$dir"
+        ok "removed"
+        return 0
+    fi
+    if [ -L "$CLAUDE_SETTINGS" ]; then
+        skip_fatal "footer: $CLAUDE_SETTINGS is a symlink - not editing it; run: claude plugin uninstall $FOOTER_PLUGIN && claude plugin marketplace remove $FOOTER_MARKETPLACE"
+        return 0
+    fi
+    if ! claude="$(_footer_claude)"; then
+        skip_fatal "footer: claude CLI not found on PATH - run: claude plugin uninstall $FOOTER_PLUGIN && claude plugin marketplace remove $FOOTER_MARKETPLACE"
+        return 0
+    fi
+    if $DRY; then
+        _footer_installed && echo "  would: claude plugin uninstall $FOOTER_PLUGIN --scope user"
+        [ -f "$dir/.added-by-install" ] && echo "  would: claude plugin marketplace remove $FOOTER_MARKETPLACE"
+        echo "  would: rm -rf $dir"
+        ok "dry-run: no changes written"
+        return 0
+    fi
+    if _footer_installed && ! "$claude" plugin uninstall "$FOOTER_PLUGIN" --scope user >/dev/null; then
+        skip_fatal "footer: claude plugin uninstall $FOOTER_PLUGIN failed"
+        return 0
+    fi
+    if [ -f "$dir/.added-by-install" ]; then
+        local current
+        if ! current="$(_footer_marketplace_path "$claude")"; then
+            skip_fatal "footer: could not read the Claude Code marketplaces - remove $FOOTER_MARKETPLACE by hand: claude plugin marketplace remove $FOOTER_MARKETPLACE"
             return 0
         fi
-        if $DRY; then
-            echo "  would: claude plugin uninstall $FOOTER_PLUGIN"
-        else
-            claude plugin uninstall "$FOOTER_PLUGIN" >/dev/null
+        # Repointed since (someone else's now): not ours to remove.
+        if [ "$current" = "$dir" ] && ! "$claude" plugin marketplace remove "$FOOTER_MARKETPLACE" >/dev/null; then
+            skip_fatal "footer: claude plugin marketplace remove $FOOTER_MARKETPLACE failed"
+            return 0
         fi
     fi
-    _prune_node_tree
+    if ! rm -rf "$dir"; then
+        skip_fatal "footer: could not remove $dir"
+        return 0
+    fi
     ok "removed"
 }
