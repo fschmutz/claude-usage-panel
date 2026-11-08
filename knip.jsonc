@@ -33,7 +33,8 @@
     // engine loads by the path in footer/hooks/hooks.json and type-checks
     // against its own `claude-code` declarations; its lib/pure copies are
     // generated (scripts/sync-footer-pure.sh). Its gates are
-    // `claude plugin validate` + `claude plugin test` (the plugin-validate job).
+    // `claude plugin validate` + `claude plugin test` (the plugin-validate job),
+    // scripts/typecheck-footer.sh, and tests/footer-gauges.test.js for gauges.js.
     "ignore": ["footer/**"],
 
     // GJS built-ins, resolved by GNOME Shell at runtime and never installable:

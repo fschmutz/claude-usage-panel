@@ -9,6 +9,8 @@ schemas/gschemas.compiled
 
 # Node (eslint run locally)
 node_modules/
+# The mod API declarations Claude Code lays beside a loaded mod (scripts/typecheck-footer.sh reads them)
+footer/.claude-plugin/types/
 
 # Editor / OS noise
 .DS_Store

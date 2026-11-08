@@ -1,0 +1,8 @@
+{
+  "name": "claude-usage-panel-ci-typescript",
+  "private": true,
+  "description": "The TypeScript scripts/typecheck-footer.sh runs over the usage-footer plugin, pinned to one exact version. Dependabot's npm ecosystem bumps it, so a compiler release that reports something new arrives as a reviewed PR.",
+  "dependencies": {
+    "typescript": "7.0.2"
+  }
+}
