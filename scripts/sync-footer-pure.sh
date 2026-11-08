@@ -26,7 +26,7 @@ local_imports() {
 # Every lib/pure module the footer needs: what its hooks import from ./pure/,
 # then what those import, until nothing new turns up.
 needed=""
-queue="$(cat "$ROOT"/footer/hooks/*.tsx | sed -nE "s/.*from '\.\/pure\/([a-z-]+)\.js'.*/\1/p" | sort -u)"
+queue="$(cat "$ROOT"/footer/hooks/*.tsx "$ROOT"/footer/hooks/*.js | sed -nE "s/.*from '\.\/pure\/([a-z-]+)\.js'.*/\1/p" | sort -u)"
 while [ -n "$queue" ]; do
     next=""
     for m in $queue; do

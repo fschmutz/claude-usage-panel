@@ -1,11 +1,14 @@
 import type { ElementTable, EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { SessionEnv, UsageLimit, UsageSnapshot } from '../types'
-import { GAUGE_COLORS, clampPercent, compactResets } from './pure/usage.js'
-import { clockPace, forecast } from './pure/pace.js'
+import { compactResets } from './pure/usage.js'
+import { clockPace } from './pure/pace.js'
+import { gauge, limitCard } from './gauges.js'
 
 type Sample = [number, number]
-type Tone = keyof typeof GAUGE_COLORS
+/** The samples of one window, for the login this session runs as. */
+export type SeriesOf = (kind: string) => Sample[]
+type Gauge = ReturnType<typeof gauge>
 
 // A run of text and how it is painted. Both halves of the footer are lists of
 // runs, so their widths are known before drawing.
@@ -57,21 +60,15 @@ export function enginePrefixWidth(hint: string, mode: string | null): number {
   return [...label].length + 3
 }
 
-function toneOf(percent: number, isRunningDry: boolean): Tone {
-  if (percent >= 90) return 'critical'
-  if (percent >= 75 || isRunningDry) return 'warning'
-  return 'normal'
-}
-
 function width(runs: readonly Run[]): number {
   return runs.reduce((n, r) => n + [...r.text].length, 0)
 }
 
 // A thin rule: the used part in the tone's color, the rest a muted track of
 // the same weight, so even 7% reads as a bar. `tick` marks where the clock
-// stands in the window: a bar past it burns faster than time.
-function bar(percent: number, cells: number, color: string, tick: number | null): Run[] {
-  const pct = clampPercent(percent)
+// stands in the window: a bar past it burns faster than time. No reading is
+// an empty track.
+function bar(pct: number, cells: number, color: string, tick: number | null): Run[] {
   const used = pct > 0 ? Math.max(1, Math.round((pct / 100) * cells)) : 0
   const out: { ch: string; color: string; bold?: boolean }[] = []
   for (let i = 0; i < cells; i++) out.push({ ch: '━', color: i < used ? color : TRACK })
@@ -88,11 +85,13 @@ function bar(percent: number, cells: number, color: string, tick: number | null)
   return runs
 }
 
-function meter(key: string, percent: number, tone: Tone, d: Density, tick: number | null = null): Run[] {
-  const color = GAUGE_COLORS[tone]
+// The reading's own text: a percent, or `–` (dim, no color) when there is no
+// honest one.
+function meter(key: string, g: Gauge, d: Density, tick: number | null = null): Run[] {
+  const color = g.known ? g.color : TRACK
   const runs: Run[] = [{ text: `${LABEL[key] ?? key} `, dim: true }]
-  if (d.bar > 0) runs.push(...bar(percent, d.bar, color, tick), { text: ' ' })
-  runs.push({ text: `${clampPercent(percent)}%`.padStart(4), color, bold: true })
+  if (d.bar > 0) runs.push(...bar(g.fill, d.bar, color, g.known ? tick : null), { text: ' ' })
+  runs.push(g.known ? { text: g.text.padStart(4), color, bold: true } : { text: g.text.padStart(4), dim: true })
   return runs
 }
 
@@ -114,17 +113,19 @@ function identity(env: SessionEnv | null, d: Detail): Run[] {
   return runs
 }
 
-function limitMeter(l: UsageLimit, samples: Record<string, Sample[]>, now: number, d: Density): Run[] {
-  const pct = clampPercent(l.percent)
-  const fc = forecast(samples[l.kind] ?? [], l.resetsAt ?? null, now)
-  const isRunningDry = fc?.exhaustsBeforeReset === true
-  const tone = toneOf(pct, isRunningDry)
+function limitMeter(l: UsageLimit, seriesOf: SeriesOf, now: number, d: Density): Run[] {
+  const card = limitCard({ kind: l.kind, percentUsed: l.percent, resetsAt: l.resetsAt })
+  const g = gauge(card, seriesOf(l.kind), now)
   const group = GROUP[l.kind]
-  const pace = group && l.resetsAt ? clockPace({ group, resetsAt: l.resetsAt, percent: pct }, now) : null
-  const runs = meter(l.kind, pct, tone, d, pace?.elapsedPercent ?? null)
-  const reset = l.resetsAt ? compactResets(l.resetsAt, now) : ''
+  const pace =
+    g.known && group && card.resetsAt
+      ? clockPace({ group, resetsAt: card.resetsAt, percent: g.percent ?? 0 }, now)
+      : null
+  const runs = meter(l.kind, g, d, pace?.elapsedPercent ?? null)
+  // A window that has rolled over: its countdown is gone with its reading.
+  const reset = g.known && card.resetsAt ? compactResets(card.resetsAt, now) : ''
   if (d.resets && reset) runs.push({ text: ` ↻${reset}`, dim: true })
-  if (isRunningDry) runs.push({ text: ' ▲', color: GAUGE_COLORS[tone], bold: true })
+  if (g.runningDry) runs.push({ text: ' ▲', color: g.color, bold: true })
   return runs
 }
 
@@ -134,13 +135,13 @@ function contextPercent(snap: UsageSnapshot | null): number | null {
   return null
 }
 
-function meters(snap: UsageSnapshot | null, samples: Record<string, Sample[]>, now: number, d: Density): Run[] {
+function meters(snap: UsageSnapshot | null, seriesOf: SeriesOf, now: number, d: Density): Run[] {
   const groups: Run[][] = []
   const ctx = contextPercent(snap)
-  if (ctx !== null) groups.push(meter('context', ctx, toneOf(ctx, false), d))
+  if (ctx !== null) groups.push(meter('context', gauge(limitCard({ kind: 'context', percentUsed: ctx }), [], now), d))
   // Only the windows the session reports: a plan without a 5h limit (Ultra)
   // has no session meter at all, never an empty one.
-  for (const l of snap?.limits ?? []) groups.push(limitMeter(l, samples, now, d))
+  for (const l of snap?.limits ?? []) groups.push(limitMeter(l, seriesOf, now, d))
   if (d.cost && typeof snap?.costUsd === 'number' && snap.costUsd >= 0.005) {
     groups.push([{ text: `$${snap.costUsd.toFixed(2)}`, dim: true }])
   }
@@ -209,11 +210,11 @@ export function drawMeters(
   $: EngineInterface,
   e: RenderInput<'SessionMode'>,
   snap: UsageSnapshot | null,
-  samples: Record<string, Sample[]>,
+  seriesOf: SeriesOf,
   now: number,
 ): RenderElement {
   const { Box, Text } = $.ui.resolve(e)
-  const runs = meters(snap, samples, now, meterDensity(e.viewport?.columns ?? 100))
+  const runs = meters(snap, seriesOf, now, meterDensity(e.viewport?.columns ?? 100))
   const modes: Run[] = e.props.modes.length ? [{ text: e.props.modes.join(' & '), dim: true }, SEP] : []
   return <Box>{line(Text, [...modes, ...runs])}</Box>
 }
@@ -229,13 +230,13 @@ export function drawFooter(
   snap: UsageSnapshot | null,
   env: SessionEnv | null,
   mode: string | null,
-  samples: Record<string, Sample[]>,
+  seriesOf: SeriesOf,
   now: number,
 ): RenderElement {
   const { Box, Text } = $.ui.resolve(e)
   const columns = e.viewport?.columns ?? 100
   const hint = [e.props.hint, e.props.tail].filter(Boolean).join(' · ')
-  const right = width(meters(snap, samples, now, meterDensity(columns)))
+  const right = width(meters(snap, seriesOf, now, meterDensity(columns)))
   const room = columns - 1 - enginePrefixWidth(hint, mode) - right - 3
   const status = joinPills(hintPills(hint))
   const withStatus = (runs: Run[]) => (status.length ? [...runs, { text: '   ' }, ...status] : runs)

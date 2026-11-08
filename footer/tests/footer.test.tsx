@@ -150,3 +150,47 @@ test('a window crossing 90% raises a toast', async ($, on) => {
   expect((await ui.find({ type: 'Text', text: /^ 92%$/ }))?.text).toBe(' 92%')
   await ui.unmount()
 })
+
+test('a window whose reset has passed reads – with an empty bar: no stale percent, countdown or toast', async ($, on) => {
+  const toasts: string[] = []
+  mock.store(on)
+  stubEnv(on)
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.every', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => (toasts.push(e.text), { value: undefined }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: Date.now(),
+      context: { tokens: 12_000, window: 200_000, percent: 6 },
+      rateLimits: [{ kind: 'seven_day', percentUsed: 96, resetsAt: inHours(-1) }],
+    },
+  }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(toasts).toEqual([])
+  const ui = await $.ui.mount({ ...MODES(200), surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^ +–$/ }))?.text).toBe('   –')
+  expect(await ui.find({ type: 'Text', text: /96%/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /↻/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the toast latch is kept in $.store: a crossing already announced is not announced again', async ($, on) => {
+  const toasts: string[] = []
+  mock.store(on, { fired: { '|seven_day': 90 } })
+  stubEnv(on)
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.every', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => (toasts.push(e.text), { value: undefined }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: Date.now(),
+      context: { tokens: 12_000, window: 200_000, percent: 6 },
+      rateLimits: [{ kind: 'seven_day', percentUsed: 92, resetsAt: inHours(50) }],
+    },
+  }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(toasts).toEqual([])
+  const ui = await $.ui.mount({ ...MODES(180), surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^ 92%$/ }))?.text).toBe(' 92%')
+  await ui.unmount()
+})

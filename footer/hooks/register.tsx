@@ -3,11 +3,16 @@ import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import type { SessionEnv, UsageLimit, UsageSnapshot } from '../types'
 import { drawFooter, drawMeters } from './footer.js'
-import { clampPercent } from './pure/usage.js'
 import { latchCrossings } from './pure/events.js'
-
-const SAMPLE_TTL_MS = 6 * 3600_000
-const SAMPLE_MAX = 120
+import {
+  accountFromConfig,
+  addSample,
+  gauge,
+  latchFromStore,
+  limitCard,
+  mergeSamples,
+  sampleKey,
+} from './gauges.js'
 
 const snapshot = atom({ plugin: 'usage-footer', key: 'snapshot' } as const, null, { shape: 'snapshot-1' })
 const clock = atom({ plugin: 'usage-footer', key: 'now' } as const, 0)
@@ -26,8 +31,22 @@ function toLimits(raw: readonly SessionRateLimit[]): UsageLimit[] {
 }
 
 // Module state: rebuilt from $.store on every session.start (a reload included).
+// Samples are keyed `<account>|<kind>` (sampleKey): two logins are two quota
+// pools, as in the shared history file the MCP server keeps.
 let samples: Samples = {}
-const fired = new Map<string, number>()
+let account: string | null = null
+const seriesOf = (kind: string): Sample[] => samples[sampleKey(account, kind)] ?? []
+
+// The login this session runs as, from Claude Code's own config file (the
+// engine tells a mod only how it is signed in). Unreadable: no account key.
+async function readAccount($: EngineInterface) {
+  try {
+    const dir = (await $.env.get('CLAUDE_CONFIG_DIR')) || (await $.env.get('HOME'))
+    account = dir ? accountFromConfig(await $.fs.read(`${dir}/.claude.json`)) : null
+  } catch {
+    account = null
+  }
+}
 
 async function readEnv($: EngineInterface) {
   const [model, cwd] = await Promise.all([$.session.model(), $.session.cwd()])
@@ -45,21 +64,31 @@ async function readEnv($: EngineInterface) {
 
 async function record($: EngineInterface, limits: UsageLimit[], ctx: Partial<UsageSnapshot>) {
   const now = Date.now()
-  for (const l of limits) {
-    const list = (samples[l.kind] ?? []).filter(([t]) => t > now - SAMPLE_TTL_MS)
-    const last = list[list.length - 1]
-    if (!last || last[1] !== l.percent || now - last[0] > 5 * 60_000) list.push([now, l.percent])
-    samples[l.kind] = list.slice(-SAMPLE_MAX)
+  // Only honest readings are sampled and announced: no number, or a window
+  // whose reset has passed, is neither a data point nor a crossing.
+  const readings = limits
+    .map(l => ({ l, g: gauge(limitCard({ kind: l.kind, percentUsed: l.percent, resetsAt: l.resetsAt }), [], now) }))
+    .filter(({ g }) => g.known)
+  const mine: Samples = {}
+  for (const { l, g } of readings) {
+    const key = sampleKey(account, l.kind)
+    mine[key] = addSample(samples[key] ?? [], g.percent ?? 0, now)
   }
+  // Merged on write: another session of the same login may have written since.
+  samples = mergeSamples(await $.store.get('samples'), mine, now) as Samples
   await $.store.set('samples', samples)
 
   const snap: UsageSnapshot = { at: now, limits, ...ctx }
   await update($, snapshot, () => snap)
 
-  const cards = limits.map(l => ({ key: l.kind, percent: clampPercent(l.percent) }))
+  // The toast latch lives in $.store too: a reload, or another session of the
+  // same login, does not announce the same crossing again.
+  const fired = latchFromStore(await $.store.get('fired'))
+  const cards = readings.map(({ l, g }) => ({ key: sampleKey(account, l.kind), kind: l.kind, percent: g.percent ?? 0 }))
   const crossings = latchCrossings(fired, cards) as { card: (typeof cards)[number]; threshold: number }[]
+  await $.store.set('fired', Object.fromEntries(fired))
   for (const { card, threshold } of crossings) {
-    const title = TITLES[card.key] ?? card.key
+    const title = TITLES[card.kind] ?? card.kind
     $.ui.toast(threshold >= 100 ? `${title} limit reached` : `${title} limit at ${card.percent}%`)
   }
 }
@@ -67,8 +96,8 @@ async function record($: EngineInterface, limits: UsageLimit[], ctx: Partial<Usa
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    const stored = await $.store.get('samples')
-    samples = stored && typeof stored === 'object' ? (stored as Samples) : {}
+    await readAccount($)
+    samples = mergeSamples(await $.store.get('samples'), {}, Date.now()) as Samples
 
     const usage = await $.session.usage()
     await record($, toLimits(usage.rateLimits), {
@@ -125,11 +154,11 @@ export const register: Register = on => {
       read($, mode),
       read($, clock),
     ])
-    return drawFooter($, e, snap, sessionEnv, permissionMode, samples, Math.max(tick, Date.now()))
+    return drawFooter($, e, snap, sessionEnv, permissionMode, seriesOf, Math.max(tick, Date.now()))
   })
 
   on('ui.render', { component: 'SessionMode' }, async ($, e) => {
     const [snap, tick] = await Promise.all([read($, snapshot), read($, clock)])
-    return drawMeters($, e, snap, samples, Math.max(tick, Date.now()))
+    return drawMeters($, e, snap, seriesOf, Math.max(tick, Date.now()))
   })
 }
