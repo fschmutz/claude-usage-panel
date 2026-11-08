@@ -54,8 +54,13 @@ semantic versioning.
   installs the plugin, checks `enabledPlugins`, and only then replaces the
   status line; it refuses a symlinked `~/.claude/settings.json`, and
   `--uninstall footer` removes only the marketplace it added. `update` never
-  swaps the status line for the footer. `/plugin install usage-footer
-  --marketplace fschmutz/claude-usage-panel` works without a clone. Details:
+  swaps the status line for the footer. Without a clone: `/plugin marketplace add
+  fschmutz/claude-usage-panel`, then `/plugin install
+  usage-footer@claude-usage-panel` (the installer counts that one as the
+  footer too). Settings follow `CLAUDE_CONFIG_DIR` when it is set; `update`
+  of an installed footer only refreshes its folder; a bare install no
+  longer adds the status line back once the footer is in, and naming both
+  installs the footer alone. Details:
   [wiki/Footer](https://github.com/fschmutz/claude-usage-panel/wiki/Footer).
 - `scripts/sync-footer-pure.sh` keeps the footer's copies of the `lib/pure/`
   modules it imports (a plugin may only import its own files) byte-identical

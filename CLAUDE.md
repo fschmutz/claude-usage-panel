@@ -168,8 +168,10 @@ Code mod drawing the line under the prompt) and runs `claude plugin test
 footer` (which transpiles, it does not check types).
 `scripts/typecheck-footer.sh` typechecks it, strict, with the TypeScript pinned
 in `.github/typescript`, against the mod API declarations Claude Code lays in
-`footer/.claude-plugin/types/` (gitignored) or `$CLAUDE_CODE_TYPES`: no package
-ships them, so it is not in `ci-gate` yet. The footer's gauges go through
+`footer/.claude-plugin/types/` (gitignored) or `$CLAUDE_CODE_TYPES`. It is a **declared local gate**
+(maintainer's decision R14c): not in `ci-gate`, not a pre-commit hook - no
+package ships the declarations and CI has no login to have Claude Code lay
+them - so run it by hand on every `footer/` change. The footer's gauges go through
 `footer/hooks/gauges.js` (usageReading, panelGauge, samples keyed
 `<account>|<kind>` and merged on write, the toast latch in `$.store`), pinned
 by `tests/footer-gauges.test.js` on the shared fixtures. A plugin may only import files inside its own
@@ -181,10 +183,16 @@ Node side never copies a pure module"**: byte-identical copies of the
 `./install.sh footer` (`scripts/install/footer.sh`) installs it from a
 directory marketplace it owns, `claude-usage-panel-local` under the state dir
 (never the public `claude-usage-panel` name: `marketplace add` repoints an
-existing name silently), refuses a symlinked `~/.claude/settings.json`, and
+existing name silently), refuses a symlinked settings.json (under
+`CLAUDE_CONFIG_DIR` when set, like every other settings edit: `CLAUDE_SETTINGS`
+in `scripts/install/node.sh`), counts a footer installed from the public
+marketplace as the footer (never a second copy), and
 drops the status line only after the plugin is verified in `enabledPlugins`
 and only on an explicit `footer` install - `update` never swaps one target
-for the other (`tests/footer-install.test.js`).
+for the other; `update` of an installed footer only refreshes the
+marketplace folder and its link, with no claude CLI and no settings edit. A
+bare install never detects `statusline` once the footer is in, and an install
+naming both installs the footer alone (`tests/footer-install.test.js`).
 
 The `deps` job (`scripts/check-deps.mjs`) also runs weekly on a schedule: a
 pin is current or a NAMED hold in `.github/dependency-holds` (version-pinned,

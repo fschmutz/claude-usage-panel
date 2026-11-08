@@ -51,8 +51,11 @@ Writes a directory marketplace of its own, `claude-usage-panel-local`, under
 checkout's `footer/`), adds it, installs `usage-footer@claude-usage-panel-local`
 for your user and checks that `enabledPlugins` has it. Claude Code reads it in
 place from `footer/`, so the daily auto-update that moves the checkout to a new
-release moves the footer with it. Open a new session to see it. Needs the
-`claude` CLI and Node.js.
+release moves the footer with it: `update` only refreshes that folder and
+its link, so it needs neither the `claude` CLI nor a settings edit. Open a new
+session to see it. A first install needs the `claude` CLI (found on `PATH`,
+`~/.local/bin`, Homebrew or a Node version manager) and Node.js. With
+`CLAUDE_CONFIG_DIR` set, every settings path below is under it.
 
 It never touches the public `claude-usage-panel` marketplace (adding a folder
 under a name that exists repoints it, with every plugin from it), and it stops
@@ -63,8 +66,12 @@ is not ours to edit: it prints the commands to run by hand instead).
 From inside Claude Code, without a clone:
 
 ```text
-/plugin install usage-footer --marketplace fschmutz/claude-usage-panel
+/plugin marketplace add fschmutz/claude-usage-panel
+/plugin install usage-footer@claude-usage-panel
 ```
+
+The installer counts that copy as the footer: it never installs a second one
+next to it, and `--uninstall footer` removes it.
 
 ## Coming from the status line
 
@@ -73,8 +80,10 @@ plugin is installed and enabled does it remove the `statusLine` entry from
 `~/.claude/settings.json`, putting back a status line of your own that the
 status line had replaced. If any step fails, the status line stays as it was.
 `./install.sh update` - the daily job included - reinstalls whatever you have
-and never swaps one for the other; `./install.sh statusline` brings the status
-line back next to the footer at any time.
+and never swaps one for the other. Once the footer is in, a bare
+`./install.sh` no longer adds the status line, and `./install.sh footer
+statusline` (either order) installs the footer alone; `./install.sh statusline`
+on its own brings the status line back next to the footer.
 
 ## Remove
 

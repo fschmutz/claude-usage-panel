@@ -4,6 +4,11 @@
 # npm ecosystem bumps it). `claude plugin test` transpiles without checking
 # types, so this is the only gate that does.
 #
+# A DECLARED LOCAL GATE (maintainer's decision R14c): it is not in ci-gate and
+# not a pre-commit hook. Run it by hand on any footer/ change, before pushing.
+# CI cannot run it: the declarations below need a Claude Code that has loaded
+# the mod, which needs a login CI does not have.
+#
 # The mod API's declarations ('claude-code', 'claude-code/testing') ship in no
 # package: Claude Code writes them itself when it loads a mod - beside it, as
 # footer/.claude-plugin/types/ (gitignored) once a session has loaded footer/

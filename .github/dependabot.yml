@@ -96,7 +96,9 @@ updates:
       default-days: 7
     labels: [dependencies]
     open-pull-requests-limit: 2
-  # The TypeScript scripts/typecheck-footer.sh runs (.github/typescript).
+  # The TypeScript scripts/typecheck-footer.sh runs (.github/typescript): a
+  # declared LOCAL gate (R14c), not in ci-gate, so a bump is proven by
+  # running the script by hand on the Dependabot branch.
   - package-ecosystem: npm
     directory: /.github/typescript
     schedule:
