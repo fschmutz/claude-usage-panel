@@ -8,6 +8,13 @@ semantic versioning.
 
 ### Added
 
+- **Messages between sessions, across logins.** `claudectl session send
+  NAME -- TEXT` queues a message for a running session, `peers` lists every
+  session a message can reach with the login it runs as, `inbox` what is still
+  queued. The pause waiter (`./install.sh pause`) wakes the recipient with it
+  exactly once, naming the sender and the reply command. Sessions started by
+  `claudectl account exec` are reached too: `peers` reads their config dirs,
+  and `exec` now carries the waiter hooks (and no other hook) into them.
 - **Run a command as another saved login.** `claudectl account exec NAME --
   CMD` gives CMD a throwaway Claude Code config dir holding only NAME's login,
   so `claude -p ...` acts as NAME while the current login, running sessions

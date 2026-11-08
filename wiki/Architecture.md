@@ -250,6 +250,8 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── pause.js            # openPause(io): the pause request, deliveries, verdicts, waiter locks, checkpoints
 ├── pause-hook.js       # Claude Code hook: asyncRewake waiter (SessionStart / Stop) + PreToolUse backstop
 ├── pause-cli.js        # `claudectl session pause | resume | report | pause-status | leftovers`
+├── mail.js             # openMail(io): messages between sessions of every login, taken once by the pause waiter
+├── mail-cli.js         # `claudectl session send | inbox | peers`
 ├── leftovers.js        # what each session left running: the process table + CLAUDE_CODE_SESSION_ID
 ├── awake.js            # openAwake(io): the awake session, the recovery journal, the lock, the readings
 ├── awake-worker.js     # the detached holder: owns the inhibitor child and the floors for one session

@@ -22,8 +22,13 @@
 //   ANTHROPIC_AUTH_TOKEN, CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_SECURESTORAGE_CONFIG_DIR)
 //   are dropped from the child's environment.
 //
-// The command itself is not restricted: it is the caller's. No hooks, MCP
-// servers or settings come along - the config dir is empty but for the login.
+// - The pause waiter hooks (`./install.sh pause`) come along when installed,
+//   so a session run this way can be paused and gets `claudectl session
+//   send` messages like any other (mail.js).
+//
+// The command itself is not restricted: it is the caller's. No other hook,
+// MCP server or setting comes along - the config dir holds the login and
+// those hooks only.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -33,7 +38,8 @@ import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 import {keychainServices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 
 import {openStore} from './accounts.js';
-import {scratchDir} from './paths.js';
+import {claudeSettingsPath, scratchDir} from './paths.js';
+import {readJSON} from './private-fs.js';
 import {pidAlive} from './procs.js';
 
 export const EXEC_PREFIX = 'claude-exec-';
@@ -129,7 +135,25 @@ export function openAccountExec(io = {}) {
     return swept;
   }
 
-  /** Make the config dir for `profile`: credentials, oauthAccount, owner. */
+  /** The live settings' pause waiter hooks (pause-hook.js), and nothing
+   *  else: {Event: [group]}, empty when they are not installed. */
+  function waiterHooks() {
+    const all = readJSON(claudeSettingsPath(io))?.hooks;
+    const out = {};
+    if (!all || typeof all !== 'object') return out;
+    for (const [event, groups] of Object.entries(all)) {
+      if (!Array.isArray(groups)) continue;
+      const kept = groups
+        .map((g) => ({...g, hooks: (Array.isArray(g?.hooks) ? g.hooks : [])
+          .filter((h) => typeof h?.command === 'string' && /[/\\]pause-hook\.js["']?\s/.test(h.command))}))
+        .filter((g) => g.hooks.length);
+      if (kept.length) out[event] = kept;
+    }
+    return out;
+  }
+
+  /** Make the config dir for `profile`: credentials, oauthAccount, owner,
+   *  and the pause waiter hooks when the live settings have them. */
   function prepare(profile) {
     fs.mkdirSync(root(), {recursive: true, mode: 0o700});
     const configDir = fs.mkdtempSync(path.join(root(), `${EXEC_PREFIX}${io.pid ?? process.pid}-`));
@@ -145,6 +169,10 @@ export function openAccountExec(io = {}) {
     fs.writeFileSync(path.join(configDir, '.credentials.json'), JSON.stringify(profile.credentials), {mode: 0o600});
     fs.writeFileSync(path.join(configDir, '.claude.json'),
       `${JSON.stringify({oauthAccount: profile.account, hasCompletedOnboarding: true}, null, 2)}\n`, {mode: 0o600});
+    const hooks = waiterHooks();
+    if (Object.keys(hooks).length) {
+      fs.writeFileSync(path.join(configDir, 'settings.json'), `${JSON.stringify({hooks}, null, 2)}\n`, {mode: 0o600});
+    }
     return configDir;
   }
 

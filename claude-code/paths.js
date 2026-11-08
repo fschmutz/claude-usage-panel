@@ -39,6 +39,11 @@ function claudeDir(io) {
   return env(io).CLAUDE_CONFIG_DIR || path.join(homedir(io), '.claude');
 }
 
+/** Claude Code's user settings (hooks among them). */
+export function claudeSettingsPath(io) {
+  return path.join(claudeDir(io), 'settings.json');
+}
+
 /** Where Claude Code keeps the live credentials. */
 export function credentialsPath(io) {
   return path.join(claudeDir(io), '.credentials.json');
@@ -104,6 +109,12 @@ export function gnomeTabsPath(io) {
  *  record, verdict, waiter lock and checkpoint (lib/pure/pause.js names). */
 export function pauseDir(io) {
   return path.join(stateDir(io), 'pause');
+}
+
+/** `claudectl session send`: one dir of queued messages per recipient
+ *  session id, shared by every login of this user (mail.js). */
+export function mailDir(io) {
+  return path.join(stateDir(io), 'mail');
 }
 
 /** Awake: the session being held, the recovery journal the backstop undoes

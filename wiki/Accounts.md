@@ -203,8 +203,10 @@ did.
 `exec` runs one command as a saved login without switching:
 `claudectl account exec PERSO -- claude -p "list my routines"`. The command
 gets a throwaway `CLAUDE_CONFIG_DIR` (mode 0700, in the per-user scratch dir)
-holding only PERSO's credentials and account block - no settings, hooks or MCP
-servers - and `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+holding only PERSO's credentials and account block, plus the pause waiter
+hooks when `./install.sh pause` is in (so the session can be paused and gets
+[`claudectl session send`](Pause.md#messages-between-sessions) messages) - no
+other settings, hooks or MCP servers - and `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
 `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_SECURESTORAGE_CONFIG_DIR` are dropped
 from its environment. A stale token is refreshed first; a token the command
 rotates is written back to PERSO, never to the current login; the dir (and on

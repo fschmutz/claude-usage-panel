@@ -357,7 +357,10 @@ and the Swift twin together, and keep the fixture matching.
   Notification marks, Stop marks idle, UserPromptSubmit / PreToolUse / PostToolUse /
   SessionEnd clear; a marker counts only for the same pid AND session id),
   `pause.js` / `pause-hook.js` / `pause-cli.js` (`claudectl session pause |
-  resume | report | pause-status | leftovers`; the hooks are installed ONLY by the opt-in
+  resume | report | pause-status | leftovers`; the same waiter delivers
+  `claudectl session send` messages, `mail.js` / `mail-cli.js`, across logins:
+  `peers` also reads each `account exec` config dir, and exec carries the
+  waiter hooks into it; the hooks are installed ONLY by the opt-in
   `./install.sh pause`: an asyncRewake `wait` on SessionStart + Stop, one live
   waiter per session by lock, exactly-once delivery by claim, a PreToolUse
   `pretool` backstop that skips subagents; shapes, row states and whether a

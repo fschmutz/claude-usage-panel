@@ -271,6 +271,29 @@ request was sent. On a plain
 checkpoint gets the resume protocol instead of the generic restart prompt;
 `--prompt=TEXT` and `--no-prompt` still win.
 
+## Messages between sessions
+
+The same waiter carries messages from one session to another, whichever login
+each runs as, sessions started by [`claudectl account exec`](Accounts.md)
+included:
+
+```bash
+claudectl session peers                       # every session a message can reach, with its login
+claudectl session send SIDE -- "rebase done, take it from here"
+claudectl session inbox --all                 # queued, not handed over yet
+```
+
+`send` queues the text (up to 16 KB) under `<state dir>/claude-usage-panel/mail/<session id>/`
+(0600 files in a 0700 dir, shared by every login of this user) and returns at
+once. The recipient's waiter takes it (moved into `delivered/`, so it is
+handed over once) and wakes the session with it, naming the sender, its login
+and the exact `claudectl session send` that replies. A pause request found
+at the same moment goes first. The text tells the model the message is
+another session's words, never the user's approval. Claude Code's own peer
+messaging does not see a session run by `account exec` (its registry is in
+the throwaway config dir); this mailbox does, because `peers` reads each of
+those dirs too and `exec` carries the waiter hooks into them.
+
 ## Limits
 
 - Each open session keeps one idle `node` waiter (tens of MB) for as long as
@@ -290,6 +313,13 @@ checkpoint gets the resume protocol instead of the generic restart prompt;
   tool call. Nothing is delivered from it once its hour has passed.
 - The panels show the last request until a newer one: an old one stays on
   screen with its final states.
+- After an update, a waiter still running older code is replaced at the
+  session's next turn end: its lock carries a revision, and a newer waiter
+  sends it SIGTERM (only once its pid is proven to be that very process) and
+  takes over.
+- A message to a session with no live waiter waits until its next turn ends.
+  A message to a session id that `/clear` replaced is never handed over: `send`
+  resolves the name at send time, so send again.
 
 ## Remove it
 

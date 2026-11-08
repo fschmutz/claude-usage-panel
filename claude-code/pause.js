@@ -22,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {
@@ -37,13 +38,19 @@ import {olderThan, releaseLock, tryLock} from './excl-lock.js';
 import {nowOf, pauseDir, projectsDir, transcriptPath} from './paths.js';
 import {openLeftovers} from './leftovers.js';
 import {readJSON, writePrivate} from './private-fs.js';
-import {pidAlive as defaultPidAlive} from './procs.js';
+import {pidAlive as defaultPidAlive, processIdentity} from './procs.js';
 import {openRegistry} from './registry.js';
 
 const CLAUDECTL_JS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'claudectl.js');
 /** A claim mutex older than this (real time, against its mtime) was left
  *  by a crashed hook. */
 const CLAIM_STALE_MS = 10_000;
+/** The waiter's revision, in its lock. Bumped whenever the waiter starts
+ *  delivering something new (2: `claudectl session send` messages): a live
+ *  waiter of an older revision still runs the code it loaded, so a new one
+ *  asks it to leave (SIGTERM: it releases its lock and exits 0) and takes
+ *  over, instead of leaving the session on the old code for up to a day. */
+export const WAITER_REV = 2;
 /** known.json keeps the name and cwd of this many sessions at most. */
 const KNOWN_MAX = 256;
 
@@ -319,6 +326,15 @@ export function openPause(io = {}) {
     return true;
   }
 
+  /** The lock's pid is still the very process that wrote it: the Linux
+   *  start time, else the `ps` identity. Only then is it ever signalled. */
+  function provenSame(held) {
+    if ((io.platform ?? process.platform) === 'linux') {
+      return Boolean(held.procStart) && registry.procStart(held.pid) === held.procStart;
+    }
+    return Boolean(held.identity) && processIdentity({exec: execFileSync, ...io}, held.pid) === held.identity;
+  }
+
   function waiterLive(sid) {
     return isPauseSessionId(sid) && lockLive(readJSON(file(sid, 'waiter')));
   }
@@ -332,9 +348,20 @@ export function openPause(io = {}) {
     if (!isPauseSessionId(sid)) return null;
     ensureDir();
     const procStart = registry.procStart(pid);
+    const identity = processIdentity({exec: execFileSync, ...io}, pid);
     const lock = tryLock(file(sid, 'waiter'), {
-      body: (token) => `${JSON.stringify({pid, at: now(), procStart, token})}\n`,
-      stale: (snap) => !lockLive(parseJSON(snap.text)),
+      body: (token) => `${JSON.stringify({pid, at: now(), procStart, identity, rev: WAITER_REV, token})}\n`,
+      stale: (snap) => {
+        const held = parseJSON(snap.text);
+        if (!lockLive(held)) return true;
+        if ((held.rev ?? 1) >= WAITER_REV || !provenSame(held)) return false;
+        try {
+          (io.kill ?? process.kill)(held.pid, 'SIGTERM');
+        } catch {
+          // gone already
+        }
+        return true;
+      },
     });
     return lock ? () => { releaseLock(lock); } : null;
   }

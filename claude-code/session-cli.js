@@ -11,6 +11,7 @@ import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib
 import {AUTO_KEEP, describeLaunch, matchSession, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {nowOf, tabsDir} from './paths.js';
 import {openPause} from './pause.js';
+import {MAIL_COMMANDS, MAIL_DETAILS, MAIL_HELP, runMail} from './mail-cli.js';
 import {PAUSE_COMMANDS, PAUSE_DETAILS, PAUSE_HELP, runPause} from './pause-cli.js';
 import {focusSession} from './waiting.js';
 import {recordTabs, terminalWindows} from './gnome-terminal.js';
@@ -40,6 +41,7 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
   claudectl session close #|NAME|PID|ID... | --all [--force] [--yes] [--dry-run]
                                              end them and close their tabs
 ${PAUSE_HELP}
+${MAIL_HELP}
 
 SNAP is a label, a unique prefix of one, or its number in \`store\`.
 Each command has its own page: claudectl session <command> --help
@@ -107,6 +109,7 @@ sends SIGKILL to a claude still running after the grace. Asks before
 closing unless --yes; --all closes every session except your own;
 --dry-run prints the plan and touches nothing.`,
   ...PAUSE_DETAILS,
+  ...MAIL_DETAILS,
 };
 
 export const ALIASES = {ls: 'list', restore: 'open', snapshots: 'store'};
@@ -216,6 +219,8 @@ export async function main(argv, io = {}) {
   const [cmd, ...rest] = args;
   // pause & co. parse their own flags (`--reason TEXT` takes a value)
   if (PAUSE_COMMANDS.has(argv[0])) return runPause(argv[0], argv.slice(1), io);
+  // send takes free text after --
+  if (MAIL_COMMANDS.has(argv[0])) return runMail(argv[0], argv.slice(1), io);
   switch (cmd) {
     case undefined:
     case 'help':

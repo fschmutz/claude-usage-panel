@@ -6,7 +6,10 @@
 //                          waiter. When a request names this session and it
 //                          was not delivered yet, it claims the delivery,
 //                          prints the protocol on stderr and exits 2: Claude
-//                          Code wakes the model with it, idle or not.
+//                          Code wakes the model with it, idle or not. The
+//                          same waiter hands over the messages other
+//                          sessions queued for this one (mail.js), so
+//                          `claudectl session send` costs no extra process.
 //   pause-hook.js pretool  PreToolUse backstop: a session without a waiter
 //                          (started before the install) gets the request by
 //                          one denied tool call, the protocol as the reason.
@@ -36,6 +39,7 @@ import {clearInterval, setInterval} from 'node:timers';
 import {
   pauseDenyOutput, pretoolEligible, isPauseSessionId, PAUSE_HOOK_TIMEOUT_S, waiterOwnership,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause.js';
+import {mailDeliveryText, openMail} from './mail.js';
 import {openPause} from './pause.js';
 import {isMain} from './is-main.js';
 
@@ -140,15 +144,16 @@ function ownership(pause, sessionId, owner, io) {
   };
 }
 
-/** Watch the pause dir for request.json, collapsing a burst of events into
- *  one check. Every claim, delivery and verdict write lands there too: only
- *  request.json can owe us a delivery. */
-function watchRequests(pause, waiter, check, debounceMs) {
+/** Watch `dir` for the files `wanted(name)` accepts, collapsing a burst of
+ *  events into one check: the pause dir for request.json (every claim,
+ *  delivery and verdict write lands there too, only request.json can owe us
+ *  a delivery), this session's mailbox for a new message. */
+function watchDir(dir, wanted, waiter, check, debounceMs) {
   let debounce = null;
   waiter.onFinish(() => clearTimeout(debounce));
   try {
-    const watcher = fs.watch(pause.dir(), {persistent: true}, (_event, name) => {
-      if ((name && name !== 'request.json') || debounce) return;
+    const watcher = fs.watch(dir, {persistent: true}, (_event, name) => {
+      if ((name && !wanted(name)) || debounce) return;
       debounce = setTimeout(() => {
         debounce = null;
         check();
@@ -190,9 +195,11 @@ export function startWaiter(payload, io = {}) {
   return {done: waiter.done, stop: () => waiter.finish(0)};
 }
 
-/** Check now, on every request.json event, every pollMs, and leave at maxMs. */
+/** Check now, on every request.json or new-message event, every pollMs,
+ *  and leave at maxMs. A pause request goes first: it is the user's. */
 function arm(waiter, pause, sid, owner, io) {
   const ours = ownership(pause, sid, owner, io);
+  const mail = openMail(io);
   const check = () => {
     if (waiter.isFinished()) return;
     try {
@@ -203,12 +210,22 @@ function arm(waiter, pause, sid, owner, io) {
       const request = pause.readRequest();
       if (request && pause.claim(sid, request, 'rewake', {pid: owner})) {
         waiter.finish(2, pause.deliveryText(sid, request, 'rewake'));
+        return;
       }
+      const messages = mail.take(sid);
+      if (messages.length) waiter.finish(2, mailDeliveryText(messages, {claudectl: mail.claudectl()}));
     } catch {
       // a half-written file: the next event or poll reads it whole
     }
   };
-  watchRequests(pause, waiter, check, io.debounceMs ?? DEBOUNCE_MS);
+  const debounceMs = io.debounceMs ?? DEBOUNCE_MS;
+  watchDir(pause.dir(), (n) => n === 'request.json', waiter, check, debounceMs);
+  try {
+    fs.mkdirSync(mail.boxOf(sid), {recursive: true, mode: 0o700});
+    watchDir(mail.boxOf(sid), (n) => n.endsWith('.json') && !n.startsWith('.'), waiter, check, debounceMs);
+  } catch {
+    // no mailbox to watch: the poll still takes what arrives
+  }
   const timer = setInterval(check, io.pollMs ?? POLL_MS);
   waiter.onFinish(() => clearInterval(timer));
   const deadline = setTimeout(() => waiter.finish(0), io.maxMs ?? WAIT_MAX_MS);

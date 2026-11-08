@@ -185,3 +185,25 @@ test('exec: help stops at --, so `account exec NAME -- claude --help` runs claud
   assert.equal(helpRequest(['account', 'exec', 'PERSO', '--', 'help']), null);
   assert.deepEqual(helpRequest(['account', 'exec', '--help']), {group: 'account', cmd: 'exec'});
 });
+
+test('exec: the pause waiter hooks come along, no other hook does', async () => {
+  const t = setup();
+  const wait = {type: 'command', command: 'node "/x/claude-code/pause-hook.js" wait', timeout: 86400, asyncRewake: true};
+  const guard = {type: 'command', command: 'node /x/guard.js'};
+  fs.writeFileSync(path.join(t.home, '.claude', 'settings.json'), JSON.stringify({
+    model: 'x', hooks: {Stop: [{hooks: [wait, guard]}], PreToolUse: [{matcher: '*', hooks: [guard]}]},
+  }));
+  const x = openAccountExec(t.io);
+  assert.equal(await x.exec('PERSO', [process.execPath, '-e', `
+    const fs = require('node:fs');
+    fs.writeFileSync(process.env.REPORT, fs.readFileSync(process.env.CLAUDE_CONFIG_DIR + '/settings.json'));`],
+  {stdio: 'ignore'}), 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(t.report, 'utf8')), {hooks: {Stop: [{hooks: [wait]}]}});
+
+  fs.writeFileSync(path.join(t.home, '.claude', 'settings.json'), JSON.stringify({hooks: {Stop: [{hooks: [guard]}]}}));
+  assert.equal(await x.exec('PERSO', [process.execPath, '-e', `
+    require('node:fs').writeFileSync(process.env.REPORT,
+      String(require('node:fs').existsSync(process.env.CLAUDE_CONFIG_DIR + '/settings.json')));`],
+  {stdio: 'ignore'}), 0);
+  assert.equal(fs.readFileSync(t.report, 'utf8'), 'false', 'no waiter installed: no settings.json');
+});
