@@ -64,15 +64,17 @@ public enum Shell {
     /// replaces the child's environment when given; `mergeStderr` folds
     /// stderr into `out` for callers that show the child's complaint to the
     /// user. `stdin`, when given, is written to the child and closed: the way
-    /// a secret reaches `security -i` without appearing in any argv.
+    /// a secret reaches `security -i` without appearing in any argv. `cwd`,
+    /// when given, is the child's working directory.
     public static func run(
         _ exe: String, _ args: [String], env: [String: String]? = nil, mergeStderr: Bool = false,
-        stdin: Data? = nil, timeout: TimeInterval = defaultTimeout
+        stdin: Data? = nil, cwd: String? = nil, timeout: TimeInterval = defaultTimeout
     ) -> Result {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: exe)
         proc.arguments = args
         if let env { proc.environment = env }
+        if let cwd { proc.currentDirectoryURL = URL(fileURLWithPath: cwd, isDirectory: true) }
         let out = Pipe()
         proc.standardOutput = out
         proc.standardError = mergeStderr ? out : FileHandle.nullDevice

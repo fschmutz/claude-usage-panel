@@ -95,10 +95,26 @@ enum Updates {
         func get() -> String? { lock.withLock { body } }
     }
 
+    /// Run the update script from its own directory. Every way of finding it
+    /// reads a user-writable file, so it runs only when UpdateStatus trusts
+    /// it, and the command line itself is constant: the path only picks the
+    /// working directory.
+    private static func runScript(_ script: String, _ args: [String], mergeStderr: Bool = false)
+        -> Shell.Result
+    {
+        guard UpdateStatus.trustedScript(script) else {
+            return Shell.Result(
+                status: -1, out: "Refusing \(script): not owned by you, or writable by others.")
+        }
+        let dir = (script as NSString).deletingLastPathComponent
+        return Shell.run(
+            "/bin/bash", ["./auto-update.sh"] + args, mergeStderr: mergeStderr, cwd: dir)
+    }
+
     /// Current status, or nil when there is no checkout to inspect.
     static func status() -> UpdateStatus? {
         guard let script = resolveScript() else { return nil }
-        let r = Shell.run("/bin/bash", [script, "--status", "--json"])
+        let r = runScript(script, ["--status", "--json"])
         guard r.ok else { return nil }
         return UpdateStatus.parse(json: Data(r.out.utf8))
     }
@@ -110,7 +126,7 @@ enum Updates {
         guard let script = resolveScript() else {
             return "No git checkout found - update by re-running the install script."
         }
-        let r = Shell.run("/bin/bash", [script], mergeStderr: true)
+        let r = runScript(script, [], mergeStderr: true)
         // The script's own last line says what went wrong; "see Console.app"
         // was a dead end for a failure it had already explained.
         return r.ok

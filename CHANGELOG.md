@@ -210,6 +210,13 @@ semantic versioning.
 
 ### Security
 
+- **macOS: the update script runs only when you own it.** The app finds
+  `auto-update.sh` through user-writable state (the launchd agent, the
+  session-ping agent, `checkout-path`); it now refuses a script, or a
+  `scripts/` or checkout directory, owned by another account or writable by
+  group or others, and runs it from its own directory with a constant
+  command line.
+
 - **Account switch: ~/.claude.json keeps what Claude Code wrote meanwhile,
   and a linked one stays a link.** The switch read the config, prepared the
   credentials write (a `security` spawn on macOS), then wrote its first copy

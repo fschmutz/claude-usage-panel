@@ -97,6 +97,30 @@ public struct UpdateStatus: Equatable, Sendable {
         return root
     }
 
+    /// Whether the update script at `path` may be run: `auto-update.sh`, a regular executable
+    /// file that `uid` owns and nobody else can write, in directories (the
+    /// script's own and the checkout root above it) that `uid` owns and nobody
+    /// else can write. The path comes from user-writable state, so a pointer
+    /// to a checkout another account controls is refused, not run.
+    public static func trustedScript(_ path: String, uid: UInt32 = UInt32(getuid())) -> Bool {
+        let file = URL(fileURLWithPath: path).standardizedFileURL
+        let dir = file.deletingLastPathComponent()
+        let root = dir.deletingLastPathComponent()
+        func ownedAndPrivate(_ url: URL, type: FileAttributeType) -> Bool {
+            guard let a = try? FileManager.default.attributesOfItem(atPath: url.path),
+                a[.type] as? FileAttributeType == type,
+                (a[.ownerAccountID] as? NSNumber)?.uint32Value == uid,
+                let mode = (a[.posixPermissions] as? NSNumber)?.uint16Value
+            else { return false }
+            return mode & 0o022 == 0
+        }
+        return file.lastPathComponent == "auto-update.sh"
+            && ownedAndPrivate(file, type: .typeRegular)
+            && FileManager.default.isExecutableFile(atPath: file.path)
+            && ownedAndPrivate(dir, type: .typeDirectory)
+            && ownedAndPrivate(root, type: .typeDirectory)
+    }
+
     /// Dotted-version ordering, the rule version_compare() uses in
     /// scripts/auto-update.sh: numeric per component, a leading "v" and any
     /// -prerelease suffix ignored, a missing component read as 0.

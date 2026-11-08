@@ -122,6 +122,43 @@ final class UpdateStatusTests: XCTestCase {
         }
     }
 
+    // The script path comes from user-writable state: it runs only when we own
+    // it and nobody else can write it or the directories above it.
+    func testOnlyAScriptWeOwnAndNobodyElseCanWriteIsTrusted() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("cup-trust-\(UUID().uuidString)")
+        let scripts = root.appendingPathComponent("scripts")
+        try fm.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let script = scripts.appendingPathComponent("auto-update.sh")
+        try Data("#!/bin/bash\n".utf8).write(to: script)
+        func chmod(_ url: URL, _ mode: Int) throws {
+            try fm.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path)
+        }
+        try chmod(root, 0o755)
+        try chmod(scripts, 0o755)
+        try chmod(script, 0o755)
+        XCTAssertTrue(UpdateStatus.trustedScript(script.path))
+        XCTAssertFalse(
+            UpdateStatus.trustedScript(script.path, uid: UInt32(getuid()) + 1), "another owner")
+        try chmod(script, 0o644)
+        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "not executable")
+        try chmod(script, 0o775)
+        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "group-writable script")
+        try chmod(script, 0o755)
+        try chmod(scripts, 0o777)
+        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "world-writable scripts/")
+        try chmod(scripts, 0o755)
+        try chmod(root, 0o757)
+        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "world-writable checkout root")
+        try chmod(root, 0o755)
+        let other = scripts.appendingPathComponent("other.sh")
+        try Data("#!/bin/bash\n".utf8).write(to: other)
+        try chmod(other, 0o755)
+        XCTAssertFalse(UpdateStatus.trustedScript(other.path), "not auto-update.sh")
+        XCTAssertFalse(UpdateStatus.trustedScript(scripts.path + "/missing/auto-update.sh"))
+    }
+
     // Mirrors version_compare in scripts/auto-update.sh: numeric per
     // component, v-prefix and prerelease suffix ignored.
     func testVersionOrderingMatchesTheShellComparator() {
