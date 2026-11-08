@@ -1,7 +1,7 @@
 # Claude Usage Panel - Wiki
 
 See your **Claude Code** plan usage everywhere: the GNOME top bar, the macOS menu
-bar, a footer under the Claude Code prompt, or by just asking Claude / Cursor
+bar, a status line under the Claude Code prompt, or by just asking Claude / Cursor
 (MCP). Optional **Cursor** team spend.
 
 - 🌐 **Landing site + one-click installs:** <https://fschmutz.github.io/claude-usage-panel/>
@@ -18,11 +18,11 @@ you, and only ever fast-forwards a clean checkout - see [[Installation]].
 
 ## Pages
 
-- [[Installation]] - every client: GNOME, macOS, footer, MCP
+- [[Installation]] - every client: GNOME, macOS, status line, MCP
 - [[Settings]] - all preferences
 - [[Cursor Integration]] - optional team-spend section
 - [[macOS]] - the SwiftUI menu-bar app
-- [[Footer]] - the line under the Claude Code prompt: context and plan-limit gauges
+- [[Status Line]] - condensed usage under the Claude Code prompt
 - [[MCP Tool]] - ask Claude or Cursor for your usage in-conversation
 - [[Accounts]] - save each Claude login under a name (PRO, PERSO) and switch without a browser
 - [[Codex]] - the same for the OpenAI Codex logins, opt-in and clearly labelled

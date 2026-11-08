@@ -356,19 +356,6 @@ semantic versioning.
   README, the site and the wiki, like the plugin already was; the release
   bump re-pins them and `check-versions.sh` fails on an unpinned one.
 
-### Removed
-
-- **The Node status line** (`claude-code/statusline.js`,
-  `claude-code/transcript-tokens.js`), replaced by the footer. Its opt-in
-  segments go with it: `account` (`[PRO ⇢ PERSO]`), `sessions`, `waiting`,
-  `awake`, `ping` and the `∑ tok` total; the panels, `claudectl` and the MCP
-  tools still show all of that. `./install.sh statusline` is now an alias of
-  `footer`, and a machine that has the old status line is migrated by the next
-  `./install.sh update` (the daily job included): the `statusLine` entry is
-  removed from `~/.claude/settings.json` - a status line of your own that it
-  had replaced is put back - and the plugin is installed. `--segments=` and
-  `--tokens=` are accepted and ignored.
-
 ## [3.11.0] - 2026-10-24
 
 ### Added

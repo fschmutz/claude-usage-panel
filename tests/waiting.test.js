@@ -16,6 +16,7 @@ import * as pure from '../claude-usage-panel@fschmutz.github.io/lib/pure.js';
 import {handleHook, listWaiting, focusSession, writeWaitingMarker} from '../claude-code/waiting.js';
 import {sessionRegistryDir} from '../claude-code/paths.js';
 import {main as waitingMain} from '../claude-code/waiting-cli.js';
+import {waitingSegment} from '../claude-code/statusline.js';
 import {handleRequest} from '../mcp/server.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -221,7 +222,7 @@ test('focusSession runs the kitty pid match when nothing is placed', (t) => {
     assert.ok(ran.some((a) => a.join(' ') === 'kitty @ focus-window --match pid:11'));
 });
 
-// ── claudectl waiting / MCP ──────────────────────────────────────────────────
+// ── claudectl waiting / status line / MCP ───────────────────────────────────
 
 async function cli(io, ...argv) {
     let text = '';
@@ -276,6 +277,16 @@ test('claudectl waiting with nothing waiting says so', async (t) => {
     const io = world(t, {live: [{pid: 11, sessionId: 's1', name: 'API', cwd: '/a'}]});
     const r = await cli(io);
     assert.match(r.text, /nothing waiting/);
+});
+
+test('statusline waiting segment is silent at 0 and compact at N', (t) => {
+    const io = world(t, {
+        live: [{pid: 11, sessionId: 's1', name: 'API', cwd: '/a'}],
+        markers: [{sessionId: 's1', pid: 11, reason: 'idle', at: NOW - 1000}],
+    });
+    const empty = world(t);
+    assert.equal(waitingSegment({io: empty}), '');
+    assert.match(waitingSegment({io}), /wait 1/);
 });
 
 test('MCP waiting tool returns the list', async (t) => {

@@ -72,7 +72,7 @@ test('CLI: list --usage prints the no-reading dash for a window that already rol
     ]})});
     const list = await run(['list', '--usage'], io);
     assert.match(list.text, /PRO.*S – {2}W 34%/);
-    // ...and the stale 96 % is not what the auto-switch ranks accounts on.
+    // ...and the stale 96 % is not what the status line ranks accounts on.
     assert.deepEqual(worstFromCache(s.readUsageCache()), {PRO: 34});
 });
 

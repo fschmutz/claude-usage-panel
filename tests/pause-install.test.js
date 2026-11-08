@@ -130,7 +130,7 @@ test('without node the target is skipped loudly and an update of it fails', (t) 
 
 test('no other target installs the pause hooks', (t) => {
     const home = sandbox(t);
-    assert.doesNotMatch(sh(home, ['--dry-run', 'gnome', 'footer', 'mcp', 'cli', 'waiting']).stdout, /pause hooks/);
+    assert.doesNotMatch(sh(home, ['--dry-run', 'gnome', 'statusline', 'mcp', 'cli', 'waiting']).stdout, /pause hooks/);
 });
 
 test('hooks-edit pause: replaces an outdated entry of ours in place and drops it from events no longer used', (t) => {

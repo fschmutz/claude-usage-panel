@@ -3,7 +3,7 @@
 
 // ── Usage normalization, severity, resets, alerts ─────────────────────────────
 // The one JavaScript copy of the shared contract: the GNOME extension, the
-// MCP server, the CLI and linux/usage-bar.mjs import it (the footer plugin a copy).
+// status line, the MCP server, the CLI and linux/usage-bar.mjs all import it.
 // Model.swift is the Swift twin; tests/fixtures/normalize.json +
 // extra-usage.json pin the numbers.
 
@@ -308,7 +308,7 @@ export function sparkline(history) {
 // The reset countdown every client prints, broken into units: whole seconds
 // FLOORED (a reset 59 s away is "0m", never "1m"; 23h59m40s is never "1d"),
 // then days / hours / minutes. null without a parseable date, {past: true}
-// once the reset is due. The MCP server / CLI render it compactly
+// once the reset is due. The status line / MCP render it compactly
 // (claude-code/stamps.js resetHint, built on this) and Swift (ResetCountdown)
 // splits it the same way; tests/fixtures/resets.json pins every label.
 function resetParts(iso, nowMs = Date.now()) {
@@ -342,7 +342,7 @@ export function formatResets(iso, nowMs = Date.now()) {
     return `Resets in ${span}`;
 }
 
-// The compact countdown, "3h06m" / "4d2h" / "12m": the footer, the MCP
+// The compact countdown, "3h06m" / "4d2h" / "12m": the status line, the MCP
 // server, the CLI and the account rows of both panels. The two most
 // significant units; '' when past, absent or unparseable. Flooring (never
 // rounding to the nearest minute) keeps it from running a minute ahead of

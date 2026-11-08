@@ -47,26 +47,13 @@ const env = (home, extra = {}) => ({
 const withNode = (home, extra = {}) =>
     env(home, {PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`, ...extra});
 
-/** A HOME that already has the MCP server and the CLI installed. */
-function installedHome(t) {
+/** A HOME that already has the status line and the CLI installed. */
+function installedHome(t, {segments = 'context,limits,tokens,ping', tokens = 'all'} = {}) {
     const home = stubbedHome(t, {prefix: 'cup-shape-'});
-    const r = run('bash', [INSTALL, 'mcp', 'cli'], {env: withNode(home)});
+    const r = run('bash', [INSTALL, 'statusline', 'cli', `--segments=${segments}`, `--tokens=${tokens}`],
+        {env: withNode(home)});
     assert.equal(r.status, 0, r.stdout + r.stderr);
     return home;
-}
-
-const settingsOf = (home) => path.join(home, '.claude', 'settings.json');
-const claudeCalls = (home) => {
-    const log = path.join(home, 'claude-calls.log');
-    return fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '';
-};
-
-/** The status line an older release installed, as its installer wrote it. */
-function legacyStatusLine(home, extra = {}) {
-    fs.mkdirSync(path.join(home, '.claude'), {recursive: true});
-    const command = `node "${home}/.claude/claude-usage-panel/claude-code/statusline.js" --segments=context --tokens=all`;
-    fs.writeFileSync(settingsOf(home),
-        `${JSON.stringify({theme: 'dark', statusLine: {type: 'command', command}, ...extra}, null, 2)}\n`);
 }
 
 test('a fresh install records the version and the checkout - not only the daily job', (t) => {
@@ -89,7 +76,7 @@ test('update with no node on PATH fails loudly and records nothing', (t) => {
     const r = run('bash', [INSTALL, 'update'], {env: env(home)});
     assert.equal(r.status, 1, r.stdout + r.stderr);
     assert.match(r.stderr, /could not be reinstalled/);
-    assert.match(r.stderr, /mcp: Node\.js not found/);
+    assert.match(r.stderr, /statusline: Node\.js not found/);
     assert.match(r.stderr, /cli: Node\.js not found/);
     assert.equal(fs.existsSync(stamp(home)), false, 'a partial update is never stamped');
 });
@@ -99,54 +86,26 @@ test('the installed set is read without node, so nothing is silently dropped', (
     const r = run('bash', [INSTALL, '--list'], {env: env(home)});
     assert.equal(r.status, 0, r.stderr);
     const installed = /installed: +([^(]*)/.exec(r.stdout)[1];
-    assert.match(installed, /mcp/);
+    assert.match(installed, /statusline/);
     assert.match(installed, /cli/);
 });
 
-// The status line became the usage-footer plugin. A machine an older release
-// set up still has the statusLine entry: it must read as having the footer
-// (so the daily update picks it up), and that update must swap one for the
-// other - the entry out, the plugin in from this checkout.
-test('the retired status line counts as the footer, and an update migrates it', (t) => {
-    const home = stubbedHome(t, {prefix: 'cup-footer-'});
-    legacyStatusLine(home);
-    const listed = run('bash', [INSTALL, '--list'], {env: env(home)});
-    assert.match(/installed: +([^(]*)/.exec(listed.stdout)[1], /footer/, 'read without node or claude');
+test('update keeps the status-line segments the user chose', (t) => {
+    const home = installedHome(t, {segments: 'limits,account', tokens: 'fresh'});
+    const settings = path.join(home, '.claude', 'settings.json');
+    assert.match(fs.readFileSync(settings, 'utf8'), /--segments=limits,account --tokens=fresh/);
 
     const r = run('bash', [INSTALL, 'update'], {env: withNode(home)});
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    const settings = JSON.parse(fs.readFileSync(settingsOf(home), 'utf8'));
-    assert.equal(settings.statusLine, undefined, 'the old status line is gone');
-    assert.equal(settings.theme, 'dark', 'every other setting is kept');
-    assert.match(claudeCalls(home), new RegExp(`plugin marketplace add ${ROOT}`));
-    assert.match(claudeCalls(home), /plugin install usage-footer@claude-usage-panel --scope user/);
-});
+    assert.match(
+        fs.readFileSync(settings, 'utf8'),
+        /--segments=limits,account --tokens=fresh/,
+        'an update must not reset the segments to the defaults',
+    );
 
-test('the migration puts back the foreign status line the old one had replaced', (t) => {
-    const home = stubbedHome(t, {prefix: 'cup-footer-'});
-    legacyStatusLine(home);
-    const mine = {type: 'command', command: 'my-own-line'};
-    fs.writeFileSync(path.join(home, '.claude', 'claude-usage-statusline.prev.json'), JSON.stringify(mine));
-
-    const r = run('bash', [INSTALL, 'statusline'], {env: withNode(home)});
-    assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.deepEqual(JSON.parse(fs.readFileSync(settingsOf(home), 'utf8')).statusLine, mine);
-    assert.equal(fs.existsSync(path.join(home, '.claude', 'claude-usage-statusline.prev.json')), false);
-});
-
-test('without the claude CLI an installed footer updates in place, a missing one fails', (t) => {
-    const home = stubbedHome(t, {prefix: 'cup-footer-'});
-    fs.rmSync(path.join(home, 'bin', 'claude'));
-    fs.mkdirSync(path.join(home, '.claude'), {recursive: true});
-
-    const missing = run('bash', [INSTALL, 'update', 'footer'], {env: withNode(home)});
-    assert.equal(missing.status, 1, missing.stdout + missing.stderr);
-    assert.match(missing.stderr, /could not be reinstalled:[\s\S]*footer: claude CLI not found/);
-
-    fs.writeFileSync(settingsOf(home), '{"enabledPlugins": {"usage-footer@claude-usage-panel": true}}\n');
-    const r = run('bash', [INSTALL, 'update'], {env: withNode(home)});
-    assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /already installed - loads in place/);
+    // …and an explicit flag still wins.
+    run('bash', [INSTALL, 'statusline', '--segments=context'], {env: withNode(home)});
+    assert.match(fs.readFileSync(settings, 'utf8'), /--segments=context --tokens=fresh/);
 });
 
 test('status-line flags of any other shape never reach the command in settings.json', (t) => {
@@ -199,7 +158,7 @@ test('uninstalling everything drops the state the update path reads', (t) => {
     fs.writeFileSync(path.join(home, 'bin', 'claude'),
         '#!/bin/sh\ncase "$1 $2" in "mcp get") exit 1 ;; esac\nexit 0\n');
     fs.chmodSync(path.join(home, 'bin', 'claude'), 0o755);
-    const r = run('bash', [INSTALL, '--uninstall', 'mcp', 'cli'], {env: withNode(home)});
+    const r = run('bash', [INSTALL, '--uninstall', 'statusline', 'cli'], {env: withNode(home)});
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.equal(fs.existsSync(stamp(home)), false);
     assert.equal(fs.existsSync(path.join(stateDir(home), 'checkout-path')), false);
@@ -272,12 +231,13 @@ test('update carries on past a target that failed hard, and says which one', (t)
     const home = installedHome(t);
     brokenMac(home);
     fs.rmSync(stamp(home));
-    fs.writeFileSync(path.join(home, 'claude-calls.log'), '');
+    const settings = path.join(home, '.claude', 'settings.json');
+    fs.writeFileSync(settings, '{}\n');
 
-    const r = run('bash', [INSTALL, 'update', 'macos', 'footer'], {env: withNode(home)});
+    const r = run('bash', [INSTALL, 'update', 'macos', 'statusline'], {env: withNode(home)});
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.match(r.stdout, /Claude Code footer/, 'the target after the failed one still ran');
-    assert.match(claudeCalls(home), /plugin install usage-footer@claude-usage-panel/);
+    assert.match(r.stdout, /Claude Code status line/, 'the target after the failed one still ran');
+    assert.match(fs.readFileSync(settings, 'utf8'), /statusline\.js/);
     assert.match(r.stderr, /could not be reinstalled:[\s\S]*macos: the build failed/);
     assert.equal(fs.existsSync(stamp(home)), false);
 });
@@ -294,11 +254,11 @@ test('a GNOME pack that fails leaves the installed extension in place and the ru
     fs.writeFileSync(path.join(ext, 'extension.js'), '// the working install\n');
     fs.rmSync(stamp(home));
 
-    const r = run('bash', [INSTALL, 'update', 'gnome', 'footer'], {env: withNode(home)});
+    const r = run('bash', [INSTALL, 'update', 'gnome', 'statusline'], {env: withNode(home)});
     assert.equal(r.status, 1, r.stdout + r.stderr);
     assert.equal(fs.readFileSync(path.join(ext, 'extension.js'), 'utf8'), '// the working install\n',
         'the panel must survive a failed pack');
-    assert.match(r.stdout, /Claude Code footer/, 'the next target still ran');
+    assert.match(r.stdout, /Claude Code status line/, 'the next target still ran');
     assert.match(r.stderr, /gnome: packing the extension failed/);
     assert.deepEqual(
         fs.readdirSync(path.join(home, '.local', 'share', 'gnome-shell')).filter((n) => n.startsWith('.cup-')),
@@ -347,18 +307,18 @@ test('a bare --uninstall with nothing installed says so', (t) => {
     assert.match(r.stderr, /Nothing installed to uninstall/);
 });
 
-test('removing the retired status line without node skips loudly and still removes the rest', (t) => {
+test('uninstalling the status line without node skips loudly and still removes the rest', (t) => {
     const home = installedHome(t);
-    legacyStatusLine(home);
     const cli = path.join(home, '.local', 'bin', 'claudectl');
     assert.ok(fs.existsSync(cli));
 
-    const r = run('bash', [INSTALL, '--uninstall', 'footer', 'cli'], {env: env(home)});
+    const r = run('bash', [INSTALL, '--uninstall', 'statusline', 'cli'], {env: env(home)});
     assert.equal(r.status, 1, r.stdout + r.stderr);
     assert.doesNotMatch(r.stderr, /command not found/);
-    assert.match(r.stderr, /could not be fully removed:[\s\S]*footer: Node\.js not found/);
+    assert.match(r.stderr, /could not be fully removed:[\s\S]*statusline: Node\.js not found/);
     assert.equal(fs.existsSync(cli), false, 'the target after it was still uninstalled');
-    assert.match(fs.readFileSync(settingsOf(home), 'utf8'), /statusline\.js/, 'nothing half-edited');
+    assert.match(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'), /statusline\.js/,
+        'nothing half-edited');
 });
 
 test('uninstalling the MCP server without node does not claim the Cursor entry is gone', (t) => {
@@ -403,14 +363,14 @@ test('skip_fatal records to the log from inside a subshell, and refuses to run w
 // all of them must come from the tree (pure dir included), none from this
 // checkout - a tree that only worked because the checkout sat next to it
 // would break the day the checkout moves.
-test('the installed MCP server, claudectl and hooks start from the tree, lib/pure included', (t) => {
+test('the installed status line, MCP server and claudectl start from the tree, lib/pure included', (t) => {
     const home = stubbedHome(t, {prefix: 'cup-tree-'});
     const tree = path.join(home, '.claude', 'claude-usage-panel');
     const pureDir = path.join(tree, 'claude-usage-panel@fschmutz.github.io', 'lib', 'pure');
     // A module dropped from the checkout must not survive the next install.
     fs.mkdirSync(pureDir, {recursive: true});
     fs.writeFileSync(path.join(pureDir, 'gone.js'), 'export const stale = true;\n');
-    const r = run('bash', [INSTALL, 'mcp', 'cli'], {env: withNode(home)});
+    const r = run('bash', [INSTALL, 'statusline', 'mcp', 'cli'], {env: withNode(home)});
     assert.equal(r.status, 0, r.stdout + r.stderr);
     const want = fs.readdirSync(path.join(ROOT, 'claude-usage-panel@fschmutz.github.io', 'lib', 'pure'));
     assert.deepEqual(fs.readdirSync(pureDir).sort(), want.sort(), 'every pure module, and no stale one');
@@ -441,6 +401,12 @@ test('the installed MCP server, claudectl and hooks start from the tree, lib/pur
         return out.stdout;
     };
 
+    const resets = Math.floor(Date.now() / 1000) + 3 * 3600;
+    const line = start('claude-code/statusline.js', ['--segments=limits'], JSON.stringify({
+        rate_limits: {five_hour: {used_percentage: 26, resets_at: resets}},
+    }));
+    assert.match(line, /26%/);
+
     const init = start('mcp/server.js', [], `${JSON.stringify({
         jsonrpc: '2.0', id: 1, method: 'initialize',
         params: {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 't', version: '0'}},
@@ -456,8 +422,6 @@ test('the installed MCP server, claudectl and hooks start from the tree, lib/pur
     assert.equal(start('claude-code/pause-hook.js', ['pretool'], JSON.stringify({
         session_id: 'aaaa1111-0000-4000-8000-000000000001', hook_event_name: 'PreToolUse',
     })), '');
-    // No settings.json at all is the same answer: nothing wrote hooks into it.
-    const settingsFile = path.join(home, '.claude', 'settings.json');
-    const settings = fs.existsSync(settingsFile) ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')) : {};
+    const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
     assert.equal(settings.hooks, undefined, 'no Node client installs the waiting or pause hooks: those are opt-in targets');
 });

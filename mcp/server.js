@@ -56,7 +56,8 @@ export async function getUsage(io = {}) {
   if (!result.ok) return result;
   const nowMs = nowOf(io);
   // Pace history and warehouse trend are both filed under the live login
-  // (warehouseAccount): two logins are two quota pools.
+  // (warehouseAccount): two logins are two quota pools. The status line keys the
+  // shared history file the same way.
   const accountKey = warehouseAccount(store.readLiveAccount());
   const cards = withTrend(
     withPace(result.cards, {nowMs, historyPath: historyPath(io), account: accountKey}),

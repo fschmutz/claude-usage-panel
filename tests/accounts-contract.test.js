@@ -1,6 +1,6 @@
 // Named accounts, the pure contract: every tests/fixtures/accounts.json
 // section parity.test.js does not walk, run through lib/pure/accounts.js, the
-// one JS copy (GNOME and the Node CLI / MCP import it). The Swift
+// one JS copy (GNOME and the Node CLI / MCP / status line import it). The Swift
 // twin is macos/Tests/ClaudeUsageCoreTests/AccountsParityTests.swift.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';

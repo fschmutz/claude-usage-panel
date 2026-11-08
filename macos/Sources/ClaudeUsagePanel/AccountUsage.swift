@@ -3,7 +3,7 @@ import Foundation
 
 // Named accounts, the token and usage half of AccountStore: exchange a stored
 // login's refresh token, pick the token a saved account's usage is read with,
-// fetch that usage, and keep the accounts' usage cache. Mirrors
+// fetch that usage, and keep the status line's usage cache. Mirrors
 // claude-code/accounts-usage.js; the store half is AccountStore.swift.
 //
 // Two rules decide everything below:

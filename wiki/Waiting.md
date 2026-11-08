@@ -2,8 +2,8 @@
 
 Several Claude Code sessions across several terminals, and one of them is
 stuck on a permission prompt, a question, or the idle prompt after you hit
-Stop. The panels, `claudectl waiting` and the MCP `waiting` tool show which
-ones need you, oldest wait first, and a click
+Stop. The panels, `claudectl waiting`, the MCP `waiting` tool and an optional
+status-line segment show which ones need you, oldest wait first, and a click
 (or `claudectl waiting focus NAME`) raises that session's terminal.
 
 ## What counts as waiting
@@ -42,12 +42,14 @@ removes ours and turns the section off.
   `claudectl session save`: tmux, kitty, WezTerm, iTerm, Terminal.app).
 - **`claudectl waiting`** / `claudectl waiting list [--json]` / `claudectl waiting focus NAME|PID`
 - **MCP `waiting`** - the list as text plus structured rows
+- **Status line** - opt-in `--segments=…,waiting` prints `wait N` (silent at 0)
 
 ## Install
 
 ```bash
 ./install.sh waiting      # the hooks, and the panel section on
 ./install.sh cli          # claudectl waiting (list / focus)
+./install.sh statusline --segments=context,limits,tokens,ping,waiting
 ```
 
 Manual hook command, if you wire `~/.claude/settings.json` yourself:

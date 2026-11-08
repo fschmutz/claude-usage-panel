@@ -1,4 +1,4 @@
-// The Node forecast history: one tmp file the MCP server
+// The Node forecast history: one tmp file the status line and the MCP server
 // both append to. It sits in a shared tmp dir, so it has to survive whatever
 // else wrote it, and it has to keep two logins' quota pools apart.
 import {test} from 'node:test';

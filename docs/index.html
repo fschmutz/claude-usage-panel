@@ -137,7 +137,7 @@
     <div class="feat"><div class="ic">📈</div><h3>Usage sparkline</h3><p>A tiny per-limit trend graph so you see where you're heading, not just where you are.</p></div>
     <div class="feat"><div class="ic">💲</div><h3>Session cost</h3><p>Optional dollar cost computed locally via <code>ccusage</code>.</p></div>
     <div class="feat"><div class="ic">🟣</div><h3>Cursor spend</h3><p>Optional team cycle spend, today, and top spender via the Cursor Admin API - with a % gauge when a limit is set.</p></div>
-    <div class="feat"><div class="ic">⌨️</div><h3>Claude Code footer</h3><p>The line right under the Claude Code prompt, drawn by a plugin: model, project and branch on the left, Context and Session/Week gauges flush right, with the clock tick and a burn-rate warning. No network, no credentials.</p></div>
+    <div class="feat"><div class="ic">⌨️</div><h3>Terminal status line</h3><p>A condensed one-line view right under the Claude Code prompt - Context, Session/Week limits, and a Σ session-token counter, read straight from Claude Code's stdin. No network, no credentials.</p></div>
     <div class="feat"><div class="ic">👥</div><h3>Named accounts</h3><p>Save each Claude login as <code>PRO</code> / <code>PERSO</code>, see every account's limits side by side, switch in one click - or let it switch to the account with the most room at 90%. No logout, no browser.</p></div>
     <div class="feat"><div class="ic">🤖</div><h3>Ask Claude (MCP)</h3><p>A <code>get_usage</code> MCP tool for Claude Code and Cursor - ask "how much of my plan have I used?" and get live limits in the conversation. One-click Add to Cursor.</p></div>
   </div>
@@ -175,10 +175,10 @@
     <p class="lead" style="margin-top:14px">macOS 13+. Builds the app, installs to /Applications, and <b>starts at login</b> (toggle in Settings). The token is read from the login Keychain - click <b>Always Allow</b> on first launch.</p>
   </div>
   <div class="pane" id="claude">
-    <p class="lead" style="margin-top:6px"><b>Footer</b> - the line under the prompt: <code>● Opus 5.5  main   context ━━━━━━ 62%   week ━━┃━━━ 41% ↻2d2h</code></p>
+    <p class="lead" style="margin-top:6px"><b>Status line</b> - a one-line usage gauge under the prompt: <code>Context ▌░░ 8%  Session █▌░ 26% 59m  Week █▌░ 24%  ∑ 1.2M tok</code></p>
     <div class="oneliner">
-<pre id="cmd-sl">curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash -s -- footer</pre>
-      <button class="copy" data-copy="cmd-sl" aria-label="Copy footer install command">Copy</button>
+<pre id="cmd-sl">curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash -s -- statusline</pre>
+      <button class="copy" data-copy="cmd-sl" aria-label="Copy status line install command">Copy</button>
     </div>
     <p class="lead" style="margin-top:16px"><b>Named accounts</b> - two subscriptions, one machine: <code>claudectl account save PRO</code>, sign in to the other, <code>save PERSO</code>, then <code>use PERSO</code> whenever you like.</p>
     <div class="oneliner">

@@ -14,7 +14,8 @@ claudectl account use PRO         # from now on: no browser, no logout
 ```
 
 Every client shows the same thing: the GNOME dropdown and the macOS menu list
-the saved accounts with each one's usage and switch on a click, and the MCP tool grows
+the saved accounts with each one's usage and switch on a click, the status line
+tags the session with its account (`[PRO]`), and the MCP tool grows
 `list_accounts` / `save_account` / `switch_account` / `rename_account` so you
 can say *"switch me to PERSO"* in the conversation.
 
@@ -22,12 +23,13 @@ can say *"switch me to PERSO"* in the conversation.
 
 `./install.sh cli` puts `claudectl` on your PATH (`~/.local/bin`).
 The desktop panels and the MCP server need nothing extra: the same module is
-installed alongside them by `./install.sh cli` / `mcp`, and the GNOME
+installed alongside them by `./install.sh statusline` / `mcp`, and the GNOME
 extension and the macOS app carry their own port of it.
 
 **Off by default in the panels.** Nothing account-related is drawn until you
 turn on *Enable named accounts* in the GNOME preferences or the macOS Settings
-(Accounts section). The CLI and the MCP tools work regardless.
+(Accounts section); the status line shows its `[PRO]` tag only with
+`--segments=…,account`. The CLI and the MCP tools work regardless.
 
 ## What a switch does
 
@@ -173,7 +175,10 @@ panel switches to the one with the most headroom, notifies you (`Switched PRO �
 PERSO: PRO was at 92% - 2 running sessions keep the old login until
 restarted`) and re-polls as the new account. Never twice within five minutes,
 never to an account it has no usage for, never when the current login is not a
-saved one.
+saved one. The same rule, from the same shared fixture, drives the status
+line's hint: `[PRO ⇢ PERSO]` in yellow means *this session is at the threshold
+and PERSO has room* - it does not switch by itself; the status line has no
+credentials.
 
 ## CLI reference
 
@@ -191,7 +196,7 @@ claudectl account exec NAME -- CMD [ARG...]       run CMD as NAME, the current l
 `save` refuses a name that already belongs to a different account, and refuses
 to save an account that is already saved under another name; `--force`
 overrides both. `list --usage` reads every account's limits (refreshing where
-needed) and writes the usage snapshot the panels share. `refresh` without a
+needed) and writes the snapshot the status line reads. `refresh` without a
 name goes through every saved account even when one fails, and exits 1 if any
 did.
 
@@ -218,18 +223,18 @@ payload carried no figure for that limit at all (the endpoint ships kinds
 nobody has enabled as null placeholders, and drawing those as 0% reads as a
 full tank), and in the minutes after a window's reset instant has passed, while
 the endpoint is still returning the old window's figure. The same rule runs in
-the GNOME dropdown, the macOS popup, both top bars and the footer, and is
+the GNOME dropdown, the macOS popup, both top bars and the status line, and is
 pinned by `tests/fixtures/reading.json`.
 
 ## Where the same logic lives
 
-`claude-code/accounts.js` is the implementation behind the CLI and the MCP
-server. The GNOME extension (`lib/pure.js` + `lib/accounts.js`)
+`claude-code/accounts.js` is the implementation behind the CLI, the MCP server
+and the status line. The GNOME extension (`lib/pure.js` + `lib/accounts.js`)
 and the macOS app (`ClaudeUsageCore/Accounts.swift` + `AccountStore.swift`)
 mirror it; `tests/fixtures/accounts.json` pins the decisions they must agree on
 (what a valid profile is, which saved account the live login is, when a token
 is valid / stale / expired, and the auto-switch rule). The usage snapshot the
-panels write is one small JSON file next to the profiles.
+panels write for the status line is one small JSON file next to the profiles.
 
 The row states, the inline notices, the button-local answers and the rotation
 are their own shared contract - `lib/pure/notices.js` (the GNOME panel, the CLI

@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Sourced by install.sh: what can be installed here, what already is.
 
-ALL_TARGETS="gnome footer mcp cli macos autoupdate sessionping cost waiting pause awake awakelid"
+ALL_TARGETS="gnome statusline footer mcp cli macos autoupdate sessionping cost waiting pause awake awakelid"
 
 # Print the targets that make sense for this machine, one per line.
 detect_targets() {
@@ -14,7 +14,7 @@ detect_targets() {
             fi
             ;;
     esac
-    command -v claude >/dev/null && echo footer
+    command -v node >/dev/null && echo statusline
     if command -v node >/dev/null &&
         { command -v claude >/dev/null || [ -d "$HOME/.cursor" ]; }; then
         echo mcp
@@ -34,9 +34,10 @@ detect_targets() {
 # `update` (reinstall only what's actually there) and `--list`.
 installed_targets() {
     [ -d "$HOME/.local/share/gnome-shell/extensions/$UUID" ] && echo gnome
-    # A machine with the retired status line counts as having the footer, so
-    # `update` migrates it (scripts/install/footer.sh).
-    if _footer_installed || _statusline_installed; then echo footer; fi
+    _statusline_installed && echo statusline
+    # Each answers for itself: `update` reinstalls exactly these, so the legacy
+    # status line is never reported as the footer and never swapped for it.
+    _footer_installed && echo footer
     _mcp_installed && echo mcp
     _cli_installed && echo cli
     [ -n "$(mac_installed_app)" ] && echo macos
@@ -50,11 +51,10 @@ installed_targets() {
     return 0
 }
 
-# Targets renamed (into `cli`, or `footer`), still accepted on the command line.
+# Targets renamed into `cli`, still accepted on the command line.
 target_alias() {
     case "$1" in
         accounts | tabs) echo cli ;;
-        statusline) echo footer ;; # the status line became the usage-footer plugin
         *) echo "$1" ;;
     esac
 }

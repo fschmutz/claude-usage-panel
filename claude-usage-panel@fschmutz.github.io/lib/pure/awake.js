@@ -294,7 +294,7 @@ export function awakeHolds(session, {nowMs = 0, sessions = 0} = {}) {
 }
 
 /**
- * Everything a panel or `claudectl awake status` shows, from
+ * Everything a panel, the status line or `claudectl awake status` shows, from
  * the two files on disk plus the live session count. The single reader of all
  * the rules above, so no port re-derives one of them.
  *

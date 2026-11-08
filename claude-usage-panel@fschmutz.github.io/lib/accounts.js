@@ -180,7 +180,7 @@ export async function usageFor(session, name, snap = null) {
 }
 
 // The panels and the MCP server drop the latest per-account worst limit here
-// so a reader with no network and no credentials can tell a freer account.
+// so the status line (no network, no credentials) can hint at a freer account.
 export async function writeUsageCache(results, nowMs = Date.now()) {
     const accounts = {};
     for (const [name, r] of Object.entries(results)) {

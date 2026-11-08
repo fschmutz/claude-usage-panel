@@ -16,7 +16,7 @@ a relog to take effect.
 **How do I update to a new version?**
 You don't have to: installing from a git checkout also schedules a daily check that installs new
 releases for you (`autoupdate`). By hand it's `./install.sh update --pull` - it pulls the latest
-and reinstalls only the targets you already have. Footer: next session. GNOME: log out /
+and reinstalls only the targets you already have. Status line: next session. GNOME: log out /
 back in. macOS: it quits and relaunches the app for you.
 
 **How do I stop it updating itself?**

@@ -1,8 +1,9 @@
 # shellcheck shell=bash
-# Sourced by install.sh: the Node clients - the MCP server (the claudectl CLI
-# is scripts/install/cli.sh) - and the one installed tree they share.
+# Sourced by install.sh: the Node clients - status line, MCP server (the
+# claudectl CLI is scripts/install/cli.sh) - and the one installed tree they
+# share.
 #
-# The MCP server, the claudectl CLI and the hooks are ES modules
+# The status line, the MCP server and the claudectl CLI are ES modules
 # that import each other by relative path (mcp/server.js -> ../claude-code/…),
 # and the shared contract straight from the GNOME extension's pure modules
 # (claude-code/*.js -> ../claude-usage-panel@fschmutz.github.io/lib/pure/…).
@@ -12,6 +13,7 @@
 NODE_TREE="$HOME/.claude/claude-usage-panel"
 # Checkout-relative dirs copied into the tree: every *.js of each, nothing else.
 NODE_TREE_DIRS="mcp claude-code claude-usage-panel@fschmutz.github.io/lib/pure"
+SL_DEST="$NODE_TREE/claude-code/statusline.js"
 MCP_DEST="$NODE_TREE/mcp/server.js"
 HOOK_DEST="$NODE_TREE/claude-code/waiting-hook.js"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
@@ -43,8 +45,8 @@ _install_node_tree() {
 }
 
 # Claude Code hooks that mark a live session as waiting on you (the opt-in
-# waiting target, scripts/install/waiting.sh). A settings.json merge: other
-# hooks stay, re-run is safe.
+# waiting target, scripts/install/waiting.sh). Same settings.json merge as the
+# status line: other hooks stay, re-run is safe.
 _waiting_hook_command() {
     printf 'node "%s"' "$HOOK_DEST"
 }
@@ -77,6 +79,7 @@ _remove_waiting_hooks() {
 _prune_node_tree() {
     [ -d "$NODE_TREE" ] || return 0
     _cli_installed && return 0 # scripts/install/cli.sh
+    _statusline_installed && return 0
     _mcp_installed && return 0
     _waiting_installed && return 0 # scripts/install/waiting.sh: the hook runs from it
     _pause_installed && return 0   # scripts/install/pause.sh: same
@@ -84,12 +87,16 @@ _prune_node_tree() {
     act rm -rf "$NODE_TREE"
 }
 
-# This answers "is this target on this machine", and is asked by `update` to
-# build its target set - which is why it may not depend on node or on the
-# claude CLI being on the caller's PATH. Under a scheduler's PATH it used to
-# answer "not installed" for a client that was installed, so the update
-# quietly skipped it and then recorded itself as complete. A grep of the file
+# Both of these answer "is this target on this machine", and both are asked by
+# `update` to build its target set - which is why neither may depend on node or
+# on the claude CLI being on the caller's PATH. Under a scheduler's PATH they
+# used to answer "not installed" for clients that were installed, so the update
+# quietly skipped them and then recorded itself as complete. A grep of the file
 # the installer writes says the same thing without any tool at all.
+_statusline_installed() {
+    [ -f "$CLAUDE_SETTINGS" ] && grep -Eq "$SL_OURS_RE" "$CLAUDE_SETTINGS"
+}
+
 _mcp_installed() {
     command -v claude >/dev/null && claude mcp get claude-usage >/dev/null 2>&1 && return 0
     # The registration the `claude` CLI writes, read directly. Same for Cursor.
@@ -99,6 +106,108 @@ _mcp_installed() {
         grep -q '"claude-usage"' "$f" && return 0
     done
     return 1
+}
+
+# The value of --segments= / --tokens= in the status line already installed, or
+# $2 when there is none. Read with grep, not the JSON editor: this runs where
+# node may not be on PATH (see _statusline_installed).
+_sl_installed_flag() { # NAME DEFAULT
+    local found=""
+    if [ -f "$CLAUDE_SETTINGS" ] && grep -Eq "$SL_OURS_RE" "$CLAUDE_SETTINGS"; then
+        found="$(grep -o -- "--$1=[A-Za-z,]*" "$CLAUDE_SETTINGS" | head -1)"
+        found="${found#--"$1"=}"
+    fi
+    printf '%s' "${found:-$2}"
+}
+
+# --segments= is lowercase names and commas, --tokens= all or fresh: anything
+# else is refused before it reaches the shell command in settings.json.
+_sl_flags_valid() { # SEGMENTS TOKENS
+    case "$1" in
+        '' | *[!a-z,]*) return 1 ;;
+    esac
+    case "$2" in
+        all | fresh) return 0 ;;
+    esac
+    return 1
+}
+
+# ── Claude Code status line ─────────────────────────────────────────────────────
+install_statusline() {
+    info "Claude Code status line"
+    if ! command -v node >/dev/null; then
+        skip_fatal "statusline: Node.js not found on PATH"
+        return 0
+    fi
+    local dest="$SL_DEST"
+    local prev="$HOME/.claude/claude-usage-statusline.prev.json"
+    _install_node_tree
+
+    # Which segments to render and the token-total mode are baked into the
+    # installed command from --segments= / --tokens= (defaults in ui.sh). Kept
+    # non-interactive by design: pipe-safe, re-runnable, no tty handling.
+    # Flags this run did not set are inherited from the installed command, so a
+    # reinstall - which is what every update is - keeps the user's choice.
+    $SL_SEGMENTS_SET || SL_SEGMENTS="$(_sl_installed_flag segments "$SL_SEGMENTS")"
+    $SL_TOKENS_SET || SL_TOKENS="$(_sl_installed_flag tokens "$SL_TOKENS")"
+    # Both values are pasted into a command Claude Code hands to a shell on
+    # every prompt: only the shapes the status line reads get through.
+    if ! _sl_flags_valid "$SL_SEGMENTS" "$SL_TOKENS"; then
+        skip_fatal "statusline: --segments= takes lowercase names separated by commas, --tokens= all or fresh - nothing was changed"
+        return 0
+    fi
+    local command
+    command="node $(_sh_word "$dest") --segments=$SL_SEGMENTS --tokens=$SL_TOKENS"
+
+    if $DRY; then
+        echo "  would: merge statusLine → $command into $CLAUDE_SETTINGS"
+        echo "  would: back up any existing (foreign) statusLine to $prev for --uninstall to restore"
+        ok "dry-run: no changes written"
+        return 0
+    fi
+    # Merge only the statusLine key; every other key is preserved. If we
+    # replace a FOREIGN status line (someone's own), stash it in $prev so
+    # --uninstall can put it back.
+    local existing
+    existing="$(_json get "$CLAUDE_SETTINGS" statusLine)"
+    if [ -n "$existing" ] && ! printf '%s' "$existing" | grep -Eq "$SL_OURS_RE"; then
+        printf '%s\n' "$existing" >"$prev"
+        echo "  backed up your previous statusLine → restored on \`--uninstall statusline\`"
+    fi
+    _json set "$CLAUDE_SETTINGS" statusLine \
+        "{\"type\": \"command\", \"command\": $(_json encode "$command")}"
+    ok "installed to $dest (segments: $SL_SEGMENTS, tokens: $SL_TOKENS)"
+    echo "  Customize: re-run with --segments=context,limits,tokens,ping,account,sessions,waiting,awake and --tokens=all|fresh."
+    echo "  Open a Claude Code session or run /statusline to see it."
+}
+
+uninstall_statusline() {
+    info "Claude Code status line"
+    local prev="$HOME/.claude/claude-usage-statusline.prev.json"
+    if $DRY; then
+        echo "  would: drop our statusLine from $CLAUDE_SETTINGS, restoring $prev if present"
+        ok "dry-run: no changes written"
+        return 0
+    fi
+    # Remove only OUR statusLine entry; if we had backed up a foreign one at
+    # install time, restore it instead of leaving none. Editing the JSON takes
+    # node; without it the run died here on `node: command not found`, and
+    # every target after this one was never uninstalled.
+    if _statusline_installed && ! command -v node >/dev/null; then
+        skip_fatal "statusline: Node.js not found on PATH - remove the \"statusLine\" key from $CLAUDE_SETTINGS by hand (or re-run with node on PATH)"
+        return 0
+    fi
+    if _statusline_installed; then
+        if [ -f "$prev" ] && _json set "$CLAUDE_SETTINGS" statusLine "$(cat "$prev")" 2>/dev/null; then
+            echo "  restored your previous statusLine"
+        else
+            _json delete "$CLAUDE_SETTINGS" statusLine
+            echo "  removed our statusLine"
+        fi
+    fi
+    act rm -f "$prev"
+    _prune_node_tree
+    ok "removed"
 }
 
 # ── MCP server (Claude Code + Cursor) ──────────────────────────────────────────

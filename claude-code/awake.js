@@ -54,7 +54,7 @@ const COMMAND_TIMEOUT_MS = 20_000;
 const BUSY = Object.freeze({ok: false, reason: 'busy'});
 
 /**
- * Everything the CLI, the MCP tool, the panels and the
+ * Everything the CLI, the MCP tool, the status line, the panels and the
  * holder itself go through. `io` is the usual shape plus `exec`, `nowMs`,
  * `pidAlive`, `hostname` and `wait` (an awaited timer: start and stop poll
  * with it, so the long-lived MCP server is never blocked), so the tests drive
@@ -114,7 +114,7 @@ export function openAwake(io = {}) {
    *  owed back. Never throws - every surface renders from this.
    *
    *  The registry is walked only for a hold that actually depends on it: the
-   *  panels render this on every poll, and a `ps` / `/proc` sweep per
+   *  status line renders this on every prompt, and a `ps` / `/proc` sweep per
    *  render for a count nothing reads is not free. */
   function status() {
     const session = readSession();

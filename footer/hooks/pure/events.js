@@ -2,9 +2,6 @@
 // Re-exported by lib/pure.js; import from there.
 
 import {alertThreshold} from './usage.js';
-// The event hooks quote the substituted values the same way a resume
-// command does - one POSIX quoting helper, owned by the sessions block.
-import {shellQuote} from './sessions.js';
 
 // ── Event hooks ─────────────────────────────────────────────────────────────
 // A command the user asks to be run when a limit crosses 90/100 % or when a
@@ -47,24 +44,61 @@ export function detectEvents(previous, current) {
     return events;
 }
 
+/** The environment variable each placeholder reads. */
+const EVENT_VARS = Object.freeze({e: 'CUP_EVENT', k: 'CUP_KEY', l: 'CUP_LABEL', p: 'CUP_PERCENT', t: 'CUP_THRESHOLD'});
+
+/** The values of one event, as the environment the command runs with. */
+export function eventEnv(event) {
+    if (!event)
+        return {};
+    return {
+        CUP_EVENT: String(event.event), CUP_KEY: String(event.key), CUP_LABEL: String(event.label),
+        CUP_PERCENT: String(event.percent), CUP_THRESHOLD: String(event.threshold ?? 0),
+    };
+}
+
 /**
- * Substitute an event into the user's command template. Every value is
- * shell-quoted on the way in: the label comes from the API, and a command
- * built by pasting it in raw is a command the API gets to write.
+ * The user's command template with each placeholder turned into a reference
+ * to its environment variable (eventEnv), quoted for where it stands: bare
+ * `"${CUP_LABEL}"`, inside double quotes `${CUP_LABEL}`, inside single quotes
+ * `'"${CUP_LABEL}"'`. No value is ever pasted into the command text, so a
+ * label from the API (`$(...)`, a quote, a backtick) is data in every
+ * position - shell-quoting the value is not enough once the template puts
+ * it inside double quotes.
  *   %e event   %k key   %l label   %p percent   %t threshold   %% literal %
  */
 export function expandEventCommand(template, event) {
     if (!template || !event)
         return '';
-    const values = {
-        e: event.event, k: event.key, l: event.label,
-        p: String(event.percent), t: String(event.threshold ?? 0),
-    };
-    return String(template).replace(/%(.)/g, (whole, ch) => {
-        if (ch === '%')
-            return '%';
-        return ch in values ? shellQuote(values[ch]) : whole;
-    });
+    const text = String(template);
+    let out = '';
+    let quote = null; // null | "'" | '"'
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '%' && i + 1 < text.length) {
+            const next = text[i + 1];
+            const name = EVENT_VARS[next];
+            if (next === '%') {
+                out += '%';
+                i++;
+                continue;
+            }
+            if (name) {
+                out += quote === '"' ? `\${${name}}` : quote === "'" ? `'"\${${name}}"'` : `"\${${name}}"`;
+                i++;
+                continue;
+            }
+        }
+        if (ch === '\\' && quote !== "'" && i + 1 < text.length) {
+            out += ch + text[i + 1];
+            i++;
+            continue;
+        }
+        if ((ch === '"' || ch === "'") && (quote === null || quote === ch))
+            quote = quote === null ? ch : null;
+        out += ch;
+    }
+    return out;
 }
 
 // ── Notification latches ────────────────────────────────────────────────────
