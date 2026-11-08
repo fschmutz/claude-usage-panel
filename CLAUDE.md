@@ -97,8 +97,10 @@ lands on the newest `vX.Y.Z` tag with the branch placed on it, never on main;
 `package.json`.** Four files under `<state dir>/claude-usage-panel` carry it,
 and `install.sh` writes the first three on every successful run - not only the
 daily job: `installed-version` (what the clients run), `checkout-path` (so the
-extension's copy of the worker and the macOS app find the checkout without a
-scheduled job), `update-pending` (a reinstall that was owed and did not finish;
+extension's copy of the worker finds the checkout without a scheduled job;
+the macOS app runs only the `auto-update.sh` symlink install.sh also writes
+there, after `UpdateStatus.trustedScript` checks it and its target are the
+user's alone), `update-pending` (a reinstall that was owed and did not finish;
 retried until it does) and `loaded-version` (written by the GNOME extension at
 enable(), so a shell still running the old code is reported instead of being
 called up to date). Comparing the checkout instead is what made a manual pull,

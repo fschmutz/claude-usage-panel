@@ -50,6 +50,10 @@ skip_fatal() {
 #                      auto-update.sh and the macOS app live outside it and
 #                      used to find it only through an installed schedule, so
 #                      opting out of autoupdate hid the checkout from both.
+#   auto-update.sh     a symlink to this checkout's scripts/auto-update.sh,
+#                      the one fixed path the macOS app runs (it checks the
+#                      link and what it leads to are the user's alone), so
+#                      no path it runs is ever read out of a file.
 _state_dir() { echo "${XDG_STATE_HOME:-$HOME/.local/state}/claude-usage-panel"; }
 
 record_install_state() {
@@ -62,6 +66,7 @@ record_install_state() {
     mkdir -p "$dir" 2>/dev/null || return 0
     printf '%s\n' "$(version)" >"$dir/installed-version" 2>/dev/null || true
     printf '%s\n' "$ROOT" >"$dir/checkout-path" 2>/dev/null || true
+    ln -sfn "$ROOT/scripts/auto-update.sh" "$dir/auto-update.sh" 2>/dev/null || true
     # Whatever reinstall was owed has just been done.
     rm -f "$dir/update-pending" 2>/dev/null || true
 }
@@ -70,11 +75,11 @@ forget_install_state() {
     local dir
     dir="$(_state_dir)"
     if $DRY; then
-        echo "  would: drop the version stamp and checkout pointer in $dir"
+        echo "  would: drop the version stamp, checkout pointer and script link in $dir"
         return 0
     fi
     rm -f "$dir/installed-version" "$dir/checkout-path" "$dir/update-pending" \
-        2>/dev/null || true
+        "$dir/auto-update.sh" 2>/dev/null || true
 }
 
 # --dry-run: print each mutating action instead of doing it. Read-only probes

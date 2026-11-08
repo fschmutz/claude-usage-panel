@@ -81,44 +81,31 @@ public struct UpdateStatus: Equatable, Sendable {
         )
     }
 
-    /// The checkout root recorded in `<state dir>/checkout-path`, accepted or
-    /// rejected. That is a plain file in a user-writable directory and its
-    /// contents end up on a command line, so it is validated like any other
-    /// untrusted input rather than trusted for having been written by our own
-    /// installer: one line, absolute, no traversal, and no shell-significant or
-    /// control characters. Pure, so the Linux test job covers it; the caller
-    /// still has to check that the script under it is executable.
-    public static func validatedCheckoutRoot(_ pointer: String) -> String? {
-        let root = pointer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard root.count > 1, root.count <= 512, root.hasPrefix("/"),
-            !root.contains(".."),
-            root.range(of: "^/[A-Za-z0-9._/@+-]+$", options: .regularExpression) != nil
-        else { return nil }
-        return root
-    }
-
-    /// Whether the update script at `path` may be run: `auto-update.sh`, a regular executable
-    /// file that `uid` owns and nobody else can write, in directories (the
-    /// script's own and the checkout root above it) that `uid` owns and nobody
-    /// else can write. The path comes from user-writable state, so a pointer
-    /// to a checkout another account controls is refused, not run.
-    public static func trustedScript(_ path: String, uid: UInt32 = UInt32(getuid())) -> Bool {
-        let file = URL(fileURLWithPath: path).standardizedFileURL
-        let dir = file.deletingLastPathComponent()
-        let root = dir.deletingLastPathComponent()
-        func ownedAndPrivate(_ url: URL, type: FileAttributeType) -> Bool {
-            guard let a = try? FileManager.default.attributesOfItem(atPath: url.path),
+    /// The update script behind `link` (the fixed link install.sh writes), or
+    /// nil when it may not be run. The link and everything it leads to must
+    /// belong to `uid` and be writable by nobody else: the link itself, the
+    /// script (named auto-update.sh, a regular executable file), its scripts/
+    /// directory and the checkout root above it. A link to a checkout another
+    /// account controls is refused, not run.
+    public static func trustedScript(link: String, uid: UInt32 = UInt32(getuid())) -> String? {
+        let fm = FileManager.default
+        func owned(_ path: String, _ type: FileAttributeType) -> Bool {
+            guard let a = try? fm.attributesOfItem(atPath: path),
                 a[.type] as? FileAttributeType == type,
                 (a[.ownerAccountID] as? NSNumber)?.uint32Value == uid,
                 let mode = (a[.posixPermissions] as? NSNumber)?.uint16Value
             else { return false }
-            return mode & 0o022 == 0
+            return type == .typeSymbolicLink || mode & 0o022 == 0
         }
-        return file.lastPathComponent == "auto-update.sh"
-            && ownedAndPrivate(file, type: .typeRegular)
-            && FileManager.default.isExecutableFile(atPath: file.path)
-            && ownedAndPrivate(dir, type: .typeDirectory)
-            && ownedAndPrivate(root, type: .typeDirectory)
+        guard owned(link, .typeSymbolicLink) else { return nil }
+        let file = URL(fileURLWithPath: link).resolvingSymlinksInPath()
+        let dir = file.deletingLastPathComponent()
+        let root = dir.deletingLastPathComponent()
+        guard file.lastPathComponent == "auto-update.sh",
+            owned(file.path, .typeRegular), fm.isExecutableFile(atPath: file.path),
+            owned(dir.path, .typeDirectory), owned(root.path, .typeDirectory)
+        else { return nil }
+        return file.path
     }
 
     /// Dotted-version ordering, the rule version_compare() uses in

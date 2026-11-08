@@ -6,47 +6,19 @@ import Foundation
 // scheduler runs - so the panel can never claim "up to date" while the
 // scheduler is quietly refusing to touch the checkout.
 enum Updates {
-    static let label = "io.github.fschmutz.claude-usage-panel.update"
-
-    /// The pointer `install.sh` writes on every run. The shell scripts keep
-    /// their state under XDG on macOS too, so this is the one path both sides
-    /// agree on - and unlike the launchd agent it exists even when the user
-    /// opted out of the daily check.
-    static var checkoutPointer: URL {
+    /// The link `install.sh` writes on every run, to the checkout's
+    /// scripts/auto-update.sh. One fixed path: the app never reads a
+    /// location out of a file, so nothing user-writable names what it runs.
+    /// The shell scripts keep their state under XDG on macOS too.
+    static var scriptLink: String {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".local/state/claude-usage-panel/checkout-path")
+            .appendingPathComponent(".local/state/claude-usage-panel/auto-update.sh").path
     }
 
-    /// Locate auto-update.sh. It only exists in a git checkout, so the honest
-    /// answer is sometimes nil (a .app installed from a release zip has none) -
-    /// the UI says so rather than pretending.
+    /// The update script, or nil: a .app installed from a release zip has no
+    /// checkout, and the UI says so rather than pretending.
     static func resolveScript() -> String? {
-        // The scheduled agent already records the path; trust it first.
-        if let path = LaunchAgent.runner(label: label) { return path }
-        // Otherwise the session-ping runner, if configured, points at the same
-        // checkout's scripts/ directory.
-        if let runner = SessionPing.read().runner {
-            let candidate = (runner as NSString).deletingLastPathComponent + "/auto-update.sh"
-            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
-        }
-        // No schedule at all: the installer's pointer. Without it, an app built
-        // from a checkout whose owner ran `--uninstall autoupdate` reported
-        // "No git checkout found" while the checkout sat right there.
-        if let root = try? String(contentsOf: checkoutPointer, encoding: .utf8) {
-            return scriptInCheckout(root)
-        }
-        return nil
-    }
-
-    /// `<root>/scripts/auto-update.sh`, for a root UpdateStatus accepts and a
-    /// file that is actually executable; nil otherwise. The script's name is a
-    /// constant here - only the directory can come from the pointer file.
-    static func scriptInCheckout(_ pointer: String) -> String? {
-        guard let root = UpdateStatus.validatedCheckoutRoot(pointer) else { return nil }
-        let candidate = URL(fileURLWithPath: root, isDirectory: true)
-            .appendingPathComponent("scripts/auto-update.sh").standardizedFileURL.path
-        guard FileManager.default.isExecutableFile(atPath: candidate) else { return nil }
-        return candidate
+        UpdateStatus.trustedScript(link: scriptLink)
     }
 
     /// The public repository, for the one install shape that has no checkout:
@@ -95,17 +67,11 @@ enum Updates {
         func get() -> String? { lock.withLock { body } }
     }
 
-    /// Run the update script from its own directory. Every way of finding it
-    /// reads a user-writable file, so it runs only when UpdateStatus trusts
-    /// it, and the command line itself is constant: the path only picks the
-    /// working directory.
+    /// Run the update script (resolved by trustedScript) from its own
+    /// directory, with a constant command line.
     private static func runScript(_ script: String, _ args: [String], mergeStderr: Bool = false)
         -> Shell.Result
     {
-        guard UpdateStatus.trustedScript(script) else {
-            return Shell.Result(
-                status: -1, out: "Refusing \(script): not owned by you, or writable by others.")
-        }
         let dir = (script as NSString).deletingLastPathComponent
         return Shell.run(
             "/bin/bash", ["./auto-update.sh"] + args, mergeStderr: mergeStderr, cwd: dir)

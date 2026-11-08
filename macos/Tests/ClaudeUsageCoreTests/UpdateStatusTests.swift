@@ -105,58 +105,53 @@ final class UpdateStatusTests: XCTestCase {
         XCTAssertEqual(quiet?.summary, "2.1.2 (could not reach the remote)")
     }
 
-    // The pointer file is user-writable and its contents reach a command line.
-    func testTheCheckoutPointerIsValidatedBeforeItIsUsed() {
-        XCTAssertEqual(
-            UpdateStatus.validatedCheckoutRoot("/Users/me/Git/claude-usage-panel\n"),
-            "/Users/me/Git/claude-usage-panel")
-        XCTAssertEqual(
-            UpdateStatus.validatedCheckoutRoot("/opt/app-1.2_beta+x/@scope"),
-            "/opt/app-1.2_beta+x/@scope")
-        for bad in [
-            "", "/", "relative/path", "/tmp/../etc", "/tmp/x; id", "/tmp/$(id)",
-            "/tmp/`id`", "/tmp/a\nb", "/tmp/a b", "/tmp/'x'",
-            "/" + String(repeating: "a", count: 600),
-        ] {
-            XCTAssertNil(UpdateStatus.validatedCheckoutRoot(bad), "accepted \(bad)")
-        }
-    }
-
-    // The script path comes from user-writable state: it runs only when we own
-    // it and nobody else can write it or the directories above it.
-    func testOnlyAScriptWeOwnAndNobodyElseCanWriteIsTrusted() throws {
+    // The app runs only what the fixed link leads to, and only when the link,
+    // the script and the directories above it are ours and nobody else's to
+    // write.
+    func testOnlyAScriptWeOwnBehindTheLinkIsTrusted() throws {
         let fm = FileManager.default
-        let root = fm.temporaryDirectory.appendingPathComponent("cup-trust-\(UUID().uuidString)")
+        let base = fm.temporaryDirectory.appendingPathComponent("cup-trust-\(UUID().uuidString)")
+        let root = base.appendingPathComponent("checkout")
         let scripts = root.appendingPathComponent("scripts")
         try fm.createDirectory(at: scripts, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: root) }
-        let script = scripts.appendingPathComponent("auto-update.sh")
-        try Data("#!/bin/bash\n".utf8).write(to: script)
+        defer { try? fm.removeItem(at: base) }
         func chmod(_ url: URL, _ mode: Int) throws {
             try fm.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path)
         }
+        func script(_ name: String) throws -> URL {
+            let url = scripts.appendingPathComponent(name)
+            try Data("#!/bin/bash\n".utf8).write(to: url)
+            try chmod(url, 0o755)
+            return url
+        }
+        let real = try script("auto-update.sh")
+        let other = try script("other.sh")
         try chmod(root, 0o755)
         try chmod(scripts, 0o755)
-        try chmod(script, 0o755)
-        XCTAssertTrue(UpdateStatus.trustedScript(script.path))
-        XCTAssertFalse(
-            UpdateStatus.trustedScript(script.path, uid: UInt32(getuid()) + 1), "another owner")
-        try chmod(script, 0o644)
-        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "not executable")
-        try chmod(script, 0o775)
-        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "group-writable script")
-        try chmod(script, 0o755)
+        let link = base.appendingPathComponent("auto-update.sh")
+        try fm.createSymbolicLink(at: link, withDestinationURL: real)
+
+        XCTAssertEqual(
+            UpdateStatus.trustedScript(link: link.path),
+            real.resolvingSymlinksInPath().path)
+        XCTAssertNil(
+            UpdateStatus.trustedScript(link: link.path, uid: UInt32(getuid()) + 1), "another owner")
+        XCTAssertNil(UpdateStatus.trustedScript(link: real.path), "a plain file, not the link")
+        XCTAssertNil(UpdateStatus.trustedScript(link: base.appendingPathComponent("none").path))
+        try chmod(real, 0o644)
+        XCTAssertNil(UpdateStatus.trustedScript(link: link.path), "not executable")
+        try chmod(real, 0o775)
+        XCTAssertNil(UpdateStatus.trustedScript(link: link.path), "group-writable script")
+        try chmod(real, 0o755)
         try chmod(scripts, 0o777)
-        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "world-writable scripts/")
+        XCTAssertNil(UpdateStatus.trustedScript(link: link.path), "world-writable scripts/")
         try chmod(scripts, 0o755)
         try chmod(root, 0o757)
-        XCTAssertFalse(UpdateStatus.trustedScript(script.path), "world-writable checkout root")
+        XCTAssertNil(UpdateStatus.trustedScript(link: link.path), "world-writable checkout root")
         try chmod(root, 0o755)
-        let other = scripts.appendingPathComponent("other.sh")
-        try Data("#!/bin/bash\n".utf8).write(to: other)
-        try chmod(other, 0o755)
-        XCTAssertFalse(UpdateStatus.trustedScript(other.path), "not auto-update.sh")
-        XCTAssertFalse(UpdateStatus.trustedScript(scripts.path + "/missing/auto-update.sh"))
+        try fm.removeItem(at: link)
+        try fm.createSymbolicLink(at: link, withDestinationURL: other)
+        XCTAssertNil(UpdateStatus.trustedScript(link: link.path), "a link to another script")
     }
 
     // Mirrors version_compare in scripts/auto-update.sh: numeric per

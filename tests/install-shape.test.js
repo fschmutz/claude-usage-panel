@@ -62,8 +62,11 @@ test('a fresh install records the version and the checkout - not only the daily 
     assert.equal(
         fs.readFileSync(path.join(stateDir(home), 'checkout-path'), 'utf8').trim(),
         ROOT,
-        'the pointer the extension copy and the macOS app resolve the checkout through',
+        'the pointer the extension copy resolves the checkout through',
     );
+    const link = path.join(stateDir(home), 'auto-update.sh');
+    assert.ok(fs.lstatSync(link).isSymbolicLink(), 'the fixed path the macOS app runs');
+    assert.equal(fs.readlinkSync(link), path.join(ROOT, 'scripts', 'auto-update.sh'));
 });
 
 test('update with no node on PATH fails loudly and records nothing', (t) => {
@@ -159,6 +162,7 @@ test('uninstalling everything drops the state the update path reads', (t) => {
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.equal(fs.existsSync(stamp(home)), false);
     assert.equal(fs.existsSync(path.join(stateDir(home), 'checkout-path')), false);
+    assert.equal(fs.existsSync(path.join(stateDir(home), 'auto-update.sh')), false);
 });
 
 test('outside its own job, a changed agent is reloaded as before', (t) => {

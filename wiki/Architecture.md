@@ -302,9 +302,13 @@ reaches users when its tag is pushed**, not when `main` moves.
 Three state files under `<state dir>/claude-usage-panel` carry that decision
 between runs, and all three are written by `install.sh`, not only by the daily
 job: `installed-version` (what the clients run), `checkout-path` (where the
-checkout is, so the extension's copy of the worker and the macOS app can find
-it without a scheduled job) and `update-pending` (a reinstall that was owed and
-did not finish - retried until it does). The GNOME extension adds
+checkout is, so the extension's copy of the worker can find it without a
+scheduled job) and `update-pending` (a reinstall that was owed and
+did not finish - retried until it does). `install.sh` also links
+`auto-update.sh` there to the checkout's script: the one fixed path the macOS
+app runs, after checking that the link, the script and the directories above
+it belong to the user and nobody else can write them, so no path it runs is
+read out of a file. The GNOME extension adds
 `loaded-version` at enable(), which is how `--status` can say "installed 2.2.0,
 running 2.1.0 - log out and back in" instead of "up to date".
 

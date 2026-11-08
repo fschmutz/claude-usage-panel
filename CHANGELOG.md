@@ -217,12 +217,14 @@ semantic versioning.
 
 ### Security
 
-- **macOS: the update script runs only when you own it.** The app finds
-  `auto-update.sh` through user-writable state (the launchd agent, the
-  session-ping agent, `checkout-path`); it now refuses a script, or a
-  `scripts/` or checkout directory, owned by another account or writable by
-  group or others, and runs it from its own directory with a constant
-  command line.
+- **macOS: the update script runs only from one fixed link, and only when
+  you own it.** `install.sh` now links `<state dir>/claude-usage-panel/auto-update.sh`
+  to the checkout's script; the app runs that path alone (no longer reading a
+  location out of the launchd agent, the session-ping agent or `checkout-path`),
+  refuses a link, script, `scripts/` or checkout directory owned by another
+  account or writable by group or others, and runs it from its own directory
+  with a constant command line. Run `./install.sh update` once so the link
+  exists.
 
 - **Account switch: ~/.claude.json keeps what Claude Code wrote meanwhile,
   and a linked one stays a link.** The switch read the config, prepared the
