@@ -14,7 +14,8 @@ detect_targets() {
             fi
             ;;
     esac
-    command -v node >/dev/null && echo statusline
+    # The footer replaces the status line: a bare install never adds it back.
+    if command -v node >/dev/null && ! _footer_installed; then echo statusline; fi
     if command -v node >/dev/null &&
         { command -v claude >/dev/null || [ -d "$HOME/.cursor" ]; }; then
         echo mcp

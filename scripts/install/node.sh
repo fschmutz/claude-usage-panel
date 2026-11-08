@@ -16,7 +16,10 @@ NODE_TREE_DIRS="mcp claude-code claude-usage-panel@fschmutz.github.io/lib/pure"
 SL_DEST="$NODE_TREE/claude-code/statusline.js"
 MCP_DEST="$NODE_TREE/mcp/server.js"
 HOOK_DEST="$NODE_TREE/claude-code/waiting-hook.js"
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+# Claude Code reads its settings from CLAUDE_CONFIG_DIR when that is set (and
+# `claude plugin install` writes enabledPlugins there), like every port reads
+# the live login: one path for the status line, the hooks and the footer.
+CLAUDE_SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 CURSOR_MCP="$HOME/.cursor/mcp.json"
 
 _install_node_tree() {

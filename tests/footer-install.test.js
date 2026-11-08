@@ -30,6 +30,13 @@ const env = (home, extra = {}) => ({
     XDG_DATA_HOME: path.join(home, '.local', 'share'),
     PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
+    // Where the installer looks for a claude CLI off PATH (scripts/lib.sh
+    // scheduler_bin_dirs): all inside the sandbox, never the developer's.
+    CUP_TEST_SYSTEM_BINS: '',
+    VOLTA_HOME: path.join(home, 'volta'),
+    NVM_DIR: path.join(home, 'nvm'),
+    FNM_DIR: path.join(home, 'fnm'),
+    ASDF_DATA_DIR: path.join(home, 'asdf'),
     ...extra,
 });
 const noNode = (home) => env(home, {PATH: `${path.join(home, 'bin')}:/usr/bin:/bin`});
@@ -54,7 +61,7 @@ const home = process.env.HOME;
 const a = process.argv.slice(2);
 fs.appendFileSync(path.join(home, 'claude-calls.log'), a.join(' ') + '\\n');
 const mkts = path.join(home, 'stub-marketplaces.json');
-const settings = path.join(home, '.claude', 'settings.json');
+const settings = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(home, '.claude'), 'settings.json');
 const read = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const verb = a.slice(0, a[1] === 'marketplace' ? 3 : 2).join('-');
 if (fs.existsSync(path.join(home, 'stub-fail-' + verb))) process.exit(1);
@@ -241,9 +248,12 @@ test('uninstall removes the plugin and the marketplace the installer added, and 
     const home2 = footerHome(t, {enabledPlugins: {[PLUGIN]: true}});
     const theirs = [{name: 'claude-usage-panel-local', source: 'directory', path: mktDir(home2)}];
     fs.writeFileSync(path.join(home2, 'stub-marketplaces.json'), JSON.stringify(theirs));
+    fs.mkdirSync(path.join(mktDir(home2), '.claude-plugin'), {recursive: true});
     r = run('bash', [INSTALL, '--uninstall', 'footer'], {env: env(home2)});
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.doesNotMatch(calls(home2), /marketplace remove/);
+    assert.ok(fs.existsSync(mktDir(home2)), 'the folder a marketplace still points at is kept');
+    assert.match(r.stdout, /kept .*footer-marketplace/);
 });
 
 test('a status-line removal that fails is a failed target, never a "removed" line', (t) => {
@@ -273,4 +283,150 @@ test('the footer replacing the status line without node skips loudly and leaves 
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /footer: Node\.js not found/);
     assert.match(fs.readFileSync(settingsOf(home), 'utf8'), /statusline\.js/);
+});
+
+// ── CLAUDE_CONFIG_DIR, update, detection, one footer ─────────────────────────
+
+test('CLAUDE_CONFIG_DIR is honoured: settings, the status line and the footer live there', (t) => {
+    const home = footerHome(t, null);
+    const cfg = path.join(home, 'cfg');
+    fs.mkdirSync(cfg);
+    fs.writeFileSync(path.join(cfg, 'settings.json'), '{"theme": "dark"}\n');
+    const e = env(home, {CLAUDE_CONFIG_DIR: cfg});
+    const cfgSettings = () => JSON.parse(fs.readFileSync(path.join(cfg, 'settings.json'), 'utf8'));
+
+    let r = run('bash', [INSTALL, 'statusline'], {env: e});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(cfgSettings().statusLine.command, /statusline\.js/);
+    assert.equal(fs.existsSync(settingsOf(home)), false, '~/.claude/settings.json is not the one Claude Code reads');
+
+    r = run('bash', [INSTALL, 'footer'], {env: e});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.doesNotMatch(r.stdout, /not enabled/);
+    assert.equal(cfgSettings().enabledPlugins[PLUGIN], true);
+    assert.equal(cfgSettings().statusLine, undefined, 'replaced in the file it was in');
+    const list = run('bash', [INSTALL, '--list'], {env: env(home, {CLAUDE_CONFIG_DIR: cfg, PATH: '/usr/bin:/bin'})});
+    assert.match(/installed: +([^(]*)/.exec(list.stdout)[1], /footer/);
+
+    r = run('bash', [INSTALL, '--uninstall', 'footer'], {env: e});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(cfgSettings().enabledPlugins[PLUGIN], undefined, 'the plugin is gone, not only the marketplace');
+});
+
+test('the symlink check looks at the settings.json under CLAUDE_CONFIG_DIR', (t) => {
+    const home = footerHome(t);
+    const cfg = path.join(home, 'cfg');
+    fs.mkdirSync(cfg);
+    fs.writeFileSync(path.join(home, 'dotfiles.json'), '{}\n');
+    fs.symlinkSync(path.join(home, 'dotfiles.json'), path.join(cfg, 'settings.json'));
+    const r = run('bash', [INSTALL, 'footer'], {env: env(home, {CLAUDE_CONFIG_DIR: cfg})});
+    assert.match(r.stdout, /cfg\/settings\.json is a symlink/);
+    assert.equal(calls(home), '');
+});
+
+test('the claude CLI is found where the scheduled workers look, not only on PATH', (t) => {
+    const home = footerHome(t);
+    const volta = path.join(home, 'volta', 'bin');
+    fs.mkdirSync(volta, {recursive: true});
+    fs.renameSync(path.join(home, 'bin', 'claude'), path.join(volta, 'claude'));
+    const r = run('bash', [INSTALL, 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.doesNotMatch(r.stdout, /claude CLI not found/);
+    assert.equal(readSettings(home).enabledPlugins[PLUGIN], true);
+});
+
+for (const [why, breakIt] of [
+    ['no claude CLI anywhere', (home) => fs.rmSync(path.join(home, 'bin', 'claude'))],
+    ['a settings.json that became a symlink', (home) => {
+        fs.renameSync(settingsOf(home), path.join(home, 'dotfiles.json'));
+        fs.symlinkSync(path.join(home, 'dotfiles.json'), settingsOf(home));
+    }],
+]) {
+    test(`update of an installed footer only refreshes its folder: ${why} does not fail it`, (t) => {
+        const home = footerHome(t);
+        let r = run('bash', [INSTALL, 'footer'], {env: env(home)});
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        fs.rmSync(path.join(mktDir(home), 'footer'));
+        breakIt(home);
+        const before = fs.readFileSync(settingsOf(home), 'utf8');
+        fs.rmSync(path.join(home, 'claude-calls.log'), {force: true});
+
+        r = run('bash', [INSTALL, 'update', 'footer'], {env: env(home)});
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.match(r.stdout, /up to date - loads from/);
+        assert.equal(fs.realpathSync(path.join(mktDir(home), 'footer')), fs.realpathSync(path.join(ROOT, 'footer')),
+            'the link is put back');
+        assert.equal(calls(home), '', 'no claude CLI call');
+        assert.equal(fs.readFileSync(settingsOf(home), 'utf8'), before, 'settings untouched');
+    });
+}
+
+test('uninstall without node names node, not an unreadable marketplace list', (t) => {
+    const home = footerHome(t);
+    let r = run('bash', [INSTALL, 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    r = run('bash', [INSTALL, '--uninstall', 'footer'], {env: noNode(home)});
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stderr, /footer: Node\.js not found/);
+    assert.doesNotMatch(r.stderr, /could not read the Claude Code marketplaces/);
+});
+
+test('one line under the prompt: a footer is never joined by the status line unasked', (t) => {
+    const home = footerHome(t);
+    let r = run('bash', [INSTALL, 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const listed = run('bash', [INSTALL, '--list'], {env: env(home)});
+    assert.doesNotMatch(/detected: +([^(]*)/.exec(listed.stdout)[1], /statusline/,
+        'a bare ./install.sh does not add the status line back');
+
+    for (const order of [['footer', 'statusline'], ['statusline', 'footer']]) {
+        const h = footerHome(t);
+        r = run('bash', [INSTALL, ...order], {env: env(h)});
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.match(r.stdout, /footer and statusline both named - installing the footer/);
+        assert.equal(readSettings(h).statusLine, undefined, order.join(' '));
+        assert.equal(readSettings(h).enabledPlugins[PLUGIN], true, order.join(' '));
+    }
+
+    // Asked for alone, the status line still goes next to the footer.
+    r = run('bash', [INSTALL, 'statusline'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(readSettings(home).statusLine.command, /statusline\.js/);
+});
+
+test('a footer from the public marketplace is the footer: no second copy, and uninstall finds it', (t) => {
+    const PUBLIC = 'usage-footer@claude-usage-panel';
+    const home = footerHome(t, {enabledPlugins: {[PUBLIC]: true}});
+    withStatusLine(t, home);
+    assert.ok(installed(home).includes('footer'));
+
+    fs.rmSync(path.join(home, 'claude-calls.log'), {force: true});
+    let r = run('bash', [INSTALL, 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /already installed from the claude-usage-panel marketplace/);
+    assert.doesNotMatch(calls(home), /plugin (install|marketplace add)/);
+    assert.equal(readSettings(home).enabledPlugins[PLUGIN], undefined, 'no second footer');
+    assert.equal(readSettings(home).statusLine, undefined, 'it still replaces the status line');
+
+    r = run('bash', [INSTALL, 'update', 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+
+    r = run('bash', [INSTALL, '--uninstall', 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(calls(home), new RegExp(`plugin uninstall ${PUBLIC} --scope user`));
+    assert.equal(readSettings(home).enabledPlugins[PUBLIC], undefined);
+});
+
+test('an inherited CLAUDE_CONFIG_DIR never reaches an installer under test, a chosen one does', () => {
+    const saved = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = '/the/developers/real/config';
+    try {
+        const probe = ['-c', 'printf %s "${CLAUDE_CONFIG_DIR-unset}"'];
+        assert.equal(run('bash', probe, {env: {...process.env}}).stdout, 'unset');
+        assert.equal(run('bash', probe, {env: {...process.env, CLAUDE_CONFIG_DIR: '/sandbox/cfg'}}).stdout,
+            '/sandbox/cfg');
+    } finally {
+        if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+        else process.env.CLAUDE_CONFIG_DIR = saved;
+    }
 });

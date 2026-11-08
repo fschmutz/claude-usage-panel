@@ -40,6 +40,15 @@ export function run(cmd, args, opts = {}) {
                 + 'pass the script as an argument (run("bash", [script, …])).',
         );
     }
+    // A test hands a sandbox HOME by spreading process.env: a CLAUDE_CONFIG_DIR
+    // inherited that way would point an installer at the developer's real
+    // Claude Code config. Only a value the test chose itself gets through.
+    const inherited = process.env.CLAUDE_CONFIG_DIR;
+    if (opts.env && inherited !== undefined && opts.env.CLAUDE_CONFIG_DIR === inherited) {
+        const env = {...opts.env};
+        delete env.CLAUDE_CONFIG_DIR;
+        opts = {...opts, env};
+    }
     try {
         const stdout = execFileSync(toolPath(tool), args, {
             encoding: 'utf8',

@@ -209,6 +209,18 @@ if [ ${#targets[@]} -eq 0 ]; then
     exit 1
 fi
 
+# One line under the prompt: the footer replaces the status line, so an
+# install naming both (in any order) installs the footer alone. `statusline`
+# on its own still adds the status line next to an installed footer, and
+# `update` reinstalls whatever is there.
+if [ "$action" = install ] && [[ " ${targets[*]} " == *" footer "* ]] &&
+    [[ " ${targets[*]} " == *" statusline "* ]]; then
+    echo "note: footer and statusline both named - installing the footer, which replaces the status line"
+    kept=()
+    for t in "${targets[@]}"; do [ "$t" = statusline ] || kept+=("$t"); done
+    targets=("${kept[@]}")
+fi
+
 # skip_fatal records land here: every target runs in a subshell (below), and
 # a variable set there does not survive it.
 INCOMPLETE_LOG="$(mktemp "${TMPDIR:-/tmp}/cup-install.XXXXXX")"
