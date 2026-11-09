@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.12.0] - 2026-11-09
+
 ### Added
 
 - **An isolated Chrome per account.** `claudectl account chrome NAME` opens

@@ -106,7 +106,7 @@ The `get_usage` and `waiting` tools also install without touching the repo:
 /plugin install usage-panel@claude-usage-panel
 
 # or one CLI line (the unpinned spec tracks main; append #vX.Y.Z for one release)
-claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel#v3.11.0
+claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel#v3.12.0
 
 # Cursor: click "Add to Cursor" on the landing page
 ```
