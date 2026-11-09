@@ -27,9 +27,10 @@ test('inventory: the real tree parses with no error, and every pin-shaped line i
     assert.deepEqual(new Set(pins.filter(p => p.kind === 'action').map(p => p.name)), actions);
     const revs = read('.pre-commit-config.yaml').match(/^\s+rev:/gm).length;
     assert.equal(pins.filter(p => p.kind === 'hook').length, revs);
-    // every tool dir under .github is read, whatever it pins
-    const tools = fs.readdirSync(path.join(ROOT, '.github'), {withFileTypes: true}).filter(d => d.isDirectory());
-    const has = f => tools.filter(d => fs.existsSync(path.join(ROOT, '.github', d.name, f))).map(d => `.github/${d.name}/${f}`);
+    // every tool dir under .github and tools is read, whatever it pins
+    const tools = ['.github', 'tools'].flatMap(root => fs.readdirSync(path.join(ROOT, root), {withFileTypes: true})
+        .filter(d => d.isDirectory()).map(d => `${root}/${d.name}`));
+    const has = f => tools.filter(d => fs.existsSync(path.join(ROOT, d, f))).map(d => `${d}/${f}`);
     assert.deepEqual(new Set(pins.filter(p => p.kind === 'npm').map(p => p.file)), new Set(has('package.json')));
     assert.deepEqual(new Set(pins.filter(p => p.kind === 'docker').map(p => p.file)), new Set(has('Dockerfile')));
     assert.deepEqual(new Set(pins.filter(p => p.kind === 'pip').map(p => p.file)), new Set(has('requirements.txt')));
@@ -139,7 +140,7 @@ test("dependabot.yml is the grace window: weekly, 7-day cooldown, and bash held 
 
 test('dependabot PR titles find the bump they carry', () => {
     const prs = [
-        {number: 7, title: 'chore(deps): bump knip from 6.39.0 to 6.40.0 in /.github/knip'},
+        {number: 7, title: 'chore(deps): bump knip from 6.39.0 to 6.40.0 in /tools/knip'},
         {number: 8, title: 'chore(deps): bump eslint-plugin-knip from 1.0.0 to 6.40.0'},
         {number: 9, title: 'chore(deps): bump bash from 3.2.5 to 3.2.57 in /.github/bash32'},
         {number: 10, title: 'chore(deps): bump actions/setup-node from 7.0.0 to 7.1.0'},

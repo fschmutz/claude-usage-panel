@@ -69,10 +69,10 @@ updates:
     open-pull-requests-limit: 2
 
   # The Claude Code CLI the plugin-validate CI job runs
-  # (.github/claude-cli/package-lock.json), pinned to one exact version. A
+  # (tools/claude-cli/package-lock.json), pinned to one exact version. A
   # bump whose validator finds a new warning goes red on its own PR.
   - package-ecosystem: npm
-    directory: /.github/claude-cli
+    directory: /tools/claude-cli
     schedule:
       interval: weekly
     cooldown:
@@ -80,27 +80,27 @@ updates:
     labels: [dependencies]
     open-pull-requests-limit: 2
   - package-ecosystem: npm
-    directory: /.github/ccusage
+    directory: /tools/ccusage
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
     labels: [dependencies]
     open-pull-requests-limit: 2
-  # The knip the knip pre-commit hook runs (.github/knip/package-lock.json).
+  # The knip the knip pre-commit hook runs (tools/knip/package-lock.json).
   - package-ecosystem: npm
-    directory: /.github/knip
+    directory: /tools/knip
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
     labels: [dependencies]
     open-pull-requests-limit: 2
-  # The TypeScript scripts/typecheck-footer.sh runs (.github/typescript): a
+  # The TypeScript scripts/typecheck-footer.sh runs (tools/typescript): a
   # declared LOCAL gate (R14c), not in ci-gate, so a bump is proven by
   # running the script by hand on the Dependabot branch.
   - package-ecosystem: npm
-    directory: /.github/typescript
+    directory: /tools/typescript
     schedule:
       interval: weekly
     cooldown:

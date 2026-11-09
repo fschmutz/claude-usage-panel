@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # TypeScript typecheck of the usage-footer plugin (footer/: hooks, contract,
-# tests), strict, with the TypeScript pinned in .github/typescript (Dependabot's
+# tests), strict, with the TypeScript pinned in tools/typescript (Dependabot's
 # npm ecosystem bumps it). `claude plugin test` transpiles without checking
 # types, so this is the only gate that does.
 #
@@ -22,7 +22,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 root="$PWD"
-dir=.github/typescript
+dir=tools/typescript
 want="$(sed -n 's/^ *"typescript": *"\([0-9][0-9.]*\)".*/\1/p' "$dir/package.json")"
 [ -n "$want" ] || {
     echo "typecheck-footer: no typescript version pinned in $dir/package.json" >&2

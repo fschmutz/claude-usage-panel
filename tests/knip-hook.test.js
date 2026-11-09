@@ -16,10 +16,10 @@ function fresh(t) {
     const home = stubbedHome(t, {prefix: 'cup-knip-'});
     const repo = path.join(home, 'repo');
     fs.mkdirSync(path.join(repo, 'scripts'), {recursive: true});
-    fs.mkdirSync(path.join(repo, '.github', 'knip'), {recursive: true});
+    fs.mkdirSync(path.join(repo, 'tools', 'knip'), {recursive: true});
     fs.copyFileSync(path.join(ROOT, 'scripts', 'knip.sh'), path.join(repo, 'scripts', 'knip.sh'));
-    fs.copyFileSync(path.join(ROOT, '.github', 'knip', 'package.json'),
-        path.join(repo, '.github', 'knip', 'package.json'));
+    fs.copyFileSync(path.join(ROOT, 'tools', 'knip', 'package.json'),
+        path.join(repo, 'tools', 'knip', 'package.json'));
     fs.writeFileSync(path.join(home, 'bin', 'npm'), '#!/bin/sh\necho "npm $*" >>"$HOME/npm.log"\nexit 1\n');
     fs.chmodSync(path.join(home, 'bin', 'npm'), 0o755);
     const env = ci => ({HOME: home, PATH: `${path.join(home, 'bin')}:/usr/bin:/bin`, ...(ci && {CI: 'true'})});
@@ -32,7 +32,7 @@ test('knip.sh: not installed yet means install it, with lifecycle scripts off', 
     const {home, sh} = fresh(t);
     sh(false);
     assert.match(fs.readFileSync(path.join(home, 'npm.log'), 'utf8'),
-        /^npm ci --prefix \.github\/knip --ignore-scripts /m);
+        /^npm ci --prefix tools\/knip --ignore-scripts /m);
 });
 
 test('knip.sh: an install that fails skips loudly on a workstation and fails in CI', t => {

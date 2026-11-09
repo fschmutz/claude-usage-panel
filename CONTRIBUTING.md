@@ -66,6 +66,7 @@ wiki page.
 ├── scripts/                 # install/ targets · pack-gnome · auto-update · session-ping · versions
 │   ├── attribution-guard.sh # the attribution gate (copied from the template; do not fork)
 │   └── tests/               # its fixtures and shell suite (everything else tests from tests/)
+├── tools/                   # npm tool pins (ccusage · knip · claude-cli · typescript), bumped by Dependabot
 └── install.sh               # unified installer (gnome · statusline · mcp · cli · macos · autoupdate · sessionping)
 ```
 

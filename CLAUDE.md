@@ -51,7 +51,7 @@ node scripts/check-deps.mjs audit      # OSV for direct pins + npm audit of ever
 ./install.sh macos           # build macos/ClaudeUsagePanel.app
 ./install.sh autoupdate      # schedule the daily update check (systemd timer / launchd / cron)
 ./install.sh sessionping 05:30 10:35 --days=mon-fri  # scheduled claude pings that open the 5h session window (opt-in)
-./install.sh cost            # pinned ccusage (.github/ccusage, Dependabot) + cost line on (opt-in)
+./install.sh cost            # pinned ccusage (tools/ccusage, Dependabot) + cost line on (opt-in)
 ./install.sh waiting         # Claude Code hooks for "Waiting on you" + the panel section on (opt-in: node per tool call)
 ./install.sh pause           # Claude Code hooks for `claudectl session pause|resume` (opt-in: asyncRewake waiter + node per tool call)
 ./install.sh update [target...]        # reinstall installed targets (upgrade); --pull to git pull first
@@ -160,14 +160,14 @@ editable after the fact, and rebuilding every other gate for a description edit
 is not worth it. It is the one gate deliberately outside `ci-gate`.
 
 The `plugin-validate` job runs `claude plugin validate` on the marketplace
-and on `plugin/` with the CLI pinned in `.github/claude-cli` (Dependabot's npm
+and on `plugin/` with the CLI pinned in `tools/claude-cli` (Dependabot's npm
 ecosystem), and fails on any warning.
 
 The same job validates `footer/` (the opt-in `usage-footer` plugin, a Claude
 Code mod drawing the line under the prompt) and runs `claude plugin test
 footer` (which transpiles, it does not check types).
 `scripts/typecheck-footer.sh` typechecks it, strict, with the TypeScript pinned
-in `.github/typescript`, against the mod API declarations Claude Code lays in
+in `tools/typescript`, against the mod API declarations Claude Code lays in
 `footer/.claude-plugin/types/` (gitignored) or `$CLAUDE_CODE_TYPES`. It is a **declared local gate**
 (maintainer's decision R14c): not in `ci-gate`, not a pre-commit hook - no
 package ships the declarations and CI has no login to have Claude Code lay

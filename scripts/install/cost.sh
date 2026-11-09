@@ -4,14 +4,14 @@
 # The panels' "Session cost" line runs an installed `ccusage` and nothing else
 # (no `npx ccusage@latest`: that ran the newest unpinned release on every poll,
 # in the session holding the Claude token). This target installs exactly the
-# tree locked in .github/ccusage/package-lock.json - ccusage and every package
+# tree locked in tools/ccusage/package-lock.json - ccusage and every package
 # under it, each checked against its recorded integrity hash - with `npm ci`
 # into a private prefix, then puts a `ccusage` launcher where the panels look.
 # Dependabot bumps the lock, `update` reinstalls it, and it turns the cost line
 # on in whichever panel is installed. A global `volta install` / `npm i -g`
 # (what this did before) resolved the transitive packages afresh on every
 # install, so two machines on the same pin could run different code.
-COST_PIN_DIR="$ROOT/.github/ccusage"
+COST_PIN_DIR="$ROOT/tools/ccusage"
 COST_PIN_FILE="$COST_PIN_DIR/package.json"
 COST_LAUNCHER_TAG="# claude-usage-panel cost launcher"
 

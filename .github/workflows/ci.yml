@@ -226,7 +226,7 @@ jobs:
   # The marketplace (.claude-plugin/marketplace.json) and the plugin (plugin/)
   # as Claude Code itself reads them. `--strict` turns every warning into exit
   # 1, and the output is checked as well, so a warning cannot pass as green.
-  # The CLI is .github/claude-cli/package-lock.json, one exact version bumped
+  # The CLI is tools/claude-cli/package-lock.json, one exact version bumped
   # by Dependabot: a new CLI that adds a warning shows up as a red Dependabot
   # PR to fix, never as an unrelated PR turning red overnight.
   plugin-validate:
@@ -245,7 +245,7 @@ jobs:
       # (2026-10-12: 10 min, a release left untagged). Each attempt is
       # bounded and retried, so a stall costs minutes, not the run.
       - name: npm ci (bounded, 3 attempts)
-        working-directory: .github/claude-cli
+        working-directory: tools/claude-cli
         run: |
           for attempt in 1 2 3; do
             timeout 180 npm ci --no-audit --no-fund --fetch-timeout=60000 --fetch-retries=2 && exit 0
@@ -260,7 +260,7 @@ jobs:
           DISABLE_AUTOUPDATER: "1"
           DISABLE_TELEMETRY: "1"
         run: |
-          cli=.github/claude-cli/node_modules/.bin/claude
+          cli=tools/claude-cli/node_modules/.bin/claude
           "$cli" --version
           for target in . plugin footer; do
             rc=0
@@ -284,7 +284,7 @@ jobs:
           CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
           DISABLE_AUTOUPDATER: "1"
           DISABLE_TELEMETRY: "1"
-        run: .github/claude-cli/node_modules/.bin/claude plugin test footer
+        run: tools/claude-cli/node_modules/.bin/claude plugin test footer
 
   # The author of record is the human who owns the change: no commit here is
   # authored or committed by an address .github/attribution-allow.txt does not

@@ -143,8 +143,8 @@ ever find yourself editing the ruleset's required checks, something is wrong.
   the `bash32` job is pinned by digest in `.github/bash32/Dockerfile` (docker
   ecosystem, held to 3.2).
   The Claude Code CLI the `plugin-validate` job runs is pinned in
-  `.github/claude-cli/package-lock.json`, and the knip of the `knip` hook in
-  `.github/knip/package-lock.json` (npm ecosystem).
+  `tools/claude-cli/package-lock.json`, and the knip of the `knip` hook in
+  `tools/knip/package-lock.json` (npm ecosystem).
 - **Dependabot waits 7 days** (`cooldown`) before proposing a new release. A
   compromised upstream is normally caught and yanked inside that window.
 - **`permissions:` is least-privilege.** The workflow level grants no write

@@ -6,7 +6,7 @@
 //   node scripts/check-deps.mjs              freshness, then advisories
 //   node scripts/check-deps.mjs freshness    every pin against its upstream
 //   node scripts/check-deps.mjs audit        OSV for the direct pins, `npm audit`
-//                                            for every .github/<tool> tree
+//                                            for every tools/<tool> tree
 //
 // Network required: an upstream that does not answer is UNKNOWN and fails,
 // never "up to date". Runs in CI (the `deps` job, on every push and weekly) -
@@ -32,6 +32,10 @@ import {nodeVerdict, verdict} from './deps/verdict.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'fschmutz/claude-usage-panel';
 const HOLDS = '.github/dependency-holds';
+/** Where tool pins live, one dir per tool: .github/ for CI images and the
+ *  pip pin, tools/ for the npm pins (Dependabot cannot open npm PRs for
+ *  manifests under .github/, dependabot-core#15721). */
+const PIN_ROOTS = ['.github', 'tools'];
 const run = promisify(execFile);
 
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -44,7 +48,7 @@ export function inventory() {
         ...ls('.github/workflows', /\.ya?ml$/).map(f => parseWorkflow(f, read(f))),
         parsePreCommit('.pre-commit-config.yaml', read('.pre-commit-config.yaml')),
         parseEngines('package.json', read('package.json')),
-        ...ls('.github', /^[^.]/, {dirs: true}).flatMap(dir => {
+        ...PIN_ROOTS.flatMap(root => ls(root, /^[^.]/, {dirs: true})).flatMap(dir => {
             const out = [];
             if (fs.existsSync(path.join(ROOT, dir, 'package.json')))
                 out.push(parsePackageJson(`${dir}/package.json`, read(`${dir}/package.json`)));

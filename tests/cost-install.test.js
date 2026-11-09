@@ -13,7 +13,7 @@ import {run, stubbedHome} from './helpers.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL = path.join(ROOT, 'install.sh');
 const UUID = 'claude-usage-panel@fschmutz.github.io';
-const PIN_DIR = path.join(ROOT, '.github/ccusage');
+const PIN_DIR = path.join(ROOT, 'tools/ccusage');
 const PINNED = JSON.parse(fs.readFileSync(path.join(PIN_DIR, 'package.json'), 'utf8')).dependencies.ccusage;
 
 function stub(home, name, body) {

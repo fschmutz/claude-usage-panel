@@ -116,7 +116,7 @@ test('pre-commit: every remote hook is frozen to a SHA, and Dependabot watches e
     for (const rev of revs) assert.match(rev, /^[0-9a-f]{40} {2}# frozen: v\S+$/);
     const eco = [...read('.github/dependabot.yml').matchAll(/package-ecosystem: (\S+)/g)].map((m) => m[1]);
     assert.deepEqual([...new Set(eco)].sort(), ['docker', 'github-actions', 'npm', 'pip', 'pre-commit']);
-    assert.match(read('.github/dependabot.yml'), /directory: \/\.github\/claude-cli/);
+    assert.match(read('.github/dependabot.yml'), /directory: \/tools\/claude-cli/);
     assert.match(read('.github/dependabot.yml'), /directory: \/\.github\/bash32/);
     assert.match(read('.github/dependabot.yml'), /directory: \/\.github\/pre-commit/);
     assert.match(read('.github/dependabot.yml'), /directory: \/\.github\/swift/);
@@ -196,16 +196,16 @@ test('ci plugin-validate: a pinned CLI validates every manifest strictly and tes
     const body = job('.github/workflows/ci.yml', 'plugin-validate');
     // a registry stall must fail fast and retry, never sit until the job timeout
     assert.match(body, /for attempt in 1 2 3; do\n\s+timeout \d+ npm ci /);
-    assert.match(body, /npm ci [^\n]*\n\s+working-directory: \.github\/claude-cli/);
+    assert.match(body, /npm ci [^\n]*\n\s+working-directory: tools\/claude-cli/);
     assert.match(body, /plugin validate --strict "\$target"/);
     assert.match(body, /for target in \. plugin footer; do/);
     assert.match(body, /scripts\/sync-footer-pure\.sh --check/, 'the footer lib/pure copies are checked');
     assert.match(body, /claude plugin test footer/, 'the footer plugin tests run');
     assert.match(body, /grep -qi 'warning'/, 'a warning in the output fails the job too');
-    const cli = JSON.parse(read('.github/claude-cli/package.json'));
+    const cli = JSON.parse(read('tools/claude-cli/package.json'));
     const want = cli.dependencies['@anthropic-ai/claude-code'];
     assert.match(want, /^\d+\.\d+\.\d+$/, 'an exact version, never a range');
-    const lock = JSON.parse(read('.github/claude-cli/package-lock.json'));
+    const lock = JSON.parse(read('tools/claude-cli/package-lock.json'));
     assert.equal(lock.packages['node_modules/@anthropic-ai/claude-code'].version, want);
     const needs = job('.github/workflows/ci.yml', 'ci-gate').match(/needs: \[([^\]]+)\]/)[1].split(/,\s*/);
     assert.ok(needs.includes('plugin-validate'), 'plugin-validate must be in ci-gate needs:');

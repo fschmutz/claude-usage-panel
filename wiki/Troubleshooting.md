@@ -21,7 +21,7 @@
 ## Cost shows "unavailable"
 
 Run `./install.sh cost`: it installs the `ccusage` version pinned in
-`.github/ccusage/package.json` (through Volta when you have it, else
+`tools/ccusage/package.json` (through Volta when you have it, else
 `npm install -g`) and turns the cost line on; `./install.sh update` keeps it on
 the pin. The panels run only an installed copy and never download one, and
 they look in `~/.volta/bin`, `~/.npm-global/bin`, `/opt/homebrew/bin` and

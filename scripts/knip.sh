@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # knip - unused files, exports, dependencies and unlisted imports - run with the
-# version pinned in .github/knip/package-lock.json (Dependabot's npm ecosystem
+# version pinned in tools/knip/package-lock.json (Dependabot's npm ecosystem
 # bumps it). Config: knip.jsonc. The pre-commit `knip` hook calls this, so it
 # runs on every commit and in CI's lint job; the install is redone only when
 # the installed knip is not the pinned one (that install needs the network:
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-dir=.github/knip
+dir=tools/knip
 want="$(sed -n 's/^ *"knip": *"\([0-9][0-9.]*\)".*/\1/p' "$dir/package.json")"
 [ -n "$want" ] || {
     echo "knip.sh: no knip version pinned in $dir/package.json" >&2
