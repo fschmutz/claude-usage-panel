@@ -88,22 +88,3 @@ test('chrome: --dry-run prints the plan and starts nothing', async () => {
   assert.match(lines.join(''), /would open Chrome for PERSO: .*chrome\/PERSO\nfirst launch: sign in to claude.ai as PERSO/);
   assert.equal(t.spawned.length, 0);
 });
-
-test('chrome --fill-google: the credentials leave the environment before Chrome is spawned', async () => {
-  const t = setup();
-  const env = {...t.io.env, CLAUDECTL_LOGIN_USER: 'u@example.test', CLAUDECTL_LOGIN_PASSWORD: 'pw-SECRET'};
-  const seen = [];
-  const lines = [];
-  const io = {...t.io, env, stdout: (s) => lines.push(s),
-    spawn: (cmd, args) => {
-      seen.push({hasUser: 'CLAUDECTL_LOGIN_USER' in env, hasPass: 'CLAUDECTL_LOGIN_PASSWORD' in env, args});
-      const dir = args.find((a) => a.startsWith('--user-data-dir=')).slice('--user-data-dir='.length);
-      fs.writeFileSync(path.join(dir, 'DevToolsActivePort'), '9222\n/devtools/browser/x\n');
-      return {unref() {}};
-    },
-    cdpTargets: async () => [], ask: async () => 'no', sleep: async () => {}};
-  assert.equal(await main(['chrome', 'PERSO', '--fill-google'], io), 1, 'not approved: nothing filled');
-  assert.deepEqual(seen.map((s) => [s.hasUser, s.hasPass]), [[false, false]]);
-  assert.ok(seen[0].args.includes('--remote-debugging-address=127.0.0.1'), 'DevTools on loopback only');
-  assert.ok(!lines.join('').includes('pw-SECRET'));
-});

@@ -6,6 +6,13 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Removed
+
+- **`claudectl account chrome --fill-google`** (added in 3.12.0). Google
+  rejects a Chrome running with DevTools enabled ("This browser or app may not
+  be secure", measured live), and the fill needed DevTools. A profile signs in
+  with the link claude.ai mails, opened with `--url=<link>`.
+
 ## [3.12.0] - 2026-11-09
 
 ### Added

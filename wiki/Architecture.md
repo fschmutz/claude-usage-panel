@@ -258,7 +258,6 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── account-exec.js     # `account exec`: a command run as a saved login in a throwaway config dir
 ├── account-chrome.js   # `account chrome`: an isolated Chrome profile per saved account, for Claude-in-Chrome
-├── chrome-fill.js      # `account chrome --fill-google`: injected credentials into accounts.google.com only, after yes
 ├── codex-cli.js        # `claudectl codex`: the CLI over the Codex store
 ├── session-cli.js      # `claudectl session`: the CLI over tabs.js
 ├── waiting.js          # live registry + waiting markers; focus via layout.js
