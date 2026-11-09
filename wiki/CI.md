@@ -140,7 +140,7 @@ ever find yourself editing the ruleset's required checks, something is wrong.
   (Dependabot's pre-commit ecosystem). The pre-commit the `lint` job installs
   is pinned in `.github/pre-commit/requirements.txt` (pip ecosystem: a version
   inside a `run:` line is invisible to every ecosystem). The bash 3.2 image of
-  the `bash32` job is pinned by digest in `.github/bash32/Dockerfile` (docker
+  the `bash32` job is pinned by digest in `tools/bash32/Dockerfile` (docker
   ecosystem, held to 3.2).
   The Claude Code CLI the `plugin-validate` job runs is pinned in
   `tools/claude-cli/package-lock.json`, and the knip of the `knip` hook in

@@ -219,7 +219,7 @@ inherits), and a write scope is declared only on the job that needs it
 (`release.yml`, `wiki.yml`). Pre-commit hook revs are frozen to a SHA with a
 `# frozen: vX` comment. The CI pre-commit version lives in
 `.github/pre-commit/requirements.txt` and the bash32 image in
-`.github/bash32/Dockerfile`, pinned by digest. Dependabot bumps all of them
+`tools/bash32/Dockerfile`, pinned by digest. Dependabot bumps all of them
 (github-actions, pre-commit, pip, docker and npm ecosystems).
 
 CodeQL runs via **default setup**, not a workflow file - do not create one, it

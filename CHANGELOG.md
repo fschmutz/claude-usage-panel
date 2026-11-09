@@ -127,8 +127,9 @@ semantic versioning.
 
 ### Fixed
 
-- **Dependabot can open its npm PRs again.** The ccusage, knip, claude-cli
-  and TypeScript pins moved from `.github/<tool>` to `tools/<tool>`:
+- **Dependabot can open its npm and Docker PRs again.** The ccusage, knip,
+  claude-cli and TypeScript pins and the swift and bash32 images moved from
+  `.github/<tool>` to `tools/<tool>`:
   Dependabot's npm jobs found each bump but GitHub refused to open the pull
   request for a manifest under `.github/` (400 "invalid or unauthorized
   changes", dependabot-core#15721), so those pins never updated.

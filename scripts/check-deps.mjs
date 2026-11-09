@@ -33,8 +33,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'fschmutz/claude-usage-panel';
 const HOLDS = '.github/dependency-holds';
 /** Where tool pins live, one dir per tool: .github/ for CI images and the
- *  pip pin, tools/ for the npm pins (Dependabot cannot open npm PRs for
- *  manifests under .github/, dependabot-core#15721). */
+ *  pip pin, tools/ for the npm and Docker pins (Dependabot cannot open their
+ *  PRs for manifests under .github/, dependabot-core#15721). */
 const PIN_ROOTS = ['.github', 'tools'];
 const run = promisify(execFile);
 

@@ -168,9 +168,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The toolchain is .github/swift/Dockerfile: the official swift image
+      # The toolchain is tools/swift/Dockerfile: the official swift image
       # pinned by digest, bumped by Dependabot's docker ecosystem.
-      - run: docker build --quiet --tag cup-swift .github/swift
+      - run: docker build --quiet --tag cup-swift tools/swift
       # Warnings are errors: a green build whose log carried two unread
       # warnings for weeks is how this flag got here. The package is in Swift 6
       # language mode, so a concurrency violation is an error too.
@@ -218,9 +218,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The image is .github/bash32/Dockerfile: pinned by digest, bumped by
+      # The image is tools/bash32/Dockerfile: pinned by digest, bumped by
       # Dependabot's docker ecosystem. Never a bare `bash:3.2` tag here.
-      - run: docker build --quiet --tag cup-bash32 .github/bash32
+      - run: docker build --quiet --tag cup-bash32 tools/bash32
       - run: docker run --rm -v "$PWD:/repo:ro" -e HOME=/tmp cup-bash32 bash /repo/scripts/bash32-smoke.sh
 
   # The marketplace (.claude-plugin/marketplace.json) and the plugin (plugin/)

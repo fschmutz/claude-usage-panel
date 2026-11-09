@@ -117,27 +117,27 @@ test('pre-commit: every remote hook is frozen to a SHA, and Dependabot watches e
     const eco = [...read('.github/dependabot.yml').matchAll(/package-ecosystem: (\S+)/g)].map((m) => m[1]);
     assert.deepEqual([...new Set(eco)].sort(), ['docker', 'github-actions', 'npm', 'pip', 'pre-commit']);
     assert.match(read('.github/dependabot.yml'), /directory: \/tools\/claude-cli/);
-    assert.match(read('.github/dependabot.yml'), /directory: \/\.github\/bash32/);
+    assert.match(read('.github/dependabot.yml'), /directory: \/tools\/bash32/);
     assert.match(read('.github/dependabot.yml'), /directory: \/\.github\/pre-commit/);
-    assert.match(read('.github/dependabot.yml'), /directory: \/\.github\/swift/);
+    assert.match(read('.github/dependabot.yml'), /directory: \/tools\/swift/);
 });
 
 test('swift-core: the toolchain image is pinned by digest, the package is in Swift 6 mode', () => {
-    const from = read('.github/swift/Dockerfile').match(/^FROM (\S+)$/m)[1];
+    const from = read('tools/swift/Dockerfile').match(/^FROM (\S+)$/m)[1];
     assert.match(from, /^swift:\d+\.\d+(\.\d+)?-\w+@sha256:[0-9a-f]{64}$/);
     const body = job('.github/workflows/ci.yml', 'swift-core');
-    assert.match(body, /docker build [^\n]*\.github\/swift/);
+    assert.match(body, /docker build [^\n]*tools\/swift/);
     assert.doesNotMatch(body, /setup-swift/);
     assert.match(read('macos/Package.swift'), /^\/\/ swift-tools-version: 6\.\d/);
     assert.doesNotMatch(read('macos/Package.swift'), /StrictConcurrency|swiftLanguageMode\(\.v5\)/);
 });
 
 test('bash32: the image is pinned by digest and CI never names a bare bash tag', () => {
-    const from = read('.github/bash32/Dockerfile').match(/^FROM (\S+)$/m)[1];
+    const from = read('tools/bash32/Dockerfile').match(/^FROM (\S+)$/m)[1];
     assert.match(from, /^bash:3\.2\.\d+@sha256:[0-9a-f]{64}$/);
     const body = job('.github/workflows/ci.yml', 'bash32');
     assert.doesNotMatch(body.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n'), /bash:3/);
-    assert.match(body, /docker build [^\n]*\.github\/bash32/);
+    assert.match(body, /docker build [^\n]*tools\/bash32/);
 });
 
 test('node: CI runs the engines floor, and nothing below it', () => {

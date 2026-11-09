@@ -10,7 +10,7 @@
 #   scripts/bash32-smoke.sh          run it (expects to BE bash 3.2)
 #
 # Run it the way CI does, from a checkout root:
-#   docker build -t cup-bash32 .github/bash32
+#   docker build -t cup-bash32 tools/bash32
 #   docker run --rm -v "$PWD:/repo:ro" -e HOME=/tmp cup-bash32 bash /repo/scripts/bash32-smoke.sh
 set -euo pipefail
 

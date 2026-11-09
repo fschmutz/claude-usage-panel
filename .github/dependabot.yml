@@ -44,10 +44,10 @@ updates:
     labels: [dependencies]
     open-pull-requests-limit: 2
 
-  # The bash32 job's image (.github/bash32/Dockerfile), pinned by digest. Held
+  # The bash32 job's image (tools/bash32/Dockerfile), pinned by digest. Held
   # to 3.2: that job exists to run the bash macOS ships, not the newest one.
   - package-ecosystem: docker
-    directory: /.github/bash32
+    directory: /tools/bash32
     schedule:
       interval: weekly
     cooldown:
@@ -58,9 +58,9 @@ updates:
     labels: [dependencies]
     open-pull-requests-limit: 2
 
-  # The swift-core job's toolchain (.github/swift/Dockerfile), pinned by digest.
+  # The swift-core job's toolchain (tools/swift/Dockerfile), pinned by digest.
   - package-ecosystem: docker
-    directory: /.github/swift
+    directory: /tools/swift
     schedule:
       interval: weekly
     cooldown:
