@@ -61,8 +61,20 @@ export function openAccountChrome(io = {}) {
     return path.join(dir, 'chrome', 'chrome-native-host');
   }
 
-  /** What a launch does, without doing it: {dir, firstRun, manifest, argv}. */
-  function plan(name, {url} = {}) {
+  /** True while a Chrome already runs on `dir` (its SingletonLock names a live pid). */
+  function running(dir) {
+    try {
+      const pid = Number(fs.readlinkSync(path.join(dir, 'SingletonLock')).split('-').pop());
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** What a launch does, without doing it: {dir, firstRun, manifest, argv}.
+   *  `debug`: DevTools on 127.0.0.1, a port Chrome picks, for --fill-google. */
+  function plan(name, {url, debug = false} = {}) {
     const profile = store.readProfile(name);
     if (!profile) throw new Error(`no saved account named ${name}`);
     const dir = path.join(chromeProfilesDir(io), profile.name);
@@ -73,6 +85,7 @@ export function openAccountChrome(io = {}) {
       name: profile.name, dir, firstRun, host: liveHost(),
       manifest: path.join(dir, 'NativeMessagingHosts', `${HOST_NAME}.json`),
       argv: [chromeBinary(), `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
+        ...(debug ? ['--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0'] : []),
         '--new-window', ...urls],
     };
   }
@@ -95,11 +108,29 @@ export function openAccountChrome(io = {}) {
   /** Open NAME's Chrome, detached. Returns the plan it ran. */
   function launch(name, opts = {}) {
     const p = plan(name, opts);
+    // a running instance ignores new flags: DevTools would not be on
+    if (opts.debug && running(p.dir)) throw new Error(`close the Chrome of ${p.name} first, then retry`);
     prepare(p);
+    if (opts.debug) fs.rmSync(path.join(p.dir, 'DevToolsActivePort'), {force: true});
     const child = spawn(p.argv[0], p.argv.slice(1), {detached: true, stdio: 'ignore'});
     child.unref?.();
     return p;
   }
 
-  return {plan, prepare, launch};
+  /** The DevTools port Chrome wrote for `dir`, waiting up to `ms`. */
+  async function debugPort(dir, ms = 15_000) {
+    const file = path.join(dir, 'DevToolsActivePort');
+    for (const end = Date.now() + ms; Date.now() < end;) {
+      try {
+        const port = Number(fs.readFileSync(file, 'utf8').split('\n')[0]);
+        if (port > 0) return port;
+      } catch {
+        // not written yet
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    throw new Error('Chrome did not open DevTools: nothing filled');
+  }
+
+  return {plan, prepare, launch, running, debugPort};
 }

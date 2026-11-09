@@ -242,6 +242,28 @@ lays the extension's native-messaging manifest inside the profile, naming the
 live login's `~/.claude/chrome/chrome-native-host`. Claude Code writes that
 host on its first `/chrome`; until then the command refuses.
 
+`--fill-google` fills the Google sign-in of that window (for a Google
+Workspace account such as eng@ behind "Continue with Google") from a
+password manager. You run it in your own terminal through a wrapper that
+unlocks the vault (the master password typed at its prompt) and puts one
+item's username and password in the child's environment only, as
+`CLAUDECTL_LOGIN_USER` / `CLAUDECTL_LOGIN_PASSWORD`, then locks the vault on
+every exit:
+
+```bash
+trap 'bw lock' EXIT INT TERM
+my-bw-inject --item work-google -- claudectl account chrome WORK --fill-google
+```
+
+claudectl
+deletes both from its environment before Chrome starts. It asks you to type
+`yes` at a prompt naming the origin and the keys, never the values. Then it
+fills the email and the password only on `https://accounts.google.com`, which
+it checks again right before each field, through DevTools on 127.0.0.1 for
+this run, and logs `filled <field> from <key>`. No value is ever printed or
+copied. 2FA stays on your phone. A Chrome of that profile already open is
+refused (close it first: DevTools only starts with the window).
+
 ## When a percentage is not shown
 
 A bar shows `–` and draws empty, rather than a number, in two cases: when the

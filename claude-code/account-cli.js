@@ -3,6 +3,7 @@
 // their usage), switch, forget, refresh. claudectl.js dispatches here.
 
 import {openAccountChrome} from './account-chrome.js';
+import {cdpTargets, connectCdp, fillGoogle, takeCredentials} from './chrome-fill.js';
 import {openAccountExec} from './account-exec.js';
 import {openStore} from './accounts.js';
 import {nowOf} from './paths.js';
@@ -19,7 +20,7 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
   claudectl account remove NAME               forget a saved account
   claudectl account refresh [NAME]            refresh the stored token(s) now
   claudectl account exec NAME -- CMD [ARG...]  run CMD as NAME, the current login untouched
-  claudectl account chrome NAME [--url=U] [--dry-run]
+  claudectl account chrome NAME [--url=U] [--fill-google] [--dry-run]
                                               an isolated Chrome signed in to claude.ai as NAME
 
 Names: letters, digits, . _ - (e.g. PRO, PERSO), case-insensitive. Running
@@ -59,7 +60,13 @@ drives this window and no other. The first launch opens claude.ai/login and
 the extension's Web Store page: sign in as NAME and add the extension, once;
 both are kept. Later launches open --url (default claude.ai). The extension's
 native-messaging manifest is laid in the profile on every launch, naming the
-live login's host, which Claude Code writes on its first /chrome.`,
+live login's host, which Claude Code writes on its first /chrome.
+--fill-google fills the Google sign-in in that window from
+CLAUDECTL_LOGIN_USER / CLAUDECTL_LOGIN_PASSWORD, injected by a password
+manager wrapper (one that runs bw and injects an item) and deleted from the
+environment before anything starts. Only https://accounts.google.com is
+filled, only after a typed yes, through DevTools on 127.0.0.1 for this run;
+no value is ever printed. 2FA stays on the phone.`,
   refresh: `Refreshes the stored token of NAME, or of every saved login. The login
 Claude Code uses now is never refreshed here: Claude Code holds the same
 single-use refresh token.`,
@@ -94,13 +101,29 @@ export async function main(argv, io = {}) {
     const name = argv[1];
     if (!name || name.startsWith('--')) throw new Error('usage: claudectl account chrome NAME [--url=U] [--dry-run]');
     const url = argv.find((a) => a.startsWith('--url='))?.slice('--url='.length);
+    const fill = argv.includes('--fill-google');
+    const dry = argv.includes('--dry-run');
+    // taken out of the environment before anything is spawned
+    const creds = fill && !dry ? takeCredentials(io.env ?? process.env) : null;
     const chrome = openAccountChrome(io);
-    const p = argv.includes('--dry-run') ? chrome.plan(name, {url}) : chrome.launch(name, {url});
-    out(`${argv.includes('--dry-run') ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
+    const p = dry ? chrome.plan(name, {url, debug: fill}) : chrome.launch(name, {url, debug: fill});
+    out(`${dry ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
     if (p.firstRun) {
       out(`first launch: sign in to claude.ai as ${p.name}, then add the Claude extension (both tabs are open); kept for next time\n`);
     }
-    return 0;
+    if (fill && dry) out('would fill: https://accounts.google.com email + password from CLAUDECTL_LOGIN_USER / CLAUDECTL_LOGIN_PASSWORD, after a typed yes\n');
+    if (!creds) return 0;
+    const port = await chrome.debugPort(p.dir);
+    const filled = await fillGoogle(creds, {
+      targets: io.cdpTargets ?? (() => cdpTargets(port)),
+      connect: io.connectCdp ?? connectCdp,
+      ask: io.ask ?? askTty,
+      log: (line) => out(`${line}\n`),
+      sleep: io.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+    });
+    creds.CLAUDECTL_LOGIN_USER = '';
+    creds.CLAUDECTL_LOGIN_PASSWORD = '';
+    return filled.length === 2 ? 0 : 1;
   }
   const args = argv.filter((a) => !a.startsWith('--'));
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
@@ -203,5 +226,19 @@ export async function main(argv, io = {}) {
     }
     default:
       throw new Error(`unknown command ${cmd}\n${helpText(store)}`);
+  }
+}
+
+/** One answer read from the terminal itself, never from a pipe. */
+async function askTty(prompt) {
+  const {createInterface} = await import('node:readline/promises');
+  const fs = await import('node:fs');
+  const input = fs.createReadStream('/dev/tty');
+  const rl = createInterface({input, output: process.stderr});
+  try {
+    return await rl.question(prompt);
+  } finally {
+    rl.close();
+    input.destroy();
   }
 }

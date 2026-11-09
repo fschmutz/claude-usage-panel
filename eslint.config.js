@@ -41,6 +41,8 @@ export default [
                 process: 'readonly',
                 console: 'readonly',
                 fetch: 'readonly',
+                // Node 22+ built-in (the engines floor): chrome-fill.js speaks CDP over it
+                WebSocket: 'readonly',
                 AbortController: 'readonly',
                 AbortSignal: 'readonly',
                 setTimeout: 'readonly',
