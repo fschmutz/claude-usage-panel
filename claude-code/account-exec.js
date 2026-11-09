@@ -26,6 +26,12 @@
 //   so a session run this way can be paused and gets `claudectl session
 //   send` messages like any other (mail.js).
 //
+// - Claude Code (re)writes the browser extension's native-messaging host
+//   manifest to point into ITS config dir, which here is the throwaway one:
+//   once the dir is gone, Claude-in-Chrome is "not connected" for every
+//   session. The manifests are recorded before the run (inside the dir, so a
+//   crashed run's are too) and put back after it, by exec and by sweep.
+//
 // The command itself is not restricted: it is the caller's. No other hook,
 // MCP server or setting comes along - the config dir holds the login and
 // those hooks only.
@@ -38,11 +44,22 @@ import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 import {keychainServices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
 
 import {openStore} from './accounts.js';
+import os from 'node:os';
+
 import {claudeSettingsPath, scratchDir} from './paths.js';
 import {readJSON} from './private-fs.js';
 import {pidAlive} from './procs.js';
 
 export const EXEC_PREFIX = 'claude-exec-';
+/** The Claude-in-Chrome native-messaging host manifest Claude Code writes. */
+const NATIVE_HOST = 'com.anthropic.claude_code_browser_extension.json';
+/** Every Chromium-family browser config dir whose NativeMessagingHosts/ it may write. */
+const BROWSER_DIRS = {
+  linux: ['.config/google-chrome', '.config/google-chrome-beta', '.config/chromium',
+    '.config/BraveSoftware/Brave-Browser', '.config/microsoft-edge'],
+  darwin: ['Library/Application Support/Google/Chrome', 'Library/Application Support/Chromium',
+    'Library/Application Support/BraveSoftware/Brave-Browser', 'Library/Application Support/Microsoft Edge'],
+};
 /** Variables that would put another login in front of the config dir's. */
 export const DROPPED_ENV = [
   'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_SECURESTORAGE_CONFIG_DIR',
@@ -97,7 +114,77 @@ export function openAccountExec(io = {}) {
     return true;
   }
 
+  /** The native-host manifest paths of every known browser. */
+  function hostManifests() {
+    const home = io.homedir ?? os.homedir();
+    return (BROWSER_DIRS[platform] ?? []).map((d) => path.join(home, d, 'NativeMessagingHosts', NATIVE_HOST));
+  }
+
+  /** Record each manifest as it is now (null: absent) inside `configDir`. */
+  function recordHosts(configDir) {
+    const before = Object.fromEntries(hostManifests().map((f) => {
+      try {
+        return [f, fs.readFileSync(f, 'utf8')];
+      } catch {
+        return [f, null];
+      }
+    }));
+    fs.writeFileSync(path.join(configDir, '.native-hosts.json'), `${JSON.stringify(before)}\n`, {mode: 0o600});
+  }
+
+  /** The live login's own native host, the one every manifest should name. */
+  const liveHost = () => path.join(env.CLAUDE_CONFIG_DIR || path.join(io.homedir ?? os.homedir(), '.claude'),
+    'chrome', 'chrome-native-host');
+  const inExecDir = (p) => typeof p === 'string'
+    && path.basename(path.dirname(path.dirname(p))).startsWith(EXEC_PREFIX);
+
+  /**
+   * Heal every manifest that names a host inside an exec dir (`configDir`'s,
+   * or one whose dir is gone or whose run died; a live run's is its own): back to what it was before the run when that
+   * was sound, else to the live login's host, else removed - a manifest
+   * naming a dir that is gone breaks Claude-in-Chrome for every session.
+   * A manifest naming anything else is left alone. Returns the healed files.
+   */
+  function restoreHosts(configDir = null) {
+    let before = {};
+    try {
+      before = configDir ? JSON.parse(fs.readFileSync(path.join(configDir, '.native-hosts.json'), 'utf8')) : {};
+    } catch {
+      // nothing recorded: the run never started
+    }
+    const healed = [];
+    for (const f of hostManifests()) {
+      let now;
+      try {
+        now = JSON.parse(fs.readFileSync(f, 'utf8'));
+      } catch {
+        continue;
+      }
+      if (!inExecDir(now?.path)) continue;
+      // another exec still running owns its manifest until it ends
+      const dir = path.dirname(path.dirname(now.path));
+      const pid = Number(new RegExp(`^${EXEC_PREFIX}(\\d+)-`).exec(path.basename(dir))?.[1]);
+      if (dir !== configDir && fs.existsSync(dir) && alive(pid)) continue;
+      let was = null;
+      try {
+        was = typeof before[f] === 'string' ? JSON.parse(before[f]) : null;
+      } catch {
+        // unreadable record: fall through to the live host
+      }
+      if (was && typeof was.path === 'string' && !inExecDir(was.path)) fs.writeFileSync(f, before[f]);
+      else if (fs.existsSync(liveHost())) fs.writeFileSync(f, `${JSON.stringify({...now, path: liveHost()}, null, 2)}\n`);
+      else fs.rmSync(f, {force: true});
+      healed.push(f);
+    }
+    return healed;
+  }
+
   function removeDir(configDir) {
+    try {
+      restoreHosts(configDir);
+    } catch {
+      // a manifest we cannot write: never block the cleanup on it
+    }
     if (platform === 'darwin') {
       try {
         (io.exec ?? execFileSync)('/usr/bin/security', ['delete-generic-password', '-s', dirService(configDir)],
@@ -111,6 +198,11 @@ export function openAccountExec(io = {}) {
 
   /** Dirs left by an exec whose process is gone: sync back, then remove. */
   function sweep() {
+    try {
+      restoreHosts(); // a crashed run's manifest, whatever became of its dir
+    } catch {
+      // never block exec on a manifest we cannot write
+    }
     let names;
     try {
       names = fs.readdirSync(root());
@@ -159,6 +251,7 @@ export function openAccountExec(io = {}) {
     const configDir = fs.mkdtempSync(path.join(root(), `${EXEC_PREFIX}${io.pid ?? process.pid}-`));
     fs.chmodSync(configDir, 0o700);
     fs.writeFileSync(path.join(configDir, '.exec-profile'), `${profile.name}\n`, {mode: 0o600});
+    recordHosts(configDir);
     const inside = storeIn(configDir);
     // On macOS the Keychain item goes first (the file does not exist yet, so
     // prepareCredentials picks it), then the file: Claude Code reads either.
@@ -212,5 +305,5 @@ export function openAccountExec(io = {}) {
     }
   }
 
-  return {exec, sweep, syncBack, dirService};
+  return {exec, sweep, syncBack, dirService, restoreHosts};
 }

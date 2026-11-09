@@ -127,6 +127,13 @@ semantic versioning.
 
 ### Fixed
 
+- **`account exec` no longer breaks Claude-in-Chrome.** Claude Code points
+  the browser extension's native-messaging manifest at its own config dir;
+  run through `exec`, that dir is deleted at the end, so the extension read
+  "not connected" for every session. `exec` now records the manifest before
+  the run and restores it after; a manifest a crashed run left pointing into
+  a dead exec dir is healed to the live login's host by the next `exec`.
+
 - **Dependabot can open its npm and Docker PRs again.** The ccusage, knip,
   claude-cli and TypeScript pins and the swift and bash32 images moved from
   `.github/<tool>` to `tools/<tool>`:

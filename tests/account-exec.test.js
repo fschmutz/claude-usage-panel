@@ -207,3 +207,46 @@ test('exec: the pause waiter hooks come along, no other hook does', async () => 
   {stdio: 'ignore'}), 0);
   assert.equal(fs.readFileSync(t.report, 'utf8'), 'false', 'no waiter installed: no settings.json');
 });
+
+// Claude Code repoints Chrome's native-messaging manifest into ITS config
+// dir; under exec that dir is deleted, which left Claude-in-Chrome "not
+// connected" for every session (2026-11-09).
+const HOST = '.config/google-chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json';
+const manifest = (p) => `${JSON.stringify({name: 'com.anthropic.claude_code_browser_extension', path: p, type: 'stdio'})}\n`;
+
+test('exec: a native-host manifest the command repoints into the dir is put back after it', async () => {
+  const t = setup();
+  const file = path.join(t.home, HOST);
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  const original = manifest(path.join(t.home, '.claude', 'chrome', 'chrome-native-host'));
+  fs.writeFileSync(file, original);
+  const x = openAccountExec({...t.io, homedir: t.home});
+  assert.equal(await x.exec('PERSO', [process.execPath, '-e', `
+    const fs = require('node:fs'), f = ${JSON.stringify(file)};
+    const m = JSON.parse(fs.readFileSync(f, 'utf8'));
+    m.path = process.env.CLAUDE_CONFIG_DIR + '/chrome/chrome-native-host';
+    fs.writeFileSync(f, JSON.stringify(m));`], {stdio: 'ignore'}), 0);
+  assert.equal(fs.readFileSync(file, 'utf8'), original, 'the manifest names the live host again');
+});
+
+test('exec: a manifest a dead run left in a gone dir is healed to the live host; a live run keeps its own', () => {
+  const t = setup();
+  const file = path.join(t.home, HOST);
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  const live = path.join(t.home, '.claude', 'chrome', 'chrome-native-host');
+  fs.mkdirSync(path.dirname(live), {recursive: true});
+  fs.writeFileSync(live, '#!/bin/sh\n');
+  // a running exec (pid 222) owns its manifest: left alone
+  const running = path.join(t.io.tmpdir, `${EXEC_PREFIX}222-abc123`);
+  fs.mkdirSync(running, {recursive: true});
+  fs.writeFileSync(file, manifest(path.join(running, 'chrome', 'chrome-native-host')));
+  const x = openAccountExec({...t.io, homedir: t.home, pidAlive: (pid) => pid === 222});
+  assert.deepEqual(x.restoreHosts(), []);
+  // a crashed run whose dir is gone: healed to the live login's host
+  fs.writeFileSync(file, manifest(path.join(t.io.tmpdir, `${EXEC_PREFIX}111-gone00`, 'chrome', 'chrome-native-host')));
+  assert.deepEqual(x.restoreHosts(), [file]);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).path, live);
+  // a manifest naming anything else is never touched
+  fs.writeFileSync(file, manifest('/opt/other/host'));
+  assert.deepEqual(x.restoreHosts(), []);
+});

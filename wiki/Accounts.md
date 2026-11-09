@@ -212,7 +212,13 @@ from its environment. A stale token is refreshed first; a token the command
 rotates is written back to PERSO, never to the current login; the dir (and on
 macOS its own Keychain item) is removed when the command exits, and one left
 by a run that died is synced back and removed by the next `exec`. The current
-login itself is refused: Claude Code holds its single-use refresh token. Two
+login itself is refused: Claude Code holds its single-use refresh token.
+Claude Code repoints Chrome's native-messaging manifest
+(`NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json`)
+into its config dir; `exec` records it before the run and puts it back after
+(a run that died is healed by the next `exec`, to the live login's
+`~/.claude/chrome/chrome-native-host`), so Claude-in-Chrome keeps working
+for every other session. Two
 long `exec` runs of the same NAME at once can both rotate its token; keep
 concurrent runs short.
 
