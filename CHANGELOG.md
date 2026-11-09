@@ -23,6 +23,15 @@ semantic versioning.
   `bash -lc` launch (one helper, `loginShell`, for every terminal, tmux and
   the GNOME event command; the macOS app is not started by Volta).
 
+- **The footer installed by `./install.sh footer` never loaded.** The
+  installer's marketplace held a link to the checkout's `footer/`, and Claude
+  Code refuses a plugin whose files resolve outside its marketplace (`claude
+  plugin list`: "Path escapes plugin directory", 2.1.318 and 2.1.319). The
+  marketplace now holds a copy, rewritten on every install and update; an
+  update turns a 3.12.1 link into a copy, so an installed footer starts
+  loading after the next daily update. CI now installs the footer with the
+  pinned CLI and fails unless it loads (`scripts/check-footer-install.sh`).
+
 ### Security
 
 - The picomatch GHSA-fc5q-39xc-vjpf hold is gone: the advisory no longer

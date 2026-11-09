@@ -190,9 +190,15 @@ marketplace as the footer (never a second copy), and
 drops the status line only after the plugin is verified in `enabledPlugins`
 and only on an explicit `footer` install - `update` never swaps one target
 for the other; `update` of an installed footer only refreshes the
-marketplace folder and its link, with no claude CLI and no settings edit. A
+marketplace folder and its copy of `footer/` (a copy, never a link: Claude
+Code refuses a plugin whose files resolve outside the marketplace), with no
+claude CLI and no settings edit. A
 bare install never detects `statusline` once the footer is in, and an install
 naming both installs the footer alone (`tests/footer-install.test.js`).
+`plugin-validate` also runs `scripts/check-footer-install.sh`: the real
+pinned CLI installs the footer into a throwaway HOME and `claude plugin list
+--json` must report it enabled with no load error - `validate` reads the
+source folder and cannot see a fault of the installed shape.
 
 The `deps` job (`scripts/check-deps.mjs`) also runs weekly on a schedule: a
 pin is current or a NAMED hold in `.github/dependency-holds` (version-pinned,

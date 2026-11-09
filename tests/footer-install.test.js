@@ -44,6 +44,24 @@ const noNode = (home) => env(home, {PATH: `${path.join(home, 'bin')}:/usr/bin:/b
 const settingsOf = (home) => path.join(home, '.claude', 'settings.json');
 const readSettings = (home) => JSON.parse(fs.readFileSync(settingsOf(home), 'utf8'));
 const mktDir = (home) => path.join(home, 'state', 'claude-usage-panel', 'footer-marketplace');
+// The footer in the marketplace is a real copy of the checkout's footer/,
+// never a link: Claude Code refuses to load a plugin whose files resolve
+// outside the marketplace directory ("Path escapes plugin directory").
+function assertFooterCopy(home) {
+    const dst = path.join(mktDir(home), 'footer');
+    assert.ok(!fs.lstatSync(dst).isSymbolicLink(), 'the footer is a copy, not a link');
+    const walk = (dir) => fs.readdirSync(dir, {withFileTypes: true, recursive: true})
+        .filter((e) => !e.isDirectory())
+        .map((e) => path.relative(dir, path.join(e.parentPath, e.name)))
+        .sort();
+    const src = path.join(ROOT, 'footer');
+    assert.deepEqual(walk(dst), walk(src), 'every file of footer/ is there, nothing else');
+    for (const f of walk(dst)) {
+        assert.ok(!fs.lstatSync(path.join(dst, f)).isSymbolicLink(), `${f} is not a link`);
+        assert.ok(fs.readFileSync(path.join(dst, f)).equals(fs.readFileSync(path.join(src, f))), `${f} matches`);
+    }
+    assert.equal(fs.existsSync(path.join(mktDir(home), 'footer.new')), false, 'no half-built copy left');
+}
 const calls = (home) => {
     const log = path.join(home, 'claude-calls.log');
     return fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '';
@@ -156,7 +174,7 @@ test('an explicit footer install adds our own marketplace, installs, verifies, t
     assert.equal(s.statusLine, undefined, 'the status line went, after the install');
     assert.equal(s.theme, 'dark', 'every other setting is kept');
     assert.equal(s.enabledPlugins[PLUGIN], true);
-    assert.equal(fs.realpathSync(path.join(mktDir(home), 'footer')), fs.realpathSync(path.join(ROOT, 'footer')));
+    assertFooterCopy(home);
     const mkt = JSON.parse(fs.readFileSync(path.join(mktDir(home), '.claude-plugin', 'marketplace.json'), 'utf8'));
     assert.equal(mkt.name, 'claude-usage-panel-local', 'never the public marketplace name');
     assert.deepEqual(installed(home).filter((x) => x === 'statusline' || x === 'footer'), ['footer']);
@@ -346,20 +364,41 @@ for (const [why, breakIt] of [
         const home = footerHome(t);
         let r = run('bash', [INSTALL, 'footer'], {env: env(home)});
         assert.equal(r.status, 0, r.stdout + r.stderr);
-        fs.rmSync(path.join(mktDir(home), 'footer'));
+        fs.rmSync(path.join(mktDir(home), 'footer'), {recursive: true});
         breakIt(home);
         const before = fs.readFileSync(settingsOf(home), 'utf8');
         fs.rmSync(path.join(home, 'claude-calls.log'), {force: true});
 
         r = run('bash', [INSTALL, 'update', 'footer'], {env: env(home)});
         assert.equal(r.status, 0, r.stdout + r.stderr);
-        assert.match(r.stdout, /up to date - loads from/);
-        assert.equal(fs.realpathSync(path.join(mktDir(home), 'footer')), fs.realpathSync(path.join(ROOT, 'footer')),
-            'the link is put back');
+        assert.match(r.stdout, /up to date - copied from/);
+        assertFooterCopy(home);
         assert.equal(calls(home), '', 'no claude CLI call');
         assert.equal(fs.readFileSync(settingsOf(home), 'utf8'), before, 'settings untouched');
     });
 }
+
+test('update turns a pre-3.12.2 footer link into a copy and refreshes a stale copy', (t) => {
+    const home = footerHome(t);
+    let r = run('bash', [INSTALL, 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const dst = path.join(mktDir(home), 'footer');
+
+    // The shape 3.12.1 wrote: a link to the checkout, which never loaded.
+    fs.rmSync(dst, {recursive: true});
+    fs.symlinkSync(path.join(ROOT, 'footer'), dst);
+    r = run('bash', [INSTALL, 'update', 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assertFooterCopy(home);
+    assert.ok(fs.existsSync(path.join(ROOT, 'footer', 'hooks', 'register.tsx')), 'the checkout is untouched');
+
+    // A copy from an older tag: a file the checkout dropped goes, a changed one is rewritten.
+    fs.writeFileSync(path.join(dst, 'hooks', 'gone.js'), '');
+    fs.writeFileSync(path.join(dst, 'hooks', 'register.tsx'), 'old');
+    r = run('bash', [INSTALL, 'update', 'footer'], {env: env(home)});
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assertFooterCopy(home);
+});
 
 test('uninstall without node names node, not an unreadable marketplace list', (t) => {
     const home = footerHome(t);

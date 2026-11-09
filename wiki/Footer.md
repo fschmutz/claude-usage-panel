@@ -47,12 +47,13 @@ curl -fsSL https://fschmutz.github.io/claude-usage-panel/install | bash -s -- fo
 ```
 
 Writes a directory marketplace of its own, `claude-usage-panel-local`, under
-`~/.local/state/claude-usage-panel/footer-marketplace` (a link to this
-checkout's `footer/`), adds it, installs `usage-footer@claude-usage-panel-local`
+`~/.local/state/claude-usage-panel/footer-marketplace` (a copy of this
+checkout's `footer/`: Claude Code refuses to load a plugin linked from outside
+its marketplace), adds it, installs `usage-footer@claude-usage-panel-local`
 for your user and checks that `enabledPlugins` has it. Claude Code reads it in
-place from `footer/`, so the daily auto-update that moves the checkout to a new
+place from that copy, and every install and update rewrites it, so the daily auto-update that moves the checkout to a new
 release moves the footer with it: `update` only refreshes that folder and
-its link, so it needs neither the `claude` CLI nor a settings edit. Open a new
+its copy, so it needs neither the `claude` CLI nor a settings edit. Open a new
 session to see it. A first install needs the `claude` CLI (found on `PATH`,
 `~/.local/bin`, Homebrew or a Node version manager) and Node.js. With
 `CLAUDE_CONFIG_DIR` set, every settings path below is under it.

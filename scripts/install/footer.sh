@@ -5,9 +5,11 @@
 #
 # The plugin comes from a directory marketplace this installer owns, under its
 # own name: <state dir>/footer-marketplace, a generated marketplace.json and a
-# `footer` link to this checkout's footer/. Claude Code reads a directory
-# marketplace's plugin in place, so the auto-update that moves the checkout to
-# a new tag moves the footer with it. The name is NOT `claude-usage-panel`:
+# copy of this checkout's footer/ (never a link: Claude Code refuses a plugin
+# whose files resolve outside the marketplace). Claude Code reads a directory
+# marketplace's plugin in place, and every install and update rewrites the
+# copy, so the auto-update that moves the checkout to a new tag moves the
+# footer with it. The name is NOT `claude-usage-panel`:
 # that is the public GitHub marketplace, and `marketplace add` of a directory
 # under an existing name silently repoints it - and every plugin installed
 # from it - at that directory.
@@ -23,7 +25,7 @@
 #   - one footer: installed from the public marketplace by hand, it counts as
 #     the footer and no second copy is installed next to it;
 #   - `update` of an installed footer only refreshes the marketplace folder
-#     and its link: no claude CLI, no settings edit, so a scheduler's PATH or
+#     and its copy: no claude CLI, no settings edit, so a scheduler's PATH or
 #     a settings.json that became a symlink cannot fail every daily update;
 #   - every step's exit status is checked, a failure is a skip_fatal.
 FOOTER_MARKETPLACE="claude-usage-panel-local"
@@ -60,14 +62,22 @@ _footer_claude() {
     echo "$c/claude"
 }
 
-# The marketplace folder: its marketplace.json and the `footer` link to this
-# checkout. Rewritten on every install and update, so a moved checkout is
-# followed.
+# The marketplace folder: its marketplace.json and a copy of this checkout's
+# footer/. A copy, never a link: Claude Code refuses to load a plugin whose
+# files resolve outside the marketplace directory ("Path escapes plugin
+# directory"), so a `footer` link to the checkout installs and never loads.
+# Rewritten on every install and update, so a new tag or a moved checkout is
+# followed. The copy is built beside the old one and swapped in, so a failed
+# copy leaves the previous footer loadable; `rm -rf` of a pre-3.12.2 link
+# removes the link only.
 _footer_write_marketplace() { # DIR
     mkdir -p "$1/.claude-plugin" &&
         printf '%s\n' "{\"name\": \"$FOOTER_MARKETPLACE\", \"owner\": {\"name\": \"claude-usage-panel install.sh\"}, \"plugins\": [{\"name\": \"usage-footer\", \"source\": \"./footer\", \"description\": \"The line under the Claude Code prompt, from this checkout.\"}]}" \
             >"$1/.claude-plugin/marketplace.json" &&
-        ln -sfn "$ROOT/footer" "$1/footer"
+        rm -rf "$1/footer.new" &&
+        cp -R "$ROOT/footer" "$1/footer.new" &&
+        rm -rf "$1/footer" &&
+        mv "$1/footer.new" "$1/footer"
 }
 
 # Where the marketplace named $FOOTER_MARKETPLACE points today: its path, or
@@ -120,7 +130,7 @@ _footer_drop_statusline() {
     _prune_node_tree
 }
 
-# `update` of an installed footer: the plugin loads in place through the link,
+# `update` of an installed footer: the plugin loads in place from the copy,
 # so refreshing the folder is the whole reinstall. Nothing here needs the
 # claude CLI or writes settings.json.
 _footer_refresh() {
@@ -131,7 +141,7 @@ _footer_refresh() {
     local dir
     dir="$(_footer_marketplace_dir)"
     if $DRY; then
-        echo "  would: refresh $dir (footer -> $ROOT/footer)"
+        echo "  would: refresh $dir (footer copied from $ROOT/footer)"
         ok "dry-run: no changes written"
         return 0
     fi
@@ -139,7 +149,7 @@ _footer_refresh() {
         skip_fatal "footer: could not refresh the marketplace at $dir"
         return 0
     fi
-    ok "up to date - loads from $ROOT/footer"
+    ok "up to date - copied from $ROOT/footer"
 }
 
 install_footer() {
@@ -189,7 +199,7 @@ install_footer() {
         return 0
     fi
     if $DRY; then
-        echo "  would: write $dir (marketplace $FOOTER_MARKETPLACE, footer -> $ROOT/footer)"
+        echo "  would: write $dir (marketplace $FOOTER_MARKETPLACE, footer copied from $ROOT/footer)"
         [ -n "$current" ] || echo "  would: claude plugin marketplace add $dir"
         echo "  would: claude plugin install $FOOTER_PLUGIN --scope user"
         $replace && echo "  would: then drop the status line from $CLAUDE_SETTINGS"
@@ -220,7 +230,7 @@ install_footer() {
         skip_fatal "footer: $FOOTER_PLUGIN is not enabled in $CLAUDE_SETTINGS after the install - nothing else was changed"
         return 0
     fi
-    ok "installed - loads from $ROOT/footer; open a new Claude Code session to see it"
+    ok "installed - copied from $ROOT/footer; open a new Claude Code session to see it"
     # 4. only now, and only when asked for by name, the status line goes
     if $replace; then
         _footer_drop_statusline || return 0

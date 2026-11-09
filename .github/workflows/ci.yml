@@ -285,6 +285,12 @@ jobs:
           DISABLE_AUTOUPDATER: "1"
           DISABLE_TELEMETRY: "1"
         run: tools/claude-cli/node_modules/.bin/claude plugin test footer
+      # `validate` reads footer/ itself and cannot see a fault of the shape
+      # install.sh gives it (3.12.1 shipped a marketplace link the CLI refuses
+      # to load). Install it as users do, in a throwaway HOME, and fail
+      # unless the pinned CLI reports it enabled with no load error.
+      - name: the installed footer loads
+        run: scripts/check-footer-install.sh tools/claude-cli/node_modules/.bin/claude
 
   # The author of record is the human who owns the change: no commit here is
   # authored or committed by an address .github/attribution-allow.txt does not
