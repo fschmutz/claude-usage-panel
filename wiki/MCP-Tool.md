@@ -37,7 +37,7 @@ All paths register the exact same server - pick one:
 
 # 3. Claude Code CLI, straight from GitHub (no clone). The unpinned spec
 #    tracks main; append #vX.Y.Z to run one release, as the plugin does.
-claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel#v3.12.0
+claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel#v3.12.1
 
 # 4. Cursor: click "Add to Cursor" on https://fschmutz.github.io/claude-usage-panel/
 ```

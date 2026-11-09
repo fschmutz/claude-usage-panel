@@ -1,6 +1,6 @@
 {
   "name": "usage-footer",
-  "version": "3.12.0",
+  "version": "3.12.1",
   "description": "The line under the Claude Code prompt: model, project, branch and agents on the left, context and plan-limit gauges (session, week) flush right, with the clock tick and a burn-rate warning.",
   "author": {"name": "Falco Schmutz"},
   "homepage": "https://fschmutz.github.io/claude-usage-panel/",

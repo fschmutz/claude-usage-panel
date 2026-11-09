@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.12.1] - 2026-11-09
+
 ### Removed
 
 - **`claudectl account chrome --fill-google`** (added in 3.12.0). Google
