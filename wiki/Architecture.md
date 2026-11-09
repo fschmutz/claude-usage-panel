@@ -257,6 +257,7 @@ claude-code/            # the Node clients' I/O over lib/pure/ (installed with i
 ├── tools.js            # finding and querying tmux / ps / osascript from a scheduler's minimal PATH
 ├── account-cli.js      # `claudectl account`: the CLI over the account store
 ├── account-exec.js     # `account exec`: a command run as a saved login in a throwaway config dir
+├── account-chrome.js   # `account chrome`: an isolated Chrome profile per saved account, for Claude-in-Chrome
 ├── codex-cli.js        # `claudectl codex`: the CLI over the Codex store
 ├── session-cli.js      # `claudectl session`: the CLI over tabs.js
 ├── waiting.js          # live registry + waiting markers; focus via layout.js

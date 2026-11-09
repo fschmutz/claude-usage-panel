@@ -8,6 +8,11 @@ semantic versioning.
 
 ### Added
 
+- **An isolated Chrome per account.** `claudectl account chrome NAME` opens
+  Google Chrome with a profile of its own for NAME (0700, kept in the state
+  dir; the main profile untouched), so Claude-in-Chrome pairs it with
+  NAME's sessions only. Sign in to claude.ai and add the extension once per
+  profile; later launches open the page you name.
 - **Messages between sessions, across logins.** `claudectl session send
   NAME -- TEXT` queues a message for a running session, `peers` lists every
   session a message can reach with the login it runs as, `inbox` what is still

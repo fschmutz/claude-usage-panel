@@ -22,7 +22,7 @@ const GROUPS = {account, awake, codex, session, waiting};
 
 const HELP = `claudectl - Claude Code from the command line
 
-  claudectl account ...   named logins: list, current, save, use, remove, refresh, exec
+  claudectl account ...   named logins: list, current, save, use, remove, refresh, exec, chrome
   claudectl session ...   running sessions: list, focus, save, store, show, open, purge, autosave
   claudectl codex ...     named OpenAI Codex logins: list, current, save, use, remove, usage
   claudectl waiting ...   live sessions waiting on you: list, focus

@@ -111,6 +111,12 @@ export function pauseDir(io) {
   return path.join(stateDir(io), 'pause');
 }
 
+/** `claudectl account chrome`: one isolated Chrome profile per saved
+ *  account, kept between launches (account-chrome.js). */
+export function chromeProfilesDir(io) {
+  return path.join(stateDir(io), 'chrome');
+}
+
 /** `claudectl session send`: one dir of queued messages per recipient
  *  session id, shared by every login of this user (mail.js). */
 export function mailDir(io) {

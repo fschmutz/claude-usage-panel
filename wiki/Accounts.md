@@ -222,6 +222,26 @@ for every other session. Two
 long `exec` runs of the same NAME at once can both rotate its token; keep
 concurrent runs short.
 
+## An isolated Chrome per account
+
+`claudectl account chrome NAME [--url=U]` opens Google Chrome with a profile of
+its own for NAME, kept (mode 0700) under
+`<state dir>/claude-usage-panel/chrome/NAME`. The main Chrome profile is never
+read or written. Claude-in-Chrome pairs a browser with the Claude Code
+sessions of the same claude.ai account, so a session on NAME (the current
+login, or `claudectl account exec NAME -- claude`) drives this window and no
+other.
+
+The first launch opens two tabs: claude.ai sign-in and the extension's Web
+Store page. Sign in as NAME and add the extension, once; both stay in the
+profile. This step cannot be automated. The stored login is an API token,
+not a claude.ai web session, and no password goes through a tool. Branded
+Chrome also ignores `--load-extension` (137+), and force-install policy is
+system-wide. Later launches open `--url` (default claude.ai). Every launch
+lays the extension's native-messaging manifest inside the profile, naming the
+live login's `~/.claude/chrome/chrome-native-host`. Claude Code writes that
+host on its first `/chrome`; until then the command refuses.
+
 ## When a percentage is not shown
 
 A bar shows `–` and draws empty, rather than a number, in two cases: when the

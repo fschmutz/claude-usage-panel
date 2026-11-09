@@ -2,6 +2,7 @@
 // the login Claude Code holds now under a name, list the saved ones (with
 // their usage), switch, forget, refresh. claudectl.js dispatches here.
 
+import {openAccountChrome} from './account-chrome.js';
 import {openAccountExec} from './account-exec.js';
 import {openStore} from './accounts.js';
 import {nowOf} from './paths.js';
@@ -18,6 +19,8 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
   claudectl account remove NAME               forget a saved account
   claudectl account refresh [NAME]            refresh the stored token(s) now
   claudectl account exec NAME -- CMD [ARG...]  run CMD as NAME, the current login untouched
+  claudectl account chrome NAME [--url=U] [--dry-run]
+                                              an isolated Chrome signed in to claude.ai as NAME
 
 Names: letters, digits, . _ - (e.g. PRO, PERSO), case-insensitive. Running
 Claude Code sessions keep their old login until restarted. Saved logins are
@@ -48,6 +51,15 @@ Claude login acts as NAME while the current login, running sessions and
 command rotates is written back to NAME. The dir carries no settings, hooks
 or MCP servers and is removed when CMD exits. Exits with CMD's code. The
 current login itself is refused (run the command directly).`,
+  chrome: `Opens Google Chrome with a profile of its own for NAME (kept, mode
+0700, in the state dir; the main Chrome profile is never read or written).
+Claude-in-Chrome pairs a browser with the sessions of the same claude.ai
+account, so a session on NAME (the current login, or \`account exec NAME\`)
+drives this window and no other. The first launch opens claude.ai/login and
+the extension's Web Store page: sign in as NAME and add the extension, once;
+both are kept. Later launches open --url (default claude.ai). The extension's
+native-messaging manifest is laid in the profile on every launch, naming the
+live login's host, which Claude Code writes on its first /chrome.`,
   refresh: `Refreshes the stored token of NAME, or of every saved login. The login
 Claude Code uses now is never refreshed here: Claude Code holds the same
 single-use refresh token.`,
@@ -78,6 +90,18 @@ export async function main(argv, io = {}) {
   }
   const store = openStore(io);
   const out = io.stdout ?? ((s) => process.stdout.write(s));
+  if (argv[0] === 'chrome') {
+    const name = argv[1];
+    if (!name || name.startsWith('--')) throw new Error('usage: claudectl account chrome NAME [--url=U] [--dry-run]');
+    const url = argv.find((a) => a.startsWith('--url='))?.slice('--url='.length);
+    const chrome = openAccountChrome(io);
+    const p = argv.includes('--dry-run') ? chrome.plan(name, {url}) : chrome.launch(name, {url});
+    out(`${argv.includes('--dry-run') ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
+    if (p.firstRun) {
+      out(`first launch: sign in to claude.ai as ${p.name}, then add the Claude extension (both tabs are open); kept for next time\n`);
+    }
+    return 0;
+  }
   const args = argv.filter((a) => !a.startsWith('--'));
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
   const json = flags.has('--json');
