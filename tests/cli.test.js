@@ -14,7 +14,7 @@ import * as accountCli from '../claude-code/account-cli.js';
 import * as codexCli from '../claude-code/codex-cli.js';
 import * as sessionCli from '../claude-code/session-cli.js';
 import * as waitingCli from '../claude-code/waiting-cli.js';
-import {run, sandboxHome, stubbedHome} from './helpers.js';
+import {nodeOnlyBin, run, sandboxHome, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL = path.join(ROOT, 'install.sh');
@@ -107,7 +107,7 @@ const env = (home) => ({
     HOME: home,
     XDG_STATE_HOME: path.join(home, 'state'),
     XDG_CONFIG_HOME: path.join(home, '.config'),
-    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
 });
 
@@ -164,7 +164,7 @@ test('install.sh cli: a HOME with shell syntax in it is data in the shim and the
     const base = stubbedHome(t, {prefix: 'cup-cli-q-'});
     const home = path.join(base, 'we"ird $(touch PWNED) `touch PWNED2` it\'s');
     fs.mkdirSync(home);
-    const e = {...env(home), PATH: `${path.join(base, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`};
+    const e = {...env(home), PATH: `${path.join(base, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`};
     const r = run('bash', [INSTALL, 'cli'], {env: e, cwd: base});
     assert.equal(r.status, 0, r.stdout + r.stderr);
 

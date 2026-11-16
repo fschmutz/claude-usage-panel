@@ -74,6 +74,25 @@ export function sandboxHome(t, {prefix = 'cup-'} = {}) {
     return {home, homedir: home, env: {}, platform: 'linux', tmpdir: home, procDir: path.join(home, 'proc')};
 }
 
+let nodeDir;
+/**
+ * A PATH dir holding this node and nothing else. A test that puts node on PATH
+ * as `path.dirname(process.execPath)` also puts there everything installed
+ * next to it: `npm i -g @anthropic-ai/claude-code`, nvm and fnm all drop the
+ * real `claude` in node's own bin dir, and the installer under test then runs
+ * it instead of the sandbox's stub (or finds one the test removed). One dir per
+ * test process, removed when it exits.
+ */
+export function nodeOnlyBin() {
+    if (!nodeDir) {
+        nodeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-node-'));
+        fs.symlinkSync(process.execPath, path.join(nodeDir, 'node'));
+        const dir = nodeDir;
+        process.on('exit', () => fs.rmSync(dir, {recursive: true, force: true}));
+    }
+    return nodeDir;
+}
+
 /** A PATH dir holding stub executables `names`: `<home>/bin` when `home`
  *  is given, else a fresh sandbox of its own. */
 export function binDir(t, names, {home} = {}) {

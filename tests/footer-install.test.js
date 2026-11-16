@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {run, stubbedHome} from './helpers.js';
+import {nodeOnlyBin, run, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL = path.join(ROOT, 'install.sh');
@@ -28,7 +28,7 @@ const env = (home, extra = {}) => ({
     XDG_STATE_HOME: path.join(home, 'state'),
     XDG_CONFIG_HOME: path.join(home, '.config'),
     XDG_DATA_HOME: path.join(home, '.local', 'share'),
-    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
     // Where the installer looks for a claude CLI off PATH (scripts/lib.sh
     // scheduler_bin_dirs): all inside the sandbox, never the developer's.

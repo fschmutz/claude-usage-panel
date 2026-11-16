@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {run, stubbedHome} from './helpers.js';
+import {nodeOnlyBin, run, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL = path.join(ROOT, 'install.sh');
@@ -40,7 +40,7 @@ const env = (home, {node = true} = {}) => ({
     HOME: home,
     XDG_STATE_HOME: path.join(home, 'state'),
     XDG_CONFIG_HOME: path.join(home, '.config'),
-    PATH: [path.join(home, 'bin'), node && path.dirname(process.execPath), '/usr/bin', '/bin']
+    PATH: [path.join(home, 'bin'), node && nodeOnlyBin(), '/usr/bin', '/bin']
         .filter(Boolean).join(':'),
 });
 const sh = (home, args, opts) => run('bash', [INSTALL, ...args], {env: env(home, opts)});
