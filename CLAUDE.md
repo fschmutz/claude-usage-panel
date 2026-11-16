@@ -205,7 +205,7 @@ pre-commit; a GNOME test imports extension files by literal
 path, or knip cannot see which exports it uses.
 
 The `js` job runs a Node matrix of the `package.json` engines floor (22) and
-the active LTS (24); `tests/ci-release.test.js` fails if the floor is not in
+the active LTS (26); `tests/ci-release.test.js` fails if the floor is not in
 the matrix.
 
 Workflow rules. `zizmor` in pre-commit fails the build on the first two and

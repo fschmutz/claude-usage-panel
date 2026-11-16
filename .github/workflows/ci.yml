@@ -51,7 +51,7 @@ jobs:
           python-version: "3.12"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "26"
       # Inline rather than pre-commit/action: that composite resolves
       # actions/cache by a mutable tag and pip-installs an unpinned pre-commit,
       # both invisible to zizmor and Dependabot. Here the cache is SHA-pinned
@@ -109,7 +109,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ["22", "24"]
+        node: ["22", "26"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -134,7 +134,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "26"
       - run: node scripts/screenshots/render.mjs --check
 
   # Translations are hand-written but the template and the merges are not: this
@@ -240,7 +240,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "26"
       # A stalled registry hangs npm ci with no output until the job timeout
       # (2026-10-12: 10 min, a release left untagged). Each attempt is
       # bounded and retried, so a stall costs minutes, not the run.
@@ -346,7 +346,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "26"
       - run: node scripts/check-deps.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
