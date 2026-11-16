@@ -21,7 +21,7 @@ import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
-import {run, stubbedHome} from './helpers.js';
+import {nodeOnlyBin, run, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL = path.join(ROOT, 'install.sh');
@@ -45,7 +45,7 @@ const env = (home, extra = {}) => ({
 });
 
 const withNode = (home, extra = {}) =>
-    env(home, {PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`, ...extra});
+    env(home, {PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`, ...extra});
 
 /** A HOME that already has the status line and the CLI installed. */
 function installedHome(t, {segments = 'context,limits,tokens,ping', tokens = 'all'} = {}) {

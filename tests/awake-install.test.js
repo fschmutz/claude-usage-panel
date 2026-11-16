@@ -16,7 +16,7 @@ import {
   AWAKE_SUDO_COMMANDS, awakeSudoArgv, awakeSudoersBody,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/awake-power.js';
 import {awakeDir} from '../claude-code/paths.js';
-import {run, stubbedHome} from './helpers.js';
+import {nodeOnlyBin, run, stubbedHome} from './helpers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BACKSTOP = path.join(ROOT, 'scripts', 'awake-backstop.sh');
@@ -248,7 +248,7 @@ test('install.sh --dry-run awake schedules the backstop and writes nothing', (t)
     HOME: home,
     XDG_STATE_HOME: path.join(home, 'state'),
     XDG_CONFIG_HOME: path.join(home, '.config'),
-    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
   };
   const r = run('bash', [INSTALL, '--dry-run', 'awake'], {env});
@@ -264,7 +264,7 @@ test('install.sh --dry-run awakelid never touches sudoers, and says what it woul
     ...process.env,
     HOME: home,
     XDG_STATE_HOME: path.join(home, 'state'),
-    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
   };
   // No USER, as under a scheduler or `env -i`: the target asks the system who
@@ -294,7 +294,7 @@ test('install.sh update awakelid never asks for a password when the rule is in f
     ...process.env,
     HOME: home,
     XDG_STATE_HOME: path.join(home, 'state'),
-    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
   };
   fs.writeFileSync(path.join(home, 'bin', 'uname'),
@@ -327,7 +327,7 @@ function sudoersWorld(t, {tamper = false} = {}) {
     ...process.env,
     HOME: home,
     XDG_STATE_HOME: path.join(home, 'state'),
-    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
     CUP_TEST_SUDOERS: path.join(sudoersDir, 'claude-usage-panel-awake'),
   };
@@ -371,7 +371,7 @@ test('the installed schedule repairs the store claude-code/paths.js names', (t) 
     HOME: home,
     XDG_STATE_HOME: path.join(home, 'state'),
     XDG_CONFIG_HOME: path.join(home, '.config'),
-    PATH: `${path.join(home, 'bin')}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${path.join(home, 'bin')}:${nodeOnlyBin()}:/usr/bin:/bin`,
     CUP_TEST_SCHEDULER: 'cron',
   };
   fs.writeFileSync(path.join(home, 'bin', 'uname'),
