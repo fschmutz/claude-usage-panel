@@ -2,4 +2,4 @@
 # 3.2 as /bin/bash). Pinned by digest: a tag is mutable. It lives in a
 # Dockerfile, not in the workflow's `docker run` line, so Dependabot's docker
 # ecosystem can see it and bump the digest (held to 3.2 in dependabot.yml).
-FROM bash:3.2.57@sha256:0fd7cb8499c63a3c9345e7088a9cd83bb69f6e895e83833859aff838a0312091
+FROM bash:3.2.57@sha256:2556c2da19c32c1614d318645c73a7bf64d38be21cf69e98e3ca51f053983719
