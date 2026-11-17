@@ -333,14 +333,13 @@ test('get_usage - a store it cannot write still answers with the usage', async (
     writeLiveLogin(io.home,
         {claudeAiOauth: {...creds('pro').claudeAiOauth, accessToken: 'at-rotated', refreshToken: 'rt-rotated'}},
         account('pro'));
-    fs.chmodSync(store.dir, 0o500);
-    let r;
-    try {
-        assert.throws(() => store.syncBack(), 'the sandbox really is read-only');
-        r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
-    } finally {
-        fs.chmodSync(store.dir, 0o700); // before the sandbox cleanup removes it
-    }
+    // The write must fail for every uid: a 0o500 dir stops nobody under root (every
+    // cloud sweep), so a directory sits where writeAtomic's tmp file (<file>.<pid>.tmp)
+    // is created and its cleanup rm cannot remove it.
+    fs.mkdirSync(path.join(store.dir, `PRO.json.${process.pid}.tmp`));
+    assert.throws(() => store.syncBack(), 'the store really cannot be written');
+    const r = await handleRequest({method: 'tools/call', params: {name: 'get_usage'}}, io);
+    fs.rmdirSync(path.join(store.dir, `PRO.json.${process.pid}.tmp`));
     assert.equal(r.isError, undefined);
     assert.equal(r.structuredContent.limits.length, 2);
     assert.equal(store.readProfile('PRO').credentials.claudeAiOauth.refreshToken, 'rt-pro');
