@@ -6,6 +6,24 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- CI runs every Node job on the active LTS (26) beside the engines floor
+  (22). Pinned tools bumped: claude-code 2.1.322, knip 6.44.2, ccusage
+  20.0.48, zizmor 1.32.0, the bash 3.2 image.
+
+### Fixed
+
+- Installer tests put only `node` on PATH, so a real `claude` CLI installed
+  next to node can no longer replace the sandbox stub. The MCP
+  unwritable-store test now fails its write under root too.
+
+### Security
+
+- picomatch GHSA-fc5q-39xc-vjpf (ReDoS, no patched release) declared in
+  `.github/dependency-holds`: it reaches only knip's dev tree, fed by the
+  repo's own globs. Nothing installed by `install.sh` ships it.
+
 ## [3.12.1] - 2026-11-09
 
 ### Removed
