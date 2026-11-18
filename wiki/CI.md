@@ -210,6 +210,27 @@ Two things to check before approving a first-time run:
    `github_user: null` means unattributed - the contributor can fix it by
    adding that email to their GitHub account.
 
+## Landing a fork PR by rebase
+
+Fork PRs land by rebase, never a merge commit. When the PR is behind main or
+`CONFLICTING`, the maintainer rebases it, pushes it back to the fork (the PR
+needs "Allow edits by maintainers"), lets the PR's CI go green on the rebased
+commit, then fast-forwards main to it, which marks the PR merged:
+
+```bash
+W=$(scratch-worktree)          # any throwaway worktree of this repo
+FORK=git@github.com:<owner>/claude-usage-panel.git   # SSH, as origin
+cd "$W" && git fetch "$FORK" <branch> && git checkout -b prN FETCH_HEAD
+OLD=$(git rev-parse HEAD) && git rebase origin/main  # resolve, keep authorship
+pre-commit run --from-ref HEAD~1 --to-ref HEAD && npm test
+git push-confirm --force-with-lease=<branch>:$OLD "$FORK" prN:<branch>
+# wait for the PR's `ci` run on the new SHA to succeed, then:
+git push-confirm origin prN:main                     # fast-forward only
+```
+
+A CHANGELOG conflict is two `[Unreleased]` entries: keep both. Never push a
+rebased commit to main before its PR run is green.
+
 ## Diagnosing a stuck pull request
 
 A PR showing `BLOCKED` with everything green means a **required context is not
