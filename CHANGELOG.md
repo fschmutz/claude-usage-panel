@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.12.2] - 2026-11-18
+
 ### Changed
 
 - CI runs every Node job on the active LTS (26) beside the engines floor

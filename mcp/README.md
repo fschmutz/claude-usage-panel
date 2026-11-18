@@ -55,10 +55,10 @@ Pick whichever fits - all four register the exact same server:
 
 # 3. Claude Code CLI, straight from GitHub - no clone needed. The unpinned
 #    spec tracks main; append #vX.Y.Z to run one release, as the plugin does.
-claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel#v3.12.1
+claude mcp add claude-usage -- npx -y github:fschmutz/claude-usage-panel#v3.12.2
 
 # 4. Cursor: click "Add to Cursor" on https://fschmutz.github.io/claude-usage-panel/
-#    (or add {"command": "npx", "args": ["-y", "github:fschmutz/claude-usage-panel#v3.12.1"]}
+#    (or add {"command": "npx", "args": ["-y", "github:fschmutz/claude-usage-panel#v3.12.2"]}
 #     under mcpServers in ~/.cursor/mcp.json)
 ```
 
