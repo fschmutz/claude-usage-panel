@@ -191,7 +191,7 @@ test('tmux windows: named, in their cwd, the command quoted for the shell', () =
     const [first, second] = tmuxCalls(rows, 'S');
     assert.deepEqual(first.slice(0, 8), ['new-session', '-d', '-s', 'S', '-n', 'API', '-c', '/r/api']);
     assert.deepEqual(second.slice(0, 7), ['new-window', '-t', 'S', '-n', "it's", '-c', '/r/web']);
-    assert.equal(second[7], `bash -lc 'claude --name '\\''it'\\''\\'\\'''\\''s'\\'' --resume '\\''id-b'\\''; exec "$SHELL" -i'`);
+    assert.equal(second[7], `bash -lc 'unset _VOLTA_TOOL_RECURSION; claude --name '\\''it'\\''\\'\\'''\\''s'\\'' --resume '\\''id-b'\\''; exec "$SHELL" -i'`);
 });
 
 test('tmux takes -n and -c as formats: a # in a name or directory stays literal', () => {
@@ -267,7 +267,7 @@ test('tmux: one tmux session per saved window, each attached in its own terminal
         ['new-session', '-d', '-s', `${TMUX_SESSION}-2`], ['new-session', '-d', '-s', `${TMUX_SESSION}-3`],
     ]);
     assert.deepEqual(steps.filter((s) => s.cmd === 'ghostty').map((s) => s.args.at(-1)),
-        tmuxSessions.map((n) => `tmux attach -t ${n}`));
+        tmuxSessions.map((n) => `unset _VOLTA_TOOL_RECURSION; tmux attach -t ${n}`));
     const mac = launchSteps(placed, 'terminal', {platform: 'darwin', hasTmux: true});
     assert.equal((mac.steps.at(-1).args[1].match(/do script "tmux attach/g) ?? []).length, 3);
 });
@@ -337,6 +337,25 @@ test('sessionFreeEnv drops what names the calling Claude session, keeps configur
     assert.deepEqual(sessionFreeEnv({...inherited, ...config}), config);
     // a future variable of the same families is dropped too
     assert.deepEqual(sessionFreeEnv({CLAUDE_CODE_SESSION_KIND: 'x', CLAUDE_CODE_MESSAGING_V2: 'y'}), {});
+});
+
+test('every claudectl launch drops the Volta recursion flag, env and command', () => {
+    // claudectl runs under node through Volta, which sets the flag for its
+    // children; a terminal (or a tmux server) that kept it broke every node
+    // hook of the reopened sessions with "Node is not available"
+    assert.deepEqual(sessionFreeEnv({_VOLTA_TOOL_RECURSION: '1', PATH: '/x'}), {PATH: '/x'});
+    assert.deepEqual(sessionFreeEnv({CLAUDECODE: '1', _VOLTA_TOOL_RECURSION: '1'}), {});
+    const flagFirst = /^bash -lc 'unset _VOLTA_TOOL_RECURSION; /;
+    for (const bin of ['gnome-terminal', 'xfce4-terminal']) {
+        const shells = tabsArgv(bin, rows).filter((a) => a.startsWith('bash -lc '));
+        assert.equal(shells.length, rows.length, bin);
+        for (const sh of shells) assert.match(sh, flagFirst, bin);
+    }
+    for (const call of tmuxCalls(rows, 'S')) assert.match(call.at(-1), flagFirst);
+    for (const opts of [{hasTmux: true}, {hasTmux: false}]) {
+        for (const step of launchSteps(rows, 'kitty', opts).steps.filter((s) => s.cmd === 'kitty'))
+            assert.match(step.args.at(-1), /^unset _VOLTA_TOOL_RECURSION; /);
+    }
 });
 
 test('sessionFreeEnv drops what Claude injects into its tool shells, only under a Claude shell', () => {

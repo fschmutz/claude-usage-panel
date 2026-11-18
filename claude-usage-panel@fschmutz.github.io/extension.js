@@ -41,6 +41,7 @@ import {ExtraUsageSection, StatusSection} from './lib/statusSection.js';
 import {
     panelGauge, refreshSections, isRetryableFailure,
     nextPollSeconds, nextResetMs, sameUsage, detectEvents, eventEnv, expandEventCommand,
+    LAUNCH_UNSET, loginShell,
     warehouseAccount, warehouseEntry, weekOverWeek, planLabel,
     formatClock, panelCard, panelText, popupWidth, usageReading,
     shownCards,
@@ -391,9 +392,11 @@ class ClaudeUsageButton extends PanelMenu.Button {
             const command = expandEventCommand(template, event);
             try {
                 const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
+                for (const name of LAUNCH_UNSET)
+                    launcher.unsetenv(name);
                 for (const [name, value] of Object.entries(eventEnv(event)))
                     launcher.setenv(name, value, true);
-                launcher.spawnv(['bash', '-lc', command]);
+                launcher.spawnv(loginShell(command));
             } catch (e) {
                 logError(e, `claude-usage-panel: event command failed (${event.event})`);
             }

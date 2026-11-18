@@ -180,33 +180,53 @@ export function interactiveResume(entry, opts) {
     return `${resumeCommand(entry, opts)}; exec "$SHELL" -i`;
 }
 
+// Volta's node shim marks every process it starts with _VOLTA_TOOL_RECURSION=1
+// so a nested shim skips version resolution. A terminal opened from claudectl
+// (node through Volta) inherited it, and every hook or status line of the
+// Claude session in that terminal then failed with "Node is not available"
+// unless the resolved node directory happened to be on its PATH. Launch-time
+// markers of the launcher, never user configuration: dropped from the spawn
+// env (claude-code/terminals.js sessionFreeEnv) AND unset in the command, for
+// terminals and tmux servers that hand the tab their own environment instead.
+export const LAUNCH_UNSET = ['_VOLTA_TOOL_RECURSION'];
+
+/** `command` as the shell line every launched terminal runs. */
+export function launchCommand(command) {
+    return `unset ${LAUNCH_UNSET.join(' ')}; ${command}`;
+}
+
+/** argv running `command` in a login bash, launch markers unset. */
+export function loginShell(command) {
+    return ['bash', '-lc', launchCommand(command)];
+}
+
 // Terminals we know how to open at a directory with a command, best first.
 // claude-code/terminals.js imports this list (`claudectl session open` must
 // open the same terminal the same way as a panel's resume click).
 // `argv(dir, cmd)` returns the full argv - no shell involved on our side, the
-// command string is handed to bash -lc by the terminal itself.
+// command string is handed to bash -lc (loginShell) by the terminal itself.
 export const TERMINALS = [
     {bin: 'ghostty', desktop: ['com.mitchellh.ghostty.desktop'],
-        argv: (d, c) => [`--working-directory=${d}`, '-e', 'bash', '-lc', c]},
-    {bin: 'kitty', desktop: ['kitty.desktop'], argv: (d, c) => ['--directory', d, 'bash', '-lc', c]},
+        argv: (d, c) => [`--working-directory=${d}`, '-e', ...loginShell(c)]},
+    {bin: 'kitty', desktop: ['kitty.desktop'], argv: (d, c) => ['--directory', d, ...loginShell(c)]},
     {bin: 'wezterm', desktop: ['org.wezfurlong.wezterm.desktop'],
-        argv: (d, c) => ['start', '--cwd', d, '--', 'bash', '-lc', c]},
+        argv: (d, c) => ['start', '--cwd', d, '--', ...loginShell(c)]},
     {bin: 'alacritty', desktop: ['Alacritty.desktop'],
-        argv: (d, c) => ['--working-directory', d, '-e', 'bash', '-lc', c]},
-    {bin: 'foot', desktop: ['foot.desktop', 'footclient.desktop'], argv: (d, c) => ['-D', d, 'bash', '-lc', c]},
+        argv: (d, c) => ['--working-directory', d, '-e', ...loginShell(c)]},
+    {bin: 'foot', desktop: ['foot.desktop', 'footclient.desktop'], argv: (d, c) => ['-D', d, ...loginShell(c)]},
     {bin: 'gnome-terminal', desktop: ['org.gnome.Terminal.desktop'],
-        argv: (d, c) => [`--working-directory=${d}`, '--', 'bash', '-lc', c]},
-    {bin: 'konsole', desktop: ['org.kde.konsole.desktop'], argv: (d, c) => ['--workdir', d, '-e', 'bash', '-lc', c]},
-    {bin: 'tilix', desktop: ['com.gexperts.Tilix.desktop'], argv: (d, c) => ['-w', d, '-e', 'bash', '-lc', c]},
+        argv: (d, c) => [`--working-directory=${d}`, '--', ...loginShell(c)]},
+    {bin: 'konsole', desktop: ['org.kde.konsole.desktop'], argv: (d, c) => ['--workdir', d, '-e', ...loginShell(c)]},
+    {bin: 'tilix', desktop: ['com.gexperts.Tilix.desktop'], argv: (d, c) => ['-w', d, '-e', ...loginShell(c)]},
     {bin: 'xfce4-terminal', desktop: ['xfce4-terminal.desktop'],
-        argv: (d, c) => [`--working-directory=${d}`, '-x', 'bash', '-lc', c]},
-    {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
+        argv: (d, c) => [`--working-directory=${d}`, '-x', ...loginShell(c)]},
+    {bin: 'x-terminal-emulator', desktop: [], argv: (d, c) => ['-e', ...loginShell(`cd ${shellQuote(d)} && ${c}`)]},
     {bin: 'xterm', desktop: ['xterm.desktop', 'debian-xterm.desktop'],
-        argv: (d, c) => ['-e', 'bash', '-lc', `cd ${shellQuote(d)} && ${c}`]},
+        argv: (d, c) => ['-e', ...loginShell(`cd ${shellQuote(d)} && ${c}`)]},
     // The Default Terminal spec launcher: whatever the desktop's default is,
     // even one we have no entry for. Last, so plain autodetection prefers a
     // terminal we can drive directly.
-    {bin: 'xdg-terminal-exec', desktop: [], argv: (d, c) => [`--dir=${d}`, '--', 'bash', '-lc', c]},
+    {bin: 'xdg-terminal-exec', desktop: [], argv: (d, c) => [`--dir=${d}`, '--', ...loginShell(c)]},
 ];
 
 /** The terminal binary behind a Desktop Entry ID, as `xdg-terminal-exec
@@ -264,6 +284,6 @@ export function terminalArgv(bin, cwd, command) {
     const known = TERMINALS.find(t => t.bin === bin || bin.endsWith(`/${t.bin}`));
     const tail = known
         ? known.argv(dir, command)
-        : ['-e', 'bash', '-lc', `cd ${shellQuote(dir)} && ${command}`];
+        : ['-e', ...loginShell(`cd ${shellQuote(dir)} && ${command}`)];
     return [bin, ...tail];
 }

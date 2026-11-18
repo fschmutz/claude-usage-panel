@@ -145,20 +145,34 @@ test('the limit is respected', () => {
 test('a known terminal gets its own working-directory flag, not a cd', () => {
     const argv = pure.terminalArgv('gnome-terminal', '/home/u/p', 'echo hi');
     assert.deepEqual(argv, [
-        'gnome-terminal', '--working-directory=/home/u/p', '--', 'bash', '-lc', 'echo hi',
+        'gnome-terminal', '--working-directory=/home/u/p', '--', 'bash', '-lc', 'unset _VOLTA_TOOL_RECURSION; echo hi',
     ]);
 });
 
 test('an absolute path to a known terminal is still recognised', () => {
     const argv = pure.terminalArgv('/usr/bin/kitty', '/home/u/p', 'echo hi');
-    assert.deepEqual(argv, ['/usr/bin/kitty', '--directory', '/home/u/p', 'bash', '-lc', 'echo hi']);
+    assert.deepEqual(argv, ['/usr/bin/kitty', '--directory', '/home/u/p', 'bash', '-lc', 'unset _VOLTA_TOOL_RECURSION; echo hi']);
 });
 
 test('an unknown terminal falls back to -e with a quoted cd', () => {
     const argv = pure.terminalArgv('weird-term', "/home/u/it's", 'claude --resume x');
     assert.deepEqual(argv, [
-        'weird-term', '-e', 'bash', '-lc', `cd '/home/u/it'\\''s' && claude --resume x`,
+        'weird-term', '-e', 'bash', '-lc', `unset _VOLTA_TOOL_RECURSION; cd '/home/u/it'\\''s' && claude --resume x`,
     ]);
+});
+
+// Volta marks what its node shim starts with _VOLTA_TOOL_RECURSION=1; a
+// terminal opened from claudectl inherited it and every node hook of the
+// Claude session in it failed. Every launch argv unsets it first.
+test('every terminal launch unsets the Volta recursion flag before the command', () => {
+    assert.deepEqual(pure.LAUNCH_UNSET, ['_VOLTA_TOOL_RECURSION']);
+    for (const bin of [...pure.TERMINALS.map((t) => t.bin), 'weird-term']) {
+        const argv = pure.terminalArgv(bin, '/p', 'claude --resume x');
+        const i = argv.indexOf('-lc');
+        assert.equal(argv[i - 1], 'bash', bin);
+        assert.match(argv[i + 1], /^unset _VOLTA_TOOL_RECURSION; .*claude --resume x$/, bin);
+    }
+    assert.deepEqual(pure.loginShell('ls'), ['bash', '-lc', 'unset _VOLTA_TOOL_RECURSION; ls']);
 });
 
 test('no terminal means no launch', () => {

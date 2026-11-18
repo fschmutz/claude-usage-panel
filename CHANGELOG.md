@@ -6,6 +6,16 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- A terminal opened by `claudectl session open` (or a resume after pause)
+  no longer inherits Volta's `_VOLTA_TOOL_RECURSION` flag from claudectl's
+  own node. With it, every node hook and status line of the reopened Claude
+  session failed with "Volta error: Node is not available". The flag is
+  dropped from the spawn environment and unset at the head of every
+  `bash -lc` launch (one helper, `loginShell`, for every terminal, tmux and
+  the GNOME event command; the macOS app is not started by Volta).
+
 ## [3.12.2] - 2026-11-18
 
 ### Changed

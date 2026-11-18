@@ -14,7 +14,7 @@ import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js'
 
 import {run} from './proc.js';
 import {refreshSessions} from './sessionIndex.js';
-import {compactTokens, interactiveResume, pickTerminal, terminalArgv} from './pure.js';
+import {LAUNCH_UNSET, compactTokens, interactiveResume, pickTerminal, terminalArgv} from './pure.js';
 import {vbox, clipLabel} from './widgets.js';
 
 // How many of today's sessions the dropdown offers to resume.
@@ -175,7 +175,10 @@ export class SessionsController {
         const argv = terminalArgv(bin, session.cwd, interactiveResume(session));
         this._menu.close();
         try {
-            Gio.Subprocess.new(argv, Gio.SubprocessFlags.NONE);
+            const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
+            for (const name of LAUNCH_UNSET)
+                launcher.unsetenv(name);
+            launcher.spawnv(argv);
         } catch (e) {
             logError(e, 'claude-usage-panel: could not open a terminal');
             this._notify(_('Claude usage'), _('Could not open %s').format(bin));

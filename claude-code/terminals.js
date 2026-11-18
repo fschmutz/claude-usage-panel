@@ -31,7 +31,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 import {
-  pickTerminal, shellQuote, terminalArgv,
+  LAUNCH_UNSET, launchCommand, pickTerminal, shellQuote, terminalArgv,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 import {onPath} from './tools.js';
 
@@ -116,7 +116,7 @@ const TAB_FLAGS = {
 export function tabsArgv(terminal, rows, prompt = '') {
   const flags = TAB_FLAGS[base(terminal)];
   return windowGroups(rows).flatMap((group) => group.flatMap((r, i) => [
-    i ? '--tab' : '--window', ...flags(r, `bash -lc ${shellQuote(sessionCommand(r, prompt))}`),
+    i ? '--tab' : '--window', ...flags(r, `bash -lc ${shellQuote(launchCommand(sessionCommand(r, prompt)))}`),
   ]));
 }
 
@@ -130,7 +130,7 @@ const tmuxLiteral = (s) => String(s ?? '').replace(/#/g, '##');
 export function tmuxCalls(rows, session = TMUX_SESSION, prompt = '') {
   return rows.map((r, i) => [
     ...(i ? ['new-window', '-t', session] : ['new-session', '-d', '-s', session]),
-    '-n', tmuxLiteral(r.name), '-c', tmuxLiteral(r.cwd), `bash -lc ${shellQuote(sessionCommand(r, prompt))}`,
+    '-n', tmuxLiteral(r.name), '-c', tmuxLiteral(r.cwd), `bash -lc ${shellQuote(launchCommand(sessionCommand(r, prompt)))}`,
   ]);
 }
 
@@ -220,11 +220,12 @@ const INJECTED_ENV = {
   NoDefaultCurrentDirectoryInExePath: (v) => v === '1',
 };
 
-/** `env` without the calling Claude session's own variables. */
+/** `env` without the calling Claude session's own variables, nor the
+ *  launcher's markers (LAUNCH_UNSET: Volta's recursion flag). */
 export function sessionFreeEnv(env) {
   const underClaude = Boolean(env.CLAUDECODE);
   return Object.fromEntries(Object.entries(env).filter(([k, v]) =>
-    !SESSION_ENV.test(k) && !(underClaude && INJECTED_ENV[k]?.(String(v)))));
+    !SESSION_ENV.test(k) && !LAUNCH_UNSET.includes(k) && !(underClaude && INJECTED_ENV[k]?.(String(v)))));
 }
 
 // dconf prints a GVariant: 'ghostty' (quoted), or nothing when unset.
