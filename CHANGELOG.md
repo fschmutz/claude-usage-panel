@@ -16,6 +16,11 @@ semantic versioning.
   `bash -lc` launch (one helper, `loginShell`, for every terminal, tmux and
   the GNOME event command; the macOS app is not started by Volta).
 
+### Security
+
+- The picomatch GHSA-fc5q-39xc-vjpf hold is gone: the advisory no longer
+  matches the knip tree (picomatch 4.0.7), so the stale entry failed `deps`.
+
 ## [3.12.2] - 2026-11-18
 
 ### Changed
