@@ -8,6 +8,13 @@ semantic versioning.
 
 ### Fixed
 
+- The pause protocol no longer points a workflow's resume call at the script
+  copy beside the checkpoint, which the Workflow tool always refuses (it sits
+  outside the dirs the session can read). The checkpoint records the
+  `scriptPath` the tool returned plus `resumeFromRunId`, the copy is a backup
+  only, and the resume protocol requires the run id on every call so a
+  relaunch keeps the finished agents' results.
+
 - A terminal opened by `claudectl session open` (or a resume after pause)
   no longer inherits Volta's `_VOLTA_TOOL_RECURSION` flag from claudectl's
   own node. With it, every node hook and status line of the reopened Claude

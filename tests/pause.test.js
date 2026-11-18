@@ -111,7 +111,8 @@ test('the pause text names its origin, the checkpoint, the report command and th
     assert.match(t, /PAUSE PROTOCOL/);
     assert.match(t, /\n {6}\/st\/pause\/checkpoints\/A\.md\n/, 'step 3c names the fixed path');
     assert.match(t, /re-point every path[\s\S]*never re-create \/tmp paths/, 'scratch work is moved and re-pointed, not copied');
-    assert.match(t, /Copy its script next\s+to the checkpoint/, 'a workflow script survives a cwd the reopened session cannot read');
+    assert.match(t, /copy the script\s+next to the checkpoint[^]*as a backup only/, 'a workflow script survives a cwd the reopened session cannot read');
+    assert.match(t, /resumeFromRunId plus\s+the scriptPath the Workflow tool returned, never a copy/, 'the resume call names the tool path, not the copy');
     assert.match(t, /session report --session A --request R --verdict SAFE --checkpoint '\/st\/pause\/checkpoints\/A\.md'/);
     assert.match(t, /--verdict NOT_SAFE --checkpoint '\/st\/pause\/checkpoints\/A\.md' --reason-file '\/st\/pause\/A\.reason\.txt'/);
     assert.match(t, /\/st\/pause\/A\.reason\.txt with your file-writing tool/);
@@ -133,7 +134,9 @@ test('the resume text carries the checkpoint, or says it is missing', () => {
     const yes = textOf({request: r, checkpointExists: true});
     assert.match(yes, /^\[claudectl resume request r-1\] The user typed `claudectl session resume`/);
     assert.match(yes, /RESUME PROTOCOL\nYour checkpoint: \/st\/pause\/checkpoints\/A\.md\n1\. Read the checkpoint/);
-    assert.match(yes, /scriptPath is refused, pass the saved script\s+inline \(`script`\) with the same run id/);
+    assert.match(yes, /every call carries\s+resumeFromRunId/, 'a resume never drops the run id');
+    assert.match(yes, /when it is refused, pass the saved script inline \(`script`\)\s+with the same run id/);
+    assert.match(yes, /Never point scriptPath at\s+the checkpoint copy/);
     assert.match(yes, /fresh run only when the resume itself fails/);
     assert.doesNotMatch(yes, /PAUSE PROTOCOL/);
     assert.match(textOf({request: r}), /No checkpoint was found at \/st\/pause\/checkpoints\/A\.md/);

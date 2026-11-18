@@ -53,10 +53,11 @@ anything owned by another session.
       answered included. If the stop call says "not found", the job is already
       dead: record it as such.
    c. For each workflow, record its run id, the agent or stage it was cut in (its
-      writes may be half-applied) and the exact resume call. Copy its script next
-      to the checkpoint (same directory, <run id>.js): the stored script sits under
-      the project dir of the cwd it was launched from, which a reopened session
-      may not be allowed to read.
+      writes may be half-applied) and the exact resume call: resumeFromRunId plus
+      the scriptPath the Workflow tool returned, never a copy. Also copy the script
+      next to the checkpoint (same directory, <run id>.js) as a backup only: the
+      Workflow tool refuses a scriptPath outside the cwd and the dirs it can read,
+      so the resume call must never name that copy.
    d. Kill the processes from 1b. Roll back open DB transactions: never leave one
       open, never commit one just to pause.
    e. Cancel pending wake-ups, loops and session crons, and record how to re-create
@@ -137,10 +138,12 @@ ${where}
 2. For any action that was cut off mid-flight, check whether it took effect before
    redoing it (commit landed? file written? deploy started?).
 3. Run the recorded smoke check on the dirty trees before any new work.
-4. Re-arm: resume each workflow from its run id (resumeFromRunId keeps every
-   finished agent's result). When its scriptPath is refused, pass the saved script
-   inline (\`script\`) with the same run id and the durable paths as args. Start a
-   fresh run only when the resume itself fails, and say why. Restart the needed
+4. Re-arm: resume each workflow from its run id; every call carries
+   resumeFromRunId (it keeps every finished agent's result). Use the scriptPath the
+   tool returned; when it is refused, pass the saved script inline (\`script\`)
+   with the same run id and the durable paths as args. Never point scriptPath at
+   the checkpoint copy. Start a fresh run only when the resume itself fails, and
+   say why. Restart the needed
    monitors and watchers, re-check the external runs.
 5. Continue the next steps without asking again. Report only what needs the user.`;
 }
