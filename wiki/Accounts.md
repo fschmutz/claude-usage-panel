@@ -250,6 +250,27 @@ Each link works once. Google sign-in is not needed, and cannot be automated
 either: Google rejects a DevTools-driven Chrome with "This browser or app may
 not be secure" (measured 2026-11-09).
 
+## A fresh sign-in for a dead login
+
+A saved login whose refresh token is gone (`expired`) or refused
+(`refresh-failed`) cannot be refreshed: only a new sign-in helps.
+`claudectl account login NAME` does it without touching the current login:
+`claude auth login --email <NAME's email>` runs in a throwaway config dir, and
+its browser step opens in NAME's own Chrome (`account chrome`, above), which is
+already signed in to claude.ai as NAME. Click Authorize there; the CLI's
+localhost callback ends the login by itself and the new credentials go into
+NAME's profile. No code is pasted. A sign-in that comes back as another
+account is not saved, and the current login is refused (Claude Code holds it:
+run `claude auth login` directly).
+
+`claudectl account login --expired` does the same for every saved login a new
+sign-in would repair (it fetches usage first, so a refused token counts),
+one after the other; one that fails or times out does not stop the rest.
+`--wait=S` gives up on a missing click after S seconds (default 600),
+`--dry-run` only says what would run. With claudectl installed, the panels'
+"Copy sign-in command" button copies `claudectl account login NAME`; without
+it, `claude auth login`, which replaces the current login.
+
 ## When a percentage is not shown
 
 A bar shows `–` and draws empty, rather than a number, in two cases: when the

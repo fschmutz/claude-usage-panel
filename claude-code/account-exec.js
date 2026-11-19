@@ -66,7 +66,7 @@ export const DROPPED_ENV = [
 ];
 
 /** The environment the child runs in: ours, pointed at `configDir`. */
-function childEnv(env, configDir) {
+export function childEnv(env, configDir) {
   const out = {...env, CLAUDE_CONFIG_DIR: configDir};
   for (const k of DROPPED_ENV) delete out[k];
   return out;
@@ -269,6 +269,19 @@ export function openAccountExec(io = {}) {
     return configDir;
   }
 
+  /** An empty config dir for a fresh sign-in (account-login.js): the same
+   *  name, mode and native-host record as an exec dir, so a run that dies is
+   *  swept the same way, but no login and no owner - nothing is synced back
+   *  from it unless the sign-in finished and was checked. */
+  function loginDir() {
+    fs.mkdirSync(root(), {recursive: true, mode: 0o700});
+    const configDir = fs.mkdtempSync(path.join(root(), `${EXEC_PREFIX}${io.pid ?? process.pid}-`));
+    fs.chmodSync(configDir, 0o700);
+    recordHosts(configDir);
+    if (platform === 'darwin') dirService(configDir); // throws if it would be the live item
+    return configDir;
+  }
+
   /**
    * Run `argv` as saved login `name`. Resolves to the child's exit code.
    * @param {{stdio?: any}} [opts]
@@ -305,5 +318,5 @@ export function openAccountExec(io = {}) {
     }
   }
 
-  return {exec, sweep, syncBack, dirService, restoreHosts};
+  return {exec, sweep, syncBack, dirService, restoreHosts, loginDir, removeDir};
 }

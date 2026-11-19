@@ -38,7 +38,7 @@ const liveLogin = (name, uuid) => ({
  * is live, whether a login is torn) are the ones under test.
  */
 async function controller(t, {enabled = true, files = {}, usage = null, token = null, tokenDelayMs = 0,
-    mtimes = {}, onQueryInfo = null, onRead = null} = {}) {
+    mtimes = {}, onQueryInfo = null, onRead = null, cli = false} = {}) {
     const encode = new TextEncoder();
     const decode = new TextDecoder();
     const notes = [];
@@ -54,6 +54,10 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
         ...mem.GLib,
         getenv: () => null,
         get_home_dir: () => HOME,
+        // the claudectl shim exists only when the test says so (cli: true);
+        // every other file_test keeps the stub's truthy answer
+        file_test: p => (p === `${HOME}/.local/bin/claudectl` ? cli : true),
+        find_program_in_path: () => null,
         get_real_time: () => 1,
         timeout_add_seconds: () => 1,
         // Timers are kept, not run: a test fires one with fire(id). The
@@ -222,9 +226,28 @@ test('a login the endpoint refuses reads refresh-failed, shows no figures, and o
         const notice = c._state.notices.find(n => n.arg === 'OLD');
         assert.deepEqual([notice.kind, notice.action], ['refresh-failed', 'relogin']);
         await c.repair(notice.id);
-        assert.deepEqual(clipboard, ['claude auth login']);
+        assert.deepEqual(clipboard, ['claude auth login'], 'no claudectl: the plain sign-in');
         assert.match(c._outcomeFor(`notice:${notice.id}`).text, /claude auth login/);
     });
+
+test('with claudectl installed, the relogin button copies the sign-in into that profile', async t => {
+    const {c, clipboard} = await controller(t, {
+        cli: true,
+        files: {
+            [`${ACCOUNTS}/PRO.json`]: profile('PRO', 'u-pro'),
+            [`${ACCOUNTS}/OLD.json`]: profile('OLD', 'u-old'),
+            ...liveLogin('PRO', 'u-pro'),
+        },
+        usage: token => (token === 'at-OLD'
+            ? {status: 401, body: {}}
+            : {status: 200, body: {limits: [{kind: 'session', percent: 3}]}}),
+    });
+    await c.refresh([{key: 'session', percent: 3}]);
+    const notice = c._state.notices.find(n => n.arg === 'OLD');
+    await c.repair(notice.id);
+    assert.deepEqual(clipboard, ['claudectl account login OLD']);
+    assert.match(c._outcomeFor(`notice:${notice.id}`).text, /run it in a terminal, then click Authorize/);
+});
 
 test('a login that stops answering keeps the weekly reset it last reported', async t => {
     const reset = new Date(Date.now() + 3 * 86_400_000).toISOString();

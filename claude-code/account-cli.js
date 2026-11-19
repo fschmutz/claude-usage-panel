@@ -4,6 +4,7 @@
 
 import {openAccountChrome} from './account-chrome.js';
 import {openAccountExec} from './account-exec.js';
+import {DEFAULT_WAIT_S, openAccountLogin} from './account-login.js';
 import {openStore} from './accounts.js';
 import {nowOf} from './paths.js';
 import {tokenState} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
@@ -21,6 +22,8 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
   claudectl account exec NAME -- CMD [ARG...]  run CMD as NAME, the current login untouched
   claudectl account chrome NAME [--url=U] [--dry-run]
                                               an isolated Chrome signed in to claude.ai as NAME
+  claudectl account login NAME|--expired [--wait=S] [--dry-run] [--json]
+                                              a fresh sign-in for a dead saved login, one click
 
 Names: letters, digits, . _ - (e.g. PRO, PERSO), case-insensitive. Running
 Claude Code sessions keep their old login until restarted. Saved logins are
@@ -60,6 +63,17 @@ the extension's Web Store page: sign in as NAME and add the extension, once;
 both are kept. Later launches open --url (default claude.ai). The extension's
 native-messaging manifest is laid in the profile on every launch, naming the
 live login's host, which Claude Code writes on its first /chrome.`,
+  login: `A fresh sign-in for saved account NAME (or, with --expired, for every
+saved login whose token is gone or refused, the current one aside), the
+current login untouched. \`claude auth login\` runs in a throwaway config dir
+and opens its page in NAME's own Chrome (\`account chrome\`, signed in to
+claude.ai as NAME): click Authorize there and the login ends by itself, and
+is saved into NAME. A login that comes back as another account is not saved.
+--wait=S gives up after S seconds (default ${DEFAULT_WAIT_S}). --dry-run says what would run.
+The current login itself is refused (run \`claude auth login\` directly).
+Ctrl-C stops the batch. --json prints one row per account: {name, ok, email,
+tokenState} or {name, ok: false, error}, and {name, email, dryRun} with
+--dry-run. Exit 0 when every sign-in landed (or none was needed), else 1.`,
   refresh: `Refreshes the stored token of NAME, or of every saved login. The login
 Claude Code uses now is never refreshed here: Claude Code holds the same
 single-use refresh token.`,
@@ -102,6 +116,7 @@ export async function main(argv, io = {}) {
     }
     return 0;
   }
+  if (argv[0] === 'login') return login(argv.slice(1), io, out);
   const args = argv.filter((a) => !a.startsWith('--'));
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
   const json = flags.has('--json');
@@ -204,4 +219,51 @@ export async function main(argv, io = {}) {
     default:
       throw new Error(`unknown command ${cmd}\n${helpText(store)}`);
   }
+}
+
+/** `account login NAME | --expired [--wait=S] [--dry-run] [--json]`. */
+async function login(argv, io, out) {
+  const names = argv.filter((a) => !a.startsWith('--'));
+  const all = argv.includes('--expired');
+  const dry = argv.includes('--dry-run');
+  const json = argv.includes('--json');
+  const waitArg = argv.find((a) => a.startsWith('--wait='));
+  const waitS = waitArg ? Number(waitArg.slice('--wait='.length)) : DEFAULT_WAIT_S;
+  if (all === (names.length === 1) || names.length > 1 || !(Number.isInteger(waitS) && waitS > 0)) {
+    throw new Error('usage: claudectl account login NAME|--expired [--wait=S] [--dry-run] [--json]');
+  }
+  const l = openAccountLogin(io);
+  const targets = all ? await l.expired() : names;
+  if (!targets.length) {
+    out(json ? '[]\n' : 'no saved login needs a new sign-in\n');
+    return 0;
+  }
+  const rows = [];
+  let failed = 0;
+  // One login that fails (or times out) must not keep the others from theirs.
+  for (const name of targets) {
+    try {
+      if (dry) {
+        const p = l.plan(name);
+        rows.push({name: p.name, email: p.email, dryRun: true});
+        if (!json) {
+          out(`${p.name}: would run claude auth login${p.email ? ` --email ${p.email}` : ''} in a throwaway ` +
+            `config dir, its page in ${p.name}'s Chrome; the current login untouched\n`);
+        }
+        continue;
+      }
+      const r = await l.login(name, {waitS, onWaiting: (p) => {
+        if (!json) out(`${p.name}: ${p.name}'s Chrome opens on the sign-in page - click Authorize (waiting ${waitS}s)\n`);
+      }});
+      rows.push({...r, ok: true});
+      if (!json) out(`${r.name}: signed in again (${r.email ?? 'unknown email'}), token ${r.tokenState}\n`);
+    } catch (e) {
+      failed++;
+      rows.push({name, ok: false, error: e.message});
+      if (!json) out(`${e.message.startsWith(`${name}: `) ? e.message : `${name}: ${e.message}`}\n`);
+      if (e.interrupted) break;
+    }
+  }
+  if (json) out(`${JSON.stringify(rows, null, 2)}\n`);
+  return failed ? 1 : 0;
 }

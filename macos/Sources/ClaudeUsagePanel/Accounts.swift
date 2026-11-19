@@ -295,10 +295,19 @@ extension UsageModel {
         case .save:
             saveCurrentAccount(parkNameFor(notice.arg), control: control)
         case .relogin:
-            let command = "claude auth login"
+            // claudectl signs NAME in on its own profile; without it, the plain
+            // sign-in replaces the live login and needs a save after.
+            let shim = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".local/bin/claudectl").path
+            let viaCli = FileManager.default.isExecutableFile(atPath: shim)
+            let command = Notices.reloginCommand(notice.arg, claudectl: viaCli)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(command, forType: .string)
-            setOutcome(control, ok: true, "copied `\(command)` - run it, then save the login again")
+            setOutcome(
+                control, ok: true,
+                viaCli
+                    ? "copied `\(command)` - run it in a terminal, then click Authorize"
+                    : "copied `\(command)` - run it, then save the login again")
         case .retry:
             Task {
                 await refresh()

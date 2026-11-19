@@ -21,8 +21,9 @@ import {
 import {
     OUTCOME_TTL_MS, accountHealth, accountNotices, accountSummary, autoSwitchTarget,
     formatAccountUsage, isTorn, needsAttention, nextInRotation, outcome, outcomeVisible, parkName,
-    rotationOrder, rowError, severityClass, usageSeverity, worstPercent,
+    reloginCommand, rotationOrder, rowError, severityClass, usageSeverity, worstPercent,
 } from './pure.js';
+import {claudectlPath} from './paths.js';
 import {NoticeList, OutcomeLabel} from './noticeRow.js';
 import {vbox, vboxProps, clipLabel} from './widgets.js';
 
@@ -499,10 +500,14 @@ export class AccountsController {
             }
             break;
         case 'relogin': {
-            const command = 'claude auth login';
+            // claudectl signs NAME in on its own profile; without it, the
+            // plain sign-in replaces the live login and needs a save after.
+            const viaCli = Boolean(claudectlPath());
+            const command = reloginCommand(notice.arg, {claudectl: viaCli});
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, command);
-            this._setOutcome(control, true,
-                _('copied `%s` - run it, then save the login again').format(command));
+            this._setOutcome(control, true, viaCli
+                ? _('copied `%s` - run it in a terminal, then click Authorize').format(command)
+                : _('copied `%s` - run it, then save the login again').format(command));
             break;
         }
         default:

@@ -55,3 +55,9 @@ test('pure.js nextInRotation - no rotation below the fixture\'s minimum', () => 
     assert.equal(pure.nextInRotation(names.slice(0, -1), null), null);
     assert.equal(pure.nextInRotation(names, null), 'A0');
 });
+
+for (const c of FIX.reloginCommand) {
+    test(`pure.js reloginCommand - ${c.name}`, () => {
+        assert.equal(pure.reloginCommand(c.account, {claudectl: c.claudectl}), c.expected);
+    });
+}

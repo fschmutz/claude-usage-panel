@@ -91,6 +91,17 @@ export function accountNotices({
     return out;
 }
 
+/**
+ * What a `relogin` notice's button copies for saved login `name`. With
+ * claudectl installed: `claudectl account login NAME`, a fresh sign-in into
+ * NAME's own profile that leaves the live login alone. Without it, the only
+ * way left is `claude auth login`, which replaces the LIVE login (save it
+ * again afterwards). The name is a valid profile name, which needs no quoting.
+ */
+export function reloginCommand(name, {claudectl = false} = {}) {
+    return claudectl && name ? `claudectl account login ${name}` : 'claude auth login';
+}
+
 // ── Button-local outcomes ───────────────────────────────────────────────────────
 // The answer to "did that work?" belongs beside the control that asked, and it
 // belongs there briefly: a success that never clears becomes furniture, and a

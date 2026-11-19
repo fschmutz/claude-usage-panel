@@ -48,6 +48,7 @@ export function openAccountChrome(io = {}) {
   const spawn = (...a) => (io.spawn ?? nodeSpawn)(...a);
 
   function chromeBinary() {
+    if (io.chromeBin) return io.chromeBin;
     const pathEnv = toolEnv(io).PATH;
     for (const c of CHROME[platform] ?? []) {
       if (path.isAbsolute(c) ? fs.existsSync(c) : onPath(c, pathEnv)) return c;

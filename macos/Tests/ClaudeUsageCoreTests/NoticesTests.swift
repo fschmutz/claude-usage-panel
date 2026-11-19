@@ -78,4 +78,13 @@ final class NoticesTests: XCTestCase {
             XCTAssertEqual(got, expected, name)
         }
     }
+
+    func testReloginCommand() throws {
+        let fix = try fixture()
+        for c in fix["reloginCommand"] as! [[String: Any]] {
+            let got = Notices.reloginCommand(
+                c["account"] as? String, claudectl: c["claudectl"] as! Bool)
+            XCTAssertEqual(got, c["expected"] as! String, c["name"] as! String)
+        }
+    }
 }

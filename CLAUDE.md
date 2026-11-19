@@ -243,7 +243,9 @@ process: `wiki/CI.md`.
 `claudectl account` CLI (`claude-code/account-cli.js`; `account exec`, a
 command run as a saved login in a throwaway `CLAUDE_CONFIG_DIR`, is
 `claude-code/account-exec.js`; `account chrome`, an isolated Chrome profile
-per account for Claude-in-Chrome, is `claude-code/account-chrome.js`), the MCP server's
+per account for Claude-in-Chrome, is `claude-code/account-chrome.js`; `account
+login`, a fresh sign-in for a dead saved login in an empty throwaway config dir
+with its browser step in that Chrome, is `claude-code/account-login.js`), the MCP server's
 `list_accounts` / `save_account` / `switch_account` / `rename_account` tools (`mcp/tools.js`) and
 the status line's `account` segment - all static imports. Its pure half is
 `lib/pure/accounts.js`, the same module the GNOME extension imports;

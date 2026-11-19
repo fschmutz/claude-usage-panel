@@ -155,6 +155,18 @@ public enum Notices {
     }
 }
 
+extension Notices {
+    /// What a `relogin` notice's button copies for saved login `name`. With
+    /// claudectl installed: `claudectl account login NAME`, a fresh sign-in
+    /// into NAME's own profile that leaves the live login alone. Without it,
+    /// the only way left is `claude auth login`, which replaces the LIVE login
+    /// (save it again afterwards). A valid profile name needs no quoting.
+    public static func reloginCommand(_ name: String?, claudectl: Bool) -> String {
+        guard claudectl, let name, !name.isEmpty else { return "claude auth login" }
+        return "claudectl account login \(name)"
+    }
+}
+
 // MARK: - Button-local outcomes
 
 /// The answer to "did that work?" beside the control that asked, and only

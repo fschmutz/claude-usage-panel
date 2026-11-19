@@ -6,6 +6,18 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `claudectl account login NAME` (and `--expired` for every saved login
+  whose token is gone or refused): a fresh sign-in for a dead saved login
+  without touching the current one. `claude auth login` runs in a throwaway
+  config dir with its browser step in NAME's own Chrome (`account chrome`);
+  one Authorize click there and the login lands in NAME's profile. A sign-in
+  as another account is not saved; `--wait=S` and `--dry-run`. With claudectl
+  installed, the panels' "Copy sign-in command" button now copies it instead
+  of `claude auth login` (which replaces the current login); pinned for both
+  ports by `reloginCommand` in `tests/fixtures/notices.json`.
+
 ## [3.12.3] - 2026-11-19
 
 ### Fixed

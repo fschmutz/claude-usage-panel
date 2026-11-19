@@ -18,344 +18,306 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: extension.js:206
-msgid "Extra usage"
-msgstr ""
-
-#: extension.js:325
+#: extension.js:313
 #, javascript-format
 msgid "%s - retrying, showing the last reading"
 msgstr ""
 
-#: extension.js:362
+#: extension.js:350
 #, javascript-format
 msgid "Updated %s"
 msgstr ""
 
-#: extension.js:400
-msgid "Session cost: computing…"
-msgstr ""
-
-#: extension.js:405
-#, javascript-format
-msgid "Session cost: $%s · %s tokens (est.)"
-msgstr ""
-
-#: extension.js:407
-msgid "Session cost: unavailable (install ccusage)"
-msgstr ""
-
-#: extension.js:437
-#, javascript-format
-msgid "%s (%d%% of the cap)"
-msgstr ""
-
-#: extension.js:454
-#, javascript-format
-msgid "last %s"
-msgstr ""
-
-#: extension.js:454 prefs/pings.js:96
-msgid "never"
-msgstr ""
-
-#: extension.js:458
-#, javascript-format
-msgid "next %s"
-msgstr ""
-
-#: extension.js:460
-#, javascript-format
-msgid "Session pings: %s"
-msgstr ""
-
-#: extension.js:569
+#: extension.js:501
 msgid "Claude ?"
-msgstr ""
-
-#: lib/accountsSection.js:80
-#, javascript-format
-msgid "Incomplete switch to %s - the login may be half-installed."
 msgstr ""
 
 #: lib/accountsSection.js:82
 #, javascript-format
-msgid "%s's credentials and account block disagree."
+msgid "Incomplete switch to %s - the login may be half-installed."
 msgstr ""
 
 #: lib/accountsSection.js:84
 #, javascript-format
-msgid "Signed in as %s, but this login is not saved."
+msgid "%s's credentials and account block disagree."
 msgstr ""
 
 #: lib/accountsSection.js:86
 #, javascript-format
-msgid "%s: login expired - a new sign-in is the only fix."
+msgid "Signed in as %s, but this login is not saved."
 msgstr ""
 
 #: lib/accountsSection.js:88
 #, javascript-format
-msgid "%s: the stored login was refused - sign in again."
+msgid "%s: login expired - a new sign-in is the only fix."
 msgstr ""
 
 #: lib/accountsSection.js:90
 #, javascript-format
+msgid "%s: the stored login was refused - sign in again."
+msgstr ""
+
+#: lib/accountsSection.js:92
+#, javascript-format
 msgid "%s: no usage reading right now."
 msgstr ""
 
-#: lib/accountsSection.js:98
+#: lib/accountsSection.js:100
 msgid "Finish switch"
 msgstr ""
 
-#: lib/accountsSection.js:100
+#: lib/accountsSection.js:102
 msgid "Repair"
 msgstr ""
 
-#: lib/accountsSection.js:102
+#: lib/accountsSection.js:104
 #, javascript-format
 msgid "Save as %s"
 msgstr ""
 
-#: lib/accountsSection.js:104
+#: lib/accountsSection.js:106
 msgid "Copy sign-in command"
 msgstr ""
 
-#: lib/accountsSection.js:106
+#: lib/accountsSection.js:108
 msgid "Retry"
 msgstr ""
 
-#: lib/accountsSection.js:129 prefs/accounts.js:22 prefs.js:39
+#: lib/accountsSection.js:131 prefs/accounts.js:22 prefs.js:39
 msgid "Accounts"
 msgstr ""
 
-#: lib/accountsSection.js:133
+#: lib/accountsSection.js:135
 msgid "Next"
 msgstr ""
 
-#: lib/accountsSection.js:212
+#: lib/accountsSection.js:214
 #, javascript-format
 msgid "Next walks %s and wraps. Up next: %s."
 msgstr ""
 
-#: lib/accountsSection.js:239
+#: lib/accountsSection.js:241
 msgid "(login expired)"
 msgstr ""
 
-#: lib/accountsSection.js:241
+#: lib/accountsSection.js:243
 msgid "(refresh failed)"
 msgstr ""
 
-#: lib/accountsSection.js:243
+#: lib/accountsSection.js:245
 msgid "(no reading)"
 msgstr ""
 
-#: lib/accountsSection.js:324
+#: lib/accountsSection.js:326
 #, javascript-format
 msgid "Auto-switch at %d%% · on"
 msgstr ""
 
-#: lib/accountsSection.js:325
+#: lib/accountsSection.js:327
 #, javascript-format
 msgid "Auto-switch at %d%% · off"
 msgstr ""
 
-#: lib/accountsSection.js:488
+#: lib/accountsSection.js:496
 #, javascript-format
 msgid "saved as %s"
 msgstr ""
 
-#: lib/accountsSection.js:498
+#: lib/accountsSection.js:509
+#, javascript-format
+msgid "copied `%s` - run it in a terminal, then click Authorize"
+msgstr ""
+
+#: lib/accountsSection.js:510
 #, javascript-format
 msgid "copied `%s` - run it, then save the login again"
 msgstr ""
 
-#: lib/accountsSection.js:503
+#: lib/accountsSection.js:515
 msgid "re-reading…"
 msgstr ""
 
-#: lib/accountsSection.js:522
+#: lib/accountsSection.js:534
 #, javascript-format
 msgid "%s was already the login"
 msgstr ""
 
-#: lib/accountsSection.js:526
+#: lib/accountsSection.js:538
 #, javascript-format
 msgid "Switched %s → %s: %s was at %d%%"
 msgstr ""
 
-#: lib/accountsSection.js:528
+#: lib/accountsSection.js:540
 #, javascript-format
 msgid "Switched %s → %s"
 msgstr ""
 
-#: lib/accountsSection.js:531
+#: lib/accountsSection.js:543
 #, javascript-format
 msgid " - %d running session keeps the old login until restarted"
 msgid_plural " - %d running sessions keep the old login until restarted"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/accountsSection.js:535 lib/awakeSection.js:167 lib/awakeSection.js:181
-#: lib/boardSection.js:212 lib/boardSection.js:218 lib/headerBar.js:42
-#: lib/pauseSection.js:211 lib/pauseSection.js:222 lib/samples.js:67
-#: lib/samples.js:71 lib/sessionsSection.js:175 lib/sessionsSection.js:185
-#: lib/waitingSection.js:121 lib/waitingSection.js:128
-#: lib/waitingSection.js:136
+#: lib/accountsSection.js:547 lib/claudectl.js:27 lib/claudectl.js:33
+#: lib/headerBar.js:42 lib/samples.js:67 lib/samples.js:71
+#: lib/sessionsSection.js:171 lib/sessionsSection.js:184
+#: lib/waitingSection.js:123 lib/waitingSection.js:131
 msgid "Claude usage"
 msgstr ""
 
-#: lib/accountsSection.js:539
+#: lib/accountsSection.js:551
 #, javascript-format
 msgid "now on %s"
 msgstr ""
 
-#: lib/awakeSection.js:35
+#: lib/awakeSection.js:34
 #, javascript-format
 msgid "off (last session ended: %s)"
 msgstr ""
 
-#: lib/awakeSection.js:35
+#: lib/awakeSection.js:34
 msgid "off"
 msgstr ""
 
-#: lib/awakeSection.js:37
+#: lib/awakeSection.js:36
 #, javascript-format
 msgid "timer %s"
 msgstr ""
 
-#: lib/awakeSection.js:38
+#: lib/awakeSection.js:37
 #, javascript-format
 msgid "%d live session(s)"
 msgstr ""
 
-#: lib/awakeSection.js:41
+#: lib/awakeSection.js:40
 #, javascript-format
 msgid "%s · lid mode"
 msgstr ""
 
-#: lib/awakeSection.js:49
+#: lib/awakeSection.js:48
 #, javascript-format
 msgid "Sleep was not given back (%s), %s ago. Click Recover."
 msgstr ""
 
-#: lib/awakeSection.js:77
+#: lib/awakeSection.js:76
 msgid "Awake"
 msgstr ""
 
-#: lib/awakeSection.js:144
+#: lib/awakeSection.js:143
 msgid "Recover"
 msgstr ""
 
-#: lib/awakeSection.js:146
+#: lib/awakeSection.js:145
 msgid "+30m"
 msgstr ""
 
-#: lib/awakeSection.js:147
+#: lib/awakeSection.js:146
 msgid "Off"
 msgstr ""
 
-#: lib/awakeSection.js:154
+#: lib/awakeSection.js:153
 msgid "While sessions"
 msgstr ""
 
-#: lib/awakeSection.js:168
+#: lib/awakeSection.js:170
 msgid "Install claudectl (./install.sh awake) to keep this machine awake."
 msgstr ""
 
-#: lib/awakeSection.js:182
+#: lib/awakeSection.js:171
 msgid "Could not change the awake state"
 msgstr ""
 
-#: lib/boardSection.js:32 lib/waitingSection.js:108
+#: lib/boardSection.js:31 lib/waitingSection.js:107
 msgid "permission"
 msgstr ""
 
-#: lib/boardSection.js:33 lib/waitingSection.js:110
+#: lib/boardSection.js:32 lib/waitingSection.js:109
 msgid "idle"
 msgstr ""
 
-#: lib/boardSection.js:33 lib/waitingSection.js:111
+#: lib/boardSection.js:32 lib/waitingSection.js:110
 msgid "question"
 msgstr ""
 
-#: lib/boardSection.js:34
+#: lib/boardSection.js:33
 msgid "waiting"
 msgstr ""
 
-#: lib/boardSection.js:37
+#: lib/boardSection.js:36
 msgid "running"
 msgstr ""
 
-#: lib/boardSection.js:65 prefs.js:41
+#: lib/boardSection.js:64 prefs.js:41
 msgid "Sessions"
 msgstr ""
 
-#: lib/boardSection.js:69 lib/pauseSection.js:106
+#: lib/boardSection.js:68 lib/pauseSection.js:105
 msgid "Pause all"
 msgstr ""
 
-#: lib/boardSection.js:70 lib/pauseSection.js:107
+#: lib/boardSection.js:69 lib/pauseSection.js:106
 msgid "Resume all"
 msgstr ""
 
-#: lib/boardSection.js:116
+#: lib/boardSection.js:115
 msgid "est., still indexing"
 msgstr ""
 
-#: lib/boardSection.js:116 lib/codexSection.js:53
+#: lib/boardSection.js:115 lib/codexSection.js:53
 msgid "est."
 msgstr ""
 
-#: lib/boardSection.js:118
+#: lib/boardSection.js:117
 #, javascript-format
 msgid "%d waiting"
 msgstr ""
 
-#: lib/boardSection.js:119
+#: lib/boardSection.js:118
 #, javascript-format
 msgid "%d live"
 msgstr ""
 
-#: lib/boardSection.js:120
+#: lib/boardSection.js:119
 #, javascript-format
 msgid "%d today"
 msgstr ""
 
-#: lib/boardSection.js:126
+#: lib/boardSection.js:125
 msgid "Waiting"
 msgstr ""
 
-#: lib/boardSection.js:126
+#: lib/boardSection.js:125
 msgid "Live"
 msgstr ""
 
-#: lib/boardSection.js:126
+#: lib/boardSection.js:125
 msgid "Today"
 msgstr ""
 
-#: lib/boardSection.js:145
+#: lib/boardSection.js:144
 #, javascript-format
 msgid "%d ended today"
 msgstr ""
 
-#: lib/boardSection.js:195 lib/pauseSection.js:190
+#: lib/boardSection.js:194 lib/pauseSection.js:189
 msgid "Pause"
 msgstr ""
 
-#: lib/boardSection.js:212
+#: lib/boardSection.js:211
 msgid "Install claudectl (./install.sh cli) to jump to a session."
 msgstr ""
 
-#: lib/boardSection.js:219 lib/waitingSection.js:122 lib/waitingSection.js:136
+#: lib/boardSection.js:212 lib/waitingSection.js:117 lib/waitingSection.js:131
 #, javascript-format
 msgid "Could not focus %s"
 msgstr ""
 
-#: lib/claudeUsage.js:41
+#: lib/claudeUsage.js:40
 msgid "No Claude credentials found. Sign in with Claude Code."
 msgstr ""
 
-#: lib/claudeUsage.js:70
+#: lib/claudeUsage.js:69
 msgid "Claude session expired. Run any Claude Code command to refresh."
 msgstr ""
 
@@ -375,30 +337,30 @@ msgstr ""
 msgid "OpenAI Codex"
 msgstr ""
 
-#: lib/codexSection.js:98
+#: lib/codexSection.js:101
 #, javascript-format
 msgid "Signed in as %s - `claudectl codex save NAME` keeps it."
 msgstr ""
 
-#: lib/codexSection.js:100
+#: lib/codexSection.js:103
 msgid "No Codex login found. Run `codex login` first."
 msgstr ""
 
-#: lib/codexSection.js:147
+#: lib/codexSection.js:150
 #, javascript-format
 msgid "Recorded by the codex CLI at %s, not read now."
 msgstr ""
 
-#: lib/codexSection.js:165
+#: lib/codexSection.js:168
 msgid "needs `codex login`"
 msgstr ""
 
-#: lib/codexSection.js:184
+#: lib/codexSection.js:187
 #, javascript-format
 msgid "now on %s - restart codex to use it"
 msgstr ""
 
-#: lib/codexSection.js:185
+#: lib/codexSection.js:188
 #, javascript-format
 msgid "%s was already the Codex login"
 msgstr ""
@@ -465,112 +427,112 @@ msgstr ""
 msgid "Quit"
 msgstr ""
 
-#: lib/pauseSection.js:45
+#: lib/pauseSection.js:44
 msgid "woken"
 msgstr ""
 
-#: lib/pauseSection.js:45
+#: lib/pauseSection.js:44
 msgid "next tool call"
 msgstr ""
 
-#: lib/pauseSection.js:47
+#: lib/pauseSection.js:46
 msgid "SAFE"
 msgstr ""
 
-#: lib/pauseSection.js:48
+#: lib/pauseSection.js:47
 #, javascript-format
 msgid "NOT SAFE: %s"
 msgstr ""
 
-#: lib/pauseSection.js:48
+#: lib/pauseSection.js:47
 msgid "NOT SAFE"
 msgstr ""
 
-#: lib/pauseSection.js:49
+#: lib/pauseSection.js:48
 msgid "resumed"
 msgstr ""
 
-#: lib/pauseSection.js:50
+#: lib/pauseSection.js:49
 #, javascript-format
 msgid "delivered (%s), pausing"
 msgstr ""
 
-#: lib/pauseSection.js:50
+#: lib/pauseSection.js:49
 msgid "delivered, pausing"
 msgstr ""
 
-#: lib/pauseSection.js:51
+#: lib/pauseSection.js:50
 msgid "delivering"
 msgstr ""
 
-#: lib/pauseSection.js:52
+#: lib/pauseSection.js:51
 msgid "no waiter yet: gets it on its next turn"
 msgstr ""
 
-#: lib/pauseSection.js:53
+#: lib/pauseSection.js:52
 msgid "ended without a verdict"
 msgstr ""
 
-#: lib/pauseSection.js:54
+#: lib/pauseSection.js:53
 msgid "superseded by a newer request"
 msgstr ""
 
-#: lib/pauseSection.js:55
+#: lib/pauseSection.js:54
 msgid "no verdict within the hour"
 msgstr ""
 
-#: lib/pauseSection.js:55
+#: lib/pauseSection.js:54
 msgid "expired before delivery"
 msgstr ""
 
-#: lib/pauseSection.js:56
+#: lib/pauseSection.js:55
 msgid "not running"
 msgstr ""
 
-#: lib/pauseSection.js:66
+#: lib/pauseSection.js:65
 #, javascript-format
 msgid "Resume %s"
 msgstr ""
 
-#: lib/pauseSection.js:67
+#: lib/pauseSection.js:66
 #, javascript-format
 msgid "%d/%d resumed"
 msgstr ""
 
-#: lib/pauseSection.js:68
+#: lib/pauseSection.js:67
 #, javascript-format
 msgid "Pause %s"
 msgstr ""
 
-#: lib/pauseSection.js:69
+#: lib/pauseSection.js:68
 #, javascript-format
 msgid "%d/%d safe"
 msgstr ""
 
-#: lib/pauseSection.js:71
+#: lib/pauseSection.js:70
 #, javascript-format
 msgid "%d not safe"
 msgstr ""
 
-#: lib/pauseSection.js:73
+#: lib/pauseSection.js:72
 #, javascript-format
 msgid "%d in progress"
 msgstr ""
 
-#: lib/pauseSection.js:101
+#: lib/pauseSection.js:100
 msgid "Pause / resume"
 msgstr ""
 
-#: lib/pauseSection.js:212
+#: lib/pauseSection.js:210
 msgid ""
 "Install claudectl and the pause hooks (./install.sh pause) to pause sessions."
 msgstr ""
 
-#: lib/pauseSection.js:223
+#: lib/pauseSection.js:211
 msgid "Could not resume the sessions"
 msgstr ""
 
-#: lib/pauseSection.js:223
+#: lib/pauseSection.js:211
 msgid "Could not pause the sessions"
 msgstr ""
 
@@ -584,71 +546,112 @@ msgstr ""
 msgid "%s is on pace to run out before it resets"
 msgstr ""
 
-#: lib/savedSessions.js:45
+#: lib/savedSessions.js:70
 #, javascript-format
 msgid "Reopen %s (%d session)"
 msgid_plural "Reopen %s (%d sessions)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/savedSessions.js:64
-msgid "Reopened your sessions"
-msgstr ""
-
-#: lib/savedSessions.js:64
+#: lib/savedSessions.js:89
 msgid "Could not reopen the sessions"
 msgstr ""
 
-#: lib/savedSessions.js:83
-msgid "Saved your open sessions"
+#: lib/savedSessions.js:94
+msgid "Reopened your sessions"
 msgstr ""
 
-#: lib/savedSessions.js:83
+#: lib/savedSessions.js:104
 msgid "Could not save every session"
 msgstr ""
 
-#: lib/sessionPing.js:87
+#: lib/savedSessions.js:110
+msgid "Saved your open sessions"
+msgstr ""
+
+#: lib/sessionPing.js:88
 msgid "systemctl failed"
 msgstr ""
 
-#: lib/sessionPing.js:101
+#: lib/sessionPing.js:102
 msgid ""
 "No systemd user session here - schedule pings with ./install.sh sessionping "
 "instead."
 msgstr ""
 
-#: lib/sessionPing.js:111
+#: lib/sessionPing.js:112
 msgid "Add at least one ping time (HH:MM)."
 msgstr ""
 
-#: lib/sessionPing.js:114
+#: lib/sessionPing.js:115
 msgid "session-ping.sh not found - reinstall with ./install.sh gnome."
 msgstr ""
 
-#: lib/sessionPing.js:119
+#: lib/sessionPing.js:120
 #, javascript-format
 msgid "Could not write the systemd units: %s"
 msgstr ""
 
-#: lib/sessionsSection.js:51 prefs/sessions.js:17
+#: lib/sessionsSection.js:52 prefs/sessions.js:18
 msgid "Today’s sessions"
 msgstr ""
 
-#: lib/sessionsSection.js:113
+#: lib/sessionsSection.js:114
 msgid "Today’s sessions (est., still indexing)"
 msgstr ""
 
-#: lib/sessionsSection.js:114
+#: lib/sessionsSection.js:115
 msgid "Today’s sessions (est.)"
 msgstr ""
 
-#: lib/sessionsSection.js:176
+#: lib/sessionsSection.js:172
 msgid "No terminal found - set one in the extension preferences."
 msgstr ""
 
-#: lib/sessionsSection.js:185
+#: lib/sessionsSection.js:184
 #, javascript-format
 msgid "Could not open %s"
+msgstr ""
+
+#: lib/statusSection.js:25
+msgid "Extra usage"
+msgstr ""
+
+#: lib/statusSection.js:38
+#, javascript-format
+msgid "%s (%d%% of the cap)"
+msgstr ""
+
+#: lib/statusSection.js:80
+msgid "Session cost: computing…"
+msgstr ""
+
+#: lib/statusSection.js:85
+#, javascript-format
+msgid "Session cost: $%s · %s tokens (est.)"
+msgstr ""
+
+#: lib/statusSection.js:87
+msgid "Session cost: unavailable (install ccusage)"
+msgstr ""
+
+#: lib/statusSection.js:104
+#, javascript-format
+msgid "last %s"
+msgstr ""
+
+#: lib/statusSection.js:104 prefs/pings.js:96
+msgid "never"
+msgstr ""
+
+#: lib/statusSection.js:108
+#, javascript-format
+msgid "next %s"
+msgstr ""
+
+#: lib/statusSection.js:110
+#, javascript-format
+msgid "Session pings: %s"
 msgstr ""
 
 #: lib/usageCard.js:22
@@ -659,11 +662,11 @@ msgstr ""
 msgid "the endpoint reported no figure for this limit"
 msgstr ""
 
-#: lib/waitingSection.js:40 lib/waitingSection.js:81
+#: lib/waitingSection.js:39 lib/waitingSection.js:80
 msgid "Waiting on you"
 msgstr ""
 
-#: lib/waitingSection.js:129
+#: lib/waitingSection.js:124
 msgid "Install claudectl (./install.sh cli) to jump to a waiting session."
 msgstr ""
 
@@ -733,24 +736,6 @@ msgid ""
 "fits the bar"
 msgstr ""
 
-#: prefs/accounts.js:90
-#, javascript-format
-msgid "%s, saved as %s"
-msgstr ""
-
-#: prefs/accounts.js:91
-#, javascript-format
-msgid "%s (not saved yet)"
-msgstr ""
-
-#: prefs/accounts.js:92
-msgid "No Claude Code login found"
-msgstr ""
-
-#: prefs/accounts.js:98
-msgid "login expired - sign in and save it again"
-msgstr ""
-
 #: prefs/accounts.js:89
 msgid "Rename"
 msgstr ""
@@ -759,11 +744,29 @@ msgstr ""
 msgid "Rename this saved login"
 msgstr ""
 
-#: prefs/accounts.js:105
+#: prefs/accounts.js:129
+#, javascript-format
+msgid "%s, saved as %s"
+msgstr ""
+
+#: prefs/accounts.js:130
+#, javascript-format
+msgid "%s (not saved yet)"
+msgstr ""
+
+#: prefs/accounts.js:131
+msgid "No Claude Code login found"
+msgstr ""
+
+#: prefs/accounts.js:137
+msgid "login expired - sign in and save it again"
+msgstr ""
+
+#: prefs/accounts.js:144
 msgid "Forget this saved login"
 msgstr ""
 
-#: prefs/accounts.js:125
+#: prefs/accounts.js:165
 msgid "Names use letters, digits, . _ - only (up to 32 characters)"
 msgstr ""
 
@@ -849,8 +852,8 @@ msgstr ""
 #: prefs/integrations.js:15
 msgid ""
 "The official API does not expose dollar cost on subscription plans. Enable "
-"this to compute it locally with ccusage (requires ccusage installed: npm i -"
-"g ccusage)."
+"this to compute it locally with ccusage (requires ccusage installed: npm i "
+"-g ccusage)."
 msgstr ""
 
 #: prefs/integrations.js:18
@@ -867,8 +870,8 @@ msgstr ""
 
 #: prefs/integrations.js:29
 msgid ""
-"Show Cursor team spend using the Cursor Admin API. Create a key at cursor."
-"com → team → Settings → Admin API. Stored in the system keyring."
+"Show Cursor team spend using the Cursor Admin API. Create a key at "
+"cursor.com → team → Settings → Admin API. Stored in the system keyring."
 msgstr ""
 
 #: prefs/integrations.js:32
@@ -1035,15 +1038,15 @@ msgid ""
 "actually work. Same schedule as ./install.sh sessionping."
 msgstr ""
 
-#: prefs/pings.js:29
+#: prefs/pings.js:30
 msgid "Open the 5h session window on schedule"
 msgstr ""
 
-#: prefs/pings.js:31
+#: prefs/pings.js:32
 msgid "Runs scripts/session-ping.sh from a systemd user timer"
 msgstr ""
 
-#: prefs/pings.js:32
+#: prefs/pings.js:33
 msgid "Needs a systemd user session - use ./install.sh sessionping here"
 msgstr ""
 
@@ -1091,109 +1094,109 @@ msgstr ""
 msgid "Sun"
 msgstr ""
 
-#: prefs/pings.js:80
+#: prefs/pings.js:79
 msgid "Add a ping"
 msgstr ""
 
-#: prefs/pings.js:83
+#: prefs/pings.js:82
 msgid "Suggest times"
 msgstr ""
 
-#: prefs/pings.js:99
+#: prefs/pings.js:100
 #, javascript-format
 msgid "%d%% of %s-%s covered"
 msgstr ""
 
-#: prefs/pings.js:101
+#: prefs/pings.js:102
 msgid "no valid times yet"
 msgstr ""
 
-#: prefs/pings.js:122
+#: prefs/pings.js:123
 #, javascript-format
 msgid "Ping %d"
 msgstr ""
 
-#: prefs/sessions.js:18
+#: prefs/sessions.js:19
 msgid ""
 "List the sessions that spent the most tokens today, biggest first, and "
 "resume one in a terminal with a click. Read from the local transcripts in "
 "$CLAUDE_CONFIG_DIR/projects (~/.claude/projects by default)."
 msgstr ""
 
-#: prefs/sessions.js:21
+#: prefs/sessions.js:22
 msgid "Show today’s sessions"
 msgstr ""
 
-#: prefs/sessions.js:22
+#: prefs/sessions.js:23
 msgid "Adds up to 5 resume links to the dropdown"
 msgstr ""
 
-#: prefs/sessions.js:29
+#: prefs/sessions.js:30
 msgid "Session sections"
 msgstr ""
 
-#: prefs/sessions.js:30
+#: prefs/sessions.js:31
 msgid "Waiting on you, Pause / resume and Today’s sessions"
 msgstr ""
 
-#: prefs/sessions.js:31
+#: prefs/sessions.js:32
 msgid "One merged list"
 msgstr ""
 
-#: prefs/sessions.js:31
+#: prefs/sessions.js:32
 msgid "Tabs"
 msgstr ""
 
-#: prefs/sessions.js:31
+#: prefs/sessions.js:32
 msgid "Separate sections"
 msgstr ""
 
-#: prefs/sessions.js:38
+#: prefs/sessions.js:39
 msgid "Terminal"
 msgstr ""
 
-#: prefs/sessions.js:45
+#: prefs/sessions.js:46
 msgid ""
 "Leave empty for the desktop default terminal ($TERMINAL first); without one: "
 "ghostty, kitty, wezterm, alacritty, foot, gnome-terminal, konsole, tilix, "
 "xfce4-terminal, xterm. Also used by claudectl session open."
 msgstr ""
 
-#: prefs/sessions.js:56
+#: prefs/sessions.js:57
 msgid "Saved sessions"
 msgstr ""
 
-#: prefs/sessions.js:57
+#: prefs/sessions.js:58
 msgid ""
 "claudectl session keeps the running Claude Code sessions in snapshots and "
 "reopens them as tabs of one terminal window."
 msgstr ""
 
-#: prefs/sessions.js:59
+#: prefs/sessions.js:60
 msgid "Autosave"
 msgstr ""
 
-#: prefs/sessions.js:61
+#: prefs/sessions.js:62
 msgid "Newest snapshot"
 msgstr ""
 
-#: prefs/sessions.js:62
+#: prefs/sessions.js:63
 msgid "Reopen"
 msgstr ""
 
-#: prefs/sessions.js:70
+#: prefs/sessions.js:73
 msgid "claudectl is not installed - run ./install.sh cli"
 msgstr ""
 
-#: prefs/sessions.js:72
+#: prefs/sessions.js:75
 msgid "None yet - run claudectl session save, or wait for the autosave"
 msgstr ""
 
-#: prefs/sessions.js:83
+#: prefs/sessions.js:86
 msgid "Every 30 minutes"
 msgstr ""
 
-#: prefs/sessions.js:83
+#: prefs/sessions.js:86
 msgid "Not scheduled - run ./install.sh cli"
 msgstr ""
 
