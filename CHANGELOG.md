@@ -13,7 +13,9 @@ semantic versioning.
   without touching the current one. `claude auth login` runs in a throwaway
   config dir with its browser step in NAME's own Chrome (`account chrome`);
   one Authorize click there and the login lands in NAME's profile. A sign-in
-  as another account is not saved; `--wait=S` and `--dry-run`. With claudectl
+  as another account is not saved, a profile signed out of claude.ai is
+  refused up front with the sign-in step, and the page opens alone
+  (`account chrome --only`); `--wait=S` and `--dry-run`. With claudectl
   installed, the panels' "Copy sign-in command" button now copies it instead
   of `claude auth login` (which replaces the current login); pinned for both
   ports by `reloginCommand` in `tests/fixtures/notices.json`.

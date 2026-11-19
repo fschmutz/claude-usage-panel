@@ -259,7 +259,11 @@ A saved login whose refresh token is gone (`expired`) or refused
 its browser step opens in NAME's own Chrome (`account chrome`, above), which is
 already signed in to claude.ai as NAME. Click Authorize there; the CLI's
 localhost callback ends the login by itself and the new credentials go into
-NAME's profile. No code is pasted. A sign-in that comes back as another
+NAME's profile. No code is pasted. NAME's Chrome must hold a claude.ai
+session first (a live `sessionKey` cookie, read by name and date only from a
+copy of the profile's cookie store); signed out, the command stops at once and
+names the sign-in step instead of waiting. The page opens alone
+(`account chrome --only`), never with the first-launch tabs. A sign-in that comes back as another
 account is not saved, and the current login is refused (Claude Code holds it:
 run `claude auth login` directly).
 

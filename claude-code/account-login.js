@@ -20,6 +20,10 @@
 //   keeps naming the live login's, never the dir about to be removed.
 // - The child's output is never echoed (it carries the authorize URL). It
 //   gets no stdin, a deadline (--wait, default 600 s) and is killed past it.
+// - A profile whose Chrome holds no claude.ai session (no live `sessionKey`
+//   cookie) is refused up front with the sign-in step, and the browser step
+//   opens the authorize URL alone (`account chrome --only`), never the
+//   first-launch tabs.
 // - `account chrome` is planned before anything runs (Chrome found, the live
 //   native host present), so a browser step that cannot happen fails at once
 //   instead of after the whole wait.
@@ -52,7 +56,7 @@ export function browserScript({node, claudectl, name, configDir, errFile}) {
   const conf = configDir ? `CLAUDE_CONFIG_DIR=${shellQuote(configDir)}; export CLAUDE_CONFIG_DIR`
     : 'unset CLAUDE_CONFIG_DIR';
   return `#!/bin/sh\n${conf}\nexec ${shellQuote(node)} ${shellQuote(claudectl)} account chrome ` +
-    `${shellQuote(name)} "--url=$1" >/dev/null 2>${shellQuote(errFile)}\n`;
+    `${shellQuote(name)} --only "--url=$1" >/dev/null 2>${shellQuote(errFile)}\n`;
 }
 
 /** The last line `account chrome` wrote to stderr, for a failure's reason. */
@@ -91,9 +95,16 @@ export function openAccountLogin(io = {}) {
       throw new Error(`${profile.name} is the current login - Claude Code holds it; run \`claude auth login\` there`);
     }
     const email = typeof profile.account?.emailAddress === 'string' ? profile.account.emailAddress : null;
-    const chrome = openAccountChrome(io).plan(profile.name); // throws when Chrome is missing
-    if (!fs.existsSync(chrome.host)) {
-      throw new Error(`no Claude Code native host at ${chrome.host}: run \`claude\` once and type /chrome, then retry`);
+    const chrome = openAccountChrome(io);
+    const where = chrome.plan(profile.name); // throws when Chrome is missing
+    if (!fs.existsSync(where.host)) {
+      throw new Error(`no Claude Code native host at ${where.host}: run \`claude\` once and type /chrome, then retry`);
+    }
+    // Authorize needs the profile signed in to claude.ai; signed out, the
+    // page bounces to /login and the wait runs out for nothing.
+    if (chrome.signedIn(profile.name) === false) {
+      throw new Error(`${profile.name}: its Chrome is not signed in to claude.ai - sign in there first ` +
+        `(\`claudectl account chrome ${profile.name} --url=https://claude.ai/login\`, the emailed link), then retry`);
     }
     return {
       name: profile.name, email, health: tokenState(profile, store.now()),

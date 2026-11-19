@@ -62,7 +62,8 @@ drives this window and no other. The first launch opens claude.ai/login and
 the extension's Web Store page: sign in as NAME and add the extension, once;
 both are kept. Later launches open --url (default claude.ai). The extension's
 native-messaging manifest is laid in the profile on every launch, naming the
-live login's host, which Claude Code writes on its first /chrome.`,
+live login's host, which Claude Code writes on its first /chrome. --only opens
+--url alone, never the first-launch tabs (what \`account login\` uses).`,
   login: `A fresh sign-in for saved account NAME (or, with --expired, for every
 saved login whose token is gone or refused, the current one aside), the
 current login untouched. \`claude auth login\` runs in a throwaway config dir
@@ -109,7 +110,8 @@ export async function main(argv, io = {}) {
     if (!name || name.startsWith('--')) throw new Error('usage: claudectl account chrome NAME [--url=U] [--dry-run]');
     const url = argv.find((a) => a.startsWith('--url='))?.slice('--url='.length);
     const chrome = openAccountChrome(io);
-    const p = argv.includes('--dry-run') ? chrome.plan(name, {url}) : chrome.launch(name, {url});
+    const opts = {url, only: argv.includes('--only')};
+    const p = argv.includes('--dry-run') ? chrome.plan(name, opts) : chrome.launch(name, opts);
     out(`${argv.includes('--dry-run') ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
     if (p.firstRun) {
       out(`first launch: sign in to claude.ai as ${p.name}, then add the Claude extension (both tabs are open); kept for next time\n`);

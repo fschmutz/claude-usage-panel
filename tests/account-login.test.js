@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import {openAccountChrome} from '../claude-code/account-chrome.js';
 import {main} from '../claude-code/account-cli.js';
 import {DROPPED_ENV} from '../claude-code/account-exec.js';
 import {browserScript, openAccountLogin} from '../claude-code/account-login.js';
@@ -49,7 +50,21 @@ if (process.env.CHROME_FAIL) { console.error('claudectl: Google Chrome not found
 `;
 
 /** Live login PRO, saved PRO, a dead PERSO (no refresh token left). */
-function setup({env = {}, host = true, platform = 'linux', exec = null, onChild = null} = {}) {
+// NAME's Chrome cookie store with a claude.ai sessionKey (or not): only the
+// name and dates are ever read, as Chrome lays them out.
+const SQLITE = process.getBuiltinModule?.('node:sqlite');
+function cookies(dir, rows) {
+  fs.mkdirSync(path.join(dir, 'Default'), {recursive: true});
+  const db = new SQLITE.DatabaseSync(path.join(dir, 'Default', 'Cookies'));
+  db.exec('CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, expires_utc INTEGER, has_expires INTEGER)');
+  const add = db.prepare('INSERT INTO cookies VALUES (?, ?, ?, ?, ?)');
+  for (const r of rows) add.run(r.host ?? '.claude.ai', r.name ?? 'sessionKey', 'x', r.expires ?? 0, r.hasExpires ?? 0);
+  db.close();
+}
+const chromeTime = (ms) => (BigInt(ms) + 11_644_473_600_000n) * 1000n;
+
+function setup({env = {}, host = true, platform = 'linux', exec = null, onChild = null, signedIn = true,
+  chromeBin = null} = {}) {
   const w = world();
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-login-'));
   const report = path.join(scratch, 'report');
@@ -68,6 +83,7 @@ function setup({env = {}, host = true, platform = 'linux', exec = null, onChild 
   const spawned = [];
   const io = {...w.io, platform, tmpdir: path.join(scratch, 'run'), env: {...env, REPORT: report}, pid: 5151,
     claudeBin: '/fake/claude', claudectlJs: chrome, toolDirs: [bin], ...(exec ? {exec} : {}),
+    ...(chromeBin ? {chromeBin} : {}),
     spawn: (cmd, args, opts) => {
       spawned.push({cmd, args});
       const child = nodeSpawn(process.execPath, [claude, ...args], opts);
@@ -78,6 +94,7 @@ function setup({env = {}, host = true, platform = 'linux', exec = null, onChild 
   s.saveCurrent('PRO');
   s.writeProfile({version: 1, name: 'PERSO', account: account('perso'),
     credentials: {...creds('perso', {refreshToken: undefined, expiresAt: w.io.nowMs - 1}), mcpOAuth: {x: 1}}});
+  if (signedIn && SQLITE) cookies(openAccountChrome(io).plan('PERSO').dir, [{}]);
   const snapshot = () => ({
     creds: fs.readFileSync(path.join(w.home, '.claude', '.credentials.json'), 'utf8'),
     cfg: fs.readFileSync(path.join(w.home, '.claude.json'), 'utf8'),
@@ -115,7 +132,7 @@ test('login: NAME is signed in again in a throwaway dir; the live login and ever
 test('login: the browser step opens NAME\'s Chrome as the caller, never as the throwaway dir', async () => {
   const t = setup();
   await t.login();
-  assert.deepEqual(t.read('chrome'), {argv: ['account', 'chrome', 'PERSO',
+  assert.deepEqual(t.read('chrome'), {argv: ['account', 'chrome', 'PERSO', '--only',
     '--url=http://localhost:1234/authorize?x=1'], conf: null}, 'the caller had no CLAUDE_CONFIG_DIR: none');
 });
 
@@ -172,8 +189,8 @@ test('login: on macOS the new login is read from the dir\'s own Keychain item, w
     svc = service(opts.env.CLAUDE_CONFIG_DIR);
     keychain.set(svc, JSON.stringify(creds('mac-perso')));
   });
-  const t = setup({platform: 'darwin', exec, onChild});
-  t.io.chromeBin = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const t = setup({platform: 'darwin', exec, onChild,
+    chromeBin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
   t.s = openStore(t.io);
   const r = await t.login({MODE: 'account-only'});
   assert.equal(r.tokenState, 'valid');
@@ -198,6 +215,7 @@ test('login CLI: --expired signs in every dead saved login, the live one aside, 
   const t = setup();
   t.s.writeProfile({version: 1, name: 'BETA', account: account('beta'),
     credentials: creds('beta', {refreshToken: undefined})});
+  if (SQLITE) cookies(openAccountChrome(t.io).plan('BETA').dir, [{}]);
   t.s.writeProfile({version: 1, name: 'WORK', account: account('work'), credentials: creds('work')});
   let text = '';
   const io = {...t.io, stdout: (s) => { text += s; }};
@@ -214,7 +232,42 @@ test('browserScript: every value is quoted; the URL is the one argument', () => 
   const s = browserScript({node: '/n o/node', claudectl: "/a'b/claudectl.js", name: 'PERSO', configDir: null,
     errFile: '/d/err'});
   assert.equal(s, "#!/bin/sh\nunset CLAUDE_CONFIG_DIR\nexec '/n o/node' '/a'\\''b/claudectl.js' account chrome " +
-    "'PERSO' \"--url=$1\" >/dev/null 2>'/d/err'\n");
+    "'PERSO' --only \"--url=$1\" >/dev/null 2>'/d/err'\n");
   assert.match(browserScript({node: 'n', claudectl: 'c', name: 'P', configDir: '/x y', errFile: 'e'}),
     /^#!\/bin\/sh\nCLAUDE_CONFIG_DIR='\/x y'; export CLAUDE_CONFIG_DIR\n/);
+});
+
+test('login: a profile signed out of claude.ai is refused before anything runs, with the sign-in step', async () => {
+  const t = setup({signedIn: false});
+  await assert.rejects(t.login(), /PERSO: its Chrome is not signed in to claude.ai - sign in there first \(`claudectl account chrome PERSO --url=https:\/\/claude.ai\/login`/);
+  assert.deepEqual(t.spawned, []);
+  assert.deepEqual(t.left(), []);
+});
+
+test('account chrome signedIn: a live sessionKey on claude.ai only', {skip: !SQLITE && 'no node:sqlite'}, () => {
+  const cases = [
+    [[{}], true, 'a session cookie'],
+    [[{hasExpires: 1, expires: chromeTime(Date.now() + 86_400_000)}], true, 'not expired yet'],
+    [[{hasExpires: 1, expires: chromeTime(Date.now() - 1000)}], false, 'expired'],
+    [[{name: 'lastActiveOrg'}], false, 'another cookie'],
+    [[{host: '.example.com'}], false, 'another site'],
+  ];
+  for (const [rows, want, why] of cases) {
+    const t = setup({signedIn: false});
+    const c = openAccountChrome({...t.io, nowMs: Date.now()});
+    cookies(c.plan('PERSO').dir, rows);
+    assert.equal(c.signedIn('PERSO'), want, why);
+  }
+  const t = setup({signedIn: false});
+  assert.equal(openAccountChrome(t.io).signedIn('PERSO'), false, 'a profile never launched');
+});
+
+test('account chrome --only: the URL alone, never the first-launch tabs', () => {
+  const t = setup();
+  const c = openAccountChrome(t.io);
+  const first = c.plan('PERSO', {url: 'http://localhost:1/x'});
+  assert.ok(first.firstRun && first.argv.includes('https://claude.ai/login'), 'first launch: the setup tabs');
+  const only = c.plan('PERSO', {url: 'http://localhost:1/x', only: true});
+  assert.deepEqual(only.argv.slice(-2), ['--new-window', 'http://localhost:1/x']);
+  assert.equal(only.firstRun, false);
 });

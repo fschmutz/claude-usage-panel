@@ -62,16 +62,17 @@ export function openAccountChrome(io = {}) {
     return path.join(dir, 'chrome', 'chrome-native-host');
   }
 
-  /** What a launch does, without doing it: {dir, firstRun, manifest, argv}. */
-  function plan(name, {url} = {}) {
+  /** What a launch does, without doing it: {dir, firstRun, manifest, argv}.
+   *  `only`: open `url` alone, never the first-run tabs (account login). */
+  function plan(name, {url, only = false} = {}) {
     const profile = store.readProfile(name);
     if (!profile) throw new Error(`no saved account named ${name}`);
     const dir = path.join(chromeProfilesDir(io), profile.name);
     const firstRun = !fs.existsSync(path.join(dir, 'Default', 'Extensions', EXTENSION_ID));
-    const urls = firstRun ? [LOGIN_URL, STORE_URL] : [url ?? 'https://claude.ai/'];
-    if (firstRun && url) urls.push(url);
+    const urls = firstRun && !(only && url) ? [LOGIN_URL, STORE_URL] : [url ?? 'https://claude.ai/'];
+    if (firstRun && url && !only) urls.push(url);
     return {
-      name: profile.name, dir, firstRun, host: liveHost(),
+      name: profile.name, dir, firstRun: firstRun && !(only && url), host: liveHost(),
       manifest: path.join(dir, 'NativeMessagingHosts', `${HOST_NAME}.json`),
       argv: [chromeBinary(), `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
         '--new-window', ...urls],
@@ -102,5 +103,46 @@ export function openAccountChrome(io = {}) {
     return p;
   }
 
-  return {plan, prepare, launch};
+  /**
+   * Whether NAME's profile holds a claude.ai session: a `sessionKey` cookie
+   * on .claude.ai that has not expired. Read from a copy of the profile's
+   * cookie store (Chrome keeps it open), names and dates only - no cookie
+   * value is read. null when that cannot be told (no store yet, no
+   * node:sqlite), so a caller only refuses on a definite false.
+   */
+  function signedIn(name) {
+    const profile = store.readProfile(name);
+    if (!profile) throw new Error(`no saved account named ${name}`);
+    const db = path.join(chromeProfilesDir(io), profile.name, 'Default', 'Cookies');
+    if (!fs.existsSync(db)) return false;
+    let sqlite;
+    try {
+      sqlite = process.getBuiltinModule?.('node:sqlite');
+    } catch {
+      sqlite = null;
+    }
+    if (!sqlite?.DatabaseSync) return null;
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-cookies-'));
+    try {
+      fs.copyFileSync(db, path.join(tmp, 'Cookies'));
+      const conn = new sqlite.DatabaseSync(path.join(tmp, 'Cookies'), {readOnly: true});
+      try {
+        // Chrome dates: microseconds since 1601-01-01; 0 / has_expires 0 is a session cookie
+        // (past Number's safe range today, hence BigInt)
+        const nowChrome = (BigInt(Math.floor(store.now())) + 11_644_473_600_000n) * 1000n;
+        const q = conn.prepare("SELECT expires_utc, has_expires FROM cookies WHERE name = 'sessionKey' " +
+          "AND host_key IN ('.claude.ai', 'claude.ai')");
+        q.setReadBigInts(true);
+        return q.all().some((r) => !r.has_expires || BigInt(r.expires_utc) > nowChrome);
+      } finally {
+        conn.close();
+      }
+    } catch {
+      return null;
+    } finally {
+      fs.rmSync(tmp, {recursive: true, force: true});
+    }
+  }
+
+  return {plan, prepare, launch, signedIn};
 }
