@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [3.12.3] - 2026-11-19
+
 ### Fixed
 
 - The pause protocol no longer points a workflow's resume call at the script
