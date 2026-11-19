@@ -8,6 +8,10 @@ semantic versioning.
 
 ### Fixed
 
+- `claudectl account exec` no longer passes Volta's `_VOLTA_TOOL_RECURSION` flag
+  to the command it runs: the same inherited marker that broke every node hook
+  of a reopened session also broke those of `account exec NAME -- claude`.
+
 - The pause protocol no longer points a workflow's resume call at the script
   copy beside the checkpoint, which the Workflow tool always refuses (it sits
   outside the dirs the session can read). The checkpoint records the
