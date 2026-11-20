@@ -6,6 +6,21 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Pause the session autosave until the next boot: `claudectl session autosave
+  pause | resume | status`, and a pause icon in both dropdown headers. While
+  paused, the scheduled runs write and prune nothing, so the newest snapshot
+  stays the one Reopen brings back; Save still writes. Both panels show an
+  amber "Autosave paused" strip with a Resume button and two amber bars in
+  the top-bar gauge. The pause ends by itself at the next boot.
+
+### Fixed
+
+- macOS Settings ▸ Saved sessions no longer reads "Every 30 minutes" when the
+  autosave agent is not loaded: it says paused, or not running until the next
+  login.
+
 ## [3.12.3] - 2026-11-19
 
 ### Fixed

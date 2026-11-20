@@ -166,5 +166,142 @@
         }
       }
     }
+  ],
+  "pause": [
+    {
+      "name": "no pause file",
+      "data": null,
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": false,
+        "since": null,
+        "expired": false
+      }
+    },
+    {
+      "name": "paused this boot",
+      "data": {
+        "version": 1,
+        "at": 1795165000000,
+        "bootAt": 1795163219516
+      },
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": true,
+        "since": 1795165000000,
+        "expired": false
+      }
+    },
+    {
+      "name": "clock adjusted since, within the tolerance",
+      "data": {
+        "version": 1,
+        "at": 1795165000000,
+        "bootAt": 1795163160000
+      },
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": true,
+        "since": 1795165000000,
+        "expired": false
+      }
+    },
+    {
+      "name": "exactly the tolerance is still this boot",
+      "data": {
+        "version": 1,
+        "at": 1795165000000,
+        "bootAt": 1795163279000
+      },
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": true,
+        "since": 1795165000000,
+        "expired": false
+      }
+    },
+    {
+      "name": "one ms past the tolerance is another boot",
+      "data": {
+        "version": 1,
+        "at": 1795165000000,
+        "bootAt": 1795163279001
+      },
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": false,
+        "since": null,
+        "expired": true
+      }
+    },
+    {
+      "name": "paused before a reboot",
+      "data": {
+        "version": 1,
+        "at": 1795080000000,
+        "bootAt": 1795070000000
+      },
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": false,
+        "since": null,
+        "expired": true
+      }
+    },
+    {
+      "name": "boot time unknown: not paused, not removed",
+      "data": {
+        "version": 1,
+        "at": 1795165000000,
+        "bootAt": 1795163219000
+      },
+      "bootAtMs": null,
+      "expect": {
+        "paused": false,
+        "since": null,
+        "expired": false
+      }
+    },
+    {
+      "name": "at is a string",
+      "data": {
+        "version": 1,
+        "at": "1795165000000",
+        "bootAt": 1795163219000
+      },
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": false,
+        "since": null,
+        "expired": false
+      }
+    },
+    {
+      "name": "bootAt is a boolean",
+      "data": {
+        "version": 1,
+        "at": 1795165000000,
+        "bootAt": true
+      },
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": false,
+        "since": null,
+        "expired": false
+      }
+    },
+    {
+      "name": "an array is not a pause",
+      "data": [
+        1795165000000,
+        1795163219000
+      ],
+      "bootAtMs": 1795163219000,
+      "expect": {
+        "paused": false,
+        "since": null,
+        "expired": false
+      }
+    }
   ]
 }

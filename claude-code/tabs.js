@@ -27,14 +27,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
-import {nowOf, projectsDir, tabsDir, transcriptPath} from './paths.js';
+import {autosavePausePath, nowOf, projectsDir, tabsDir, transcriptPath} from './paths.js';
 import {readJSON, writePrivate} from './private-fs.js';
 import {openRegistry} from './registry.js';
 import {launchSteps, resolveTerminal, sessionFreeEnv} from './terminals.js';
 import {onPath, query, toolEnv} from './tools.js';
 import {captureLayout} from './layout.js';
 import {formatClock} from '../claude-usage-panel@fschmutz.github.io/lib/pure/pings.js';
-import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
+import {
+  AUTO_SNAPSHOT_PREFIX, autosavePauseState,
+} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
 import {
   PAUSE_RESUME_GUARD, resumeProtocolText,
 } from '../claude-usage-panel@fschmutz.github.io/lib/pure/pause-protocol.js';
@@ -162,7 +164,8 @@ export function stampLabel(ms) {
 
 /**
  * Bind the tab operations to one environment. io (all optional):
- * homedir, env, platform, nowMs, pid, procDir, exec (execFileSync), spawn.
+ * homedir, env, platform, nowMs, pid, procDir, exec (execFileSync), spawn,
+ * bootAtMs (this boot's start, epoch ms; null = unknown).
  * The registry's operations (liveSessions, sessionOfPid, selfPid, ...) come
  * with it, so `claudectl session` needs one handle.
  */
@@ -244,6 +247,47 @@ export function openTabs(io = {}) {
     return write(label ?? stampLabel(now()), captureLayout(live, io, {askApps: true}));
   }
 
+  /** This boot's start, epoch ms, or null when it cannot be read: macOS
+   *  `kern.boottime` (absolute path - a scheduler's PATH is minimal), Linux
+   *  /proc/stat btime. The GNOME and macOS panels read the same values. */
+  function bootAt() {
+    if ('bootAtMs' in io) return io.bootAtMs;
+    try {
+      if (platform() === 'darwin') {
+        const m = /sec = (\d+), usec = (\d+)/.exec(exec('/usr/sbin/sysctl', ['-n', 'kern.boottime'], {encoding: 'utf8'}));
+        return m ? Number(m[1]) * 1000 + Math.floor(Number(m[2]) / 1000) : null;
+      }
+      const m = /^btime (\d+)$/m.exec(fs.readFileSync(path.join(io.procDir ?? '/proc', 'stat'), 'utf8'));
+      return m ? Number(m[1]) * 1000 : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The scheduled autosave's pause: {paused, since, expired} (autosavePauseState). */
+  function autosavePause(boot = bootAt()) {
+    return autosavePauseState(readJSON(autosavePausePath(io)), boot);
+  }
+
+  /** Stop the scheduled autosave until the next boot (a forced save still
+   *  writes). Refused when the boot time cannot be read: that pause could
+   *  never be told apart from a stale one. Returns the pause state. */
+  function pauseAutosave() {
+    const boot = bootAt();
+    if (!Number.isFinite(boot)) throw new Error('cannot read the boot time - autosave not paused');
+    const current = autosavePause(boot);
+    if (current.paused) return current;
+    writePrivate(autosavePausePath(io), `${JSON.stringify({version: 1, at: now(), bootAt: boot})}\n`);
+    return autosavePause(boot);
+  }
+
+  /** Resume the scheduled autosave. Returns whether it was paused. */
+  function resumeAutosave() {
+    const was = autosavePause().paused;
+    fs.rmSync(autosavePausePath(io), {force: true});
+    return was;
+  }
+
   /** The scheduled job: a new auto snapshot only when the set changed, then
    *  prune autos beyond `keep`. Returns {saved, reason, pruned}.
    *  `force` (the panels' Save button) writes whatever is open right now,
@@ -251,6 +295,12 @@ export function openTabs(io = {}) {
    *  them, must not come back on the next Reopen. The schedule never writes
    *  an empty set - at boot nothing runs yet, and that is not "closed". */
   function autosave({keep = AUTO_KEEP, force = false} = {}) {
+    // Paused: the scheduled run writes nothing and prunes nothing, so the
+    // newest snapshot stays the one the pause was meant to keep. A pause from
+    // an earlier boot is over: removed, and this run goes on as usual.
+    const pause = autosavePause();
+    if (pause.expired) fs.rmSync(autosavePausePath(io), {force: true});
+    if (pause.paused && !force) return {saved: null, reason: 'paused until the next boot', pruned: [], missed: [], paused: true};
     // no AppleScript: a scheduled job must never raise the Automation prompt
     const live = captureLayout(liveSessions(), io);
     let saved = null;
@@ -326,6 +376,6 @@ export function openTabs(io = {}) {
   }
 
   return {
-    ...registry, blocker, snapshots, resolve, save, autosave, purge, plan, launch,
+    ...registry, blocker, snapshots, resolve, save, autosave, autosavePause, pauseAutosave, resumeAutosave, purge, plan, launch,
   };
 }

@@ -37,6 +37,7 @@ import {vbox} from './lib/widgets.js';
 import {writeTextAsync} from './lib/fs.js';
 import {stateDir} from './lib/paths.js';
 import {SavedSessionsController} from './lib/savedSessions.js';
+import {AutosaveBanner} from './lib/autosaveBanner.js';
 import {ExtraUsageSection, StatusSection} from './lib/statusSection.js';
 import {
     panelGauge, refreshSections, isRetryableFailure,
@@ -185,6 +186,7 @@ class ClaudeUsageButton extends PanelMenu.Button {
             onRefresh: () => this.refresh(),
             onReopen: () => this._saved.reopen(),
             onSaveSessions: () => this._saved.save(),
+            onPauseAutosave: () => this._saved.togglePause(),
             onSettings: () => {
                 this.menu.close();
                 this._extension.openPreferences();
@@ -194,8 +196,19 @@ class ClaudeUsageButton extends PanelMenu.Button {
         });
         header.add_child(this._header);
         this.menu.addMenuItem(header);
+        // Amber, right under the header, only while the autosave is paused.
+        const bannerItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        const banner = new AutosaveBanner(() => this._saved.togglePause());
+        bannerItem.add_child(banner);
+        bannerItem.visible = false;
+        this.menu.addMenuItem(bannerItem);
         this._saved = new SavedSessionsController({
-            header: this._header, menu: this.menu, isDestroyed: deps.isDestroyed});
+            header: this._header, menu: this.menu, isDestroyed: deps.isDestroyed,
+            onPause: pause => {
+                banner.update(pause);
+                bannerItem.visible = pause.paused;
+                this._panelGauge.setPaused(pause.paused);
+            }});
 
         // One card per limit.
         const cardsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
@@ -318,6 +331,8 @@ class ClaudeUsageButton extends PanelMenu.Button {
             // After a failed poll too: none of these needs the Claude token,
             // and the account switcher is the fix for an expired login.
             await this._refreshSections(result);
+            // The top-bar pause mark follows a pause typed in a terminal.
+            await this._saved.syncPause();
         } finally {
             this._refreshing = false;
             // Re-arm from the numbers this poll just produced: the timer is

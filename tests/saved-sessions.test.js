@@ -6,14 +6,17 @@ import assert from 'node:assert/strict';
 import {memoryFs} from './gio-memory.js';
 import {stub} from './gjs-stub.js';
 
-async function controller({newest = null, cli = '/bin/claudectl', result = {ok: true, stdout: '', stderr: ''}} = {}) {
+async function controller({newest = null, cli = '/bin/claudectl', result = {ok: true, stdout: '', stderr: ''},
+    pause = {paused: false, since: null}} = {}) {
     const {SavedSessionsController} = await import('../claude-usage-panel@fschmutz.github.io/lib/savedSessions.js');
-    const seen = {states: [], runs: [], notes: [], closed: 0, reads: 0};
+    const seen = {states: [], pauseStates: [], pauses: [], runs: [], notes: [], closed: 0, reads: 0, pause};
     const ctl = new SavedSessionsController({
-        header: {syncReopen: s => seen.states.push(s)},
+        header: {syncReopen: s => seen.states.push(s), syncPause: s => seen.pauseStates.push(s)},
         menu: {close: () => { seen.closed++; }},
         isDestroyed: () => false,
+        onPause: p => seen.pauses.push(p),
         io: {
+            readAutosavePause: async () => ({...seen.pause, expired: false}),
             readSnapshots: async () => {
                 seen.reads++;
                 return {newest: seen.newest === undefined ? newest : seen.newest};
@@ -98,4 +101,40 @@ test('readSnapshots lists and parses the store with async Gio only', async t => 
     const summary = await readSnapshots();
     assert.equal(summary.count, 2);
     assert.equal(summary.newest.label, 'work');
+});
+
+test('the autosave pause: amber button, banner and top-bar mark follow every read', async () => {
+    const {ctl, seen} = await controller();
+    await ctl.syncPause();
+    assert.deepEqual(seen.pauseStates.at(-1),
+        {visible: true, paused: false, title: 'Pause the autosave until restart'});
+    assert.deepEqual(seen.pauses.at(-1), {paused: false, since: null});
+    // paused from a terminal: the next poll's read picks it up
+    seen.pause = {paused: true, since: 1790170000000};
+    await ctl.syncPause();
+    assert.deepEqual(seen.pauseStates.at(-1),
+        {visible: true, paused: true, title: 'Autosave paused until restart - click to resume'});
+    assert.deepEqual(seen.pauses.at(-1), {paused: true, since: 1790170000000});
+});
+
+test('the pause button runs autosave pause, then resume, and re-reads the state', async () => {
+    const {ctl, seen} = await controller();
+    await ctl.syncPause();
+    seen.pause = {paused: true, since: 1};
+    await ctl.togglePause();
+    assert.deepEqual(seen.runs.at(-1), ['/bin/claudectl', 'session', 'autosave', 'pause']);
+    assert.equal(seen.pauses.at(-1).paused, true);
+    seen.pause = {paused: false, since: null};
+    await ctl.togglePause();
+    assert.deepEqual(seen.runs.at(-1), ['/bin/claudectl', 'session', 'autosave', 'resume']);
+    assert.equal(seen.pauses.at(-1).paused, false);
+});
+
+test('without claudectl the pause button hides, unless a pause is already on', async () => {
+    const none = await controller({cli: null});
+    await none.ctl.syncPause();
+    assert.equal(none.seen.pauseStates.at(-1).visible, false);
+    const paused = await controller({cli: null, pause: {paused: true, since: 1}});
+    await paused.ctl.syncPause();
+    assert.equal(paused.seen.pauseStates.at(-1).visible, true, 'the banner still says so');
 });

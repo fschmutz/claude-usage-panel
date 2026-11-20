@@ -9,6 +9,12 @@ enum LaunchAgent {
             .appendingPathComponent("Library/LaunchAgents/\(label).plist")
     }
 
+    /// Is the agent loaded in this login session? A plist on disk is not:
+    /// `launchctl bootout` unloads it until the next login.
+    static func isLoaded(label: String) -> Bool {
+        Shell.run("/bin/launchctl", ["list", label]).ok
+    }
+
     static func bootout(label: String) {
         _ = Shell.run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
     }

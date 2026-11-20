@@ -26,4 +26,17 @@ final class SnapshotsParityTests: XCTestCase {
             }
         }
     }
+
+    func testPauseFixture() throws {
+        let fix = try Fixtures.load("snapshots.json")
+        for c in fix["pause"] as! [[String: Any]] {
+            let name = c["name"] as! String
+            let boot = (c["bootAtMs"] as? NSNumber)?.doubleValue
+            let got = Snapshots.pauseState(c["data"] is NSNull ? nil : c["data"], bootAtMs: boot)
+            let expect = c["expect"] as! [String: Any]
+            XCTAssertEqual(got.paused, expect["paused"] as! Bool, name)
+            XCTAssertEqual(got.expired, expect["expired"] as! Bool, name)
+            XCTAssertEqual(got.sinceMs, (expect["since"] as? NSNumber)?.doubleValue, name)
+        }
+    }
 }

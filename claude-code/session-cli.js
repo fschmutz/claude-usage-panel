@@ -38,6 +38,9 @@ export const HELP = `claudectl session - save the running Claude Code sessions, 
                                              what the schedule runs: save only when
                                              the set changed, keep the newest N autos;
                                              --force saves now, even an empty set
+  claudectl session autosave pause | resume | status
+                                             stop the scheduled autosave until the
+                                             next boot, start it again, or say which
   claudectl session close #|NAME|PID|ID... | --all [--force] [--yes] [--dry-run]
                                              end them and close their tabs
 ${PAUSE_HELP}
@@ -95,7 +98,13 @@ everything.`,
 \`auto-\` snapshot only when the set of running sessions changed since the last
 one, and keeps the newest ${AUTO_KEEP} autos: a count, not an age, so they cover a day
 or several. Labelled snapshots are never pruned. It exits 1 when a running
-claude cannot be identified, so the schedule goes red instead of skipping it.`,
+claude cannot be identified, so the schedule goes red instead of skipping it.
+
+\`autosave pause\` stops the scheduled runs until the next boot: they write
+nothing and prune nothing, so the newest snapshot stays the one you want to
+reopen. --force (the panels' Save button) still saves. \`autosave resume\`
+starts them again, \`autosave status\` says which (exit 0 running, 3 paused).
+Both panels show the pause in the dropdown and on the top-bar gauge.`,
   close: `Saves the sessions it closes as a snapshot first (\`auto-closed-<time>\`),
 so \`claudectl session open\` with that label brings them back. Then, per
 session: SIGTERM to claude, up to 10 s to exit, then SIGHUP to the shells
@@ -192,6 +201,29 @@ async function closeSessions(tabs, keys, opts, {io, out, confirm}) {
     out(`${r.closed ? 'closed' : 'FAILED'} ${row.name}: ${r.how}${r.closed ? (r.tab ? ', tab closed' : ', tab left') : ''}\n`);
   }
   return failed ? 1 : 0;
+}
+
+// `autosave pause | resume | status`. status exits 3 while paused, so a
+// script can branch on it without parsing the line.
+function autosaveControl(tabs, verb, out) {
+  const since = (ms) => `paused since ${when(ms)}, until the next boot`;
+  switch (verb) {
+    case 'pause': {
+      const p = tabs.pauseAutosave();
+      out(`autosave ${since(p.since)} - \`claudectl session autosave resume\` starts it again\n`);
+      return 0;
+    }
+    case 'resume':
+      out(tabs.resumeAutosave() ? 'autosave resumed\n' : 'autosave was not paused\n');
+      return 0;
+    case 'status': {
+      const p = tabs.autosavePause();
+      out(p.paused ? `autosave ${since(p.since)}\n` : 'autosave running\n');
+      return p.paused ? 3 : 0;
+    }
+    default:
+      throw new Error(`autosave takes pause, resume or status, not ${verb}`);
+  }
 }
 
 // Session names, custom titles, cwds and snapshot labels come out of files
@@ -365,6 +397,7 @@ export async function main(argv, io = {}) {
       return 0;
     }
     case 'autosave': {
+      if (rest[0] !== undefined) return autosaveControl(tabs, rest[0], out);
       const keep = opts.keep !== undefined ? wholeNumber(opts.keep, 1) : AUTO_KEEP;
       const r = tabs.autosave({keep, force: Boolean(opts.force)});
       out(`${r.saved ? `saved ${r.saved.label}` : 'no new snapshot'} (${r.reason})` +

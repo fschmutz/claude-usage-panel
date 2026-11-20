@@ -31,11 +31,12 @@ class HeaderBar extends St.BoxLayout {
      * @param {() => void} handlers.onRefresh poll now, without closing the menu
      * @param {() => void} handlers.onReopen reopen the newest session snapshot
      * @param {() => void} handlers.onSaveSessions snapshot the open sessions now
+     * @param {() => void} handlers.onPauseAutosave pause or resume the autosave
      * @param {() => void} handlers.onSettings open the preferences window
      * @param {() => void} handlers.onAutoSwitch flip the auto-switch setting
      * @param {() => void} handlers.onQuit turn the extension off
      */
-    _init({onRefresh, onReopen, onSaveSessions, onSettings, onAutoSwitch, onQuit}) {
+    _init({onRefresh, onReopen, onSaveSessions, onPauseAutosave, onSettings, onAutoSwitch, onQuit}) {
         super._init({style_class: 'cu-header', x_expand: true});
 
         this.add_child(new St.Label({
@@ -75,6 +76,14 @@ class HeaderBar extends St.BoxLayout {
         this._saveSessions.visible = false;
         this.add_child(this._saveSessions);
 
+        // Pause the scheduled autosave until the next boot, so the newest
+        // snapshot stays the one to reopen; amber while paused. Hidden
+        // without claudectl unless a pause is already on.
+        this._pauseAutosave = iconButton(
+            'media-playback-pause-symbolic', '', () => onPauseAutosave());
+        this._pauseAutosave.visible = false;
+        this.add_child(this._pauseAutosave);
+
         this.add_child(iconButton(
             'view-refresh-symbolic', _('Refresh now'), () => onRefresh()));
         this.add_child(iconButton(
@@ -98,6 +107,18 @@ class HeaderBar extends St.BoxLayout {
         this._reopen.visible = visible;
         this._saveSessions.visible = canSave;
         setTooltip(this._reopen, title);
+    }
+
+    /**
+     * @param {object} state
+     * @param {boolean} state.visible claudectl is there, or a pause is on
+     * @param {boolean} state.paused the autosave is paused - the button reads amber
+     * @param {string} state.title hover text, which says which state it is in
+     */
+    syncPause({visible, paused, title}) {
+        this._pauseAutosave.visible = visible;
+        this._pauseAutosave.style_class = `cu-icon-btn${paused ? ' cu-icon-warn' : ''}`;
+        setTooltip(this._pauseAutosave, title);
     }
 
     /**

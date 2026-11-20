@@ -13,7 +13,9 @@ enum MenuBarGauge {
     private static let start: CGFloat = 225
     private static let sweep: CGFloat = 270
 
-    static func image(_ gauge: PanelGauge) -> NSImage {
+    /// `paused`: the scheduled autosave is paused - two amber bars in the
+    /// arc's opening, so it shows without opening the dropdown.
+    static func image(_ gauge: PanelGauge, paused: Bool = false) -> NSImage {
         // A drawing handler runs at draw time, so `labelColor` resolves against
         // the menu bar's current appearance (light or dark) every time.
         NSImage(size: size, flipped: false) { rect in
@@ -28,7 +30,22 @@ enum MenuBarGauge {
                 color(gauge.tone).setStroke()
                 arc(center: center, radius: r, fraction: CGFloat(gauge.fraction)).stroke()
             }
+            if paused { pauseMark(in: rect) }
             return true
+        }
+    }
+
+    // Two short bars at the bottom center, where the arc opens.
+    private static func pauseMark(in rect: NSRect) {
+        color(.warning).setFill()
+        let w: CGFloat = 2
+        let h: CGFloat = 6
+        let gap: CGFloat = 2
+        for x in [rect.midX - gap / 2 - w, rect.midX + gap / 2] {
+            NSBezierPath(
+                roundedRect: NSRect(x: x, y: rect.minY, width: w, height: h), xRadius: 1, yRadius: 1
+            )
+            .fill()
         }
     }
 

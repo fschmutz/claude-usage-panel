@@ -118,6 +118,9 @@ struct PopupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             PopupHeader(model: model)
+            if model.saved.paused {
+                AutosavePauseBanner(saved: model.saved)
+            }
             StatusBlock(model: model)
             SessionsArea(model: model, layout: SessionsLayout.of(sessionsLayout))
 
@@ -197,6 +200,17 @@ private struct PopupHeader: View {
                     systemImage: "square.and.arrow.down",
                     title: "Save the open sessions now (what Reopen opens)"
                 ) { model.saved.save() }
+            }
+            // Pause the scheduled autosave until the next boot, so the
+            // newest snapshot stays the one to reopen; lit while paused.
+            if model.saved.canSave || model.saved.paused {
+                HeaderIcon(
+                    systemImage: model.saved.paused ? "pause.circle.fill" : "pause.circle",
+                    title: model.saved.paused
+                        ? "Autosave paused until restart - click to resume"
+                        : "Pause the autosave until restart",
+                    tint: model.saved.paused ? .cuWarning : nil
+                ) { model.saved.setPaused(!model.saved.paused) }
             }
             HeaderIcon(systemImage: "arrow.clockwise", title: "Refresh now") {
                 Task { await model.refresh() }
@@ -331,13 +345,15 @@ private struct HeaderIcon: View {
     let systemImage: String
     let title: String
     var lit = false
+    /// A color of its own, over `lit`: the autosave pause reads amber.
+    var tint: Color?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(lit ? .accentColor : .secondary)
+                .foregroundColor(tint ?? (lit ? .accentColor : .secondary))
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }

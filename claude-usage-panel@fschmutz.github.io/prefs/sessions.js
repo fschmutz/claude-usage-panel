@@ -10,7 +10,7 @@ import Gtk from 'gi://Gtk';
 import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {claudectlPath} from '../lib/paths.js';
 import {lastOutputLine, run} from '../lib/proc.js';
-import {readSnapshots} from '../lib/snapshots.js';
+import {readAutosavePause, readSnapshots} from '../lib/snapshots.js';
 import {DEFAULT_SESSIONS_LAYOUT, SESSIONS_LAYOUTS, sessionsLayout} from '../lib/pure.js';
 
 export function buildSessions(prefs, settings) {
@@ -80,11 +80,18 @@ export function buildSnapshots(prefs) {
         reopenBtn.sensitive = Boolean(cli && newest);
     };
     render().catch(logError);
-    run(['systemctl', '--user', 'is-active', 'claude-usage-panel-autosave.timer'],
-        {cancellable: prefs._cancellable}).then(({ok}) => {
-        if (!prefs._closed())
+    // A pause (`claudectl session autosave pause`) outranks the timer state:
+    // the timer still fires, and every run it starts writes nothing.
+    Promise.all([readAutosavePause(), run(['systemctl', '--user', 'is-active', 'claude-usage-panel-autosave.timer'],
+        {cancellable: prefs._cancellable})]).then(([pause, {ok}]) => {
+        if (prefs._closed())
+            return;
+        if (pause.paused)
+            autosaveRow.subtitle = _('Paused since %s, until restart').format(
+                GLib.DateTime.new_from_unix_local(Math.floor(pause.since / 1000)).format('%H:%M'));
+        else
             autosaveRow.subtitle = ok ? _('Every 30 minutes') : _('Not scheduled - run ./install.sh cli');
-    });
+    }).catch(logError);
     reopenBtn.connect('clicked', async () => {
         reopenBtn.sensitive = false;
         const {stdout, stderr} = await run([cli, 'session', 'open'], {cancellable: prefs._cancellable});

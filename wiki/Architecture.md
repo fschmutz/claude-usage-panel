@@ -150,7 +150,8 @@ claude-usage-panel@fschmutz.github.io/   # GNOME Shell extension (GJS / ESM)
     ├── snapshots.js    # reads the claudectl snapshot store (async), for Reopen and the preferences
     ├── claudectl.js    # runClaudectl: find the CLI, run it, notify a refusal in its own words
     ├── statusSection.js # the extra-usage row and the status block (cost, Updated, session pings)
-    ├── savedSessions.js # the header's Reopen + Save buttons over claudectl session
+    ├── savedSessions.js # the header's Reopen, Save and autosave-pause buttons over claudectl session
+    ├── autosaveBanner.js # the amber "Autosave paused" strip under the header
     ├── warehouse.js    # the 90-day history file I/O
     ├── usageCard.js    # one limit row of the dropdown
     ├── bar.js          # progress bar + clock caret, sized from their allocation
@@ -224,7 +225,8 @@ macos/                  # native SwiftUI MenuBarExtra app (SwiftPM)
         ├── AwakeStore.swift          # the awake files, the shared lock and the pmset calls
         ├── AwakeView.swift           # the opt-in Awake section in the popup and Settings
         ├── SessionBoardView.swift    # the merged / tabbed Sessions section in the popup
-        ├── SavedSessions.swift       # the claudectl snapshot store in Settings
+        ├── SavedSessions.swift       # the claudectl snapshot store and the autosave pause
+        ├── AutosavePauseBanner.swift # the amber "Autosave paused" strip in the popup
         ├── SessionPing.swift         # the launchd agent (twin of the systemd units)
         ├── SessionPingSettings.swift # session pings as the UI sees them
         ├── LaunchAgent.swift         # what the two launchd agents share

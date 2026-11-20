@@ -99,6 +99,12 @@ export function tabsDir(io) {
   return path.join(stateDir(io), 'tabs');
 }
 
+/** `claudectl session autosave pause`: {version, at, bootAt}, until the next boot.
+ *  Beside the snapshots, never among them (every `*.json` there is one). */
+export function autosavePausePath(io) {
+  return path.join(stateDir(io), 'autosave-paused.json');
+}
+
 /** Which gnome-terminal window `claudectl session open` created for which
  *  sessions, in tab order (gnome-terminal.js): what focus needs to find one. */
 export function gnomeTabsPath(io) {

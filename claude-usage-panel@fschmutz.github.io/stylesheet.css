@@ -306,6 +306,42 @@
 .cu-icon-btn.cu-icon-on {
     color: #d97757;
 }
+.cu-icon-btn.cu-icon-warn {
+    color: #e0a458;
+}
+
+/* the amber strip under the header while the autosave is paused */
+.cu-autosave-banner {
+    spacing: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(224, 164, 88, 0.6);
+    background-color: rgba(224, 164, 88, 0.16);
+}
+.cu-autosave-banner-icon {
+    icon-size: 18px;
+    color: #e0a458;
+}
+.cu-autosave-banner-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #e6e1d7;
+}
+.cu-autosave-banner-detail {
+    font-size: 11px;
+    color: #9a948a;
+}
+.cu-autosave-banner-btn {
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: #e6e1d7;
+    background-color: rgba(255, 255, 255, 0.10);
+}
+.cu-autosave-banner-btn:hover,
+.cu-autosave-banner-btn:focus {
+    background-color: rgba(255, 255, 255, 0.18);
+}
 .cu-icon {
     icon-size: 16px;
 }
@@ -354,6 +390,11 @@
     color: #1a1a1a;
 }
 .cu-light .cu-icon-btn.cu-icon-on { color: #b35a3c; }
+.cu-light .cu-icon-btn.cu-icon-warn { color: #b3742a; }
+.cu-light .cu-autosave-banner-icon { color: #b3742a; }
+.cu-light .cu-autosave-banner-title { color: #1a1a1a; }
+.cu-light .cu-autosave-banner-detail { color: #555; }
+.cu-light .cu-autosave-banner-btn { color: #1a1a1a; background-color: rgba(0, 0, 0, 0.08); }
 .cu-light .cu-account-name { color: #333; }
 .cu-light .cu-account-active .cu-account-name { color: #1a1a1a; }
 .cu-light .cu-account-meta { color: #6b6b60; }

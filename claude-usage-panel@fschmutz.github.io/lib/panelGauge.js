@@ -32,6 +32,7 @@ class PanelGauge extends St.DrawingArea {
         });
         this._fraction = 0;
         this._tone = 'normal';
+        this._paused = false;
         this.connect('repaint', () => this._paint());
     }
 
@@ -41,6 +42,14 @@ class PanelGauge extends St.DrawingArea {
             return;
         this._fraction = fraction;
         this._tone = tone;
+        this.queue_repaint();
+    }
+
+    /** @param {boolean} paused the autosave is paused: two amber bars in the arc's opening */
+    setPaused(paused) {
+        if (paused === this._paused)
+            return;
+        this._paused = paused;
         this.queue_repaint();
     }
 
@@ -64,6 +73,14 @@ class PanelGauge extends St.DrawingArea {
             cr.setSourceRGB(...rgb(GAUGE_COLORS[this._tone] ?? GAUGE_COLORS.normal));
             cr.arc(cx, cy, r, START, START + SWEEP * this._fraction);
             cr.stroke();
+        }
+        if (this._paused) {
+            // Two short bars at the bottom center, where the arc opens.
+            cr.setSourceRGB(...rgb(GAUGE_COLORS.warning));
+            const bw = 2, bh = 6, gap = 2;
+            cr.rectangle(w / 2 - gap / 2 - bw, h - bh, bw, bh);
+            cr.rectangle(w / 2 + gap / 2, h - bh, bw, bh);
+            cr.fill();
         }
         cr.$dispose();
     }

@@ -29,6 +29,24 @@ closing threads, before shutting the lid: the 30-minute autosave never sees a
 close that happens between its ticks, and Reopen would bring those threads
 back. A forced save of nothing open hides Reopen until the next session starts.
 
+## Pause the autosave until restart
+
+The **pause** icon in the same header (or `claudectl session autosave pause`)
+stops the scheduled autosave until the next boot: its runs write nothing and
+prune nothing, so the newest snapshot stays the one Reopen brings back. Use it
+when the set you want is already saved and what runs now is not it - a reboot
+with only one session reopened, say. While it lasts the dropdown shows an amber
+**Autosave paused** strip with a **Resume** button, the top-bar gauge carries
+two amber bars in its opening, and the icon itself turns amber. **Save** still
+writes: it is an explicit save.
+
+The pause is `autosave-paused.json` in the panel's state dir
+(`{version, at, bootAt}`), written by the CLI only. It ends by itself at the
+next boot (the boot time differs by more than 60 s: macOS `kern.boottime`,
+Linux `/proc/stat` btime), or with `claudectl session autosave resume`. A
+pause cannot be set when the boot time cannot be read, and an unreadable file
+is not a pause: a pause that never ended would silently stop the backups.
+
 ## Focus in gnome-terminal
 
 gnome-terminal has no way to list its tabs or say which window holds a
@@ -70,6 +88,7 @@ systemctl --user list-timers | grep claude-usage-panel-autosave   # Linux: is it
 | `purge SNAP... \| --keep=N \| --auto \| --all [--yes]` | Delete snapshots (asks first) |
 | `close #\|NAME\|PID\|ID... \| --all [--force] [--yes] [--dry-run]` | Snapshot them (`auto-closed-<time>`), SIGTERM claude, then SIGHUP the shells that started it on its tty: the tab closes, and its window when it was the last tab. Refuses your own session, a busy one, and a tab running other work, unless `--force` (which also SIGKILLs a claude still up after 10 s). Asks first unless `--yes` |
 | `autosave [--keep=N] [--force]` | What the schedule runs; `--force` (the panels' **Save**) saves now, even unchanged or empty |
+| `autosave pause \| resume \| status` | Stop the scheduled autosave until the next boot, start it again, or say which (`status` exits 3 while paused) |
 | `pause [NAME...\|--all] [--include-self] [--wait[=S]\|--no-wait] [--json]` | Send the pause protocol, follow each verdict; see [[Pause]] |
 | `resume [NAME...\|--all] [--wait[=S]\|--no-wait] [--terminal=BIN] [--dry-run]` | Resume protocol to running sessions; reopen closed ones with their checkpoint |
 | `pause-status [--json]` | The last pause / resume request, one row per session |

@@ -1,5 +1,6 @@
-// The header's two `claudectl session` buttons: Reopen (the newest snapshot as
-// tabs) and Save (the open sessions, now). The store is written by the CLI and
+// The header's `claudectl session` buttons: Reopen (the newest snapshot as
+// tabs), Save (the open sessions, now) and the autosave pause (until the next
+// boot), whose state also drives the amber banner and the top-bar mark. The store is written by the CLI and
 // by the 30-minute autosave, both outside this process: opening the menu
 // paints the last summary at once and re-reads the store without blocking,
 // repainting when it lands; a save or a reopen re-reads it too.
@@ -10,10 +11,11 @@ import {gettext as _, ngettext} from 'resource:///org/gnome/shell/extensions/ext
 import {runClaudectl} from './claudectl.js';
 import {claudectlPath} from './paths.js';
 import {firstOutputLine, lastOutputLine, run} from './proc.js';
-import {readSnapshots} from './snapshots.js';
+import {readAutosavePause, readSnapshots} from './snapshots.js';
 
 const DEFAULT_IO = {
     readSnapshots,
+    readAutosavePause,
     claudectlPath,
     run,
     notify: (title, body) => Main.notify(title, body),
@@ -22,13 +24,19 @@ const DEFAULT_IO = {
 export class SavedSessionsController {
     /**
      * @param {object} deps
-     * @param {{syncReopen: (state: object) => void}} deps.header the HeaderBar
+     * @param {{syncReopen: (state: object) => void, syncPause: (state: object) => void}} deps.header the HeaderBar
      * @param {{close: () => void}} deps.menu the dropdown
      * @param {() => boolean} deps.isDestroyed true once the button is gone
-     * @param {object} [deps.io] readSnapshots / claudectlPath / run / notify, for tests
+     * @param {(pause: {paused: boolean, since: number|null}) => void} [deps.onPause]
+     *   the banner and the top-bar mark, on every pause read
+     * @param {object} [deps.io] readSnapshots / readAutosavePause / claudectlPath / run / notify, for tests
      */
-    constructor({header, menu, isDestroyed, io = {}}) {
+    constructor({header, menu, isDestroyed, onPause = () => {}, io = {}}) {
         this._header = header;
+        this._onPause = onPause;
+        /** The last pause read: {paused, since}. */
+        this._pause = {paused: false, since: null};
+        this._pauseReading = null;
         this._menu = menu;
         this._isDestroyed = isDestroyed;
         this._io = {...DEFAULT_IO, ...io};
@@ -41,7 +49,42 @@ export class SavedSessionsController {
     sync() {
         if (this._newest !== undefined)
             this._paint();
-        return this._reload();
+        return Promise.all([this._reload(), this.syncPause()]);
+    }
+
+    /** Re-read the autosave pause: on every poll, so the top-bar mark
+     *  follows a pause or resume typed in a terminal. One read at a time. */
+    syncPause() {
+        this._pauseReading ??= this._io.readAutosavePause().then(({paused, since}) => {
+            this._pauseReading = null;
+            if (this._isDestroyed())
+                return;
+            this._pause = {paused, since};
+            this._paintPause();
+        });
+        return this._pauseReading;
+    }
+
+    _paintPause() {
+        const {paused} = this._pause;
+        this._header.syncPause({
+            visible: Boolean(this._io.claudectlPath()) || paused,
+            paused,
+            title: paused ? _('Autosave paused until restart - click to resume')
+                : _('Pause the autosave until restart'),
+        });
+        this._onPause(this._pause);
+    }
+
+    // `claudectl session autosave pause|resume`: the CLI writes the pause
+    // file, this only reads it back. The pause keeps the newest snapshot the
+    // one to reopen until the next boot; a forced Save still writes.
+    async togglePause() {
+        const verb = this._pause.paused ? 'resume' : 'pause';
+        const r = await this._run(cli => [cli, 'session', 'autosave', verb],
+            _('Could not change the autosave'));
+        if (r.status === 'done')
+            await this.syncPause();
     }
 
     // One read at a time: a menu opened twice in a row shares it.

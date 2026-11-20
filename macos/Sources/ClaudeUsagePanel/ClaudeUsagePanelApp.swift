@@ -41,7 +41,7 @@ struct ClaudeUsagePanelApp: App {
             Label {
                 Text(model.titleText)
             } icon: {
-                Image(nsImage: MenuBarGauge.image(model.menuBarGauge))
+                Image(nsImage: MenuBarGauge.image(model.menuBarGauge, paused: model.saved.paused))
             }
             .labelStyle(.titleAndIcon)
         }

@@ -283,6 +283,11 @@ test('snapshots: every case of the shared fixture', () => {
     }
 });
 
+test('snapshots: autosave pause, every case of the shared fixture', () => {
+    for (const c of fixture('snapshots.json').pause)
+        assert.deepEqual(pure.autosavePauseState(c.data, c.bootAtMs), c.expect, c.name);
+});
+
 // ── One JS copy ─────────────────────────────────────────────────────────────────
 // The Node clients import lib/pure/; they never carry a copy of it. A top-level
 // definition under claude-code/, mcp/, linux/ or scripts/ that reuses the name

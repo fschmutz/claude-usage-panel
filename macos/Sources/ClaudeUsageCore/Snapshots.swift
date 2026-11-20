@@ -45,4 +45,35 @@ public enum Snapshots {
             autos: valid.filter { $0.label.hasPrefix(autoPrefix) }.count,
             newest: valid.first)
     }
+
+    /// How far apart two reads of the boot time may be and still be the same
+    /// boot: it is derived from the wall clock, so a clock adjustment moves it
+    /// a little; a reboot moves it by at least the previous boot's uptime.
+    public static let bootToleranceMs: Double = 60_000
+
+    /// The scheduled autosave's pause, as `claudectl session autosave pause`
+    /// wrote it. `expired`: a file from an earlier boot, for the CLI to remove.
+    public struct PauseState: Equatable, Sendable {
+        public let paused: Bool
+        /// When it was paused, epoch ms; nil when not paused.
+        public let sinceMs: Double?
+        public let expired: Bool
+    }
+
+    /// Is the scheduled autosave paused? `json` is the parsed pause file
+    /// ({version, at, bootAt}, epoch ms), nil when there is none; `bootAtMs`
+    /// this boot's start, nil when unknown. A missing or broken file, or an
+    /// unknown boot time, is not paused: a pause that never expires would
+    /// silently stop the backups. Mirrors lib/pure/snapshots.js autosavePauseState.
+    public static func pauseState(_ json: Any?, bootAtMs: Double?) -> PauseState {
+        guard let obj = json as? [String: Any],
+            let at = UsageNormalizer.number(obj["at"]),
+            let bootAt = UsageNormalizer.number(obj["bootAt"]),
+            let bootAtMs, bootAtMs.isFinite
+        else { return PauseState(paused: false, sinceMs: nil, expired: false) }
+        if abs(bootAt - bootAtMs) > bootToleranceMs {
+            return PauseState(paused: false, sinceMs: nil, expired: true)
+        }
+        return PauseState(paused: true, sinceMs: at, expired: false)
+    }
 }

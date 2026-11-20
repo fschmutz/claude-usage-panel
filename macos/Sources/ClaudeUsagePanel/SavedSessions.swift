@@ -11,6 +11,11 @@ final class SavedSessions: ObservableObject {
     @Published private(set) var newestLine = ""
     @Published private(set) var canReopen = false
     @Published private(set) var canSave = false
+    /// The scheduled autosave is paused until the next boot
+    /// (`claudectl session autosave pause`): the dropdown's banner and the
+    /// menu-bar gauge's pause mark.
+    @Published private(set) var paused = false
+    @Published private(set) var pausedSince: Date?
     private var busy = false
 
     /// The launchd agent `./install.sh cli` loads (scripts/install/cli.sh).
@@ -20,6 +25,18 @@ final class SavedSessions: ObservableObject {
     private static var store: URL {
         home.appendingPathComponent("Library/Application Support/claude-usage-panel/tabs")
     }
+    /// `claudectl session autosave pause` writes it; only the CLI does.
+    private static var pauseFile: URL {
+        home.appendingPathComponent(
+            "Library/Application Support/claude-usage-panel/autosave-paused.json")
+    }
+    /// This boot's start, epoch ms: `kern.boottime`, what the CLI reads too.
+    private static let bootAtMs: Double? = {
+        var tv = timeval()
+        var size = MemoryLayout<timeval>.size
+        guard sysctlbyname("kern.boottime", &tv, &size, nil, 0) == 0 else { return nil }
+        return Double(tv.tv_sec) * 1000 + Double(tv.tv_usec / 1000)
+    }()
     /// The shim `./install.sh cli` writes.
     private static var cli: String? {
         let path = home.appendingPathComponent(".local/bin/claudectl").path
@@ -43,9 +60,13 @@ final class SavedSessions: ObservableObject {
             )
         }
         let summary = Snapshots.summarize(files)
-        autosave =
-            fm.fileExists(atPath: LaunchAgent.plistURL(label: Self.agentLabel).path)
-            ? "Every 30 minutes" : "Not scheduled - run ./install.sh cli"
+        let pause = Snapshots.pauseState(
+            (try? Data(contentsOf: Self.pauseFile)).flatMap {
+                try? JSONSerialization.jsonObject(with: $0)
+            }, bootAtMs: Self.bootAtMs)
+        paused = pause.paused
+        pausedSince = pause.sinceMs.map { Date(timeIntervalSince1970: $0 / 1000) }
+        autosave = autosaveLine()
         if Self.cli == nil {
             newestLine = "claudectl is not installed - run ./install.sh cli"
         } else if let newest = summary.newest {
@@ -61,6 +82,26 @@ final class SavedSessions: ObservableObject {
         // the newest one then means "nothing to reopen", exactly as on GNOME.
         canReopen = Self.cli != nil && !(summary.newest?.names.isEmpty ?? true) && !busy
         canSave = Self.cli != nil && !busy
+    }
+
+    // What the Settings row says: paused, not loaded (booted out by hand -
+    // it comes back at the next login), not installed, or running.
+    private func autosaveLine() -> String {
+        if let since = pausedSince, paused {
+            return "Paused since \(Self.clock.string(from: since)), until restart"
+        }
+        guard
+            FileManager.default.fileExists(
+                atPath: LaunchAgent.plistURL(label: Self.agentLabel).path)
+        else { return "Not scheduled - run ./install.sh cli" }
+        return LaunchAgent.isLoaded(label: Self.agentLabel)
+            ? "Every 30 minutes" : "Not running until the next login"
+    }
+
+    /// Stop the scheduled autosave until the next boot, or start it again:
+    /// the CLI writes the pause, this only reads it back.
+    func setPaused(_ on: Bool) {
+        run(["session", "autosave", on ? "pause" : "resume"]) { _ in nil }
     }
 
     /// Run `claudectl session open` off the main actor and show the CLI's own

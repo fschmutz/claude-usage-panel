@@ -24,3 +24,32 @@ export function summarizeSnapshots(files) {
         newest: valid[0] ?? null,
     };
 }
+
+/**
+ * How far apart two reads of the boot time may be and still be the same boot.
+ * The boot time is derived from the wall clock (macOS `kern.boottime`, Linux
+ * `/proc/stat` btime), so a clock adjustment moves it by a little; a reboot
+ * moves it by at least the previous boot's uptime.
+ */
+const AUTOSAVE_BOOT_TOLERANCE_MS = 60_000;
+
+/**
+ * Is the scheduled autosave paused? `claudectl session autosave pause` writes
+ * {version, at, bootAt} (epoch ms) and the pause lasts until the next boot.
+ * A missing or broken file, or a boot time that cannot be read, is not
+ * paused: a pause that never expires would silently stop the backups.
+ * Mirrored by ClaudeUsageCore/Snapshots.swift; tests/fixtures/snapshots.json `pause`.
+ * @param {any} data the parsed pause file, null when there is none
+ * @param {number|null} bootAtMs this boot's start, epoch ms; null when unknown
+ * @returns {{paused: boolean, since: number|null, expired: boolean}}
+ *   `expired`: a file from an earlier boot, for the CLI to remove
+ */
+export function autosavePauseState(data, bootAtMs) {
+    const valid = data !== null && typeof data === 'object' && !Array.isArray(data) &&
+        Number.isFinite(data.at) && Number.isFinite(data.bootAt);
+    if (!valid || !Number.isFinite(bootAtMs))
+        return {paused: false, since: null, expired: false};
+    if (Math.abs(data.bootAt - bootAtMs) > AUTOSAVE_BOOT_TOLERANCE_MS)
+        return {paused: false, since: null, expired: true};
+    return {paused: true, since: data.at, expired: false};
+}
