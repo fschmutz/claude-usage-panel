@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {EXTENSION_ID, LOGIN_URL, STORE_URL, openAccountChrome} from '../claude-code/account-chrome.js';
+import {EXTENSION_ID, EXTENSION_PAGE, LOGIN_URL, STORE_URL, openAccountChrome} from '../claude-code/account-chrome.js';
 import {main} from '../claude-code/account-cli.js';
 import {openStore} from '../claude-code/accounts.js';
 import {account, creds, crx, fakeExtension, world} from './accounts-world.js';
@@ -75,7 +75,8 @@ test('chrome: a missing extension is copied from the main Chrome and registered 
   const p = await x.launch('PERSO', {url: 'https://example.test/claim'});
   assert.deepEqual(p.installed, {version: '1.0.107', from: 'main Chrome Profile 2'});
   assert.equal(p.extension, true);
-  assert.deepEqual(t.spawned[0].args.slice(-2), [LOGIN_URL, 'https://example.test/claim'], 'no Web Store tab');
+  assert.deepEqual(t.spawned[0].args.slice(-3), [LOGIN_URL, EXTENSION_PAGE, 'https://example.test/claim'],
+    'no Web Store tab; the extension\'s own Sign in page');
   const entry = JSON.parse(fs.readFileSync(path.join(p.dir, 'Default', 'Preferences'), 'utf8'))
     .extensions.settings[EXTENSION_ID];
   assert.equal(entry.location, 1);
@@ -119,6 +120,23 @@ test('chrome: the Web Store tab opens only when the install cannot happen', asyn
   const mac = {...busy.io, platform: 'darwin', chromeBin: '/x'};
   openStore(mac).writeProfile({version: 1, name: 'MAC', account: account('mac'), credentials: creds('mac')});
   assert.match(openAccountChrome(mac).plan('MAC').install.why, /Linux only/);
+});
+
+test('chrome: the extension\'s own sign-in is read from its storage key names; signed in, no sign-in tab', () => {
+  const t = setup();
+  const x = openAccountChrome(t.io);
+  const def = path.join(x.plan('PERSO').dir, 'Default');
+  fakeExtension(def, EXTENSION_ID);
+  const db = path.join(def, 'Local Extension Settings', EXTENSION_ID);
+  fs.mkdirSync(db, {recursive: true});
+  fs.writeFileSync(path.join(db, '000003.log'), 'signInState-x codeVerifier-y');
+  assert.equal(x.state('PERSO').extensionSignedIn, false, 'a sign-in started, never finished');
+  assert.ok(x.plan('PERSO').argv.includes(EXTENSION_PAGE));
+  fs.writeFileSync(path.join(db, '000004.ldb'), 'compressed');
+  assert.equal(x.state('PERSO').extensionSignedIn, null, 'a compacted table cannot be read by name');
+  fs.writeFileSync(path.join(db, '000005.log'), 'accessToken');
+  assert.equal(x.state('PERSO').extensionSignedIn, true);
+  assert.ok(!x.plan('PERSO').argv.includes(EXTENSION_PAGE));
 });
 
 test('chrome: files without a Preferences entry are not an installed extension', () => {
@@ -175,7 +193,7 @@ test('chrome: --dry-run prints the plan and starts nothing', async () => {
   assert.match(lines.join(''), new RegExp('would open Chrome for PERSO: .*chrome/PERSO\\n' +
     '  claude.ai: NOT signed in - sign in as PERSO .*\\n' +
     '  extension: MISSING - would install it from main Chrome Profile 2 \\(1\\.0\\.107\\)\\n' +
-    `  tabs: ${LOGIN_URL}\\n`));
+    `  tabs: ${LOGIN_URL} ${EXTENSION_PAGE}\\n`));
   assert.equal(t.spawned.length, 0);
   assert.ok(!fs.existsSync(path.join(t.home, 'state', 'claude-usage-panel', 'chrome', 'PERSO', 'Default')), 'nothing installed');
 });

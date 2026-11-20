@@ -40,6 +40,8 @@ export const EXTENSION_ID = 'fcoeoabgfenejglbffodgkkbkcdhcgfn';
 const HOST_NAME = 'com.anthropic.claude_code_browser_extension';
 export const STORE_URL = `https://chromewebstore.google.com/detail/claude/${EXTENSION_ID}`;
 export const LOGIN_URL = 'https://claude.ai/login';
+/** The extension's own page, where its Sign in button is. */
+export const EXTENSION_PAGE = `chrome-extension://${EXTENSION_ID}/sidepanel.html`;
 
 /** Branded Google Chrome only, never a bundled Chromium. */
 const CHROME = {
@@ -129,10 +131,39 @@ export function openAccountChrome(io = {}) {
     return (io.pidAlive ?? pidAlive)(Number(m[2]));
   }
 
-  /** What NAME's profile holds now: {signedIn: true|false|null, extension, running}. */
+  /**
+   * Whether the extension itself is signed in: it keeps its own claude.ai
+   * OAuth login (`accessToken` in its chrome.storage.local, a LevelDB under
+   * Local Extension Settings/<id>), separate from the claude.ai web session,
+   * and without it Claude Code never pairs with it. Key names only, never a
+   * value. A compacted table (.ldb) may hold the key compressed, so a miss
+   * there is null (cannot tell); a miss with only the write log is false.
+   */
+  function extensionSignedIn(defaultDir) {
+    const db = path.join(defaultDir, 'Local Extension Settings', EXTENSION_ID);
+    let files;
+    try {
+      files = fs.readdirSync(db).filter((f) => /\.(log|ldb)$/.test(f));
+    } catch {
+      return false;
+    }
+    for (const f of files) {
+      try {
+        if (fs.readFileSync(path.join(db, f)).includes('accessToken')) return true;
+      } catch {
+        // a file Chrome is rewriting: the others decide
+      }
+    }
+    return files.some((f) => f.endsWith('.ldb')) ? null : false;
+  }
+
+  /** What NAME's profile holds now: {signedIn, extension, extensionSignedIn, running}. */
   function state(name) {
     const dir = profileDir(resolve(name).name);
-    return {signedIn: signedIn(name), extension: hasExtension(path.join(dir, 'Default')), running: running(dir)};
+    const def = path.join(dir, 'Default');
+    const extension = hasExtension(def);
+    return {signedIn: signedIn(name), extension, extensionSignedIn: extension ? extensionSignedIn(def) : false,
+      running: running(dir)};
   }
 
   /** What a launch does, without doing it: {name, dir, signedIn, extension,
@@ -151,6 +182,8 @@ export function openAccountChrome(io = {}) {
     if (!(only && url)) {
       if (now.signedIn === false) urls.push(LOGIN_URL);
       if (!now.extension && (storeTab || !install.from)) urls.push(STORE_URL);
+      // installed (or about to be) but not signed in: its Sign in page
+      if ((now.extension || (install.from && !storeTab)) && now.extensionSignedIn !== true) urls.push(EXTENSION_PAGE);
     }
     if (url) urls.push(url);
     else if (!urls.length) urls.push('https://claude.ai/');

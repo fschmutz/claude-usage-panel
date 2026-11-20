@@ -177,6 +177,9 @@ export function openChromeCheck(io = {}) {
     if (!fs.existsSync(host)) out.push(`native host missing: ${host} (run \`claude\` once and type /chrome)`);
     if (!own.extension) out.push(`${name}'s own Chrome: extension missing (\`claudectl account chrome ${name}\` opens its Web Store page)`);
     if (own.signedIn === false) out.push(`${name}'s own Chrome: not signed in to claude.ai`);
+    if (own.extension && own.extensionSignedIn === false) {
+      out.push(`${name}'s own Chrome: the extension itself is not signed in (\`claudectl account chrome ${name}\` opens its page: Sign in, Authorize)`);
+    }
     if (!own.running) out.push(`${name}'s own Chrome: not running`);
     if (!own.manifest) out.push(`${name}'s own Chrome: no native-host manifest yet (launch it once)`);
     if (main) {

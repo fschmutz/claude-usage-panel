@@ -67,7 +67,9 @@ extension is installed before Chrome starts: copied from a profile of the
 main Chrome that has it, else downloaded from the Web Store's update service,
 and registered with the permissions its manifest declares (Linux; not while
 that profile's Chrome runs). Only when that cannot happen does the Web Store
-page open. Then --url (default claude.ai). The extension's
+page open. The extension keeps its own claude.ai sign-in, and Claude Code
+pairs only with a signed-in one: until it is, its page opens too (click Sign
+in, then Authorize). Then --url (default claude.ai). The extension's
 native-messaging manifest is laid in the profile on every launch, naming the
 live login's host, which Claude Code writes on its first /chrome. --only opens
 --url alone, whatever is missing (what \`account login\` uses).
@@ -243,7 +245,8 @@ async function chromeCmd(argv, io, out) {
     out(`${r.name}: ${r.verdict.toUpperCase().replace('-', ' ')} - ${r.detail}\n`);
     for (const why of r.reasons) out(`  - ${why}\n`);
     out(`${r.name}'s own Chrome: claude.ai ${signedInText(r.own.signedIn)}, extension ` +
-      `${r.own.extension ? 'installed' : 'missing'}, ${r.own.running ? 'running' : 'not running'}\n`);
+      `${r.own.extension ? `installed (${signedInText(r.own.extensionSignedIn)})` : 'missing'}, ` +
+      `${r.own.running ? 'running' : 'not running'}\n`);
     if (r.main) {
       out(`main Chrome: extension in ${r.main.profiles.length ? r.main.profiles.join(', ') : 'no profile'}, ` +
         `${r.main.running ? 'running' : 'not running'}, native host ${r.main.host ?? 'not laid'}\n`);
@@ -268,6 +271,10 @@ async function chromeCmd(argv, io, out) {
   else if (dry && p.install.from) ext = `MISSING - would install it from ${p.install.from}`;
   else ext = `MISSING - ${p.install.why ?? 'not installable here'}; click "Add to Chrome" in the Web Store tab`;
   out(`  extension: ${ext}\n`);
+  if (p.extension && p.extensionSignedIn !== true && !opts.only) {
+    out(`  extension sign-in: ${signedInText(p.extensionSignedIn)} - in its tab click Sign in, then Authorize (as ${p.name}); ` +
+      'Claude Code pairs only with a signed-in extension\n');
+  }
   out(`  tabs: ${p.argv.slice(p.argv.indexOf('--new-window') + 1).join(' ')}\n`);
   return 0;
 }

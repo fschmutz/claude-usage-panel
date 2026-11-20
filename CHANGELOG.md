@@ -38,7 +38,11 @@ semantic versioning.
   it, else downloaded from the Web Store's update service, and registered in the
   profile's Preferences with the permissions its manifest declares. The Web
   Store page (`chromewebstore.google.com/detail/claude/<id>`) opens only when
-  that cannot happen (macOS, the profile's Chrome running, a failed install). A `SingletonLock`
+  that cannot happen (macOS, the profile's Chrome running, a failed install).
+  The extension's own claude.ai sign-in (it pairs with Claude Code only once
+  signed in) is read from its storage key names: until it is, each launch opens
+  the extension's page on its Sign in button, and `--check` gives it as the
+  reason. A `SingletonLock`
   left by a crashed Chrome no longer counts as running.
 
 ## [3.12.3] - 2026-11-19

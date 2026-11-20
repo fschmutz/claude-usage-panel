@@ -143,6 +143,7 @@ test('check: the reasons come from the files - native host, extension, sign-in, 
   assert.match(all, /PERSO's own Chrome: extension missing/);
   assert.match(all, /PERSO's own Chrome: not signed in to claude.ai/);
   assert.match(all, /PERSO's own Chrome: not running/);
+  assert.doesNotMatch(all, /extension itself is not signed in/, 'no extension, no sign-in reason');
   assert.match(all, /main Chrome: no native-host manifest/);
   assert.match(all, /main Chrome: extension not installed in any profile/);
 });
@@ -154,6 +155,11 @@ test('check: an account whose own Chrome runs with the extension is answered by 
   fs.symlinkSync('box-9', path.join(dir, 'SingletonLock'));
   const r = await openChromeCheck(t.io).check('PERSO');
   assert.equal(r.probes[0].where, "main Chrome or PERSO's own Chrome");
+  // the same profile, the extension never signed in: that is the reason given
+  const t2 = setup();
+  fakeExtension(path.join(t2.home, 'state', 'claude-usage-panel', 'chrome', 'PERSO', 'Default'), EXTENSION_ID);
+  const r2 = await openChromeCheck(t2.io).check('PERSO');
+  assert.ok(r2.reasons.some((x) => /extension itself is not signed in/.test(x)));
 });
 
 test('check: a probe that hangs is INCONCLUSIVE at its deadline, exit 1, JSON on request', async () => {
