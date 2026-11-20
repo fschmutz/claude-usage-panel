@@ -42,6 +42,7 @@ import path from 'node:path';
 import {execFileSync, spawn as nodeSpawn} from 'node:child_process';
 
 import {keychainServices} from '../claude-usage-panel@fschmutz.github.io/lib/pure/accounts.js';
+import {LAUNCH_UNSET} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sessions.js';
 
 import {openStore} from './accounts.js';
 import os from 'node:os';
@@ -68,7 +69,8 @@ export const DROPPED_ENV = [
 /** The environment the child runs in: ours, pointed at `configDir`. */
 export function childEnv(env, configDir) {
   const out = {...env, CLAUDE_CONFIG_DIR: configDir};
-  for (const k of DROPPED_ENV) delete out[k];
+  // Launcher markers (Volta's recursion flag) would break the child's own node hooks.
+  for (const k of [...DROPPED_ENV, ...LAUNCH_UNSET]) delete out[k];
   return out;
 }
 
