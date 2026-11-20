@@ -62,9 +62,12 @@ Chrome profile is never written). Claude-in-Chrome pairs a browser with the
 sessions of the same claude.ai account, so a session on NAME (the current
 login, or \`account exec NAME\`) drives this window and no other. Each launch
 prints the profile's state (claude.ai signed in or not, extension installed
-or missing) and opens claude.ai/login only when it is signed out and the
-extension's Web Store page only when it is missing - adding it is your click
-there, never automated - then --url (default claude.ai). The extension's
+or missing) and opens claude.ai/login only when it is signed out. A missing
+extension is installed before Chrome starts: copied from a profile of the
+main Chrome that has it, else downloaded from the Web Store's update service,
+and registered with the permissions its manifest declares (Linux; not while
+that profile's Chrome runs). Only when that cannot happen does the Web Store
+page open. Then --url (default claude.ai). The extension's
 native-messaging manifest is laid in the profile on every launch, naming the
 live login's host, which Claude Code writes on its first /chrome. --only opens
 --url alone, whatever is missing (what \`account login\` uses).
@@ -254,11 +257,17 @@ async function chromeCmd(argv, io, out) {
   const chrome = openAccountChrome(io);
   const opts = {url, only: argv.includes('--only')};
   const dry = argv.includes('--dry-run');
-  const p = dry ? chrome.plan(name, opts) : chrome.launch(name, opts);
+  const p = dry ? chrome.plan(name, opts) : await chrome.launch(name, opts);
   out(`${dry ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
   out(`  claude.ai: ${signedInText(p.signedIn)}${p.signedIn === false && !opts.only
     ? ` - sign in as ${p.name} in the claude.ai/login tab (the emailed link); kept for next time` : ''}\n`);
-  out(`  extension: ${p.extension ? 'installed' : `MISSING${opts.only ? '' : ' - click "Add to Chrome" in the Web Store tab, once'}`}\n`);
+  let ext;
+  if (p.installed) ext = `installed now, ${p.installed.version} from ${p.installed.from}`;
+  else if (p.extension) ext = 'installed';
+  else if (p.installError) ext = `MISSING - the install failed (${p.installError}); click "Add to Chrome" in the Web Store tab`;
+  else if (dry && p.install.from) ext = `MISSING - would install it from ${p.install.from}`;
+  else ext = `MISSING - ${p.install.why ?? 'not installable here'}; click "Add to Chrome" in the Web Store tab`;
+  out(`  extension: ${ext}\n`);
   out(`  tabs: ${p.argv.slice(p.argv.indexOf('--new-window') + 1).join(' ')}\n`);
   return 0;
 }

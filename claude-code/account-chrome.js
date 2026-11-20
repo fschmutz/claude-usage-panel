@@ -7,15 +7,16 @@
 // drives this window while every other Chrome stays out of it.
 //
 // What cannot be automated, and is done once per profile, by hand, then kept:
-// - signing in to claude.ai as NAME: the stored OAuth login is a token for
-//   api.anthropic.com, not a claude.ai web session, and no password goes
-//   through a tool;
-// - installing the extension from the Chrome Web Store: branded Chrome 137+
-//   ignores --load-extension, and force-install policy is system-wide (root,
-//   every profile, the main one included).
+// signing in to claude.ai as NAME - the stored OAuth login is a token for
+// api.anthropic.com, not a claude.ai web session, and no password goes
+// through a tool.
 // Each launch reads the profile's real state (a claude.ai session cookie, the
-// extension's folder) and opens the sign-in page and the Web Store page only
-// for what is still missing; the human does the rest there.
+// extension registered in its Preferences with its files) and opens the
+// sign-in page only on a signed-out profile. A missing extension is installed
+// before Chrome starts (chrome-extension.js: copied from the main Chrome, else
+// downloaded from the Web Store's update service); the Web Store tab opens
+// only when that cannot happen (macOS, the profile's Chrome running, a failed
+// install).
 //
 // The extension reaches Claude Code through a native-messaging host; a custom
 // --user-data-dir reads its manifest from <profile>/NativeMessagingHosts, so it
@@ -27,7 +28,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn as nodeSpawn} from 'node:child_process';
 
+import {BROWSER_DIRS} from './account-exec.js';
 import {openStore} from './accounts.js';
+import {openChromeExtension} from './chrome-extension.js';
 import {chromeProfilesDir} from './paths.js';
 import {pidAlive} from './procs.js';
 import {onPath, toolEnv} from './tools.js';
@@ -80,13 +83,34 @@ export function openAccountChrome(io = {}) {
 
   const profileDir = (name) => path.join(chromeProfilesDir(io), name);
 
-  /** The extension's folder holds at least one version: installed in that profile. */
+  /** Installed in that profile dir (a Chrome "Default" / "Profile 2"): its
+   *  Preferences (or Secure Preferences) entry names a folder that exists.
+   *  Files alone are not an install: Chrome deletes unregistered ones. */
   function hasExtension(dir) {
-    try {
-      return fs.readdirSync(path.join(dir, 'Extensions', EXTENSION_ID)).length > 0;
-    } catch {
-      return false;
+    for (const f of ['Preferences', 'Secure Preferences']) {
+      let entry;
+      try {
+        entry = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))?.extensions?.settings?.[EXTENSION_ID];
+      } catch {
+        continue;
+      }
+      if (typeof entry?.path === 'string' && fs.existsSync(path.join(dir, 'Extensions', entry.path))) return true;
     }
+    return false;
+  }
+
+  /** The main Chrome's user-data-dir, where a copy of the extension may sit. */
+  const mainChromeDir = () => io.mainChromeDir
+    ?? path.join(io.homedir ?? os.homedir(), (BROWSER_DIRS[platform] ?? [])[0] ?? '.config/google-chrome');
+  const extension = openChromeExtension(io);
+
+  /** Where a missing extension would come from, or why it cannot be installed here. */
+  function installSource(now) {
+    if (now.extension) return {from: null};
+    if (platform !== 'linux') return {from: null, why: 'automatic install is proven on Linux only'};
+    if (now.running) return {from: null, why: 'its Chrome is running (close it, then rerun)'};
+    const copy = extension.mainCopy(EXTENSION_ID, mainChromeDir());
+    return {from: copy ? `${copy.from} (${copy.version})` : 'Web Store download'};
   }
 
   /** Chrome holds a user-data-dir by its SingletonLock symlink, "<host>-<pid>",
@@ -112,23 +136,26 @@ export function openAccountChrome(io = {}) {
   }
 
   /** What a launch does, without doing it: {name, dir, signedIn, extension,
-   *  running, host, manifest, argv}. The sign-in page opens only on a profile
-   *  with no claude.ai session, the Web Store page only when the extension
-   *  is missing, then `url` (default claude.ai when nothing else opens).
-   *  `only`: open `url` alone, whatever is missing (account login). */
-  function plan(name, {url, only = false} = {}) {
+   *  running, install: {from, why}, host, manifest, argv}. The sign-in page
+   *  opens only on a profile with no claude.ai session, the Web Store page
+   *  only when the extension is missing and cannot be installed, then `url`
+   *  (default claude.ai when nothing else opens). `only`: open `url` alone,
+   *  whatever is missing (account login). `storeTab`: force the Web Store
+   *  tab (a failed install). */
+  function plan(name, {url, only = false, storeTab = false} = {}) {
     const profile = resolve(name);
     const dir = profileDir(profile.name);
     const now = state(profile.name);
+    const install = installSource(now);
     const urls = [];
     if (!(only && url)) {
       if (now.signedIn === false) urls.push(LOGIN_URL);
-      if (!now.extension) urls.push(STORE_URL);
+      if (!now.extension && (storeTab || !install.from)) urls.push(STORE_URL);
     }
     if (url) urls.push(url);
     else if (!urls.length) urls.push('https://claude.ai/');
     return {
-      name: profile.name, dir, ...now, host: liveHost(),
+      name: profile.name, dir, ...now, install, host: liveHost(),
       manifest: path.join(dir, 'NativeMessagingHosts', `${HOST_NAME}.json`),
       argv: [chromeBinary(), `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
         '--new-window', ...urls],
@@ -150,10 +177,21 @@ export function openAccountChrome(io = {}) {
     fs.writeFileSync(p.manifest, `${JSON.stringify(manifest, null, 2)}\n`, {mode: 0o600});
   }
 
-  /** Open NAME's Chrome, detached. Returns the plan it ran. */
-  function launch(name, opts = {}) {
-    const p = plan(name, opts);
+  /** Open NAME's Chrome, detached, the extension installed first when it is
+   *  missing. Resolves to the plan it ran, plus `installed` ({version, from})
+   *  or `installError`. */
+  async function launch(name, opts = {}) {
+    let p = plan(name, opts);
     prepare(p);
+    if (p.install.from) {
+      try {
+        const installed = await extension.install(EXTENSION_ID,
+          {userDataDir: p.dir, mainDir: mainChromeDir(), chromeBin: p.argv[0]});
+        p = {...plan(name, opts), installed};
+      } catch (e) {
+        p = {...plan(name, {...opts, storeTab: true}), installError: e.message};
+      }
+    }
     const child = spawn(p.argv[0], p.argv.slice(1), {detached: true, stdio: 'ignore'});
     child.unref?.();
     return p;

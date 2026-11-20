@@ -244,7 +244,8 @@ process: `wiki/CI.md`.
 command run as a saved login in a throwaway `CLAUDE_CONFIG_DIR`, is
 `claude-code/account-exec.js`; `account chrome [NAME]`, an isolated Chrome profile
 per account for Claude-in-Chrome (the current login by default), is
-`claude-code/account-chrome.js`, and its `--check` probe (CONNECTED / NOT
+`claude-code/account-chrome.js` (a missing extension installed by
+`claude-code/chrome-extension.js`, no click), and its `--check` probe (CONNECTED / NOT
 CONNECTED with reasons, which saved account the extension answers) is
 `claude-code/account-chrome-check.js`; `account
 login`, a fresh sign-in for a dead saved login in an empty throwaway config dir

@@ -266,7 +266,7 @@ test('account chrome --only: the URL alone, never the sign-in or Web Store tabs'
   const t = setup();
   const c = openAccountChrome(t.io);
   const plain = c.plan('PERSO', {url: 'http://localhost:1/x'});
-  assert.ok(plain.argv.some((a) => a.includes('chromewebstore')), 'no extension: the Web Store tab');
+  assert.equal(plain.install.from, 'Web Store download', 'a missing extension is installed, not a tab');
   const only = c.plan('PERSO', {url: 'http://localhost:1/x', only: true});
   assert.deepEqual(only.argv.slice(-2), ['--new-window', 'http://localhost:1/x']);
 });

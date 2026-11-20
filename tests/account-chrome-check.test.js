@@ -13,7 +13,7 @@ import {PROBE_PROMPT, PROBE_TOOL, openChromeCheck, probeArgv, probeVerdict} from
 import {EXTENSION_ID} from '../claude-code/account-chrome.js';
 import {main} from '../claude-code/account-cli.js';
 import {openStore} from '../claude-code/accounts.js';
-import {account, creds, world} from './accounts-world.js';
+import {account, creds, fakeExtension, world} from './accounts-world.js';
 
 const NOT_CONNECTED = 'Browser extension is not connected. Please ensure the Claude browser extension is installed ' +
   'and running (https://claude.ai/chrome), and that you are logged into claude.ai with the same account as Claude Code.';
@@ -97,7 +97,7 @@ function setup({answers = {}, hang = false} = {}) {
 /** The main Chrome with the extension in Profile 2, running, its manifest on the live host. */
 function mainChrome(t) {
   const dir = path.join(t.home, '.config', 'google-chrome');
-  fs.mkdirSync(path.join(dir, 'Profile 2', 'Extensions', EXTENSION_ID, '1.0_0'), {recursive: true});
+  fakeExtension(path.join(dir, 'Profile 2'), EXTENSION_ID);
   fs.writeFileSync(path.join(dir, 'Local State'),
     JSON.stringify({profile: {info_cache: {'Profile 2': {name: 'WORK'}}}}));
   fs.mkdirSync(path.join(dir, 'NativeMessagingHosts'), {recursive: true});
@@ -150,7 +150,7 @@ test('check: the reasons come from the files - native host, extension, sign-in, 
 test('check: an account whose own Chrome runs with the extension is answered by "main or its own"', async () => {
   const t = setup({answers: {PERSO: 'Tab context: 1 tab'}});
   const dir = path.join(t.home, 'state', 'claude-usage-panel', 'chrome', 'PERSO');
-  fs.mkdirSync(path.join(dir, 'Default', 'Extensions', EXTENSION_ID, '1.0_0'), {recursive: true});
+  fakeExtension(path.join(dir, 'Default'), EXTENSION_ID);
   fs.symlinkSync('box-9', path.join(dir, 'SingletonLock'));
   const r = await openChromeCheck(t.io).check('PERSO');
   assert.equal(r.probes[0].where, "main Chrome or PERSO's own Chrome");

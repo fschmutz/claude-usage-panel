@@ -72,3 +72,53 @@ export function fakeSecurity(keychain, {denied = () => false, acct = 'me'} = {})
     };
     return {exec, argvs};
 }
+
+/**
+ * A Chrome profile dir ("Default", "Profile 2") holding extension `id` as
+ * Chrome keeps it: the files under Extensions/<id>/<version>_0 and the
+ * Preferences entry naming them.
+ */
+export function fakeExtension(profileDir, id, version = '1.0.0', manifest = {}) {
+    const rel = `${id}/${version}_0`;
+    fs.mkdirSync(path.join(profileDir, 'Extensions', rel), {recursive: true});
+    fs.writeFileSync(path.join(profileDir, 'Extensions', rel, 'manifest.json'),
+        JSON.stringify({manifest_version: 3, name: 'Claude', version, ...manifest}));
+    fs.writeFileSync(path.join(profileDir, 'Preferences'),
+        JSON.stringify({extensions: {settings: {[id]: {location: 1, path: rel}}}}));
+}
+
+/** A stored (method 0) zip of `files`, behind a CRX3 header. */
+export function crx(files) {
+    const locals = [];
+    const central = [];
+    let off = 0;
+    for (const [name, text] of Object.entries(files)) {
+        const data = Buffer.from(text);
+        const n = Buffer.from(name);
+        const lh = Buffer.alloc(30);
+        lh.writeUInt32LE(0x04034b50, 0);
+        lh.writeUInt32LE(data.length, 18);
+        lh.writeUInt32LE(data.length, 22);
+        lh.writeUInt16LE(n.length, 26);
+        const ch = Buffer.alloc(46);
+        ch.writeUInt32LE(0x02014b50, 0);
+        ch.writeUInt32LE(data.length, 20);
+        ch.writeUInt32LE(data.length, 24);
+        ch.writeUInt16LE(n.length, 28);
+        ch.writeUInt32LE(off, 42);
+        locals.push(lh, n, data);
+        central.push(ch, n);
+        off += 30 + n.length + data.length;
+    }
+    const cd = Buffer.concat(central);
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0);
+    end.writeUInt16LE(Object.keys(files).length, 10);
+    end.writeUInt32LE(cd.length, 12);
+    end.writeUInt32LE(off, 16);
+    const head = Buffer.alloc(12);
+    head.write('Cr24', 0, 'latin1');
+    head.writeUInt32LE(3, 4);
+    head.writeUInt32LE(0, 8);
+    return Buffer.concat([head, ...locals, cd, end]);
+}

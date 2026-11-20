@@ -234,13 +234,25 @@ other.
 
 Every launch prints what the profile holds (claude.ai: signed in / NOT signed
 in / unknown, from its `sessionKey` cookie; extension: installed / MISSING,
-from its `Extensions/<id>` folder) and opens the claude.ai sign-in tab only
-when it is signed out and the extension's Web Store page only when it is
-missing. Sign in as NAME and click "Add to Chrome", once; both stay in the
-profile. This step cannot be automated. The stored login is an API token,
-not a claude.ai web session, and no password goes through a tool. Branded
-Chrome also ignores `--load-extension` (137+), and force-install policy is
-system-wide. Later launches open `--url` (default claude.ai). Every launch
+from its entry in the profile's Preferences and the folder it names) and opens
+the claude.ai sign-in tab only when it is signed out. Sign in as NAME once
+(the stored login is an API token, not a claude.ai web session, and no
+password goes through a tool); it stays in the profile.
+
+A missing extension is installed before Chrome starts, with no click: its
+files are copied from a profile of the main Chrome that has it (offline, the
+version already in use), else downloaded as a CRX from the Web Store's update
+service, and the profile's `Default/Preferences` gets the entry Chrome writes
+for a Web Store install, granting exactly the permissions the extension's
+manifest declares. Measured on branded Chrome 158 (Linux, 2026-11-20): the
+extension loads at the next start and stays. What does not work, measured:
+`--load-extension` (removed from branded Chrome 137+), an `External
+Extensions/<id>.json` in the user-data-dir, the Web Store tab of a fresh
+profile (it stops on consent.google.com), and policy (system-wide, root).
+Nothing is written while that profile's Chrome runs (Chrome rewrites its
+Preferences on exit): close it and rerun. On macOS the install is not proven,
+so the Web Store tab opens there instead, as it does after a failed install.
+Every launch
 lays the extension's native-messaging manifest inside the profile, naming the
 live login's `~/.claude/chrome/chrome-native-host`. Claude Code writes that
 host on its first `/chrome`; until then the command refuses.

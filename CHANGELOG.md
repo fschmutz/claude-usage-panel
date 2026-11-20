@@ -31,9 +31,14 @@ semantic versioning.
 - `claudectl account chrome` takes the current login when NAME is left out,
   and prints the profile's real state (claude.ai signed in or not, extension
   installed or missing) instead of a fixed "first launch" line. The sign-in tab
-  opens only on a signed-out profile and the Web Store page
-  (`chromewebstore.google.com/detail/claude/<id>`) only while the extension is
-  missing; `--dry-run` also prints the tabs it would open. A `SingletonLock`
+  opens only on a signed-out profile; `--dry-run` also prints the tabs it would
+  open and where a missing extension would come from.
+- `claudectl account chrome` installs a missing Claude extension by itself
+  (Linux), before Chrome starts: copied from the main Chrome's profile that has
+  it, else downloaded from the Web Store's update service, and registered in the
+  profile's Preferences with the permissions its manifest declares. The Web
+  Store page (`chromewebstore.google.com/detail/claude/<id>`) opens only when
+  that cannot happen (macOS, the profile's Chrome running, a failed install). A `SingletonLock`
   left by a crashed Chrome no longer counts as running.
 
 ## [3.12.3] - 2026-11-19
