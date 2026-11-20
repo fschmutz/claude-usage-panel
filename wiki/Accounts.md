@@ -224,16 +224,19 @@ concurrent runs short.
 
 ## An isolated Chrome per account
 
-`claudectl account chrome NAME [--url=U]` opens Google Chrome with a profile of
-its own for NAME, kept (mode 0700) under
+`claudectl account chrome [NAME] [--url=U]` opens Google Chrome with a profile
+of its own for NAME (the current login when NAME is left out), kept (mode 0700) under
 `<state dir>/claude-usage-panel/chrome/NAME`. The main Chrome profile is never
 read or written. Claude-in-Chrome pairs a browser with the Claude Code
 sessions of the same claude.ai account, so a session on NAME (the current
 login, or `claudectl account exec NAME -- claude`) drives this window and no
 other.
 
-The first launch opens two tabs: claude.ai sign-in and the extension's Web
-Store page. Sign in as NAME and add the extension, once; both stay in the
+Every launch prints what the profile holds (claude.ai: signed in / NOT signed
+in / unknown, from its `sessionKey` cookie; extension: installed / MISSING,
+from its `Extensions/<id>` folder) and opens the claude.ai sign-in tab only
+when it is signed out and the extension's Web Store page only when it is
+missing. Sign in as NAME and click "Add to Chrome", once; both stay in the
 profile. This step cannot be automated. The stored login is an API token,
 not a claude.ai web session, and no password goes through a tool. Branded
 Chrome also ignores `--load-extension` (137+), and force-install policy is
@@ -241,6 +244,19 @@ system-wide. Later launches open `--url` (default claude.ai). Every launch
 lays the extension's native-messaging manifest inside the profile, naming the
 live login's `~/.claude/chrome/chrome-native-host`. Claude Code writes that
 host on its first `/chrome`; until then the command refuses.
+
+`claudectl account chrome [NAME] --check [--json]` opens nothing: it asks
+Claude-in-Chrome as NAME (`claude -p --chrome` calling `tabs_context_mcp`,
+read as stream-json; through `account exec` when NAME is not the current
+login) and prints CONNECTED, NOT CONNECTED or INCONCLUSIVE, exit 0 only when
+connected. When not, it lists the reasons read from the files: the live
+native host, each manifest, the extension in NAME's profile and in the main
+Chrome's profiles, the claude.ai sign-in, whether each Chrome runs (its
+`SingletonLock` pid); "signed in to another account" is the inference left
+once those are fine. It then probes every other saved account, one after the
+other, to say which one the extensions answer: the main Chrome for certain
+only when that account's own Chrome is not running with the extension. Each
+probe is a short `claude -p` run on that account, up to 2 minutes.
 
 Sign in with the link claude.ai mails, never a password: open
 `claudectl account chrome NAME --url=https://claude.ai/login`, type the
@@ -263,7 +279,7 @@ NAME's profile. No code is pasted. NAME's Chrome must hold a claude.ai
 session first (a live `sessionKey` cookie, read by name and date only from a
 copy of the profile's cookie store); signed out, the command stops at once and
 names the sign-in step instead of waiting. The page opens alone
-(`account chrome --only`), never with the first-launch tabs. A sign-in that comes back as another
+(`account chrome --only`), never with the sign-in or Web Store tabs. A sign-in that comes back as another
 account is not saved, and the current login is refused (Claude Code holds it:
 run `claude auth login` directly).
 

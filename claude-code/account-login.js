@@ -46,7 +46,7 @@ import {shellQuote} from '../claude-usage-panel@fschmutz.github.io/lib/pure/sess
 import {openAccountChrome} from './account-chrome.js';
 import {childEnv, openAccountExec} from './account-exec.js';
 import {openStore} from './accounts.js';
-import {onPath, toolEnv} from './tools.js';
+import {claudeBinary} from './tools.js';
 
 export const DEFAULT_WAIT_S = 600;
 const CLAUDECTL = path.join(path.dirname(fileURLToPath(import.meta.url)), 'claudectl.js');
@@ -79,13 +79,7 @@ export function openAccountLogin(io = {}) {
   const env = io.env ?? process.env;
   const spawn = (...a) => (io.spawn ?? nodeSpawn)(...a);
 
-  function claudeBin() {
-    if (io.claudeBin) return io.claudeBin;
-    const pathEnv = toolEnv(io).PATH;
-    const dir = pathEnv.split(':').find((d) => d && onPath(path.join(d, 'claude')));
-    if (!dir) throw new Error('the claude CLI is not on PATH');
-    return path.join(dir, 'claude');
-  }
+  const claudeBin = () => claudeBinary(io);
 
   /** What a login of NAME does, without doing it. */
   function plan(name) {

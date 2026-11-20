@@ -262,12 +262,11 @@ test('account chrome signedIn: a live sessionKey on claude.ai only', {skip: !SQL
   assert.equal(openAccountChrome(t.io).signedIn('PERSO'), false, 'a profile never launched');
 });
 
-test('account chrome --only: the URL alone, never the first-launch tabs', () => {
+test('account chrome --only: the URL alone, never the sign-in or Web Store tabs', () => {
   const t = setup();
   const c = openAccountChrome(t.io);
-  const first = c.plan('PERSO', {url: 'http://localhost:1/x'});
-  assert.ok(first.firstRun && first.argv.includes('https://claude.ai/login'), 'first launch: the setup tabs');
+  const plain = c.plan('PERSO', {url: 'http://localhost:1/x'});
+  assert.ok(plain.argv.some((a) => a.includes('chromewebstore')), 'no extension: the Web Store tab');
   const only = c.plan('PERSO', {url: 'http://localhost:1/x', only: true});
   assert.deepEqual(only.argv.slice(-2), ['--new-window', 'http://localhost:1/x']);
-  assert.equal(only.firstRun, false);
 });

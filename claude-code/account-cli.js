@@ -3,6 +3,7 @@
 // their usage), switch, forget, refresh. claudectl.js dispatches here.
 
 import {openAccountChrome} from './account-chrome.js';
+import {openChromeCheck} from './account-chrome-check.js';
 import {openAccountExec} from './account-exec.js';
 import {DEFAULT_WAIT_S, openAccountLogin} from './account-login.js';
 import {openStore} from './accounts.js';
@@ -20,8 +21,9 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
   claudectl account remove NAME               forget a saved account
   claudectl account refresh [NAME]            refresh the stored token(s) now
   claudectl account exec NAME -- CMD [ARG...]  run CMD as NAME, the current login untouched
-  claudectl account chrome NAME [--url=U] [--dry-run]
+  claudectl account chrome [NAME] [--url=U] [--dry-run] [--check [--json]]
                                               an isolated Chrome signed in to claude.ai as NAME
+                                              (default: the current login); --check probes it
   claudectl account login NAME|--expired [--wait=S] [--dry-run] [--json]
                                               a fresh sign-in for a dead saved login, one click
 
@@ -54,16 +56,26 @@ Claude login acts as NAME while the current login, running sessions and
 command rotates is written back to NAME. The dir carries no settings, hooks
 or MCP servers and is removed when CMD exits. Exits with CMD's code. The
 current login itself is refused (run the command directly).`,
-  chrome: `Opens Google Chrome with a profile of its own for NAME (kept, mode
-0700, in the state dir; the main Chrome profile is never read or written).
-Claude-in-Chrome pairs a browser with the sessions of the same claude.ai
-account, so a session on NAME (the current login, or \`account exec NAME\`)
-drives this window and no other. The first launch opens claude.ai/login and
-the extension's Web Store page: sign in as NAME and add the extension, once;
-both are kept. Later launches open --url (default claude.ai). The extension's
+  chrome: `Opens Google Chrome with a profile of its own for NAME, the current
+login when NAME is left out (kept, mode 0700, in the state dir; the main
+Chrome profile is never written). Claude-in-Chrome pairs a browser with the
+sessions of the same claude.ai account, so a session on NAME (the current
+login, or \`account exec NAME\`) drives this window and no other. Each launch
+prints the profile's state (claude.ai signed in or not, extension installed
+or missing) and opens claude.ai/login only when it is signed out and the
+extension's Web Store page only when it is missing - adding it is your click
+there, never automated - then --url (default claude.ai). The extension's
 native-messaging manifest is laid in the profile on every launch, naming the
 live login's host, which Claude Code writes on its first /chrome. --only opens
---url alone, never the first-launch tabs (what \`account login\` uses).`,
+--url alone, whatever is missing (what \`account login\` uses).
+--check opens nothing: it probes Claude-in-Chrome as NAME (\`claude -p
+--chrome\`, tabs_context_mcp, through \`account exec\` for a saved login that
+is not the current one) and prints CONNECTED, NOT CONNECTED with the reasons
+read from the files (native host, manifests, extension, sign-in, Chrome
+running), or INCONCLUSIVE; then probes every other saved account, one after
+the other, to tell which one the extension answers. Each probe is a short
+\`claude -p\` run on that account (up to 2 min). --json prints the result.
+Exit 0 only when CONNECTED.`,
   login: `A fresh sign-in for saved account NAME (or, with --expired, for every
 saved login whose token is gone or refused, the current one aside), the
 current login untouched. \`claude auth login\` runs in a throwaway config dir
@@ -105,19 +117,7 @@ export async function main(argv, io = {}) {
   }
   const store = openStore(io);
   const out = io.stdout ?? ((s) => process.stdout.write(s));
-  if (argv[0] === 'chrome') {
-    const name = argv[1];
-    if (!name || name.startsWith('--')) throw new Error('usage: claudectl account chrome NAME [--url=U] [--dry-run]');
-    const url = argv.find((a) => a.startsWith('--url='))?.slice('--url='.length);
-    const chrome = openAccountChrome(io);
-    const opts = {url, only: argv.includes('--only')};
-    const p = argv.includes('--dry-run') ? chrome.plan(name, opts) : chrome.launch(name, opts);
-    out(`${argv.includes('--dry-run') ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
-    if (p.firstRun) {
-      out(`first launch: sign in to claude.ai as ${p.name}, then add the Claude extension (both tabs are open); kept for next time\n`);
-    }
-    return 0;
-  }
+  if (argv[0] === 'chrome') return chromeCmd(argv.slice(1), io, out);
   if (argv[0] === 'login') return login(argv.slice(1), io, out);
   const args = argv.filter((a) => !a.startsWith('--'));
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
@@ -224,6 +224,45 @@ export async function main(argv, io = {}) {
 }
 
 /** `account login NAME | --expired [--wait=S] [--dry-run] [--json]`. */
+const signedInText = (v) => (v === true ? 'signed in' : v === false ? 'NOT signed in' : 'unknown');
+
+/** `account chrome [NAME] [--url=U] [--only] [--dry-run] [--check [--json]]`. */
+async function chromeCmd(argv, io, out) {
+  const name = argv[0] && !argv[0].startsWith('--') ? argv[0] : undefined;
+  const url = argv.find((a) => a.startsWith('--url='))?.slice('--url='.length);
+  if (argv.includes('--check')) {
+    const err = io.stderr ?? ((s) => process.stderr.write(s));
+    const r = await openChromeCheck(io).check(name, {onProbe: (n) => err(`probing Claude-in-Chrome as ${n}...\n`)});
+    if (argv.includes('--json')) {
+      out(`${JSON.stringify(r, null, 2)}\n`);
+      return r.connected ? 0 : 1;
+    }
+    out(`${r.name}: ${r.verdict.toUpperCase().replace('-', ' ')} - ${r.detail}\n`);
+    for (const why of r.reasons) out(`  - ${why}\n`);
+    out(`${r.name}'s own Chrome: claude.ai ${signedInText(r.own.signedIn)}, extension ` +
+      `${r.own.extension ? 'installed' : 'missing'}, ${r.own.running ? 'running' : 'not running'}\n`);
+    if (r.main) {
+      out(`main Chrome: extension in ${r.main.profiles.length ? r.main.profiles.join(', ') : 'no profile'}, ` +
+        `${r.main.running ? 'running' : 'not running'}, native host ${r.main.host ?? 'not laid'}\n`);
+    }
+    const answered = r.probes.filter((p) => p.verdict === 'connected');
+    out(answered.length
+      ? `answered: ${answered.map((p) => `${p.name} (${p.where})`).join(', ')}\n`
+      : `answered: no saved account (${r.probes.map((p) => `${p.name} ${p.verdict}`).join(', ')})\n`);
+    return r.connected ? 0 : 1;
+  }
+  const chrome = openAccountChrome(io);
+  const opts = {url, only: argv.includes('--only')};
+  const dry = argv.includes('--dry-run');
+  const p = dry ? chrome.plan(name, opts) : chrome.launch(name, opts);
+  out(`${dry ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
+  out(`  claude.ai: ${signedInText(p.signedIn)}${p.signedIn === false && !opts.only
+    ? ` - sign in as ${p.name} in the claude.ai/login tab (the emailed link); kept for next time` : ''}\n`);
+  out(`  extension: ${p.extension ? 'installed' : `MISSING${opts.only ? '' : ' - click "Add to Chrome" in the Web Store tab, once'}`}\n`);
+  out(`  tabs: ${p.argv.slice(p.argv.indexOf('--new-window') + 1).join(' ')}\n`);
+  return 0;
+}
+
 async function login(argv, io, out) {
   const names = argv.filter((a) => !a.startsWith('--'));
   const all = argv.includes('--expired');

@@ -19,6 +19,22 @@ semantic versioning.
   installed, the panels' "Copy sign-in command" button now copies it instead
   of `claude auth login` (which replaces the current login); pinned for both
   ports by `reloginCommand` in `tests/fixtures/notices.json`.
+- `claudectl account chrome [NAME] --check [--json]`: probes Claude-in-Chrome
+  as NAME (`claude -p --chrome`, tabs_context_mcp, read as stream-json) and
+  prints CONNECTED, NOT CONNECTED with the reasons read from the files (native
+  host, manifests, extension, claude.ai sign-in, Chrome running) or
+  INCONCLUSIVE, exit 0 only when connected; then probes every other saved
+  account in turn to say which one the extension answers.
+
+### Changed
+
+- `claudectl account chrome` takes the current login when NAME is left out,
+  and prints the profile's real state (claude.ai signed in or not, extension
+  installed or missing) instead of a fixed "first launch" line. The sign-in tab
+  opens only on a signed-out profile and the Web Store page
+  (`chromewebstore.google.com/detail/claude/<id>`) only while the extension is
+  missing; `--dry-run` also prints the tabs it would open. A `SingletonLock`
+  left by a crashed Chrome no longer counts as running.
 
 ## [3.12.3] - 2026-11-19
 

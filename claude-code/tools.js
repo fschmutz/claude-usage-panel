@@ -109,3 +109,11 @@ export function query(io, env, cmd, args) {
     return '';
   }
 }
+
+/** The `claude` CLI: `io.claudeBin`, else the first `claude` on the tool PATH. */
+export function claudeBinary(io = {}) {
+  if (io.claudeBin) return io.claudeBin;
+  const dir = toolEnv(io).PATH.split(':').find((d) => d && onPath(path.join(d, 'claude')));
+  if (!dir) throw new Error('the claude CLI is not on PATH');
+  return path.join(dir, 'claude');
+}

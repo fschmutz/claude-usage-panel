@@ -1,5 +1,5 @@
-// `claudectl account chrome NAME [--url U]`: an isolated Google Chrome for one
-// saved account. Its own persistent profile (--user-data-dir, mode 0700) under
+// `claudectl account chrome [NAME] [--url U]`: an isolated Google Chrome for
+// one saved account (the current login when NAME is left out). Its own persistent profile (--user-data-dir, mode 0700) under
 // the state dir, so nothing of the user's main Chrome profile is read or
 // written. In it the Claude extension is signed in to claude.ai as NAME, and
 // Claude-in-Chrome pairs a browser with the sessions of the SAME account: a
@@ -13,7 +13,9 @@
 // - installing the extension from the Chrome Web Store: branded Chrome 137+
 //   ignores --load-extension, and force-install policy is system-wide (root,
 //   every profile, the main one included).
-// The first launch opens both pages; later launches open the profile as it is.
+// Each launch reads the profile's real state (a claude.ai session cookie, the
+// extension's folder) and opens the sign-in page and the Web Store page only
+// for what is still missing; the human does the rest there.
 //
 // The extension reaches Claude Code through a native-messaging host; a custom
 // --user-data-dir reads its manifest from <profile>/NativeMessagingHosts, so it
@@ -27,13 +29,14 @@ import {spawn as nodeSpawn} from 'node:child_process';
 
 import {openStore} from './accounts.js';
 import {chromeProfilesDir} from './paths.js';
+import {pidAlive} from './procs.js';
 import {onPath, toolEnv} from './tools.js';
 
 /** The Claude extension's Chrome Web Store id. */
 export const EXTENSION_ID = 'fcoeoabgfenejglbffodgkkbkcdhcgfn';
 const HOST_NAME = 'com.anthropic.claude_code_browser_extension';
-const STORE_URL = `https://chromewebstore.google.com/detail/${EXTENSION_ID}`;
-const LOGIN_URL = 'https://claude.ai/login';
+export const STORE_URL = `https://chromewebstore.google.com/detail/claude/${EXTENSION_ID}`;
+export const LOGIN_URL = 'https://claude.ai/login';
 
 /** Branded Google Chrome only, never a bundled Chromium. */
 const CHROME = {
@@ -62,17 +65,70 @@ export function openAccountChrome(io = {}) {
     return path.join(dir, 'chrome', 'chrome-native-host');
   }
 
-  /** What a launch does, without doing it: {dir, firstRun, manifest, argv}.
-   *  `only`: open `url` alone, never the first-run tabs (account login). */
+  /** NAME's saved profile, or the current login's when NAME is left out. */
+  function resolve(name) {
+    const wanted = name ?? store.liveAccountName();
+    if (!wanted) {
+      const email = store.readLiveAccount()?.emailAddress;
+      throw new Error(`the current login${email ? ` (${email})` : ''} is not a saved account - ` +
+        '`claudectl account save NAME` saves it, or name one');
+    }
+    const profile = store.readProfile(wanted);
+    if (!profile) throw new Error(`no saved account named ${wanted}`);
+    return profile;
+  }
+
+  const profileDir = (name) => path.join(chromeProfilesDir(io), name);
+
+  /** The extension's folder holds at least one version: installed in that profile. */
+  function hasExtension(dir) {
+    try {
+      return fs.readdirSync(path.join(dir, 'Extensions', EXTENSION_ID)).length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Chrome holds a user-data-dir by its SingletonLock symlink, "<host>-<pid>",
+   *  while it runs; a crash leaves it behind, so the pid must be alive (a
+   *  lock from another host counts as held). */
+  function running(dir) {
+    let target;
+    try {
+      target = fs.readlinkSync(path.join(dir, 'SingletonLock'));
+    } catch {
+      return false;
+    }
+    const m = /^(.*)-(\d+)$/.exec(target);
+    if (!m) return true;
+    if (m[1] !== (io.hostname ?? os.hostname())) return true;
+    return (io.pidAlive ?? pidAlive)(Number(m[2]));
+  }
+
+  /** What NAME's profile holds now: {signedIn: true|false|null, extension, running}. */
+  function state(name) {
+    const dir = profileDir(resolve(name).name);
+    return {signedIn: signedIn(name), extension: hasExtension(path.join(dir, 'Default')), running: running(dir)};
+  }
+
+  /** What a launch does, without doing it: {name, dir, signedIn, extension,
+   *  running, host, manifest, argv}. The sign-in page opens only on a profile
+   *  with no claude.ai session, the Web Store page only when the extension
+   *  is missing, then `url` (default claude.ai when nothing else opens).
+   *  `only`: open `url` alone, whatever is missing (account login). */
   function plan(name, {url, only = false} = {}) {
-    const profile = store.readProfile(name);
-    if (!profile) throw new Error(`no saved account named ${name}`);
-    const dir = path.join(chromeProfilesDir(io), profile.name);
-    const firstRun = !fs.existsSync(path.join(dir, 'Default', 'Extensions', EXTENSION_ID));
-    const urls = firstRun && !(only && url) ? [LOGIN_URL, STORE_URL] : [url ?? 'https://claude.ai/'];
-    if (firstRun && url && !only) urls.push(url);
+    const profile = resolve(name);
+    const dir = profileDir(profile.name);
+    const now = state(profile.name);
+    const urls = [];
+    if (!(only && url)) {
+      if (now.signedIn === false) urls.push(LOGIN_URL);
+      if (!now.extension) urls.push(STORE_URL);
+    }
+    if (url) urls.push(url);
+    else if (!urls.length) urls.push('https://claude.ai/');
     return {
-      name: profile.name, dir, firstRun: firstRun && !(only && url), host: liveHost(),
+      name: profile.name, dir, ...now, host: liveHost(),
       manifest: path.join(dir, 'NativeMessagingHosts', `${HOST_NAME}.json`),
       argv: [chromeBinary(), `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
         '--new-window', ...urls],
@@ -111,9 +167,7 @@ export function openAccountChrome(io = {}) {
    * node:sqlite), so a caller only refuses on a definite false.
    */
   function signedIn(name) {
-    const profile = store.readProfile(name);
-    if (!profile) throw new Error(`no saved account named ${name}`);
-    const db = path.join(chromeProfilesDir(io), profile.name, 'Default', 'Cookies');
+    const db = path.join(profileDir(resolve(name).name), 'Default', 'Cookies');
     if (!fs.existsSync(db)) return false;
     let sqlite;
     try {
@@ -144,5 +198,5 @@ export function openAccountChrome(io = {}) {
     }
   }
 
-  return {plan, prepare, launch, signedIn};
+  return {resolve, profileDir, plan, prepare, launch, signedIn, state, hasExtension, running, liveHost};
 }

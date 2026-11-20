@@ -52,9 +52,9 @@ import {pidAlive} from './procs.js';
 
 export const EXEC_PREFIX = 'claude-exec-';
 /** The Claude-in-Chrome native-messaging host manifest Claude Code writes. */
-const NATIVE_HOST = 'com.anthropic.claude_code_browser_extension.json';
+export const NATIVE_HOST = 'com.anthropic.claude_code_browser_extension.json';
 /** Every Chromium-family browser config dir whose NativeMessagingHosts/ it may write. */
-const BROWSER_DIRS = {
+export const BROWSER_DIRS = {
   linux: ['.config/google-chrome', '.config/google-chrome-beta', '.config/chromium',
     '.config/BraveSoftware/Brave-Browser', '.config/microsoft-edge'],
   darwin: ['Library/Application Support/Google/Chrome', 'Library/Application Support/Chromium',
@@ -284,9 +284,11 @@ export function openAccountExec(io = {}) {
 
   /**
    * Run `argv` as saved login `name`. Resolves to the child's exit code.
-   * @param {{stdio?: any}} [opts]
+   * `onSpawn(child)` sees the child as soon as it starts (its pipes, when
+   * `stdio` asked for them); `cwd` is the child's working dir.
+   * @param {{stdio?: any, cwd?: string, onSpawn?: (child: any) => void}} [opts]
    */
-  async function exec(name, argv, {stdio = 'inherit'} = {}) {
+  async function exec(name, argv, {stdio = 'inherit', cwd, onSpawn} = {}) {
     if (!argv.length) throw new Error('exec needs a command after --');
     const profile = store.readProfile(name);
     if (!profile) throw new Error(`no saved account named ${name}`);
@@ -298,7 +300,8 @@ export function openAccountExec(io = {}) {
     const configDir = prepare(store.readProfile(profile.name));
     try {
       return await new Promise((resolve, reject) => {
-        const child = spawn(argv[0], argv.slice(1), {stdio, env: childEnv(env, configDir)});
+        const child = spawn(argv[0], argv.slice(1), {stdio, env: childEnv(env, configDir), ...(cwd ? {cwd} : {})});
+        onSpawn?.(child);
         const forward = (sig) => () => child.kill(sig);
         const handlers = {SIGINT: forward('SIGINT'), SIGTERM: forward('SIGTERM')};
         for (const [s, h] of Object.entries(handlers)) process.on(s, h);
