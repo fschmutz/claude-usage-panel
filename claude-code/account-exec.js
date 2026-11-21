@@ -8,11 +8,17 @@
 // The rules, each pinned by tests/account-exec.test.js:
 // - The live login is refused: Claude Code holds its single-use refresh token,
 //   and a second holder refreshing it would log the live session out.
-// - A stale stored token is refreshed first, under the store's refresh lock
-//   (accessTokenFor), so the child starts with a token that lasts.
+// - A stored token with less than EXEC_MIN_TTL_MS left is refreshed first,
+//   under the store's refresh lock, so the child starts with a token that
+//   outlives the run: a panel poll that refreshes NAME's stored copy while the
+//   child holds the same refresh token spends it under the child.
 // - Claude Code rotates tokens as it runs: after the child exits, a rotated
 //   login for the same account is written back into the profile, or the
-//   profile would keep a dead refresh token.
+//   profile would keep a dead refresh token. ONLY a rotated one: the dir's
+//   seed (`.exec-seed`, a hash of the tokens copied in) tells "the child
+//   rotated" from "the store moved on meanwhile", and a copy the child never
+//   rotated is never written over a newer profile (its refresh token may be
+//   spent).
 // - The dir is `<scratch>/claude-exec-<pid>-XXXXXX`, mode 0700, removed when
 //   the child exits. One left by a run that died (its pid is gone) is synced
 //   back and removed by the next exec, so a crash never strands the only live
@@ -51,6 +57,10 @@ import {readJSON} from './private-fs.js';
 import {pidAlive} from './procs.js';
 
 export const EXEC_PREFIX = 'claude-exec-';
+/** The least token lifetime a run starts with (1 h). */
+const EXEC_MIN_TTL_MS = 60 * 60_000;
+/** Hash of the tokens a dir was seeded with: what "not rotated" means. */
+const SEED_FILE = '.exec-seed';
 /** The Claude-in-Chrome native-messaging host manifest Claude Code writes. */
 export const NATIVE_HOST = 'com.anthropic.claude_code_browser_extension.json';
 /** Every Chromium-family browser config dir whose NativeMessagingHosts/ it may write. */
@@ -88,6 +98,7 @@ export function openAccountExec(io = {}) {
   const storeIn = (configDir) => openStore({...io, env: childEnv(env, configDir)});
 
   const sha256Hex = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+  const seedOf = (oauth) => sha256Hex(`${oauth?.accessToken ?? ''}\n${oauth?.refreshToken ?? ''}`);
 
   /** Keychain item of `configDir`, guarded: never one the live login uses. */
   function dirService(configDir) {
@@ -110,6 +121,16 @@ export function openAccountExec(io = {}) {
     const was = profile.credentials?.claudeAiOauth ?? {};
     const now = creds.claudeAiOauth;
     if (now.refreshToken === was.refreshToken && now.accessToken === was.accessToken) return false;
+    // The child never rotated what it was given: the profile moved on without
+    // it, and the dir's copy may hold a spent refresh token. (A dir from
+    // before the seed existed has none and is written back as it always was.)
+    let seed = null;
+    try {
+      seed = fs.readFileSync(path.join(configDir, SEED_FILE), 'utf8').trim();
+    } catch {
+      // no seed: an older dir
+    }
+    if (seed && seed === seedOf(now)) return false;
     store.writeProfile({...profile, credentials: creds, savedAt: new Date(store.now()).toISOString()});
     return true;
   }
@@ -251,6 +272,7 @@ export function openAccountExec(io = {}) {
     const configDir = fs.mkdtempSync(path.join(root(), `${EXEC_PREFIX}${io.pid ?? process.pid}-`));
     fs.chmodSync(configDir, 0o700);
     fs.writeFileSync(path.join(configDir, '.exec-profile'), `${profile.name}\n`, {mode: 0o600});
+    fs.writeFileSync(path.join(configDir, SEED_FILE), `${seedOf(profile.credentials?.claudeAiOauth)}\n`, {mode: 0o600});
     recordHosts(configDir);
     const inside = storeIn(configDir);
     // On macOS the Keychain item goes first (the file does not exist yet, so
@@ -297,6 +319,11 @@ export function openAccountExec(io = {}) {
     }
     sweep();
     await store.accessTokenFor(profile.name); // refreshes a stale token, under the lock
+    const ready = store.readProfile(profile.name);
+    const expiresAt = ready.credentials?.claudeAiOauth?.expiresAt;
+    if (Number.isFinite(expiresAt) && expiresAt - store.now() < EXEC_MIN_TTL_MS) {
+      await store.refreshProfile(ready); // under the lock; the child gets a token that lasts
+    }
     const configDir = prepare(store.readProfile(profile.name));
     try {
       return await new Promise((resolve, reject) => {

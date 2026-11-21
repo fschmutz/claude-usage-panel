@@ -52,6 +52,13 @@ semantic versioning.
   server had rotated the refresh token, the answer was dropped, and the profile
   kept the spent one ("token refresh rejected (HTTP 400)"). The exchange now
   runs on a session of its own that nothing aborts, and its tokens are stored.
+- `claudectl account exec NAME` no longer writes a copy it never rotated over
+  NAME's profile: when a panel refreshed NAME during the run, the dir's
+  spent refresh token went back into the store. The dir now records a hash of
+  the tokens it was seeded with (`.exec-seed`) and only a login the command
+  rotated is written back. A run also starts with at least an hour of token
+  left (refreshed first, under the lock), so a panel has no reason to refresh
+  NAME under a running command.
 
 ## [3.12.3] - 2026-11-19
 

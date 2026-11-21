@@ -113,6 +113,12 @@ running on, not even when the account being polled *is* the live login.
 rotates, `~/.claude/.credentials.json` and `~/.claude.json` do not, and a
 refused refresh leaves every one of them as it was.
 
+A refresh, once sent, always lands in the profile. On GNOME the exchange runs
+on an HTTP session of its own: the panel's shared one is aborted on every
+screen lock, and an exchange cut off after the server rotated the token used
+to leave the profile with a spent refresh token (the next refresh: HTTP 400).
+Since the server keeps no second copy, a dropped answer is a dead login.
+
 ## What a row says when something is wrong
 
 A stored login's own dates are not the whole story: a token whose `expiresAt`
@@ -208,8 +214,11 @@ hooks when `./install.sh pause` is in (so the session can be paused and gets
 [`claudectl session send`](Pause.md#messages-between-sessions) messages) - no
 other settings, hooks or MCP servers - and `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
 `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_SECURESTORAGE_CONFIG_DIR` are dropped
-from its environment. A stale token is refreshed first; a token the command
-rotates is written back to PERSO, never to the current login; the dir (and on
+from its environment. A token with less than an hour left is refreshed
+first, so a panel never needs to refresh PERSO under a running command; a token
+the command rotates is written back to PERSO, never to the current login, and
+a copy it never rotated is never written back (the dir's `.exec-seed` tells the
+two apart: the store may have moved on, and that copy's refresh token be spent); the dir (and on
 macOS its own Keychain item) is removed when the command exits, and one left
 by a run that died is synced back and removed by the next `exec`. The current
 login itself is refused: Claude Code holds its single-use refresh token.

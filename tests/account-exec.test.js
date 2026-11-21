@@ -106,6 +106,27 @@ test('exec: a stale token is refreshed before the command starts', async () => {
   assert.equal(t.s.readProfile('PERSO').credentials.claudeAiOauth.refreshToken, 'rt-fresh');
 });
 
+test('exec: a token with under an hour left is refreshed first, so it outlives the run', async () => {
+  const t = setup({perso: creds('perso', {expiresAt: NOW + 30 * 60_000})});
+  await t.run();
+  assert.equal(t.calls.length, 1, 'one refresh POST, before the command');
+  assert.equal(t.seen().token, 'at-fresh');
+  assert.equal(t.s.readProfile('PERSO').credentials.claudeAiOauth.refreshToken, 'rt-fresh');
+});
+
+test('exec: a copy the command never rotated is not written over a profile that moved on', async () => {
+  // A panel refreshed NAME's stored copy while the command ran: the dir still
+  // holds the tokens it was seeded with, whose refresh token is now spent.
+  const t = setup();
+  const x = openAccountExec(t.io);
+  await x.exec('PERSO', [process.execPath, t.childFile], {stdio: 'ignore', onSpawn: () => {
+    const p = t.s.readProfile('PERSO');
+    t.s.writeProfile({...p, credentials: creds('perso', {accessToken: 'at-moved', refreshToken: 'rt-moved'})});
+  }});
+  assert.equal(t.s.readProfile('PERSO').credentials.claudeAiOauth.refreshToken, 'rt-moved');
+  assert.deepEqual(t.left(), []);
+});
+
 test('exec: the live login, an unknown name and a missing command are refused', async () => {
   const t = setup();
   const before = t.snapshot();
