@@ -49,6 +49,9 @@ semantic versioning.
 
 ### Fixed
 
+- `claudectl account chrome` refuses a downloaded or copied extension whose manifest version is not a
+  plain dotted number (it names the folder laid under the profile) and bounds what one zip entry may
+  inflate to (64 MiB), so a hostile archive can neither leave the profile nor exhaust memory.
 - The pause protocol no longer points a workflow's resume call at the script
   copy beside the checkpoint, which the Workflow tool always refuses (it sits
   outside the dirs the session can read). The checkpoint records the
