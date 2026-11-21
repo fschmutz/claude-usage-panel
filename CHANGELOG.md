@@ -45,6 +45,14 @@ semantic versioning.
   reason. A `SingletonLock`
   left by a crashed Chrome no longer counts as running.
 
+### Fixed
+
+- GNOME: locking the screen no longer kills a saved login. destroy() (every
+  lock) aborted the panel's HTTP session with a token refresh still on it; the
+  server had rotated the refresh token, the answer was dropped, and the profile
+  kept the spent one ("token refresh rejected (HTTP 400)"). The exchange now
+  runs on a session of its own that nothing aborts, and its tokens are stored.
+
 ## [3.12.3] - 2026-11-19
 
 ### Fixed

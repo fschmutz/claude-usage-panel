@@ -121,14 +121,25 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
     // `usage(token)` answers the usage GET per bearer token; `token(rt)` the
     // refresh POST per refresh token (after `tokenDelayMs`, so two refreshes
     // can overlap). Every refresh token sent is recorded in `exchanges`.
+    // A session's abort() fails every request still in flight on it, as Soup
+    // does: the panel's shared session is aborted by destroy(); the session
+    // the store makes for each token exchange (Soup.Session) is never.
     const answer = usage ?? (() => ({status: 200, body: {limits: []}}));
     const exchanges = [];
-    const session = {
+    const fakeSession = () => ({
+        aborted: false,
+        abort() { this.aborted = true; },
         send_and_read_async(message, _priority, _cancellable, cb) {
             const reply = ({status, body}) => {
                 message._status = status;
-                cb({send_and_read_finish: () => ({get_data: () => encode.encode(JSON.stringify(body))})},
-                    null);
+                const aborted = this.aborted;
+                cb({
+                    send_and_read_finish: () => {
+                        if (aborted)
+                            throw new Error('Operation was cancelled');
+                        return {get_data: () => encode.encode(JSON.stringify(body))};
+                    },
+                }, null);
             };
             if (message.method === 'POST') {
                 const rt = JSON.parse(message.body).refresh_token;
@@ -139,6 +150,12 @@ async function controller(t, {enabled = true, files = {}, usage = null, token = 
             }
             reply(answer((message.headers.authorization ?? '').replace('Bearer ', '')));
         },
+    });
+    const session = fakeSession();
+    stub.overrides['gi://Soup'].Session = class {
+        constructor() {
+            return fakeSession();
+        }
     };
 
     const {AccountsController} = await import('../claude-usage-panel@fschmutz.github.io/lib/accountsSection.js');
@@ -334,7 +351,7 @@ test('the store never refreshes the live login, even when its credentials cannot
         account: {accountUuid: 'u-pro', emailAddress: 'pro@example.com'},
         credentials: {claudeAiOauth: {accessToken: 'at-PRO', refreshToken: 'rt-PRO', expiresAt: 1}},
     });
-    const {exchanges, session, files} = await controller(t, {
+    const {exchanges, files} = await controller(t, {
         files: {
             [`${ACCOUNTS}/PRO.json`]: stale,
             [`${HOME}/.claude.json`]: JSON.stringify({oauthAccount: {accountUuid: 'u-pro'}}),
@@ -343,15 +360,38 @@ test('the store never refreshes the live login, even when its credentials cannot
     });
     const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
     assert.equal(await store.liveAccountName(), 'PRO');
-    await assert.rejects(store.accessTokenFor(session, 'PRO'), {code: 'no_token'});
-    await assert.rejects(store.switchTo(session, 'PRO'), {code: 'no_token'});
+    await assert.rejects(store.accessTokenFor('PRO'), {code: 'no_token'});
+    await assert.rejects(store.switchTo('PRO'), {code: 'no_token'});
     assert.deepEqual(exchanges, [], 'the refresh token Claude Code holds was not spent');
     assert.match(files[`${ACCOUNTS}/PRO.json`], /rt-PRO/);
 });
 
+test('a token exchange in flight when the panel is destroyed still stores the rotated tokens', async t => {
+    // 2026-11-21: destroy() (every screen lock) aborted the panel's session
+    // with a refresh POST on it. The server had already rotated the token;
+    // the store kept the spent one and the saved login died.
+    const {exchanges, session, files} = await controller(t, {
+        files: {
+            [`${ACCOUNTS}/PERSO.json`]: JSON.stringify({
+                version: 1, name: 'PERSO', savedAt: null, account: {accountUuid: 'u-perso'},
+                credentials: {claudeAiOauth: {accessToken: 'at-PERSO', refreshToken: 'rt-PERSO', expiresAt: 1}},
+            }),
+        },
+        tokenDelayMs: 20,
+        token: () => ({status: 200, body: {access_token: 'at-new', refresh_token: 'rt-new', expires_in: 3600}}),
+    });
+    const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
+    const pending = store.accessTokenFor('PERSO');
+    await new Promise(resolve => setTimeout(resolve, 5));
+    assert.deepEqual(exchanges, ['rt-PERSO'], 'the exchange is in flight');
+    session.abort(); // what destroy() does
+    assert.equal((await pending).token, 'at-new');
+    assert.match(files[`${ACCOUNTS}/PERSO.json`], /rt-new/);
+});
+
 test('concurrent refreshes of one profile spend its refresh token once', async t => {
     const spent = new Set();
-    const {exchanges, session, files} = await controller(t, {
+    const {exchanges, files} = await controller(t, {
         files: {
             [`${ACCOUNTS}/PERSO.json`]: JSON.stringify({
                 version: 1, name: 'PERSO', savedAt: null, account: {accountUuid: 'u-perso'},
@@ -367,7 +407,7 @@ test('concurrent refreshes of one profile spend its refresh token once', async t
         },
     });
     const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
-    const got = await Promise.all([1, 2, 3].map(() => store.accessTokenFor(session, 'PERSO')));
+    const got = await Promise.all([1, 2, 3].map(() => store.accessTokenFor('PERSO')));
     assert.deepEqual(got.map(g => g.token), ['at-new', 'at-new', 'at-new']);
     assert.deepEqual(exchanges, ['rt-PERSO']);
     assert.equal(files[`${ACCOUNTS}/.refresh-PERSO.lock`], undefined, 'the lock is released');
@@ -380,7 +420,7 @@ test('two waiters that judged one lock stale: only one takes it over, the token 
     // holder's mtime and id, answered once each.
     const early = {query: false, read: false};
     const crashedAt = Date.now() - 31_000;
-    const {exchanges, session, files} = await controller(t, {
+    const {exchanges, files} = await controller(t, {
         files: {
             [`${ACCOUNTS}/PERSO.json`]: JSON.stringify({
                 version: 1, name: 'PERSO', savedAt: null, account: {accountUuid: 'u-perso'},
@@ -411,13 +451,13 @@ test('two waiters that judged one lock stale: only one takes it over, the token 
     });
     const store = await import('../claude-usage-panel@fschmutz.github.io/lib/accounts.js');
     // A takes the stale lock over and holds it through its exchange.
-    const first = store.accessTokenFor(session, 'PERSO');
+    const first = store.accessTokenFor('PERSO');
     while (exchanges.length === 0)
         await new Promise(resolve => setTimeout(resolve, 0));
     assert.notEqual(files[lock], 'crashed', 'A holds its own lock');
     early.query = true;
     early.read = true;
-    const second = store.accessTokenFor(session, 'PERSO');
+    const second = store.accessTokenFor('PERSO');
     const got = await Promise.all([first, second]);
     assert.deepEqual(early, {query: false, read: false}, 'B judged the stale lock');
     assert.deepEqual(got.map(g => g.token), ['at-new', 'at-new']);

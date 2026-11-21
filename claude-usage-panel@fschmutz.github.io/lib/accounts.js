@@ -14,6 +14,7 @@
 // the live login is Claude Code's to refresh.
 
 import GLib from 'gi://GLib';
+import Soup from 'gi://Soup';
 
 import {readLiveAccount, readLiveCredentials} from './claudeFiles.js';
 import {fetchUsage} from './claudeUsage.js';
@@ -51,17 +52,24 @@ async function readConfig() {
 }
 
 /**
- * The port the shared sequences run on, bound to one Soup session (the token
- * exchange is the one step that needs it). Writes to Claude Code's two files
+ * The port the shared sequences run on. Writes to Claude Code's two files
  * go through GIO's replace, which writes through a symlink: a ~/.claude.json
  * linked from a dotfiles repo stays a link. Exported with the store dir for
  * the test that records the steps of both JS ports.
  */
-export function storePort(session = null) {
-    return {dir: accountsDir(), port: portFor(session)};
+export function storePort() {
+    return {dir: accountsDir(), port: portFor()};
 }
 
-function portFor(session) {
+// The token exchange runs on a Soup session of its own, made for that one POST
+// and held by nothing else. The panel aborts its shared session in destroy(),
+// which runs on every screen lock: an exchange cut off after the server has
+// rotated the refresh token leaves the store holding the spent one, and the
+// saved login is dead (seen 2026-11-21). Once sent, the exchange finishes and
+// its tokens are written, disable() or not.
+const exchangeSession = () => new Soup.Session({timeout: 30});
+
+function portFor() {
     return {
         readJSON: readJSONAsync,
         exists: existsAsync,
@@ -96,7 +104,7 @@ function portFor(session) {
         prepareCredentials: credentials => JSON.stringify(credentials),
         writeCredentials: text => writePrivate(credentialsPath(), text),
         postToken: async body => {
-            const {status, bytes} = await send(session, jsonMessage('POST', OAUTH_TOKEN_ENDPOINT, body));
+            const {status, bytes} = await send(exchangeSession(), jsonMessage('POST', OAUTH_TOKEN_ENDPOINT, body));
             let json = null;
             try {
                 json = parseBody(bytes);
@@ -112,8 +120,8 @@ function portFor(session) {
 }
 
 /** Run one shared sequence: `pick(core)` names it. */
-function store(pick, session = null) {
-    const port = portFor(session);
+function store(pick) {
+    const port = portFor();
     return runAsync(port, pick(openStoreCore(port, {dir: accountsDir()})));
 }
 
@@ -150,10 +158,10 @@ export const renameProfile = (from, to) => store(c => c.renameProfile(from, to))
 export const saveCurrent = (name, opts) => store(c => c.saveCurrent(name, opts));
 
 /** A usable access token for a saved account; `snap` saves the re-reads. */
-export const accessTokenFor = (session, name, snap = null) => store(c => c.accessTokenFor(name, snap), session);
+export const accessTokenFor = (name, snap = null) => store(c => c.accessTokenFor(name, snap));
 
 /** Make `name` the live login: sync back (or park), refresh, then install. */
-export const switchTo = (session, name) => store(c => c.switchTo(name), session);
+export const switchTo = name => store(c => c.switchTo(name));
 
 /** When the last switch happened (by any client), or null. */
 export const readLastSwitchMs = () => store(c => c.readLastSwitchMs());
@@ -169,7 +177,7 @@ export const readLastSwitchMs = () => store(c => c.readLastSwitchMs());
 export async function usageFor(session, name, snap = null) {
     let token, source;
     try {
-        ({token, source} = await accessTokenFor(session, name, snap));
+        ({token, source} = await accessTokenFor(name, snap));
     } catch (e) {
         // The store's own codes are what accountHealth() tells a broken login
         // from a merely unreachable one with.

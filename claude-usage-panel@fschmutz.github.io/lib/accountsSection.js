@@ -527,7 +527,7 @@ export class AccountsController {
         this._switching = true;
         const where = control ?? `switch:${name}`;
         try {
-            const r = await switchTo(this._session, name);
+            const r = await switchTo(name);
             if (this._isDestroyed())
                 return;
             if (!r.changed) {
