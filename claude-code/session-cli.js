@@ -10,6 +10,7 @@ import {cleanPauseText} from '../claude-usage-panel@fschmutz.github.io/lib/pure/
 import {AUTO_SNAPSHOT_PREFIX} from '../claude-usage-panel@fschmutz.github.io/lib/pure/snapshots.js';
 import {AUTO_KEEP, describeLaunch, matchSession, openTabs, resumePrompt, stampLabel} from './tabs.js';
 import {nowOf, tabsDir} from './paths.js';
+import {openStore} from './accounts.js';
 import {openPause} from './pause.js';
 import {MAIL_COMMANDS, MAIL_DETAILS, MAIL_HELP, runMail} from './mail-cli.js';
 import {PAUSE_COMMANDS, PAUSE_DETAILS, PAUSE_HELP, runPause} from './pause-cli.js';
@@ -95,7 +96,9 @@ everything.`,
 \`auto-\` snapshot only when the set of running sessions changed since the last
 one, and keeps the newest ${AUTO_KEEP} autos: a count, not an age, so they cover a day
 or several. Labelled snapshots are never pruned. It exits 1 when a running
-claude cannot be identified, so the schedule goes red instead of skipping it.`,
+claude cannot be identified, so the schedule goes red instead of skipping it.
+Each run also writes the current login back into its saved account profile
+(\`claudectl account\`), so tokens Claude Code rotated are never lost.`,
   close: `Saves the sessions it closes as a snapshot first (\`auto-closed-<time>\`),
 so \`claudectl session open\` with that label brings them back. Then, per
 session: SIGTERM to claude, up to 10 s to exit, then SIGHUP to the shells
@@ -365,6 +368,16 @@ export async function main(argv, io = {}) {
       return 0;
     }
     case 'autosave': {
+      // The scheduled run also writes the live login back into its saved
+      // profile (accounts.js syncBack: no network, never a refresh), so the
+      // tokens Claude Code rotated are kept even with no panel polling (a
+      // locked screen, no GNOME) when something replaces the login outside
+      // claudectl. Best effort: a store it cannot read never fails autosave.
+      try {
+        openStore(io).syncBack();
+      } catch {
+        // the snapshot below is this command's job
+      }
       const keep = opts.keep !== undefined ? wholeNumber(opts.keep, 1) : AUTO_KEEP;
       const r = tabs.autosave({keep, force: Boolean(opts.force)});
       out(`${r.saved ? `saved ${r.saved.label}` : 'no new snapshot'} (${r.reason})` +

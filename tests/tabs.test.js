@@ -10,6 +10,7 @@ import path from 'node:path';
 import {
     isValidLabel, matchSession, openTabs, resumePrompt, sameSessions, stampLabel,
 } from '../claude-code/tabs.js';
+import {openStore} from '../claude-code/accounts.js';
 import {DETAILS, main} from '../claude-code/session-cli.js';
 import {tabsDir, transcriptPath} from '../claude-code/paths.js';
 import {flagValue} from '../claude-code/registry.js';
@@ -340,6 +341,21 @@ test('autosave FAILS on a terminal claude it cannot identify, and says which', a
     assert.match(r.text, /^saved auto-/m);
     assert.match(r.text, /^NOT SAVED: claude pid 903 in .* - no session id/m);
     assert.match((await cli(io, 'list')).text, /\?\s+claude pid 903 .* cannot be saved/);
+});
+
+test('autosave writes the live login back into its saved profile, so a rotated token is kept', async (t) => {
+    // Claude Code rotated the live tokens since PRO was saved; nothing else
+    // polls (screen locked, no panel). Replacing the login outside claudectl
+    // now would lose the only live copy, unless autosave already kept it.
+    const io = world(t, [A]);
+    const oauth = (tag) => ({claudeAiOauth: {accessToken: `at-${tag}`, refreshToken: `rt-${tag}`, expiresAt: 4e12}});
+    const acct = {accountUuid: 'u-pro', emailAddress: 'pro@example.com'};
+    fs.writeFileSync(path.join(io.home, '.claude', '.credentials.json'), JSON.stringify(oauth('rotated')));
+    fs.writeFileSync(path.join(io.home, '.claude.json'), JSON.stringify({oauthAccount: acct}));
+    const store = openStore(io);
+    store.writeProfile({version: 1, name: 'PRO', account: acct, credentials: oauth('saved')});
+    assert.equal((await cli(io, 'autosave')).code, 0);
+    assert.equal(store.readProfile('PRO').credentials.claudeAiOauth.refreshToken, 'rt-rotated');
 });
 
 test('launch runs the resolved steps: terminals detached, tmux in order', (t) => {

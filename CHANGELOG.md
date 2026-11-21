@@ -28,6 +28,10 @@ semantic versioning.
 
 ### Changed
 
+- The scheduled `claudectl session autosave` (every 30 min) also writes the
+  current login back into its saved profile, with no network and no refresh,
+  so the tokens Claude Code rotated are kept when no panel polls (locked
+  screen, no GNOME) and the login is then replaced outside claudectl.
 - `claudectl account chrome` takes the current login when NAME is left out,
   and prints the profile's real state (claude.ai signed in or not, extension
   installed or missing) instead of a fixed "first launch" line. The sign-in tab
