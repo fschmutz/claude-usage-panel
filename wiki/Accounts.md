@@ -256,7 +256,8 @@ so the Web Store tab opens there instead, as it does after a failed install.
 The extension keeps its own claude.ai sign-in (an OAuth login in its
 `chrome.storage.local`), separate from the website's session, and Claude Code
 pairs only with a signed-in extension: a fresh install is NOT CONNECTED until
-then. While its storage holds no `accessToken` key (names only, never a value),
+then. While its storage holds none of the keys a signed-in extension writes
+(`tokenOrg`, `tokenScope`; names only, never a value),
 each launch opens the extension's own page
 (`chrome-extension://<id>/sidepanel.html`): click Sign in, then Authorize on
 claude.ai, once. `--check` names it as the reason.

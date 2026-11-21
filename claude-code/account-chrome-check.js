@@ -180,7 +180,7 @@ export function openChromeCheck(io = {}) {
     if (own.extension && own.extensionSignedIn === false) {
       out.push(`${name}'s own Chrome: the extension itself is not signed in (\`claudectl account chrome ${name}\` opens its page: Sign in, Authorize)`);
     }
-    if (!own.running) out.push(`${name}'s own Chrome: not running`);
+    if (!own.running) out.push(`${name}'s own Chrome: not running (\`claudectl account chrome ${name}\` starts it; it does not come back by itself after a reboot)`);
     if (!own.manifest) out.push(`${name}'s own Chrome: no native-host manifest yet (launch it once)`);
     if (main) {
       if (!main.host) out.push(`main Chrome: no native-host manifest at ${main.manifest}`);

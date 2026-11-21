@@ -40,6 +40,11 @@ export const EXTENSION_ID = 'fcoeoabgfenejglbffodgkkbkcdhcgfn';
 const HOST_NAME = 'com.anthropic.claude_code_browser_extension';
 export const STORE_URL = `https://chromewebstore.google.com/detail/claude/${EXTENSION_ID}`;
 export const LOGIN_URL = 'https://claude.ai/login';
+/** Storage keys the extension writes only once its OAuth sign-in landed
+ *  (1.0.107, measured 2026-11-21 on a signed-in, connected profile: tokenOrg
+ *  and tokenScope, never an "accessToken" key name in clear). */
+const SIGNED_IN_KEYS = ['tokenOrg', 'tokenScope', 'accessToken'];
+
 /** The extension's own page, where its Sign in button is. */
 export const EXTENSION_PAGE = `chrome-extension://${EXTENSION_ID}/sidepanel.html`;
 
@@ -133,7 +138,7 @@ export function openAccountChrome(io = {}) {
 
   /**
    * Whether the extension itself is signed in: it keeps its own claude.ai
-   * OAuth login (`accessToken` in its chrome.storage.local, a LevelDB under
+   * OAuth login in its chrome.storage.local (a LevelDB under
    * Local Extension Settings/<id>), separate from the claude.ai web session,
    * and without it Claude Code never pairs with it. Key names only, never a
    * value. A compacted table (.ldb) may hold the key compressed, so a miss
@@ -149,7 +154,8 @@ export function openAccountChrome(io = {}) {
     }
     for (const f of files) {
       try {
-        if (fs.readFileSync(path.join(db, f)).includes('accessToken')) return true;
+        const buf = fs.readFileSync(path.join(db, f));
+        if (SIGNED_IN_KEYS.some((k) => buf.includes(k))) return true;
       } catch {
         // a file Chrome is rewriting: the others decide
       }

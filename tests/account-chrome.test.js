@@ -134,8 +134,8 @@ test('chrome: the extension\'s own sign-in is read from its storage key names; s
   assert.ok(x.plan('PERSO').argv.includes(EXTENSION_PAGE));
   fs.writeFileSync(path.join(db, '000004.ldb'), 'compressed');
   assert.equal(x.state('PERSO').extensionSignedIn, null, 'a compacted table cannot be read by name');
-  fs.writeFileSync(path.join(db, '000005.log'), 'accessToken');
-  assert.equal(x.state('PERSO').extensionSignedIn, true);
+  fs.writeFileSync(path.join(db, '000005.log'), 'accountUuid tokenOrg tokenScope mcpConnected');
+  assert.equal(x.state('PERSO').extensionSignedIn, true, 'the keys a signed-in 1.0.107 writes');
   assert.ok(!x.plan('PERSO').argv.includes(EXTENSION_PAGE));
 });
 
