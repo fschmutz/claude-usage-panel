@@ -5,8 +5,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
+import fs from 'node:fs';
+import os from 'node:os';
+import zlib from 'node:zlib';
+import path from 'node:path';
 
-import {compareVersions, crxZip, manifestGrant, settingsEntry, unzip} from '../claude-code/chrome-extension.js';
+import {checkedVersion, compareVersions, crxZip, manifestGrant, openChromeExtension, settingsEntry, unzip} from '../claude-code/chrome-extension.js';
 import {crx} from './accounts-world.js';
 
 test('crx: the zip after the header, every file back; a non-CRX or CRX2 is refused', () => {
@@ -47,4 +51,35 @@ test('versions compare numerically', () => {
   assert.ok(compareVersions('1.0.107', '1.0.99') > 0);
   assert.ok(compareVersions('1.2', '1.2.0') === 0);
   assert.ok(compareVersions('0.9', '1') < 0);
+});
+
+test('a downloaded extension whose version is not a dotted number is refused before any file is laid', async () => {
+  assert.equal(checkedVersion('1.0.107'), '1.0.107');
+  for (const bad of ['../../escape', '1.0/../x', '', '1.0.x', 7, undefined]) assert.throws(() => checkedVersion(bad), /plain dotted number/, String(bad));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-ext-'));
+  const userDataDir = path.join(root, 'profile');
+  const body = crx({'manifest.json': JSON.stringify({version: '../../../escape'}), 'a.js': 'x'});
+  const ext = openChromeExtension({chromeVersion: '150.0.0.0', fetchImpl: async () => ({ok: true, arrayBuffer: async () => body})});
+  await assert.rejects(ext.install('abc', {userDataDir, mainDir: null, chromeBin: 'chrome'}), /plain dotted number/);
+  assert.equal(fs.existsSync(path.join(root, 'escape_0')), false);
+  assert.equal(fs.existsSync(path.join(userDataDir, 'Default', 'Preferences')), false);
+  fs.rmSync(root, {recursive: true, force: true});
+});
+
+test('a zip entry that inflates past the per-file bound is refused', () => {
+  const name = Buffer.from('big.bin');
+  const packed = zlib.deflateRawSync(Buffer.alloc(70 * 1024 * 1024));
+  const lh = Buffer.alloc(30);
+  lh.writeUInt32LE(0x04034b50, 0);
+  lh.writeUInt16LE(name.length, 26);
+  const ch = Buffer.alloc(46);
+  ch.writeUInt32LE(0x02014b50, 0);
+  ch.writeUInt16LE(8, 10);
+  ch.writeUInt32LE(packed.length, 20);
+  ch.writeUInt16LE(name.length, 28);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(30 + name.length + packed.length, 16);
+  assert.throws(() => unzip(Buffer.concat([lh, name, packed, ch, name, end])), /larger than|maxOutputLength/i);
 });

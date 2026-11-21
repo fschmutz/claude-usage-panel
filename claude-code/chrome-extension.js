@@ -27,6 +27,16 @@ import {execFileSync} from 'node:child_process';
 
 import {writeAtomic} from './private-fs.js';
 
+/** Chrome's own extension version grammar: 1 to 4 dotted integers. The version names a folder, so nothing else may reach a path. */
+const VERSION_FORM = /^\d{1,9}(?:\.\d{1,9}){0,3}$/;
+/** What one file of a downloaded extension may inflate to: a bound against a zip bomb. */
+const MAX_FILE_BYTES = 64 * 1024 * 1024;
+
+export function checkedVersion(version) {
+  if (typeof version !== 'string' || !VERSION_FORM.test(version)) throw new Error(`the extension's version is not a plain dotted number: ${JSON.stringify(version)}`);
+  return version;
+}
+
 const CRX_URL = (id, prodversion) => 'https://clients2.google.com/service/update2/crx?response=redirect' +
   `&prodversion=${prodversion}&acceptformat=crx2,crx3&x=id%3D${id}%26uc`;
 
@@ -106,7 +116,7 @@ export function unzip(buf) {
     const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
     const raw = buf.subarray(start, start + size);
     if (method === 0) files.push({name: norm, data: raw});
-    else if (method === 8) files.push({name: norm, data: zlib.inflateRawSync(raw)});
+    else if (method === 8) files.push({name: norm, data: zlib.inflateRawSync(raw, {maxOutputLength: MAX_FILE_BYTES})});
     else throw new Error(`zip method ${method} is not supported (${name})`);
   }
   return files;
@@ -219,13 +229,13 @@ export function openChromeExtension(io = {}) {
     let version;
     let from;
     if (copy) {
-      layFiles(extDir, copy.version, {srcDir: copy.dir});
+      layFiles(extDir, checkedVersion(copy.version), {srcDir: copy.dir});
       ({version, from} = copy);
     } else {
       const files = await download(id, chromeBin);
       const m = files.find((f) => f.name === 'manifest.json');
       if (!m) throw new Error('the downloaded extension has no manifest.json');
-      version = JSON.parse(m.data.toString('utf8')).version;
+      version = checkedVersion(JSON.parse(m.data.toString('utf8')).version);
       layFiles(extDir, version, {files});
       from = 'Web Store download';
     }
