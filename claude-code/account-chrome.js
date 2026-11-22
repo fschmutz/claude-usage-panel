@@ -178,8 +178,11 @@ export function openAccountChrome(io = {}) {
    *  only when the extension is missing and cannot be installed, then `url`
    *  (default claude.ai when nothing else opens). `only`: open `url` alone,
    *  whatever is missing (account login). `storeTab`: force the Web Store
-   *  tab (a failed install). */
-  function plan(name, {url, only = false, storeTab = false} = {}) {
+   *  tab (a failed install). `devtools`: a DevTools port on loopback
+   *  (--remote-debugging-port=0, the port in <dir>/DevToolsActivePort), for
+   *  account login's Authorize click; a Chrome already running keeps the
+   *  flags it started with. */
+  function plan(name, {url, only = false, storeTab = false, devtools = false} = {}) {
     const profile = resolve(name);
     const dir = profileDir(profile.name);
     const now = state(profile.name);
@@ -196,8 +199,8 @@ export function openAccountChrome(io = {}) {
     return {
       name: profile.name, dir, ...now, install, host: liveHost(),
       manifest: path.join(dir, 'NativeMessagingHosts', `${HOST_NAME}.json`),
-      argv: [chromeBinary(), `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
-        '--new-window', ...urls],
+      argv: [chromeBinary(), `--user-data-dir=${dir}`, ...(devtools ? ['--remote-debugging-port=0'] : []),
+        '--no-first-run', '--no-default-browser-check', '--new-window', ...urls],
     };
   }
 

@@ -25,7 +25,7 @@ export const HELP = `claudectl account - named Claude Code accounts, switch with
                                               an isolated Chrome signed in to claude.ai as NAME
                                               (default: the current login); --check probes it
   claudectl account login NAME|--expired [--wait=S] [--dry-run] [--json]
-                                              a fresh sign-in for a dead saved login, one click
+                                              a fresh sign-in for a dead saved login, Authorize clicked for you
 
 Names: letters, digits, . _ - (e.g. PRO, PERSO), case-insensitive. Running
 Claude Code sessions keep their old login until restarted. Saved logins are
@@ -72,7 +72,8 @@ pairs only with a signed-in one: until it is, its page opens too (click Sign
 in, then Authorize). Then --url (default claude.ai). The extension's
 native-messaging manifest is laid in the profile on every launch, naming the
 live login's host, which Claude Code writes on its first /chrome. --only opens
---url alone, whatever is missing (what \`account login\` uses).
+--url alone, whatever is missing, and --devtools starts Chrome with a DevTools
+port on loopback (both what \`account login\` uses).
 --check opens nothing: it probes Claude-in-Chrome as NAME (\`claude -p
 --chrome\`, tabs_context_mcp, through \`account exec\` for a saved login that
 is not the current one) and prints CONNECTED, NOT CONNECTED with the reasons
@@ -84,9 +85,18 @@ Exit 0 only when CONNECTED.`,
   login: `A fresh sign-in for saved account NAME (or, with --expired, for every
 saved login whose token is gone or refused, the current one aside), the
 current login untouched. \`claude auth login\` runs in a throwaway config dir
-and opens its page in NAME's own Chrome (\`account chrome\`, signed in to
-claude.ai as NAME): click Authorize there and the login ends by itself, and
-is saved into NAME. A login that comes back as another account is not saved.
+and opens its page in NAME's own Chrome (\`account chrome --devtools\`,
+signed in to claude.ai as NAME), which it drives through a loopback DevTools
+port: focuses the window (Authorize stays disabled until it has focus),
+clicks Authorize, follows the redirect to the CLI's localhost callback (or
+hands it the code a code page shows, never printed), then closes that
+Chrome. A failure names its step (page not loaded, signed out, button
+missing, Authorize stayed disabled, click with no redirect, callback
+refused). Two steps stay a human's, said when they happen, the wait going
+on: the click when NAME's Chrome was already open without DevTools, and the
+hCaptcha challenge claude.ai may answer the click with (it does on a click
+made through DevTools). The login is saved into NAME. A login that comes
+back as another account is not saved.
 --wait=S gives up after S seconds (default ${DEFAULT_WAIT_S}). --dry-run says what would run.
 The current login itself is refused (run \`claude auth login\` directly).
 Ctrl-C stops the batch. --json prints one row per account: {name, ok, email,
@@ -231,7 +241,7 @@ export async function main(argv, io = {}) {
 /** `account login NAME | --expired [--wait=S] [--dry-run] [--json]`. */
 const signedInText = (v) => (v === true ? 'signed in' : v === false ? 'NOT signed in' : 'unknown');
 
-/** `account chrome [NAME] [--url=U] [--only] [--dry-run] [--check [--json]]`. */
+/** `account chrome [NAME] [--url=U] [--only] [--devtools] [--dry-run] [--check [--json]]`. */
 async function chromeCmd(argv, io, out) {
   const name = argv[0] && !argv[0].startsWith('--') ? argv[0] : undefined;
   const url = argv.find((a) => a.startsWith('--url='))?.slice('--url='.length);
@@ -258,7 +268,7 @@ async function chromeCmd(argv, io, out) {
     return r.connected ? 0 : 1;
   }
   const chrome = openAccountChrome(io);
-  const opts = {url, only: argv.includes('--only')};
+  const opts = {url, only: argv.includes('--only'), devtools: argv.includes('--devtools')};
   const dry = argv.includes('--dry-run');
   const p = dry ? chrome.plan(name, opts) : await chrome.launch(name, opts);
   out(`${dry ? 'would open' : 'opened'} Chrome for ${p.name}: ${p.dir}\n`);
@@ -310,7 +320,9 @@ async function login(argv, io, out) {
         continue;
       }
       const r = await l.login(name, {waitS, onWaiting: (p) => {
-        if (!json) out(`${p.name}: ${p.name}'s Chrome opens on the sign-in page - click Authorize (waiting ${waitS}s)\n`);
+        if (!json) out(`${p.name}: ${p.name}'s Chrome opens on the sign-in page, Authorize is clicked there (waiting ${waitS}s)\n`);
+      }, onManual: (p, why) => {
+        if (!json) out(`${p.name}: ${why}\n`);
       }});
       rows.push({...r, ok: true});
       if (!json) out(`${r.name}: signed in again (${r.email ?? 'unknown email'}), token ${r.tokenState}\n`);

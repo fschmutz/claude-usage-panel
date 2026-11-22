@@ -302,10 +302,29 @@ A saved login whose refresh token is gone (`expired`) or refused
 (`refresh-failed`) cannot be refreshed: only a new sign-in helps.
 `claudectl account login NAME` does it without touching the current login:
 `claude auth login --email <NAME's email>` runs in a throwaway config dir, and
-its browser step opens in NAME's own Chrome (`account chrome`, above), which is
-already signed in to claude.ai as NAME. Click Authorize there; the CLI's
-localhost callback ends the login by itself and the new credentials go into
-NAME's profile. No code is pasted. NAME's Chrome must hold a claude.ai
+its browser step opens in NAME's own Chrome (`account chrome --devtools`,
+above), which is already signed in to claude.ai as NAME. The command drives
+that page through a loopback DevTools port: it brings the window to the front,
+clicks Authorize, and follows the redirect to the CLI's localhost callback,
+which ends the login by itself; the new credentials go into NAME's profile and
+that Chrome is closed, every window of it (the DevTools port must not outlive
+the login). A Chrome of NAME that was already running is left alone. A code
+page instead of the redirect has its one-time code handed to the CLI's stdin,
+never printed. A failure names its step: page not loaded, signed out, button
+missing, Authorize stayed disabled, click with no redirect (with what the page
+says), callback refused.
+
+Why the window must have focus: claude.ai keeps Authorize disabled until its
+window has held focus for 700 ms, and disables it again on blur. A window a
+background process opens on GNOME Wayland gets no focus, so the button stays
+greyed and a first click only focuses the window (measured 2026-11-22; the
+CLI itself was alive, listening on 127.0.0.1, redirect_uri localhost).
+
+Two steps stay a human's, and the command says so and keeps waiting: the
+click when NAME's Chrome was already open without DevTools (click inside the
+window, then Authorize), and the hCaptcha challenge claude.ai answers a
+DevTools click with (measured 2026-11-22: every time, `navigator.webdriver`
+being true there). The challenge is never touched by the command. NAME's Chrome must hold a claude.ai
 session first (a live `sessionKey` cookie, read by name and date only from a
 copy of the profile's cookie store); signed out, the command stops at once and
 names the sign-in step instead of waiting. The page opens alone

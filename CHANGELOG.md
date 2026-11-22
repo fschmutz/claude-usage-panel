@@ -11,8 +11,16 @@ semantic versioning.
 - `claudectl account login NAME` (and `--expired` for every saved login
   whose token is gone or refused): a fresh sign-in for a dead saved login
   without touching the current one. `claude auth login` runs in a throwaway
-  config dir with its browser step in NAME's own Chrome (`account chrome`);
-  one Authorize click there and the login lands in NAME's profile. A sign-in
+  config dir with its browser step in NAME's own Chrome (`account chrome
+  --devtools`), which it drives through a loopback DevTools port: window to
+  the front (claude.ai keeps Authorize disabled until its window has focus,
+  which a background-opened window on GNOME Wayland never gets: why a human
+  click did nothing), the Authorize click, the redirect to the CLI's
+  localhost callback (or a code page's code to the CLI's stdin, never
+  printed), then that Chrome closed; a failure names its step. The hCaptcha
+  challenge claude.ai answers a DevTools click with, and the click in a
+  Chrome already open without DevTools, are handed to the human while the
+  wait goes on; the login lands in NAME's profile. A sign-in
   as another account is not saved, a profile signed out of claude.ai is
   refused up front with the sign-in step, and the page opens alone
   (`account chrome --only`); `--wait=S` and `--dry-run`. With claudectl
