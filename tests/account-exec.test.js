@@ -82,6 +82,12 @@ test('exec: the command runs as NAME; the live login is untouched and the dir is
   assert.equal(t.s.readProfile('PERSO').credentials.claudeAiOauth.refreshToken, 'rt-perso', 'nothing rotated, nothing written');
 });
 
+test('exec: the launcher\'s Volta recursion flag does not reach the command (its hooks need node)', async () => {
+  const t = setup({env: {_VOLTA_TOOL_RECURSION: '1'}});
+  assert.equal(await t.run({}, []), 0);
+  assert.ok(!t.seen().env.includes('_VOLTA_TOOL_RECURSION'));
+});
+
 test('exec: a token the command rotates is written back to NAME, never to the live login', async () => {
   const t = setup();
   const before = t.snapshot();
