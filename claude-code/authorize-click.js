@@ -66,15 +66,26 @@ function parse(href) {
   }
 }
 
+/** claude.ai and claude.com (platform.claude.com among them), over https:
+ *  the only origins a consent or a code page is ever read on. The state
+ *  alone binds the page to our request, not to Anthropic: a page anywhere
+ *  that carried it in its URL and an Authorize button would be clicked. */
+function anthropicPage(u) {
+  return u.protocol === 'https:' && ['claude.ai', 'claude.com'].some((h) => u.hostname === h
+    || u.hostname.endsWith(`.${h}`));
+}
+
 /** Where a page stands, from one probe: loading | signed-out | no-button |
  *  disabled | ready | callback | code | error-page. `code` only for a code
- *  page answering OUR state. */
+ *  page answering OUR state; `code` and the consent steps only on
+ *  claude.ai / claude.com. */
 export function authorizeStep(probe, state) {
   if (!probe || typeof probe.href !== 'string') return 'loading';
   if (probe.href.startsWith('chrome-error://')) return 'error-page';
   const u = parse(probe.href);
   if (!u) return 'loading';
   if (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)) return 'callback';
+  if (!anthropicPage(u)) return 'loading';
   if (/\/oauth\/code\/callback\/?$/.test(u.pathname) && u.searchParams.get('code')
     && u.searchParams.get('state') === state) return 'code';
   if (/^\/(login|magic-link)(\/|$)/.test(u.pathname)) return 'signed-out';
