@@ -72,6 +72,13 @@ semantic versioning.
   left (refreshed first, under the lock), so a panel has no reason to refresh
   NAME under a running command.
 
+### Security
+
+- `claudectl account login` clicks Authorize, and reads a code page's code,
+  only on claude.ai or claude.com over https. It found the page by our
+  authorize request's state alone, so any page carrying that state in its
+  URL under an `/oauth/authorize` path would have been clicked.
+
 ## [3.12.3] - 2026-11-19
 
 ### Fixed

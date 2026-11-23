@@ -350,6 +350,25 @@ test('authorizeStep: where a page stands, from one probe', () => {
   for (const [probe, want] of cases) assert.equal(authorizeStep(probe, STATE), want, JSON.stringify(probe));
 });
 
+test('authorizeStep: only claude.ai / claude.com over https is a consent or a code page, whatever its path', () => {
+  const button = {disabled: false, busy: false, visible: true};
+  for (const href of [`https://platform.claude.com/oauth/authorize?state=${STATE}`,
+    `https://claude.ai/oauth/authorize?state=${STATE}`]) {
+    assert.equal(authorizeStep({href, button}, STATE), 'ready', href);
+  }
+  // a page that only looks like the consent (another origin, plain http, a
+  // look-alike host) is never clicked, even carrying OUR state
+  for (const href of [`https://evil.example/oauth/authorize?state=${STATE}`,
+    `http://claude.ai/oauth/authorize?state=${STATE}`,
+    `https://claude.ai.evil.example/oauth/authorize?state=${STATE}`,
+    `https://notclaude.ai/oauth/authorize?state=${STATE}`]) {
+    assert.equal(authorizeStep({href, button}, STATE), 'loading', href);
+  }
+  // nor is a look-alike code page read for its code
+  assert.equal(authorizeStep({href: `https://evil.example/oauth/code/callback?code=C1&state=${STATE}`}, STATE),
+    'loading');
+});
+
 test('authorize-click: nothing it prints carries a query, a state or a code', () => {
   const codeUrl = `https://platform.claude.com/oauth/code/callback?code=SECRET1&state=${STATE}`;
   assert.equal(where(codeUrl), 'https://platform.claude.com/oauth/code/callback');
